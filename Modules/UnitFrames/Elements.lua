@@ -20,11 +20,28 @@ function UF:CreateHealthBar(frame)
 
     frame.Health = health
 
-    -- Text
-    local text = health:CreateFontString(nil, "OVERLAY")
-    LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 12)
-    text:SetPoint("CENTER")
-    frame.Health.Text = text
+    -- Scripts
+    local function UpdateHealth(self)
+        local unit = frame.unit
+        local min, max = UnitHealth(unit), UnitHealthMax(unit)
+        self:SetMinMaxValues(0, max)
+        self:SetValue(min)
+    end
+    health:SetScript("OnEvent", UpdateHealth)
+    health:RegisterUnitEvent("UNIT_HEALTH", frame.unit)
+    health:RegisterUnitEvent("UNIT_MAXHEALTH", frame.unit)
+    -- Hook Show to force update
+    health:SetScript("OnShow", UpdateHealth)
+
+    -- Initial update
+    if UnitExists(frame.unit) then UpdateHealth(health) end
+
+    -- Target/Focus change updates
+    if frame.unit == "target" then
+        health:RegisterEvent("PLAYER_TARGET_CHANGED")
+    elseif frame.unit == "focus" then
+        health:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    end
 end
 
 function UF:CreatePowerBar(frame)
@@ -33,7 +50,6 @@ function UF:CreatePowerBar(frame)
     power:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, -1)
     power:SetHeight(10)
     power:SetStatusBarTexture(LSM:Fetch("statusbar", "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
-    power:SetStatusBarColor(0, 0.5, 1) -- Mana blue default
 
     LibRoithi.mixins:CreateBackdrop(power)
 
@@ -44,8 +60,95 @@ function UF:CreatePowerBar(frame)
     power.bg = bg
 
     frame.Power = power
+
+    -- Update Logic
+    local function UpdatePower(self)
+        local unit = frame.unit
+        local min, max = UnitPower(unit), UnitPowerMax(unit)
+        self:SetMinMaxValues(0, max)
+        self:SetValue(min)
+
+        -- Color
+        local pType, pToken, altR, altG, altB = UnitPowerType(unit)
+        local c = PowerBarColor[pToken]
+        if not c and pType then c = PowerBarColor[pType] end
+        if not c then c = PowerBarColor["MANA"] end -- Fallback
+
+        if c then
+            self:SetStatusBarColor(c.r, c.g, c.b)
+        else
+            self:SetStatusBarColor(0, 0, 1) -- Ultimate fallback
+        end
+    end
+
+    power:SetScript("OnEvent", UpdatePower)
+    power:RegisterUnitEvent("UNIT_POWER_UPDATE", frame.unit)
+    power:RegisterUnitEvent("UNIT_MAXPOWER", frame.unit)
+    power:RegisterUnitEvent("UNIT_DISPLAYPOWER", frame.unit)
+    power:SetScript("OnShow", UpdatePower)
+
+    -- Target/Focus change updates
+    if frame.unit == "target" then
+        power:RegisterEvent("PLAYER_TARGET_CHANGED")
+    elseif frame.unit == "focus" then
+        power:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    end
+
+    -- Initial
+    if UnitExists(frame.unit) then UpdatePower(power) end
 end
 
+function UF:CreateName(frame)
+    local text = frame.Health:CreateFontString(nil, "OVERLAY")
+    LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 12)
+    text:SetPoint("CENTER", frame.Health, "CENTER", 0, 0)
+    text:SetJustifyH("CENTER")
+    frame.Name = text
+
+    local function UpdateName()
+        local name = GetUnitName(frame.unit, true)
+        text:SetText(name or "")
+
+        -- Color by class? (Optional)
+        local _, class = UnitClass(frame.unit)
+        if class then
+            local c = RAID_CLASS_COLORS[class]
+            if c then text:SetTextColor(c.r, c.g, c.b) else text:SetTextColor(1, 1, 1) end
+        else
+            text:SetTextColor(1, 1, 1)
+        end
+    end
+
+    -- Frame needs to handle name updates, usually attached to parent
+    -- We can attach a script to a hidden frame or the main button?
+    -- The main button is SecureUnitButton, scripting it is tricky if we override standard handlers.
+    -- But OnEvent is fine.
+    if not frame.HitRect then -- Just checking if we already added a hook
+        frame:HookScript("OnEvent", function(self, event, ...)
+            if event == "UNIT_NAME_UPDATE" or event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then
+                UpdateName()
+            end
+        end)
+        -- Register events on the main frame
+        frame:RegisterUnitEvent("UNIT_NAME_UPDATE", frame.unit)
+        -- Target/Focus changes are handled by attributes mostly for unit, but name update isn't automatic
+        -- Since 'unit' is constant for a frame (player, target), we rely on UNIT_NAME_UPDATE or just OnShow
+        frame:HookScript("OnShow", UpdateName)
+    end
+    -- Register generic updates? For Target, we need PLAYER_TARGET_CHANGED
+    if frame.unit == "target" then
+        frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+    elseif frame.unit == "focus" then
+        frame:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    end
+
+    UpdateName()
+end
+
+-- 12.0 Heal Prediction Implementation
+-- 12.0 Heal Prediction Implementation
+-- Standard Heal Prediction & Absorb Implementation
+-- 12.0 Heal Prediction Implementation
 -- 12.0 Heal Prediction Implementation
 function UF:CreateHealPrediction(frame)
     local myHeal = CreateFrame("StatusBar", nil, frame.Health)
@@ -60,55 +163,116 @@ function UF:CreateHealPrediction(frame)
 
     local absorb = CreateFrame("StatusBar", nil, frame.Health)
     absorb:SetStatusBarTexture(LSM:Fetch("statusbar", "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
-    absorb:SetStatusBarColor(1, 1, 1, 0.6)                 -- White for absorbs
-    absorb:SetFrameLevel(frame.Health:GetFrameLevel() + 2) -- Absorbs on top of heals usually? Or layered.
+    -- Debug Color (Bright Neon Yellow) and High Strata as requested
+    absorb:SetStatusBarColor(1, 1, 0, 1)
+    absorb:SetFrameLevel(frame.Health:GetFrameLevel() + 10)
 
-    -- Using the 12.0 API as requested
+    -- Over-absorb Glow
+    local overAbsorbGlow = absorb:CreateTexture(nil, "OVERLAY")
+    overAbsorbGlow:SetTexture("Interface\\RaidFrame\\Shield-Overshield-Glow")
+    overAbsorbGlow:SetBlendMode("ADD")
+    overAbsorbGlow:SetPoint("BOTTOMLEFT", absorb, "BOTTOMRIGHT", -7, 0)
+    overAbsorbGlow:SetPoint("TOPLEFT", absorb, "TOPRIGHT", -7, 0)
+    overAbsorbGlow:SetWidth(16)
+    overAbsorbGlow:Hide()
+    absorb.overGlow = overAbsorbGlow
+
+    -- Using the Correct 12.0 API Usage
     ---@diagnostic disable-next-line: undefined-global
     if CreateUnitHealPredictionCalculator then
         ---@diagnostic disable-next-line: undefined-global
-        local calculator = CreateUnitHealPredictionCalculator(frame.unit)
+        local calculator = CreateUnitHealPredictionCalculator()
 
         frame:HookScript("OnUpdate", function()
-            -- Retrieve values using UnitGetDetailedHealPrediction(unitGUID)
-            -- But the calculator might be an object watcher.
-            -- The prompt asks to "Use CreateUnitHealPredictionCalculator and UnitGetDetailedHealPrediction".
-            -- We assume UnitGetDetailedHealPrediction takes the unit or GUID.
+            local status, err = pcall(function()
+                ---@diagnostic disable-next-line: undefined-global
+                UnitGetDetailedHealPrediction(frame.unit, "player", calculator)
 
-            ---@diagnostic disable-next-line: undefined-global
-            local myIncomingHeal, otherIncomingHeal, absorbed, healAbsorb, _, _ = UnitGetDetailedHealPrediction(
-            frame.unit, nil, calculator)
+                -- 1. Get Values
+                local _, myIncomingHeal, otherIncomingHeal, _ = calculator:GetIncomingHeals()
+                local absorbAmount, isClamped = calculator:GetDamageAbsorbs()
+                absorbAmount = absorbAmount or 0
 
-            if not myIncomingHeal then return end
+                -- Support Safe Rendering (Secret Values) using SetValue + Scaling
 
-            local health = frame.Health:GetValue()
-            local maxHealth = frame.Health:GetMinMaxValues() -- (min calls it max usually, checking returns)
-            local _, maxHealthVal = frame.Health:GetMinMaxValues()
+                -- Support Safe Rendering (Secret Values) using SetValue + Scaling
+                -- We want the bar to represent 0 -> 110% of Health
+                -- So we make the Frame 110% wide, and SetMinMax to 0 -> 110% MaxHealth
 
-            -- Simple bar positioning logic (horizontal)
-            local width = frame.Health:GetWidth()
-            local healthPct = health / maxHealthVal
-            local hpWidth = width * healthPct
+                local maxHealthVal = UnitHealthMax(frame.unit)
+                -- UnitHealthMax returns secret; comparison crashes. Safe to pass to SetMinMaxValues.
 
-            -- Position MyHeal
-            myHeal:SetPoint("TOPLEFT", frame.Health, "TOPLEFT", hpWidth, 0)
-            myHeal:SetPoint("BOTTOMLEFT", frame.Health, "BOTTOMLEFT", hpWidth, 0)
-            local myWidth = (myIncomingHeal / maxHealthVal) * width
-            myHeal:SetWidth(math.max(1, myWidth))
+                local width = frame.Health:GetWidth()
+                if width <= 0 then return end
 
-            -- Position OtherHeal
-            otherHeal:SetPoint("TOPLEFT", myHeal, "TOPRIGHT", 0, 0)
-            otherHeal:SetPoint("BOTTOMLEFT", myHeal, "BOTTOMRIGHT", 0, 0)
-            local otherWidth = (otherIncomingHeal / maxHealthVal) * width
-            otherHeal:SetWidth(math.max(1, otherWidth))
+                -- Heal Logic (SetValue + Stacked)
+                myHeal:SetWidth(width)
+                myHeal:SetMinMaxValues(0, maxHealthVal)
+                myHeal:SetValue(myIncomingHeal or 0)
 
-            -- Position Absorb (Total Absorb overlay)
-            -- Usually absorbs overlay health + prediction, but lets append for clarity or overlay at end
-            -- ElvUI usually overlays it at the end of health.
-            absorb:SetPoint("TOPLEFT", otherHeal, "TOPRIGHT", 0, 0)
-            absorb:SetPoint("BOTTOMLEFT", otherHeal, "BOTTOMRIGHT", 0, 0)
-            local absorbWidth = (absorbed / maxHealthVal) * width
-            absorb:SetWidth(math.max(1, absorbWidth))
+                otherHeal:SetWidth(width)
+                otherHeal:SetMinMaxValues(0, maxHealthVal)
+                otherHeal:SetValue(otherIncomingHeal or 0)
+
+                local healthTex = frame.Health:GetStatusBarTexture()
+                myHeal:ClearAllPoints()
+                if healthTex then
+                    myHeal:SetPoint("TOPLEFT", healthTex, "TOPRIGHT", 0, 0)
+                    myHeal:SetPoint("BOTTOMLEFT", healthTex, "BOTTOMRIGHT", 0, 0)
+                else
+                    myHeal:SetPoint("TOPLEFT", frame.Health, "TOPLEFT", 0, 0)
+                    myHeal:SetPoint("BOTTOMLEFT", frame.Health, "BOTTOMLEFT", 0, 0)
+                end
+
+                local myTex = myHeal:GetStatusBarTexture()
+                otherHeal:ClearAllPoints()
+                if myTex then
+                    otherHeal:SetPoint("TOPLEFT", myTex, "TOPRIGHT", 0, 0)
+                    otherHeal:SetPoint("BOTTOMLEFT", myTex, "BOTTOMRIGHT", 0, 0)
+                else
+                    otherHeal:SetPoint("TOPLEFT", myHeal, "TOPLEFT", 0, 0)
+                    otherHeal:SetPoint("BOTTOMLEFT", myHeal, "BOTTOMLEFT", 0, 0)
+                end
+
+                -- Absorb Logic (Restricted Environment Safe Mode)
+                -- 1. We cannot check if values are <= 0 or nil (Comparison Crash)
+                -- 2. We cannot multiply maxHealth * 1.1 (Arithmetic Crash)
+                -- 3. We Must pass-through values directly to widgets.
+
+                local totalAbsorb = UnitGetTotalAbsorbs(frame.unit)
+
+                absorb:ClearAllPoints()
+                absorb:SetPoint("TOPLEFT", frame.Health, "TOPLEFT", 0, 0)
+                absorb:SetPoint("BOTTOMLEFT", frame.Health, "BOTTOMLEFT", 0, 0)
+
+                -- Width: 100% of Health Frame (Safe UI Value)
+                -- We cannot scale to 110% because we cannot multiply the MaxValue secret.
+                absorb:SetWidth(width)
+
+                -- MinMax: Pass-through from Health Bar (Secret -> Secret)
+                -- We assume Health Bar has valid MinMax from its own secure update.
+                local hMin, hMax = frame.Health:GetMinMaxValues()
+                absorb:SetMinMaxValues(hMin, hMax)
+
+                -- Value: Direct Pass (Secret -> Secret)
+                absorb:SetValue(totalAbsorb or 0)
+
+                absorb:Show()
+
+                -- Color: Higher Visibility (Light Blue-Grey, Higher Alpha)
+                absorb:SetStatusBarColor(0.6, 0.8, 1, 0.6)
+
+                -- Glow: Disabled (Cannot compare total > max)
+                overAbsorbGlow:Hide()
+            end)
+
+            if not status then
+                local t = GetTime()
+                if not frame.lastErr or (t - frame.lastErr > 3) then
+                    frame.lastErr = t
+                    print("[RoithiUI Error]: " .. tostring(err))
+                end
+            end
         end)
     end
 end

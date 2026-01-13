@@ -1,12 +1,14 @@
 local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
+local LSM = LibStub("LibSharedMedia-3.0")
 
 -- ----------------------------------------------------------------------------
 -- 1. Bar Creation
 -- ----------------------------------------------------------------------------
 function ns.CreateCastBar(unit)
     local bar = CreateFrame("StatusBar", "MidnightCastBar_" .. unit, UIParent)
-    bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    local texture = LSM:Fetch("statusbar", "Solid") or "Interface\\TargetingFrame\\UI-StatusBar"
+    bar:SetStatusBarTexture(texture)
 
     local bg = bar:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(bar); bg:SetColorTexture(0, 0, 0, 0.5)

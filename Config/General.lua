@@ -65,7 +65,7 @@ function Config:CreateDashboard()
         currentY = currentY - 20
 
         -- Checkboxes
-        local function CreateCheck(text, dbTable, key, frameObj)
+        local function CreateCheck(text, dbTable, key, frameObj, customToggleFunc)
             local cb = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
             cb:SetPoint("TOPLEFT", 25, currentY)
             cb:SetSize(20, 20)
@@ -80,13 +80,12 @@ function Config:CreateDashboard()
                 local enabled = self:GetChecked()
                 if dbTable then dbTable[key] = enabled end
 
-                -- Toggle Frame Visibility Immediately
-                if frameObj then
+                if customToggleFunc then
+                    customToggleFunc(enabled)
+                elseif frameObj then
+                    -- Default behavior for generic frames (Castbars uses this currently)
                     if enabled then
-                        -- For Castbars, re-enabling might require more (edit mode re-init)
-                        -- But for simple visibility:
                         frameObj:Show()
-                        -- Castbar specific logic
                         if frameObj.isInEditMode ~= nil then
                             frameObj.isInEditMode = true
                             if LibStub("LibEditMode") then LibStub("LibEditMode"):RefreshFrameSettings(frameObj) end
@@ -97,7 +96,7 @@ function Config:CreateDashboard()
                     end
                 end
 
-                -- Specific Castbar Updates
+                -- Specific Castbar Updates (Legacy/Castbar)
                 if ns.UpdateBlizzardVisibility then ns.UpdateBlizzardVisibility() end
                 if ns.UpdateCast and frameObj then ns.UpdateCast(frameObj) end
 
@@ -116,7 +115,9 @@ function Config:CreateDashboard()
             if not RoithiUIDB.UnitFrames then RoithiUIDB.UnitFrames = {} end
             if not RoithiUIDB.UnitFrames[unit] then RoithiUIDB.UnitFrames[unit] = { enabled = true } end
 
-            local cbUF = CreateCheck("UnitFrame", RoithiUIDB.UnitFrames[unit], "enabled", ufFrame)
+            local cbUF = CreateCheck("UnitFrame", RoithiUIDB.UnitFrames[unit], "enabled", ufFrame, function(enabled)
+                if ufModule then ufModule:ToggleFrame(unit, enabled) end
+            end)
         end
 
         -- 2. Castbar Check
