@@ -27,11 +27,34 @@ function UF:CreateUnitFrame(unit, name)
 
     -- Register with LibEditMode if available
     if LEM then
-        -- Assuming a standard usage of LibEditMode:RegisterFrame(frame, displayName, dbTable)
-        -- We won't implement the full logic here as we don't have the library source,
-        -- but we'll show the intent as requested.
-        -- We use RoithiUIDB.EditMode positions which LEM handles usually.
-        LEM:RegisterFrame(frame, name .. " Frame", RoithiUIDB.EditMode)
+        -- Default settings if not present
+        if not RoithiUIDB.UnitFrames then RoithiUIDB.UnitFrames = {} end
+        if not RoithiUIDB.UnitFrames[unit] then RoithiUIDB.UnitFrames[unit] = {} end
+
+        local db = RoithiUIDB.UnitFrames[unit]
+
+        -- Ensure defaults exist (even if table was created by config toggle)
+        if not db.point then db.point = "CENTER" end
+        if not db.x then db.x = 0 end
+        if not db.y then db.y = 0 end
+
+        local defaults = { point = db.point, x = db.x, y = db.y }
+
+        frame.editModeName = name .. " Frame" -- Used by LEM
+
+        local function OnPositionChanged(f, layoutName, point, x, y)
+            db.point = point
+            db.x = x
+            db.y = y
+            f:ClearAllPoints()
+            f:SetPoint(point, UIParent, point, x, y)
+        end
+
+        LEM:AddFrame(frame, OnPositionChanged, defaults)
+
+        -- Apply initial pos
+        frame:ClearAllPoints()
+        frame:SetPoint(db.point, UIParent, db.point, db.x, db.y)
     end
 
     return frame

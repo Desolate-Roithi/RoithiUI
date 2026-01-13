@@ -13,7 +13,9 @@
 
     <!-- Core -->
     <Script file="Core/Init.lua"/>
-    <Script file="Core/Config.lua"/>
+    <Script file="Config/General.lua"/>
+    <Script file="Config/Castbars.lua"/>
+    <Script file="Config/UnitFrames.lua"/>
 
     <!-- Modules -->
     <!-- UnitFrames -->
@@ -22,10 +24,8 @@
     <Script file="Modules/UnitFrames/Units.lua"/>
     
     <!-- Castbar Integration (Loaded here or by Core if it was pure Lua, but XML loading implies direct file reference) -->
-    <!-- Assuming Castbar has its own files, but usually we load the main file which loads the rest or we list them here. -->
     <!-- User asked for integration of existing Castbar. We'll add the likely entry point. -->
     <Script file="Modules/Castbar/Core.lua"/>
-    <Script file="Modules/Castbar/Config.lua"/>
     <Script file="Modules/Castbar/Empower.lua"/>
     <Script file="Modules/Castbar/Castbar.lua"/>
 </Ui>

@@ -110,74 +110,53 @@ ns.DEFAULTS = {
 -- 2. Taint-Safe Blizzard Frame Hiding
 -- ----------------------------------------------------------------------------
 function ns.UpdateBlizzardVisibility()
-    if not MidnightCastbarsDB then return end
+    local db = RoithiUIDB.Castbar
+    if not db then return end
+
+    -- Helper to hide/show
+    local function ToggleBlizzBar(frame, shouldHide)
+        if not frame then return end
+        if shouldHide then
+            frame:UnregisterAllEvents()
+            frame:Hide()
+            frame:SetAlpha(0)
+            -- Hook Show to keep hidden?
+            -- Better to just ensure events are gone.
+        else
+            frame:SetAlpha(1)
+            -- Re-register events if we know them, or reload UI hint?
+            -- Blizzard code usually registers these on load or via Mixins.
+            -- Modern frames use Mixins. We might need to call OnLoad or re-register specific events.
+            -- For now, we restore Alpha and let the user reload if needed,
+            -- OR we try to re-hook events.
+            -- Re-registering all events manually is brittle.
+            -- A reload is safer for "Show" but we can try basic ones.
+            if frame.unit then
+                frame:RegisterUnitEvent("UNIT_SPELLCAST_START", frame.unit)
+                frame:RegisterUnitEvent("UNIT_SPELLCAST_STOP", frame.unit)
+                frame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", frame.unit)
+                frame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", frame.unit)
+            end
+        end
+    end
 
     -- Target
-    if TargetFrameSpellBar then
-        if MidnightCastbarsDB.target and MidnightCastbarsDB.target.enabled then
-            TargetFrameSpellBar:UnregisterAllEvents()
-            TargetFrameSpellBar:Hide()
-            TargetFrameSpellBar:SetAlpha(0)
-        else
-            TargetFrameSpellBar:SetAlpha(1)
-            TargetFrameSpellBar:RegisterEvent("PLAYER_TARGET_CHANGED")
-            TargetFrameSpellBar:RegisterEvent("CVAR_UPDATE")
-            TargetFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_START", "target")
-            TargetFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_STOP", "target")
-            TargetFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "target")
-            TargetFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "target")
-            TargetFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_START", "target")
-            TargetFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_STOP", "target")
-            TargetFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTIBLE", "target")
-            TargetFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_NOT_INTERRUPTIBLE", "target")
-            -- Force update if we just enabled it back
-            if UnitExists("target") then TargetFrameSpellBar:Show() end
-        end
+    -- Check both legacy global and new key
+    local targetBar = TargetFrame.spellbar or TargetFrameSpellBar
+    if targetBar then
+        ToggleBlizzBar(targetBar, db.target and db.target.enabled)
     end
 
     -- Focus
-    if FocusFrameSpellBar then
-        if MidnightCastbarsDB.focus and MidnightCastbarsDB.focus.enabled then
-            FocusFrameSpellBar:UnregisterAllEvents()
-            FocusFrameSpellBar:Hide()
-            FocusFrameSpellBar:SetAlpha(0)
-        else
-            FocusFrameSpellBar:SetAlpha(1)
-            FocusFrameSpellBar:RegisterEvent("PLAYER_FOCUS_CHANGED")
-            FocusFrameSpellBar:RegisterEvent("CVAR_UPDATE")
-            FocusFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_START", "focus")
-            FocusFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_STOP", "focus")
-            FocusFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "focus")
-            FocusFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "focus")
-            FocusFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_START", "focus")
-            FocusFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_STOP", "focus")
-            FocusFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTIBLE", "focus")
-            FocusFrameSpellBar:RegisterUnitEvent("UNIT_SPELLCAST_NOT_INTERRUPTIBLE", "focus")
-            if UnitExists("focus") then FocusFrameSpellBar:Show() end
-        end
+    local focusBar = FocusFrame.spellbar or FocusFrameSpellBar
+    if focusBar then
+        ToggleBlizzBar(focusBar, db.focus and db.focus.enabled)
     end
 
     -- Player
-    if PlayerCastingBarFrame then
-        if MidnightCastbarsDB.player and MidnightCastbarsDB.player.enabled then
-            PlayerCastingBarFrame:UnregisterAllEvents()
-            PlayerCastingBarFrame:Hide()
-            PlayerCastingBarFrame:SetAlpha(0)
-        else
-            PlayerCastingBarFrame:SetAlpha(1)
-            PlayerCastingBarFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-            PlayerCastingBarFrame:RegisterEvent("CVAR_UPDATE")
-            PlayerCastingBarFrame:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
-            PlayerCastingBarFrame:RegisterUnitEvent("UNIT_SPELLCAST_STOP", "player")
-            PlayerCastingBarFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
-            PlayerCastingBarFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
-            PlayerCastingBarFrame:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_START", "player")
-            PlayerCastingBarFrame:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_STOP", "player")
-            PlayerCastingBarFrame:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTIBLE", "player")
-            PlayerCastingBarFrame:RegisterUnitEvent("UNIT_SPELLCAST_NOT_INTERRUPTIBLE", "player")
-            PlayerCastingBarFrame:RegisterUnitEvent("UNIT_SPELLCAST_DELAYED", "player")
-            PlayerCastingBarFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_UPDATE", "player")
-        end
+    local playerBar = PlayerFrame.Spellbar or PlayerCastingBarFrame
+    if playerBar then
+        ToggleBlizzBar(playerBar, db.player and db.player.enabled)
     end
 end
 
@@ -236,8 +215,8 @@ function Castbar:OnEnable()
     MidnightCastbarsDB = RoithiUIDB.Castbar -- Ensure defined
 
     ns.UpdateBlizzardVisibility()
-    ns.InitializeBars()   -- Defined in Castbar.lua
-    ns.InitializeConfig() -- Defined in Config.lua
+    ns.InitializeBars()          -- Defined in Castbar.lua
+    ns.InitializeCastbarConfig() -- Defined in Config/Castbars.lua
 
     -- Register Cast Events
     local f = CreateFrame("Frame") -- or use module? Module doesn't have event mixins by default in my Init.lua

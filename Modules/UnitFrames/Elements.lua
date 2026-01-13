@@ -76,8 +76,8 @@ function UF:CreateHealPrediction(frame)
             -- We assume UnitGetDetailedHealPrediction takes the unit or GUID.
 
             ---@diagnostic disable-next-line: undefined-global
-            local myIncomingHeal, otherIncomingHeal, absorbed, healAbsorb, _, _ = UnitGetDetailedHealPrediction(frame
-                .unit)
+            local myIncomingHeal, otherIncomingHeal, absorbed, healAbsorb, _, _ = UnitGetDetailedHealPrediction(
+            frame.unit, nil, calculator)
 
             if not myIncomingHeal then return end
 

@@ -54,8 +54,8 @@ function ns.UpdateCast(bar)
     local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID, numStages
     local state = "cast"
 
-    -- Empowered / Channel Check (12.0 Standard)
-    -- UnitChannelInfo: name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID, isEmpowered, numEmpowerStages
+    -- Empowered / Channel Check
+    -- UnitChannelInfo: name ... spellID, isEmpowered, numEmpowerStages
     local chName, chText, chTexture, chStart, chEnd, _, chNotInt, chSpellID, isEmpowered, numEmpowerStages =
         UnitChannelInfo(unit)
 
@@ -63,13 +63,21 @@ function ns.UpdateCast(bar)
     local numStagesSafe = 0
 
     if chName then
-        -- 1. Try safe check of isEmpowered (might be secret)
+        -- 1. Trust 'isEmpowered' return if true
         pcall(function()
             if isEmpowered then isEmpoweredSafe = true end
         end)
 
-        -- 2. Fallback: Check Stage Percentages
-        if UnitEmpoweredStagePercentages then
+        -- 2. Trust 'numEmpowerStages' return if > 0
+        pcall(function()
+            if numEmpowerStages and numEmpowerStages > 0 then
+                isEmpoweredSafe = true
+                numStagesSafe = numEmpowerStages
+            end
+        end)
+
+        -- 3. Fallback: Check Stage Percentages
+        if not isEmpoweredSafe and UnitEmpoweredStagePercentages then
             local percentages = UnitEmpoweredStagePercentages(unit)
             if percentages and #percentages > 0 then
                 isEmpoweredSafe = true
@@ -78,13 +86,21 @@ function ns.UpdateCast(bar)
             end
         end
 
-        -- 3. Try to read numEmpowerStages safely if we haven't got a count yet
-        if isEmpoweredSafe and numStagesSafe == 0 then
-            pcall(function()
-                if numEmpowerStages and numEmpowerStages > 0 then
-                    numStagesSafe = numEmpowerStages
+        -- 4. Deep Fallback: Check Spell Data directly
+        -- This handles cases where UnitChannelInfo flags are nil for non-player units
+        if not isEmpoweredSafe and chSpellID and C_Spell and C_Spell.GetSpellEmpowerStageInfo then
+            local stageInfo = C_Spell.GetSpellEmpowerStageInfo(chSpellID, 1)
+            if stageInfo then
+                isEmpoweredSafe = true
+                -- We can't determine current stage easily without UnitEmpoweredStagePercentages,
+                -- but we know it's an empowered cast.
+                -- Try to get max stages
+                if numStagesSafe == 0 then
+                    -- Loop to find max? Or just default to 1 so bars show?
+                    -- Usually 3-4.
+                    numStagesSafe = 1 -- Better than nothing
                 end
-            end)
+            end
         end
 
         if isEmpoweredSafe then

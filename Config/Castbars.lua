@@ -159,7 +159,7 @@ local function GetSettingsForUnit(unit)
                 LEM:AddFrameSettings(ns.bars[unit], GetSettingsForUnit(unit))
                 LEM:RefreshFrameSettings(ns.bars[unit])
             end,
-        }
+        },
     }
 
     if colorSectionsExpanded[unit] then
@@ -240,7 +240,7 @@ end
 -- ----------------------------------------------------------------------------
 -- 5. Initialization
 -- ----------------------------------------------------------------------------
-function ns.InitializeConfig()
+function ns.InitializeCastbarConfig()
     for unit, bar in pairs(ns.bars) do
         local db = GetDB(unit)
         bar.editModeName = "Midnight " .. unit:gsub("^%l", string.upper) .. " Bar"
@@ -255,136 +255,10 @@ function ns.InitializeConfig()
 end
 
 -- ----------------------------------------------------------------------------
--- 5. Global Enable Menu (Anchored to EditModeManagerFrame)
--- ----------------------------------------------------------------------------
-local globalMenu
-local function CreateGlobalEnableMenu()
-    if globalMenu then return globalMenu end
-
-    -- Main Container
-    local f = CreateFrame("Frame", "MidnightCastbarsGlobalMenu", UIParent, "BackdropTemplate")
-    f:SetSize(170, 40) -- Start collapsed-ish height, or expand on init
-    f:SetPoint("TOPLEFT", EditModeManagerFrame, "TOPRIGHT", 2, 0)
-
-    f:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true,
-        tileSize = 32,
-        edgeSize = 32,
-        insets = { left = 8, right = 8, top = 8, bottom = 8 }
-    })
-
-    -- State
-    f.isExpanded = true
-    f:SetHeight(130)
-
-    -- Header / Toggle Button
-    local header = CreateFrame("Button", nil, f)
-    header:SetPoint("TOPLEFT", 5, -5)
-    header:SetPoint("TOPRIGHT", -5, -5)
-    header:SetHeight(30)
-
-    local title = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    title:SetPoint("CENTER", header, "CENTER", 0, 0)
-    title:SetText("Midnight Castbars")
-
-    local arrow = header:CreateTexture(nil, "ARTWORK")
-    arrow:SetAtlas("Options-List-Expand-Up") -- Points up when expanded? Or down?
-    -- Logic: Expanded -> "Collapse" (Up arrow or Minus), Collapsed -> "Expand" (Down arrow)
-    -- Blizzard convention: 'Options-List-Expand-Up' usually means "Click to collapse" (points up/open)
-    arrow:SetSize(14, 14)
-    arrow:SetPoint("RIGHT", header, "RIGHT", -10, 0)
-    f.menuArrow = arrow
-
-    -- Checkboxes Container (for hiding/showing)
-    local content = CreateFrame("Frame", nil, f)
-    content:SetPoint("TOPLEFT", 0, -35)
-    content:SetPoint("BOTTOMRIGHT", 0, 0)
-    f.content = content
-
-    -- Toggling Logic
-    header:SetScript("OnClick", function()
-        f.isExpanded = not f.isExpanded
-        if f.isExpanded then
-            f:SetHeight(200)
-            content:Show()
-            arrow:SetAtlas("Options-List-Expand-Up")
-        else
-            f:SetHeight(40)
-            content:Hide()
-            arrow:SetAtlas("Options-List-Expand-Down")
-        end
-    end)
-
-    -- Checkbox Helper (Standard UICheckButtonTemplate with EditMode styling)
-    local function CreateCheck(unit, label, yOffset)
-        -- Using UICheckButtonTemplate as it's reliable.
-        -- EditModeSettingCheckboxTemplate is likely internal or requires complex setup.
-        local cb = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
-        cb:SetPoint("TOPLEFT", 15, yOffset)
-        cb:SetSize(24, 24) -- Standard size
-
-        -- Style text to match Edit Mode (White, Highlight)
-        cb.text:SetFontObject("GameFontHighlight")
-        cb.text:SetText(label)
-
-        cb:SetScript("OnShow", function(self)
-            self:SetChecked(GetDB(unit).enabled)
-        end)
-
-        cb:SetScript("OnClick", function(self)
-            local enabled = self:GetChecked()
-            GetDB(unit).enabled = enabled
-
-            -- Play Sound
-            PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
-
-            -- Update Blizzard Frames visibility
-            ns.UpdateBlizzardVisibility()
-
-            -- Update our bar visibility
-            local bar = ns.bars[unit]
-            if enabled then
-                -- Re-enable interaction with Edit Mode
-                bar.isInEditMode = true
-                bar:Show()
-                LEM:RefreshFrameSettings(bar)
-            else
-                bar.isInEditMode = false
-                bar:Hide()
-            end
-
-            ns.UpdateCast(bar)
-        end)
-        return cb
-    end
-
-    f.checkPlayer       = CreateCheck("player", "Player Bar", -10)
-    f.checkTarget       = CreateCheck("target", "Target Bar", -35)
-    f.checkFocus        = CreateCheck("focus", "Focus Bar", -60)
-
-    f.checkPet          = CreateCheck("pet", "Pet Bar", -85)
-    f.checkTargetTarget = CreateCheck("targettarget", "ToT Bar", -110)
-    f.checkFocusTarget  = CreateCheck("focustarget", "Focus Target", -135)
-
-    -- Adjust height for more items (6 items * 25px approx + padding) -> 130 + 75 = 205
-    -- We need to update the height logic in the header click
-
-    f:Hide()
-    globalMenu = f
-    return f
-end
-
-
--- ----------------------------------------------------------------------------
 -- 6. Edit Mode Callbacks
 -- ----------------------------------------------------------------------------
 LEM:RegisterCallback('enter', function()
-    -- Create/Show Global Menu
-    local menu = CreateGlobalEnableMenu()
-    menu:Show()
-
+    -- Enable bars for Edit Mode
     for unit, bar in pairs(ns.bars) do
         local db = GetDB(unit)
         if db and db.enabled then
@@ -403,8 +277,7 @@ LEM:RegisterCallback('enter', function()
 end)
 
 LEM:RegisterCallback('exit', function()
-    if globalMenu then globalMenu:Hide() end
-
+    -- Hide bars
     for _, bar in pairs(ns.bars) do
         bar.isInEditMode = false
         bar:Hide()
