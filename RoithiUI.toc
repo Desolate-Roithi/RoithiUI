@@ -1,0 +1,9 @@
+## Interface: 120001
+## Title: RoithiUI
+## Notes: Modular UI suite for Patch 12.0
+## Author: Roithi
+## Version: 1.0
+## SavedVariables: RoithiUIDB
+## OptionalDeps: LibStub, CallbackHandler-1.0, LibEditMode, LibSharedMedia-3.0
+
+RoithiUI.xml

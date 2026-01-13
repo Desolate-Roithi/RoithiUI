@@ -1,0 +1,31 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <!-- Libraries -->
+    <Script file="Libs/LibStub/LibStub.lua"/>
+    <Include file="Libs/CallbackHandler-1.0/CallbackHandler-1.0.xml"/>
+    <Include file="Libs/LibSharedMedia-3.0/lib.xml"/>
+    <Include file="Libs/LibEditMode/embed.xml"/>
+    <!-- Assuming standard boilerplate. I'll check existence or safer guessing -->
+    <!-- Better to use standard file checks or assume typical structure -->
+    <!-- Let's check CallbackHandler and LSM first to be safe -->
+    
+    <Script file="Libs/LibRoithi/LibRoithi.lua"/>
+    <Script file="Libs/LibRoithi/LibEditModeExtension.lua"/>
+
+    <!-- Core -->
+    <Script file="Core/Init.lua"/>
+    <Script file="Core/Config.lua"/>
+
+    <!-- Modules -->
+    <!-- UnitFrames -->
+    <Script file="Modules/UnitFrames/Core.lua"/>
+    <Script file="Modules/UnitFrames/Elements.lua"/>
+    <Script file="Modules/UnitFrames/Units.lua"/>
+    
+    <!-- Castbar Integration (Loaded here or by Core if it was pure Lua, but XML loading implies direct file reference) -->
+    <!-- Assuming Castbar has its own files, but usually we load the main file which loads the rest or we list them here. -->
+    <!-- User asked for integration of existing Castbar. We'll add the likely entry point. -->
+    <Script file="Modules/Castbar/Core.lua"/>
+    <Script file="Modules/Castbar/Config.lua"/>
+    <Script file="Modules/Castbar/Empower.lua"/>
+    <Script file="Modules/Castbar/Castbar.lua"/>
+</Ui>
