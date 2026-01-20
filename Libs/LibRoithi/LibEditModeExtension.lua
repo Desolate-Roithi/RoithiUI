@@ -44,6 +44,12 @@ end
 function headerMixin:OnHeaderClick()
     local isExpanded = not self.setting.get(lib:GetActiveLayoutName())
     self.setting.set(lib:GetActiveLayoutName(), isExpanded, true)
+
+    if isExpanded then
+        self.Symbol:SetText("\226\150\178") -- ▲
+    else
+        self.Symbol:SetText("\226\150\188") -- ▼
+    end
 end
 
 if lib.internal and type(lib.internal.CreatePool) == "function" then

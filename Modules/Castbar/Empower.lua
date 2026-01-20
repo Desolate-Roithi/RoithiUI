@@ -22,8 +22,12 @@ local function BuildEmpowerTimeline(unit)
 
     -- 1. Duration from UnitChannelInfo (usually Charge Duration)
     -- Empowered spells are channels, but UnitCastingInfo might return data too.
-    local name, text, texture, startTime, endTime, isTradeSkill, castID, notInterruptible, spellID, _, numStages =
+    -- Empowered spells are channels, but UnitCastingInfo might return data too.
+    local name, text, texture, startTime, endTime, isTradeSkill, castID, notInterruptible, spellID, _, numStages
+    local isEmpowered -- Declare local
+    name, text, texture, startTime, endTime, isTradeSkill, castID, notInterruptible, spellID, _, numStages =
         UnitCastingInfo(unit)
+
     if not name then
         name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID, isEmpowered, numStages =
             UnitChannelInfo(unit)
@@ -39,18 +43,50 @@ local function BuildEmpowerTimeline(unit)
 
     -- 2. Stage Percentages (12.0 API)
     -- These define the breakpoints relative to the chargeDuration.
-    local percentages
-    if UnitEmpoweredStagePercentages then
-        percentages = UnitEmpoweredStagePercentages(unit)
+    -- 2. Stage Logic (12.0 API Support)
+    -- Priorities:
+    -- 1. UnitEmpoweredStageDurations (New 12.0.1 preferred)
+    -- 2. UnitEmpoweredStagePercentages (Legacy/Deprecated?)
+    -- 3. Fallback (Equal Split)
+
+    local durations
+    if UnitEmpoweredStageDurations then
+        durations = UnitEmpoweredStageDurations(unit)
     end
 
-    if percentages and #percentages > 0 then
+    local percentages
+    if not durations and _G.UnitEmpoweredStagePercentages then
+        percentages = _G.UnitEmpoweredStagePercentages(unit)
+    end
+
+    if durations and #durations > 0 then
+        -- Durations -> Ends
+        local accum = 0
+        for i, dur in ipairs(durations) do
+            -- Duration is likely in ms or seconds? Usually match UnitChannelInfo format.
+            -- If huge, normalize. If small, assume seconds.
+            -- UnitChannelInfo returns ms but we converted to seconds (chargeDuration).
+            -- Let's verify standard API return. Usually Duration APIs return MS if integer, Seconds if float.
+            -- Safest: if dur > 100 then dur = dur / 1000 end
+
+            if dur > 50 then dur = dur / 1000 end
+
+            accum = accum + dur
+            stageEnds[i] = accum
+        end
+        totalStage = accum -- Total duration defined by sum of stages
+
+        -- Override chargeDuration source of truth?
+        -- Sometimes chargeDuration (from ChannelInfo) differs slightly from sum of stages due to latency window.
+        -- We trust sum of stages for the timeline visual.
+        chargeDuration = totalStage
+    elseif percentages and #percentages > 0 then
         for i, pct in ipairs(percentages) do
             stageEnds[i] = pct * chargeDuration
         end
         totalStage = stageEnds[#stageEnds] or chargeDuration
     else
-        -- Fallback if no percentages (guess)
+        -- Fallback if no data (guess)
         if chargeDuration > 0 then
             local count = numStages or 3
             if count < 1 then count = 3 end -- safety

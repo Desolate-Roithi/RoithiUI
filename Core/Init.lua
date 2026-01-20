@@ -59,6 +59,11 @@ function RoithiUI:OnInitialize()
             module:OnInitialize()
         end
     end
+
+    -- Register Options
+    if self.Config and self.Config.RegisterOptions then
+        self.Config:RegisterOptions()
+    end
 end
 
 function RoithiUI:OnEnable()

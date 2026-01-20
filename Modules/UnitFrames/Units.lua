@@ -18,69 +18,91 @@ function UF:ShouldCreate(unit)
     return true
 end
 
-function UF:InitializeUnits()
-    -- Player Frame
-    if self:ShouldCreate("player") then
-        local frame = self:CreateUnitFrame("player", "Player")
+function UF:CreateStandardLayout(unit, name)
+    if not self:ShouldCreate(unit) then return end
+
+    local frame = self:CreateUnitFrame(unit, name)
+
+    -- Default Positions (Can be overridden by DB later)
+    if unit == "player" then
         frame:SetPoint("CENTER", UIParent, "CENTER", -250, -100)
-        self:CreateHealthBar(frame)
-        self:CreatePowerBar(frame)
-        self:CreateHealPrediction(frame)
-        self:CreateName(frame)
-        self:ToggleFrame("player", self:IsUnitEnabled("player"))
-    end
-
-    -- Target Frame
-    if self:ShouldCreate("target") then
-        local frame = self:CreateUnitFrame("target", "Target")
+    elseif unit == "target" then
         frame:SetPoint("CENTER", UIParent, "CENTER", 250, -100)
-        self:CreateHealthBar(frame)
-        self:CreatePowerBar(frame)
-        self:CreateHealPrediction(frame)
-        self:CreateName(frame)
-        self:ToggleFrame("target", self:IsUnitEnabled("target"))
-    end
-
-    -- Focus Frame
-    if self:ShouldCreate("focus") then
-        local frame = self:CreateUnitFrame("focus", "Focus")
+    elseif unit == "focus" then
         frame:SetPoint("CENTER", UIParent, "CENTER", -350, 0)
-        self:CreateHealthBar(frame)
-        self:CreatePowerBar(frame)
-        self:CreateHealPrediction(frame)
-        self:CreateName(frame)
-        self:ToggleFrame("focus", self:IsUnitEnabled("focus"))
-    end
-
-    -- Pet Frame
-    if self:ShouldCreate("pet") then
-        local frame = self:CreateUnitFrame("pet", "Pet")
+    elseif unit == "pet" then
         frame:SetPoint("CENTER", UIParent, "CENTER", -250, -150)
-        self:CreateHealthBar(frame)
-        self:CreatePowerBar(frame)
-        self:CreateName(frame)
-        -- No HealPred for pet typically, or optional
-        self:ToggleFrame("pet", self:IsUnitEnabled("pet"))
-    end
-
-    -- Target of Target (ToT)
-    if self:ShouldCreate("targettarget") then
-        local frame = self:CreateUnitFrame("targettarget", "ToT")
+    elseif unit == "targettarget" then
         frame:SetPoint("CENTER", UIParent, "CENTER", 250, -150)
-        self:CreateHealthBar(frame)
-        self:CreateName(frame)
-        -- Power optional for ToT usually
-        self:ToggleFrame("targettarget", self:IsUnitEnabled("targettarget"))
+    elseif unit == "focustarget" then
+        frame:SetPoint("CENTER", UIParent, "CENTER", -350, -50)
     end
 
-    -- Focus Target
-    if self:ShouldCreate("focustarget") then
-        local frame = self:CreateUnitFrame("focustarget", "FocusTarget")
-        frame:SetPoint("CENTER", UIParent, "CENTER", -350, -50)
-        self:CreateHealthBar(frame)
-        self:CreateName(frame)
-        self:ToggleFrame("focustarget", self:IsUnitEnabled("focustarget"))
+    -- Create ALL elements for every frame to ensure consistent structure
+    self:CreateHealthBar(frame)
+    self:CreatePowerBar(frame) -- Restored
+    self:CreateHealPrediction(frame)
+    -- self:CreateName(frame) -- Replaced by Tag 1
+    self:CreateIndicators(frame)
+    self:CreateAuras(frame)
+    self:CreateRange(frame)
+
+    -- Ensure Default Tags exist
+    if RoithiUIDB and RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[unit] then
+        local db = RoithiUIDB.UnitFrames[unit]
+        if not db.tags then db.tags = {} end
+
+        -- Default 1: Name
+        if not db.tags[1] then
+            db.tags[1] = { enabled = true, formatString = "@name", point = "BOTTOM", anchorTo = "Frame", x = 0, y = 35 } -- Above frame
+        end
+        -- Default 2: Health
+        if not db.tags[2] then
+            db.tags[2] = {
+                enabled = true,
+                formatString = "@health.current / @health.maximum",
+                point = "CENTER",
+                anchorTo =
+                "Health",
+                x = 0,
+                y = 0
+            }
+        end
+        -- Default 3: Power
+        if not db.tags[3] then
+            db.tags[3] = { enabled = true, formatString = "@power.current:short", point = "CENTER", anchorTo = "Power", x = 0, y = 0 }
+        end
     end
+
+    self:CreateClassPower(frame)
+    self:CreateAdditionalPower(frame)
+    self:CreateEncounterResource(frame)
+    local TM = self.TagManager
+    if TM then
+        self:UpdateTags(frame) -- Build tags from DB
+
+        -- Register lightweight updates
+        if not frame.RoithiTagsHooked then
+            local function UpdateTags() self:UpdateCustomTags(frame) end
+            frame:HookScript("OnEvent", function(_, event, unit)
+                if unit == frame.unit then UpdateTags() end
+            end)
+            -- Also update on Show to ensure fresh data
+            frame:HookScript("OnShow", UpdateTags)
+            frame.RoithiTagsHooked = true
+        end
+    end
+
+    self:ToggleFrame(unit, self:IsUnitEnabled(unit))
+end
+
+function UF:InitializeUnits()
+    self:CreateStandardLayout("player", "Player")
+    self:CreateStandardLayout("target", "Target")
+    self:CreateStandardLayout("focus", "Focus")
+    self:CreateStandardLayout("pet", "Pet")
+    self:CreateStandardLayout("targettarget", "Target of Target")
+    self:CreateStandardLayout("focustarget", "Focus Target")
 end
 
 -- Hook OnEnable to run initialization
@@ -89,4 +111,5 @@ local baseEnable = UF.OnEnable
 function UF:OnEnable()
     if baseEnable then baseEnable(self) end
     self:InitializeUnits()
+    if ns.InitializeUnitFrameConfig then ns.InitializeUnitFrameConfig() end
 end

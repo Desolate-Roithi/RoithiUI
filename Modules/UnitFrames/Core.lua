@@ -13,11 +13,35 @@ function UF:CreateUnitFrame(unit, name)
 
     frame:SetAttribute("unit", unit)
     frame:SetAttribute("type1", "target") -- Target on left click
+
+    -- "togglemenu" is the correct secure action for 11.0+ context menus (matches User Example)
+    frame:SetAttribute("type2", "togglemenu")
+    frame:SetAttribute("*type2", "togglemenu")
+
+    frame:EnableMouse(true)
     frame:RegisterForClicks("AnyUp")
+
+    -- Debug Hook only (Removed manual logic)
+    -- frame:HookScript("OnClick", function(self, button) end)
+
+    frame:HookScript("OnEnter", function(self)
+        -- Mouse enter
+    end)
+
+    -- No longer assigning frame.menu as we handle it in OnClick directly
+    frame.menu = nil
 
     -- Visual Setup
     frame:SetSize(200, 50) -- Default size, can be overridden
     LibRoithi.mixins:CreateBackdrop(frame)
+
+    -- Mouseover Highlight
+    local highlight = frame:CreateTexture(nil, "HIGHLIGHT")
+    highlight:SetAllPoints()
+    highlight:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    highlight:SetBlendMode("ADD")
+    highlight:SetAlpha(0.2)
+    frame.Highlight = highlight
 
     frame.unit = unit
 
@@ -26,35 +50,10 @@ function UF:CreateUnitFrame(unit, name)
     self.frames[unit] = frame
 
     -- Register with LibEditMode if available
+    -- Moved to Config/UnitFrames.lua to centralize settings and registration
     if LEM then
-        -- Default settings if not present
-        if not RoithiUIDB.UnitFrames then RoithiUIDB.UnitFrames = {} end
-        if not RoithiUIDB.UnitFrames[unit] then RoithiUIDB.UnitFrames[unit] = {} end
-
-        local db = RoithiUIDB.UnitFrames[unit]
-
-        -- Ensure defaults exist (even if table was created by config toggle)
-        if not db.point then db.point = "CENTER" end
-        if not db.x then db.x = 0 end
-        if not db.y then db.y = 0 end
-
-        local defaults = { point = db.point, x = db.x, y = db.y }
-
-        frame.editModeName = name .. " Frame" -- Used by LEM
-
-        local function OnPositionChanged(f, layoutName, point, x, y)
-            db.point = point
-            db.x = x
-            db.y = y
-            f:ClearAllPoints()
-            f:SetPoint(point, UIParent, point, x, y)
-        end
-
-        LEM:AddFrame(frame, OnPositionChanged, defaults)
-
-        -- Apply initial pos
-        frame:ClearAllPoints()
-        frame:SetPoint(db.point, UIParent, db.point, db.x, db.y)
+        -- We still set the editModeName for Config/UnitFrames.lua to use
+        frame.editModeName = name .. " Frame"
     end
 
     return frame
@@ -64,27 +63,36 @@ function UF:UpdateBlizzardVisibility()
     -- Only run if we have DB
     if not RoithiUIDB.UnitFrames then return end
 
+    -- Safe Hiding Infrastructure
+    local HiddenFrame = CreateFrame("Frame")
+    HiddenFrame:Hide()
+
     local function ToggleBlizz(frame, show)
         if not frame then return end
         if show then
+            -- Restore original parent if known, otherwise default to UIParent
+            local parent = frame.RoithiOriginalParent or UIParent
+            frame:SetParent(parent)
+
             frame:SetAlpha(1)
-            if frame.RegisterEvent then
-                frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-                -- We can't easily re-register all specific events without knowing them,
-                -- but usually resetting Alpha is enough if we didn't UnregisterAllEvents.
-                -- However, for UnitFrames, UnregisterAllEvents is safer to prevent taint/CPU usage.
-                -- Modern WoW frames use Mixins, so we might need a Reload to fully restore if we unregister stuff.
-                -- For now, let's just SetAlpha(0) and DisableDrawLayer to be less destructive?
-                -- No, user wants them "hidden".
-                -- Let's try just Hide() and SetParent(HiddenFrame) if we could, but that taints.
-                -- We'll stick to SetAlpha(0) and UnregisterAllEvents for "Hide",
-                -- and tell user to Reload for "Show" if it breaks.
-                -- Actually, for PlayerFrame, UnregisterAllEvents stops it from updating.
+            frame:EnableMouse(true)
+            -- Restore visibility driver
+            RegisterUnitWatch(frame)
+
+            local unit = frame.unit or (frame.GetAttribute and frame:GetAttribute("unit"))
+            if unit and UnitExists(unit) then
+                frame:Show()
             end
         else
-            frame:UnregisterAllEvents()
-            frame:Hide()
-            frame:SetAlpha(0)
+            -- Cache original parent once
+            if not frame.RoithiOriginalParent then
+                frame.RoithiOriginalParent = frame:GetParent()
+            end
+
+            -- "Unregister" by moving to the shadow realm
+            -- This hides the frame AND all its children (Auras) automatically
+            UnregisterUnitWatch(frame)
+            frame:SetParent(HiddenFrame)
         end
     end
 
@@ -133,15 +141,26 @@ function UF:ToggleFrame(unit, enabled)
     if InCombatLockdown() then return end -- Update later if needed
 
     if enabled then
-        RegisterUnitWatch(frame)
-        -- Provide a default state driver for visibility if UnitWatch isn't enough (UnitWatch handles exists/dead)
-        -- But we want standard "Hide if unchecked" which is handled by UnregisterUnitWatch below.
+        -- Check if we are in Edit Mode
+        if LEM and LEM:IsInEditMode() then
+            -- Force Show
+            UnregisterUnitWatch(frame)
+            frame:Show()
+            frame:SetAlpha(1)
+            frame.isInEditMode = true
+        else
+            -- Standard Gameplay
+            RegisterUnitWatch(frame)
+            -- Provide a default state driver for visibility if UnitWatch isn't enough (UnitWatch handles exists/dead)
+            -- But we want standard "Hide if unchecked" which is handled by UnregisterUnitWatch below.
 
-        -- Also ensure it respects show/hide from UnitWatch immediately
-        if UnitExists(unit) then frame:Show() end
+            -- Also ensure it respects show/hide from UnitWatch immediately
+            if UnitExists(unit) then frame:Show() end
+        end
     else
         UnregisterUnitWatch(frame)
         frame:Hide()
+        frame.isInEditMode = false
     end
 
     self:UpdateBlizzardVisibility()

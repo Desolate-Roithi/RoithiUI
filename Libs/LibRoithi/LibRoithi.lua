@@ -58,5 +58,21 @@ function lib.mixins:SetFont(obj, fontName, size, flags)
     end
 end
 
+--- Safely formats text, handling Secret values in 12.0.1+
+-- @param formatString The string format pattern (e.g. "%d / %d")
+-- @param ... The values to format
+-- @return The formatted string, or a placeholder if values are Secret
+function lib.mixins:SafeFormat(formatString, ...)
+    local args = { ... }
+    for i = 1, #args do
+        local val = args[i]
+        -- Check for 12.0.1 Secret Userdata
+        if type(val) == "userdata" and C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(val) then
+            return "..." -- Return placeholder for the whole string if any part is secret
+        end
+    end
+    return string.format(formatString, ...)
+end
+
 -- Global Access for convenience if needed, but LibStub is preferred
 _G.LibRoithi = lib

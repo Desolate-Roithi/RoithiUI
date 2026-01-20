@@ -4,24 +4,41 @@
     <Include file="Libs/CallbackHandler-1.0/CallbackHandler-1.0.xml"/>
     <Include file="Libs/LibSharedMedia-3.0/lib.xml"/>
     <Include file="Libs/LibEditMode/embed.xml"/>
-    <!-- Assuming standard boilerplate. I'll check existence or safer guessing -->
-    <!-- Better to use standard file checks or assume typical structure -->
-    <!-- Let's check CallbackHandler and LSM first to be safe -->
     
+    <!-- Ace3 Libraries -->
+    <Include file="Libs/Ace3/AceDB-3.0/AceDB-3.0.xml"/>
+    <Include file="Libs/Ace3/AceConsole-3.0/AceConsole-3.0.xml"/>
+    <Include file="Libs/Ace3/AceGUI-3.0/AceGUI-3.0.xml"/>
+    <Include file="Libs/Ace3/AceConfig-3.0/AceConfig-3.0.xml"/>
+
     <Script file="Libs/LibRoithi/LibRoithi.lua"/>
     <Script file="Libs/LibRoithi/LibEditModeExtension.lua"/>
 
     <!-- Core -->
     <Script file="Core/Init.lua"/>
     <Script file="Config/General.lua"/>
+    <Script file="Config/Options.lua"/>
     <Script file="Config/Castbars.lua"/>
     <Script file="Config/UnitFrames.lua"/>
 
     <!-- Modules -->
     <!-- UnitFrames -->
     <Script file="Modules/UnitFrames/Core.lua"/>
-    <Script file="Modules/UnitFrames/Elements.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Bars.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Text.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Tags.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Indicators.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Auras.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Range.lua"/>
+    <Script file="Modules/UnitFrames/Elements/ClassPower.lua"/>
+    <Script file="Modules/UnitFrames/Elements/AdditionalPower.lua"/>
+    <Script file="Modules/UnitFrames/Elements/EncounterResource.lua"/>
     <Script file="Modules/UnitFrames/Units.lua"/>
+    
+    <!-- Timers -->
+    <Script file="Modules/Timers/Core.lua"/>
+    <Script file="Modules/Timers/BattleRes.lua"/>
+    <Script file="Modules/Timers/Bloodlust.lua"/>
     
     <!-- Castbar Integration (Loaded here or by Core if it was pure Lua, but XML loading implies direct file reference) -->
     <!-- User asked for integration of existing Castbar. We'll add the likely entry point. -->
