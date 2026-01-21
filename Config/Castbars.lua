@@ -71,6 +71,7 @@ local function GetSettingsForUnit(unit)
                 GetDB(unit).width = value
                 UpdateBarFromSettings(unit)
             end,
+            formatter = function(v) return string.format("%.1f", v) end,
         },
 
         {
@@ -85,6 +86,7 @@ local function GetSettingsForUnit(unit)
                 GetDB(unit).height = value
                 UpdateBarFromSettings(unit)
             end,
+            formatter = function(v) return string.format("%.1f", v) end,
         },
         {
             name = "X Position",
@@ -98,6 +100,7 @@ local function GetSettingsForUnit(unit)
                 GetDB(unit).x = value
                 UpdateBarFromSettings(unit)
             end,
+            formatter = function(v) return string.format("%.1f", v) end,
         },
         {
             name = "Y Position",
@@ -111,6 +114,7 @@ local function GetSettingsForUnit(unit)
                 GetDB(unit).y = value
                 UpdateBarFromSettings(unit)
             end,
+            formatter = function(v) return string.format("%.1f", v) end,
         },
         {
             name = "Font Size",

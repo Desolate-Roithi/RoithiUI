@@ -9,6 +9,7 @@ local LibRoithi = LibStub("LibRoithi-1.0")
 
 -- Simple Module System
 RoithiUI.modules = {}
+RoithiUI.debug = false
 
 function RoithiUI:NewModule(name)
     local module = {}
@@ -35,15 +36,39 @@ end)
 
 function RoithiUI:OnInitialize()
     -- Initialize DB
-    if not _G.RoithiUIDB then
-        _G.RoithiUIDB = {
-            EnabledModules = {
+    -- Initialize DB with Defaults
+    if not _G.RoithiUIDB then _G.RoithiUIDB = {} end
+
+    local function MergeTable(target, source)
+        if type(target) ~= "table" then target = {} end
+        for k, v in pairs(source) do
+            if type(v) == "table" then
+                if type(target[k]) ~= "table" then
+                    target[k] = CopyTable(v)
+                else
+                    MergeTable(target[k], v)
+                end
+            else
+                if target[k] == nil then
+                    target[k] = v
+                end
+            end
+        end
+        return target
+    end
+
+    if ns.Defaults then
+        MergeTable(_G.RoithiUIDB, ns.Defaults)
+    else
+        -- Fallback if Defaults missing (Safety)
+        if not _G.RoithiUIDB.EnabledModules then
+            _G.RoithiUIDB.EnabledModules = {
                 PlayerFrame = true,
                 TargetFrame = true,
                 FocusFrame = true,
                 Castbars = true,
             }
-        }
+        end
     end
 
     -- DB Migration Logic

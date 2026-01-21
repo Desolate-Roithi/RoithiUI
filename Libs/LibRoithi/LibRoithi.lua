@@ -66,9 +66,10 @@ function lib.mixins:SafeFormat(formatString, ...)
     local args = { ... }
     for i = 1, #args do
         local val = args[i]
-        -- Check for 12.0.1 Secret Userdata
-        if type(val) == "userdata" and C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(val) then
-            return "..." -- Return placeholder for the whole string if any part is secret
+        -- 12.0.1: Secret values can be userdata OR numbers that fail arithmetic
+        local isSecret = (C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(val))
+        if isSecret then
+            return "..."
         end
     end
     return string.format(formatString, ...)

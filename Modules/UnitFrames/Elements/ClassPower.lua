@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
@@ -143,15 +144,30 @@ function UF:CreateClassPower(frame)
                     element:Hide()
                     return
                 end
-            end
+            end -- Close Druid Form Check
 
-            if UnitPowerMax("player", config.type, true) <= 0 then
+            -- 12.0.1 Safety:
+            local rawMax = UnitPowerMax("player", config.type, true)
+            local isMaxSecret = (issecretvalue and issecretvalue(rawMax))
+
+            -- If not secret, check if <= 0 to hide. If secret, we can't check value, so we assume valid but handle carefully.
+            -- Actually, if Max is Secret, we can't determine width/count easily if it was dynamic.
+            -- But here we loop 1..10.
+
+            if not isMaxSecret and (rawMax <= 0) then
                 element:Hide()
                 return
             end
 
             cur = UnitPower("player", config.type, true)
-            max = UnitPowerMax("player", config.type, true)
+            max = rawMax
+
+            -- Critical Safety: We loop 'i' from 1 to 10 and compare 'i <= cur'.
+            -- If 'cur' is Secret, this crashes ("compare number to userdata").
+            -- Fix: If cur is secret, force 0 (empty bar).
+            if (issecretvalue and issecretvalue(cur)) then
+                cur = 0
+            end
 
             -- Some powers are returned in 1/10ths e.g. Stagger? No, Secondary resources are usually integer.
             -- Using 'true' in UnitPower returns unmodified.

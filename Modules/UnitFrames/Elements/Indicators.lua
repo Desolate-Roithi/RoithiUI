@@ -75,57 +75,133 @@ function UF:CreateIndicators(frame)
     res:Hide()
     frame.ResurrectIndicator = res
 
+    -- 9. PvP Indicator
+    local pvp = parent:CreateTexture(nil, "OVERLAY")
+    pvp:SetSize(24, 24)
+    pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
+    pvp:Hide()
+    frame.PvPIndicator = pvp
+
+    -- 10. Quest Indicator
+    local quest = parent:CreateTexture(nil, "OVERLAY")
+    quest:SetSize(20, 20)
+    quest:SetTexture("Interface\\TargetingFrame\\PortraitQuestBadge")
+    quest:Hide()
+    frame.QuestIndicator = quest
+
+    -- 11. Tank / Assist Indicator
+    local tankassist = parent:CreateTexture(nil, "OVERLAY")
+    tankassist:SetSize(16, 16)
+    tankassist:Hide()
+    frame.TankAssistIndicator = tankassist
+
     -- Update Function
-    local function IsEnabled(key)
-        if not RoithiUIDB then return true end
-        local db = RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[unit]
-        if not db or not db.indicators then return true end
-        return db.indicators[key] ~= false -- Default true
+    local function GetIndicatorDB(key)
+        if not RoithiUIDB then return nil end
+        local db = RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[frame.unit]
+        if not db or not db.indicators then return nil end
+        return db.indicators[key]
     end
 
-    -- Update Function
+    local function IsEnabled(key)
+        local db = GetIndicatorDB(key)
+        if not db then return true end -- Default enabled if no DB
+        if type(db) == "table" then return db.enabled ~= false end
+        return db ~= false             -- Legacy boolean support
+    end
+
+    local function UpdateLayout()
+        local db = RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[frame.unit] and
+            RoithiUIDB.UnitFrames[frame.unit].indicators
+        if not db then return end
+
+        local anchorParent = frame.Health or frame
+
+        local function ApplySettings(indicator, key, defaultSize, defaultPoint, defaultRel, defaultX, defaultY)
+            if not indicator then return end
+            local s = db[key]
+
+            -- Normalize defaults
+            defaultSize = defaultSize or 20
+            defaultPoint = defaultPoint or "CENTER"
+            defaultRel = defaultRel or defaultPoint
+            defaultX = defaultX or 0
+            defaultY = defaultY or 0
+
+            if not s or type(s) ~= "table" then
+                indicator:SetSize(defaultSize, defaultSize)
+                indicator:ClearAllPoints()
+                indicator:SetPoint(defaultPoint, anchorParent, defaultRel, defaultX, defaultY)
+                return
+            end
+
+            indicator:SetSize(s.size or defaultSize, s.size or defaultSize)
+            indicator:ClearAllPoints()
+            local point = s.point or defaultPoint
+            local relativePoint = s.relativePoint or s.point or defaultRel
+            indicator:SetPoint(point, anchorParent, relativePoint, s.x or defaultX, s.y or defaultY)
+        end
+
+        ApplySettings(frame.CombatIndicator, "combat", 20, "CENTER", "BOTTOMLEFT", 0, 0)
+        ApplySettings(frame.RestingIndicator, "resting", 20, "CENTER", "TOPLEFT", 0, 0)
+        ApplySettings(frame.LeaderIndicator, "leader", 16, "TOPLEFT", nil, 0, 8)
+        ApplySettings(frame.RaidTargetIndicator, "raidicon", 20, "CENTER", "TOP", 0, 5)
+        ApplySettings(frame.ReadyCheckIndicator, "readycheck", 20, "CENTER", nil, 0, 0)
+        ApplySettings(frame.RoleIndicator, "role", 16, "TOPLEFT", nil, 14, 8)
+        ApplySettings(frame.PhaseIndicator, "phase", 22, "CENTER", nil, 0, 0)
+        ApplySettings(frame.ResurrectIndicator, "resurrect", 24, "CENTER", nil, 0, 0)
+        ApplySettings(frame.PvPIndicator, "pvp", 24, "CENTER", "TOPRIGHT", -10, 10)
+        ApplySettings(frame.QuestIndicator, "quest", 20, "CENTER", "TOPLEFT", 10, 10)
+        ApplySettings(frame.TankAssistIndicator, "tankassist", 16, "TOPLEFT", nil, 0, 16)
+    end
+
+    -- Expose UpdateLayout
+    frame.UpdateIndicatorLayout = UpdateLayout
+
     local function UpdateIndicators()
-        local unit = frame.unit -- Refresh just in case
+        local unit = frame.unit
+        local inTestMode = RoithiUIDB and RoithiUIDB.IndicatorTestMode
+
+        if not frame.IndicatorLayoutApplying then
+            frame.IndicatorLayoutApplying = true
+            UpdateLayout()
+            frame.IndicatorLayoutApplying = false
+        end
+
+        local function ShowIndicator(indicator, key, condition)
+            if not indicator then return end
+            if IsEnabled(key) and (condition or inTestMode) then
+                -- Unit Specific Filtering
+                if key == "resting" and unit ~= "player" then
+                    indicator:Hide()
+                    return
+                end
+
+                indicator:Show()
+            else
+                indicator:Hide()
+            end
+        end
 
         -- Resurrect
-        if IsEnabled("resurrect") and UnitHasIncomingResurrection(unit) then
-            res:Show()
-        else
-            res:Hide()
-        end
+        ShowIndicator(res, "resurrect", UnitHasIncomingResurrection(unit))
 
         -- Phase
-        if IsEnabled("phase") and UnitPhaseReason(unit) then
-            phase:Show()
-        else
-            phase:Hide()
-        end
+        ShowIndicator(phase, "phase", UnitPhaseReason(unit))
 
         -- Combat
-        if IsEnabled("combat") and UnitAffectingCombat(unit) then
-            combat:Show()
-        else
-            combat:Hide()
-        end
+        ShowIndicator(combat, "combat", UnitAffectingCombat(unit))
 
-        -- Resting (Player only typically)
-        if IsEnabled("resting") and unit == "player" and IsResting() then
-            resting:Show()
-        else
-            resting:Hide()
-        end
+        -- Resting
+        ShowIndicator(resting, "resting", unit == "player" and IsResting())
 
         -- Leader
-        if IsEnabled("leader") and UnitIsGroupLeader(unit) then
-            leader:Show()
-        else
-            leader:Hide()
-        end
+        ShowIndicator(leader, "leader", UnitIsGroupLeader(unit))
 
         -- Raid Target
-        local index = GetRaidTargetIndex(unit)
-        if IsEnabled("raidicon") and index then
-            SetRaidTargetIconTexture(raidDate, index)
+        local raidIndex = GetRaidTargetIndex(unit)
+        if IsEnabled("raidicon") and (raidIndex or inTestMode) then
+            SetRaidTargetIconTexture(raidDate, raidIndex or 1)
             raidDate:Show()
         else
             raidDate:Hide()
@@ -133,42 +209,76 @@ function UF:CreateIndicators(frame)
 
         -- Role
         local roleType = UnitGroupRolesAssigned(unit)
-        if IsEnabled("role") then
-            if roleType == "TANK" then
+        if IsEnabled("role") and (roleType ~= "NONE" or inTestMode) then
+            local r = roleType == "NONE" and "TANK" or roleType -- Default to tank in test mode
+            if r == "TANK" then
                 role:SetTexCoord(0, 19 / 64, 22 / 64, 41 / 64)
-                role:Show()
-            elseif roleType == "HEALER" then
+            elseif r == "HEALER" then
                 role:SetTexCoord(20 / 64, 39 / 64, 1 / 64, 20 / 64)
-                role:Show()
-            elseif roleType == "DAMAGER" then
+            elseif r == "DAMAGER" then
                 role:SetTexCoord(20 / 64, 39 / 64, 22 / 64, 41 / 64)
-                role:Show()
-            else
-                role:Hide()
             end
+            role:Show()
         else
             role:Hide()
         end
 
         -- Ready Check
-        local status = GetReadyCheckStatus(unit)
-        if IsEnabled("readycheck") and status then
-            -- Logic simplified for brevity, assuming generic enablement sufficient
-            -- Actually must replicate icon logic
-            if status == "ready" then
+        local rcStatus = GetReadyCheckStatus(unit)
+        if IsEnabled("readycheck") and (rcStatus or inTestMode) then
+            local s = rcStatus or "ready"
+            if s == "ready" then
                 readyCheck:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
-                readyCheck:Show()
-            elseif status == "notready" then
+            elseif s == "notready" then
                 readyCheck:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
-                readyCheck:Show()
-            elseif status == "waiting" then
+            elseif s == "waiting" then
                 readyCheck:SetTexture("Interface\\RaidFrame\\ReadyCheck-Waiting")
-                readyCheck:Show()
-            else
-                readyCheck:Hide()
             end
+            readyCheck:Show()
         else
             readyCheck:Hide()
+        end
+
+        -- PvP
+        local pvpType = UnitIsPVPFreeForAll(unit) and "FFA" or
+        (UnitIsPVP(unit) and (UnitFactionGroup(unit) or "Neutral"))
+        if _G.issecretvalue and _G.issecretvalue(pvpType) then pvpType = "Neutral" end -- Safety
+
+        if IsEnabled("pvp") and (pvpType or inTestMode) then
+            local faction = pvpType or (UnitFactionGroup("player") or "Neutral")
+            if faction == "FFA" then
+                pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-FFA")
+            elseif faction == "Alliance" then
+                pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Alliance")
+            elseif faction == "Horde" then
+                pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Horde")
+            else
+                pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
+            end
+            pvp:Show()
+        else
+            pvp:Hide()
+        end
+
+        -- Quest
+        ShowIndicator(quest, "quest", UnitIsQuestBoss and UnitIsQuestBoss(unit))
+
+        -- Tank / Assist
+        local isTank = UnitIsGroupAssistant(unit) or UnitIsGroupLeader(unit) -- Simplified for now, or check real MT/MA
+        -- Actually Blizzard has specific MT/MA flags in some APIs.
+        -- Let's check UnitIsMainTank/UnitIsMainAssist if they exist (usually oUF or similar use them)
+        local isMT = _G.UnitIsMainTank and _G.UnitIsMainTank(unit)
+        local isMA = _G.UnitIsMainAssist and _G.UnitIsMainAssist(unit)
+
+        if IsEnabled("tankassist") and (isMT or isMA or inTestMode) then
+            if isMT or (inTestMode and not isMA) then
+                tankassist:SetTexture("Interface\\GroupFrame\\UI-Group-MainTankIcon")
+            else
+                tankassist:SetTexture("Interface\\GroupFrame\\UI-Group-MainAssistIcon")
+            end
+            tankassist:Show()
+        else
+            tankassist:Hide()
         end
     end
 

@@ -50,8 +50,8 @@ local function BuildEmpowerTimeline(unit)
     -- 3. Fallback (Equal Split)
 
     local durations
-    if UnitEmpoweredStageDurations then
-        durations = UnitEmpoweredStageDurations(unit)
+    if _G.UnitEmpoweredStageDurations then
+        durations = _G.UnitEmpoweredStageDurations(unit)
     end
 
     local percentages

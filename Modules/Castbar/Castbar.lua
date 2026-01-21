@@ -79,8 +79,8 @@ function ns.UpdateCast(bar)
         end)
 
         -- 3. Fallback: Check Stage Percentages
-        if not isEmpoweredSafe and UnitEmpoweredStagePercentages then
-            local percentages = UnitEmpoweredStagePercentages(unit)
+        if not isEmpoweredSafe and _G.UnitEmpoweredStagePercentages then
+            local percentages = _G.UnitEmpoweredStagePercentages(unit)
             if percentages and #percentages > 0 then
                 isEmpoweredSafe = true
                 -- Use this count if reliable

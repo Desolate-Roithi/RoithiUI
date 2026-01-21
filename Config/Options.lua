@@ -22,6 +22,14 @@ local function GetOptions()
                         name = "General settings for RoithiUI modules.",
                         order = 1,
                     },
+                    reset = {
+                        type = "execute",
+                        name = "Reset to Defaults",
+                        desc = "Reset all settings to default values and reload the UI. Cannot be undone.",
+                        order = 10,
+                        func = function() RoithiUI:ResetSettings() end,
+                        width = "full",
+                    },
                     -- Add global toggles here later if needed
                 },
             },
@@ -38,6 +46,7 @@ local function GetOptions()
                     -- Units will be populated dynamically or defined below
                 },
             },
+            customtags = RoithiUI.Config.GetCustomTagsOptions and RoithiUI.Config.GetCustomTagsOptions() or nil,
             castbars = {
                 type = "group",
                 name = "Castbars",
@@ -104,86 +113,7 @@ local function GetOptions()
                                 GetDB().powerTextFormat = v; ns.RefreshUnitFrame(unit)
                             end,
                         },
-                        fontSize = {
-                            type = "range",
-                            name = "Font Size",
-                            order = 3,
-                            min = 8,
-                            max = 32,
-                            step = 1,
-                            get = function() return GetDB().fontSize or 12 end,
-                            set = function(_, v)
-                                GetDB().fontSize = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        -- Positions (X/Y) moved from EditMode? User said: "Move the others to the settings window"
-                        -- Ideally offsets are fine here if fine-tuning is needed outside drag-drop.
-                        healthX = {
-                            type = "range",
-                            name = "Health X",
-                            min = -100,
-                            max = 100,
-                            step = 1,
-                            get = function() return GetDB().healthTextX or -4 end,
-                            set = function(_, v)
-                                GetDB().healthTextX = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        healthY = {
-                            type = "range",
-                            name = "Health Y",
-                            min = -50,
-                            max = 50,
-                            step = 1,
-                            get = function() return GetDB().healthTextY or 0 end,
-                            set = function(_, v)
-                                GetDB().healthTextY = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        powerX = {
-                            type = "range",
-                            name = "Power X",
-                            min = -100,
-                            max = 100,
-                            step = 1,
-                            get = function() return GetDB().powerTextX or -4 end,
-                            set = function(_, v)
-                                GetDB().powerTextX = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        powerY = {
-                            type = "range",
-                            name = "Power Y",
-                            min = -50,
-                            max = 50,
-                            step = 1,
-                            get = function() return GetDB().powerTextY or 0 end,
-                            set = function(_, v)
-                                GetDB().powerTextY = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        nameX = {
-                            type = "range",
-                            name = "Name X",
-                            min = -100,
-                            max = 100,
-                            step = 1,
-                            get = function() return GetDB().nameTextX or 0 end,
-                            set = function(_, v)
-                                GetDB().nameTextX = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        nameY = {
-                            type = "range",
-                            name = "Name Y",
-                            min = -50,
-                            max = 50,
-                            step = 1,
-                            get = function() return GetDB().nameTextY or 0 end,
-                            set = function(_, v)
-                                GetDB().nameTextY = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
+
                     },
                 },
                 -- Tab: Indicators
@@ -193,59 +123,156 @@ local function GetOptions()
                     order = 2,
                     inline = true,
                     args = {
-                        combat = {
+                        testMode = {
                             type = "toggle",
-                            name = "Show Combat",
-                            get = function() return (GetDB().indicators and GetDB().indicators.combat ~= false) end,
+                            name = "|cffffd100Test Mode|r",
+                            desc = "Force show all enabled indicators for easier configuration.",
+                            order = 0,
+                            get = function() return RoithiUIDB.IndicatorTestMode end,
                             set = function(_, v)
-                                if not GetDB().indicators then GetDB().indicators = {} end; GetDB().indicators.combat = v; ns
-                                    .RefreshUnitFrame(unit)
+                                RoithiUIDB.IndicatorTestMode = v
+                                ns.RefreshUnitFrame(unit)
                             end,
+                            width = "full",
                         },
-                        phase = {
-                            type = "toggle",
-                            name = "Show Phase",
-                            get = function() return (GetDB().indicators and GetDB().indicators.phase ~= false) end,
-                            set = function(_, v)
-                                if not GetDB().indicators then GetDB().indicators = {} end; GetDB().indicators.phase = v; ns
-                                    .RefreshUnitFrame(unit)
+                        selectIndicator = {
+                            type = "select",
+                            name = "Select Indicator",
+                            order = 1,
+                            values = function()
+                                local v = {
+                                    combat = "Combat",
+                                    leader = "Leader",
+                                    raidicon = "Raid Icon",
+                                    role = "Role",
+                                    readycheck = "Ready Check",
+                                    phase = "Phase",
+                                    resurrect = "Resurrect",
+                                    pvp = "PvP",
+                                    tankassist = "Main Tank / Assist",
+                                }
+                                if unit == "target" or unit == "focus" then
+                                    v.quest = "Quest"
+                                end
+                                return v
                             end,
+                            get = function() return RoithiUIDB.tempIndicatorSelect end,
+                            set = function(_, v) RoithiUIDB.tempIndicatorSelect = v end,
                         },
-                        resurrect = {
-                            type = "toggle",
-                            name = "Show Resurrect",
-                            get = function() return (GetDB().indicators and GetDB().indicators.resurrect ~= false) end,
-                            set = function(_, v)
-                                if not GetDB().indicators then GetDB().indicators = {} end; GetDB().indicators.resurrect =
-                                    v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        leader = {
-                            type = "toggle",
-                            name = "Show Leader",
-                            get = function() return (GetDB().indicators and GetDB().indicators.leader ~= false) end,
-                            set = function(_, v)
-                                if not GetDB().indicators then GetDB().indicators = {} end; GetDB().indicators.leader = v; ns
-                                    .RefreshUnitFrame(unit)
-                            end,
-                        },
-                        raidicon = {
-                            type = "toggle",
-                            name = "Show Raid Icon",
-                            get = function() return (GetDB().indicators and GetDB().indicators.raidicon ~= false) end,
-                            set = function(_, v)
-                                if not GetDB().indicators then GetDB().indicators = {} end; GetDB().indicators.raidicon =
-                                    v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        role = {
-                            type = "toggle",
-                            name = "Show Role",
-                            get = function() return (GetDB().indicators and GetDB().indicators.role ~= false) end,
-                            set = function(_, v)
-                                if not GetDB().indicators then GetDB().indicators = {} end; GetDB().indicators.role = v; ns
-                                    .RefreshUnitFrame(unit)
-                            end,
+                        -- Details Group (Only shown if selection made)
+                        details = {
+                            type = "group",
+                            name = "Settings",
+                            order = 2,
+                            inline = true,
+                            hidden = function() return not RoithiUIDB.tempIndicatorSelect end,
+                            args = {
+                                enabled = {
+                                    type = "toggle",
+                                    name = "Enable",
+                                    order = 1,
+                                    get = function()
+                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local db = GetDB().indicators and GetDB().indicators[k]
+                                        return db and db.enabled
+                                    end,
+                                    set = function(_, v)
+                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        if not GetDB().indicators then GetDB().indicators = {} end
+                                        if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
+                                        GetDB().indicators[k].enabled = v
+                                        ns.RefreshUnitFrame(unit)
+                                    end,
+                                },
+                                size = {
+                                    type = "range",
+                                    name = "Size",
+                                    order = 2,
+                                    min = 8,
+                                    max = 64,
+                                    step = 1,
+                                    get = function()
+                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local db = GetDB().indicators and GetDB().indicators[k]
+                                        return db and db.size or 20
+                                    end,
+                                    set = function(_, v)
+                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        if not GetDB().indicators then GetDB().indicators = {} end
+                                        if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
+                                        GetDB().indicators[k].size = v
+                                        ns.RefreshUnitFrame(unit)
+                                    end,
+                                },
+                                point = {
+                                    type = "select",
+                                    name = "Anchor Point",
+                                    order = 3,
+                                    values = {
+                                        ["CENTER"] = "Center",
+                                        ["TOP"] = "Top",
+                                        ["BOTTOM"] = "Bottom",
+                                        ["LEFT"] = "Left",
+                                        ["RIGHT"] = "Right",
+                                        ["TOPLEFT"] = "Top Left",
+                                        ["TOPRIGHT"] = "Top Right",
+                                        ["BOTTOMLEFT"] = "Bottom Left",
+                                        ["BOTTOMRIGHT"] = "Bottom Right"
+                                    },
+                                    get = function()
+                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local db = GetDB().indicators and GetDB().indicators[k]
+                                        return db and db.point or "CENTER"
+                                    end,
+                                    set = function(_, v)
+                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        if not GetDB().indicators then GetDB().indicators = {} end
+                                        if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
+                                        GetDB().indicators[k].point = v
+                                        ns.RefreshUnitFrame(unit)
+                                    end,
+                                },
+                                x = {
+                                    type = "range",
+                                    name = "X Offset",
+                                    order = 4,
+                                    min = -100,
+                                    max = 100,
+                                    step = 1,
+                                    get = function()
+                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local db = GetDB().indicators and GetDB().indicators[k]
+                                        return db and db.x or 0
+                                    end,
+                                    set = function(_, v)
+                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        if not GetDB().indicators then GetDB().indicators = {} end
+                                        if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
+                                        GetDB().indicators[k].x = v
+                                        ns.RefreshUnitFrame(unit)
+                                    end,
+                                },
+                                y = {
+                                    type = "range",
+                                    name = "Y Offset",
+                                    order = 5,
+                                    min = -100,
+                                    max = 100,
+                                    step = 1,
+                                    get = function()
+                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local db = GetDB().indicators and GetDB().indicators[k]
+                                        return db and db.y or 0
+                                    end,
+                                    set = function(_, v)
+                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        if not GetDB().indicators then GetDB().indicators = {} end
+                                        if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
+                                        GetDB().indicators[k].y = v
+                                        ns.RefreshUnitFrame(unit)
+                                    end,
+                                },
+                            },
                         },
                     },
                 },

@@ -171,3 +171,48 @@ function UF:OnEnable()
     -- or we trigger the spawn here if Units.lua just defines the layouts.
     -- We will let Units.lua register the specific layouts.
 end
+
+function UF:UpdateFrameFromSettings(unit)
+    local db = RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[unit]
+    local frame = self.frames and self.frames[unit]
+    if not frame or not db then return end
+
+    -- Dimension
+    local width = db.width or frame:GetWidth() -- Use current if DB missing, or default? db.width is safe.
+    -- Actually better to use defaults if nil
+    if not db.width then width = 200 end
+    local height = db.height or 50
+    frame:SetSize(width, height)
+
+    -- Position (Only if enforced by DB, usually EditMode handles this via OnPositionChanged)
+    -- But explicit update ensures sync
+    if db.point then
+        frame:ClearAllPoints()
+        frame:SetPoint(db.point, UIParent, db.point, db.x or 0, db.y or 0)
+    end
+
+    -- Fonts & Elements Refresh
+    local fontSize = db.fontSize or 12
+    if frame.Name then
+        LibRoithi.mixins:SetFont(frame.Name, "Friz Quadrata TT", fontSize, "OUTLINE")
+        if frame.UpdateName then frame.UpdateName() end
+    end
+    if frame.HealthText then
+        LibRoithi.mixins:SetFont(frame.HealthText, "Friz Quadrata TT", fontSize, "OUTLINE")
+        if frame.UpdateHealthText then frame.UpdateHealthText() end
+    end
+    if frame.PowerText then
+        LibRoithi.mixins:SetFont(frame.PowerText, "Friz Quadrata TT", fontSize, "OUTLINE")
+        if frame.UpdatePowerText then frame.UpdatePowerText() end
+    end
+
+    -- Update Layouts
+    if frame.UpdateIndicators then frame.UpdateIndicators() end
+    if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
+    if frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
+    if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+    if frame.UpdateAuras then frame.UpdateAuras() end
+
+    -- Tags
+    if self.UpdateTags then self:UpdateTags(frame) end
+end

@@ -24,55 +24,18 @@ function UF:CreateStandardLayout(unit, name)
     local frame = self:CreateUnitFrame(unit, name)
 
     -- Default Positions (Can be overridden by DB later)
-    if unit == "player" then
-        frame:SetPoint("CENTER", UIParent, "CENTER", -250, -100)
-    elseif unit == "target" then
-        frame:SetPoint("CENTER", UIParent, "CENTER", 250, -100)
-    elseif unit == "focus" then
-        frame:SetPoint("CENTER", UIParent, "CENTER", -350, 0)
-    elseif unit == "pet" then
-        frame:SetPoint("CENTER", UIParent, "CENTER", -250, -150)
-    elseif unit == "targettarget" then
-        frame:SetPoint("CENTER", UIParent, "CENTER", 250, -150)
-    elseif unit == "focustarget" then
-        frame:SetPoint("CENTER", UIParent, "CENTER", -350, -50)
+    -- Apply Settings (Dimensions, Position, etc. from DB)
+    if self.UpdateFrameFromSettings then
+        self:UpdateFrameFromSettings(unit)
     end
 
     -- Create ALL elements for every frame to ensure consistent structure
     self:CreateHealthBar(frame)
-    self:CreatePowerBar(frame) -- Restored
+    self:CreatePowerBar(frame)
     self:CreateHealPrediction(frame)
-    -- self:CreateName(frame) -- Replaced by Tag 1
     self:CreateIndicators(frame)
     self:CreateAuras(frame)
     self:CreateRange(frame)
-
-    -- Ensure Default Tags exist
-    if RoithiUIDB and RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[unit] then
-        local db = RoithiUIDB.UnitFrames[unit]
-        if not db.tags then db.tags = {} end
-
-        -- Default 1: Name
-        if not db.tags[1] then
-            db.tags[1] = { enabled = true, formatString = "@name", point = "BOTTOM", anchorTo = "Frame", x = 0, y = 35 } -- Above frame
-        end
-        -- Default 2: Health
-        if not db.tags[2] then
-            db.tags[2] = {
-                enabled = true,
-                formatString = "@health.current / @health.maximum",
-                point = "CENTER",
-                anchorTo =
-                "Health",
-                x = 0,
-                y = 0
-            }
-        end
-        -- Default 3: Power
-        if not db.tags[3] then
-            db.tags[3] = { enabled = true, formatString = "@power.current:short", point = "CENTER", anchorTo = "Power", x = 0, y = 0 }
-        end
-    end
 
     self:CreateClassPower(frame)
     self:CreateAdditionalPower(frame)
@@ -82,11 +45,43 @@ function UF:CreateStandardLayout(unit, name)
         self:UpdateTags(frame) -- Build tags from DB
 
         -- Register lightweight updates
+        -- Register lightweight updates
         if not frame.RoithiTagsHooked then
             local function UpdateTags() self:UpdateCustomTags(frame) end
+
+            -- Key events for stats
+            if frame.unit then
+                frame:RegisterUnitEvent("UNIT_HEALTH", frame.unit)
+                frame:RegisterUnitEvent("UNIT_MAXHEALTH", frame.unit)
+                frame:RegisterUnitEvent("UNIT_POWER_UPDATE", frame.unit)
+                frame:RegisterUnitEvent("UNIT_MAXPOWER", frame.unit)
+                frame:RegisterUnitEvent("UNIT_NAME_UPDATE", frame.unit)
+                frame:RegisterUnitEvent("UNIT_LEVEL", frame.unit)
+                frame:RegisterUnitEvent("UNIT_ABSORB_AMOUNT_CHANGED", frame.unit)
+            end
+
+            -- Context events for target switching
+            if frame.unit == "target" then
+                frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+            elseif frame.unit == "focus" then
+                frame:RegisterEvent("PLAYER_FOCUS_CHANGED")
+            elseif frame.unit == "targettarget" or frame.unit == "focustarget" or frame.unit == "pettarget" then
+                frame:RegisterEvent("UNIT_TARGET")
+            end
+
             frame:HookScript("OnEvent", function(_, event, unit)
-                if unit == frame.unit then UpdateTags() end
+                -- Standard Unit Events
+                if unit == frame.unit then
+                    UpdateTags()
+                    -- Context Switch Events
+                elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then
+                    UpdateTags()
+                elseif event == "UNIT_TARGET" then
+                    -- Check if parent unit changed (e.g. target changed for targettarget)
+                    UpdateTags()
+                end
             end)
+
             -- Also update on Show to ensure fresh data
             frame:HookScript("OnShow", UpdateTags)
             frame.RoithiTagsHooked = true

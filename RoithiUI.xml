@@ -16,7 +16,10 @@
 
     <!-- Core -->
     <Script file="Core/Init.lua"/>
+    <Script file="Core/Commands.lua"/>
+    <Script file="Config/Defaults.lua"/>
     <Script file="Config/General.lua"/>
+    <Script file="Config/CustomTags.lua"/>
     <Script file="Config/Options.lua"/>
     <Script file="Config/Castbars.lua"/>
     <Script file="Config/UnitFrames.lua"/>
@@ -45,4 +48,7 @@
     <Script file="Modules/Castbar/Core.lua"/>
     <Script file="Modules/Castbar/Empower.lua"/>
     <Script file="Modules/Castbar/Castbar.lua"/>
+    
+    <!-- Manual Tests (Safe to load, requires /rs on to activate) -->
+    <Script file="Tests/Manual/SimulateSecrets.lua"/>
 </Ui>

@@ -33,15 +33,25 @@ function UF:CreateAdditionalPower(frame)
 
         -- Only show if primary resource is NOT Mana (pType ~= 0) AND we have Mana (max > 0)
         -- e.g. Druid in Cat Form (Energy) but has Mana.
-        if pType ~= 0 and maxMana > 0 then
-            addPower:Show()
-            addPower:SetMinMaxValues(0, maxMana)
-            addPower:SetValue(curMana)
-            addPower:SetStatusBarColor(0, 0.5, 1) -- Mana Blue
+        if pType ~= 0 then
+            -- 12.0.1 Safety: Check for Secret
+            local isSecret = C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(maxMana)
+            local hasMana = isSecret or (maxMana and maxMana > 0)
 
-            -- Ensure visibility affects layout
-            if frame.UpdateAdditionalPowerLayout and not frame.isInEditMode then
-                frame.UpdateAdditionalPowerLayout()
+            if hasMana then
+                addPower:Show()
+                addPower:SetMinMaxValues(0, maxMana)
+                addPower:SetValue(curMana)
+                addPower:SetStatusBarColor(0, 0.5, 1) -- Mana Blue
+
+                -- Ensure visibility affects layout
+                if frame.UpdateAdditionalPowerLayout and not frame.isInEditMode then
+                    frame.UpdateAdditionalPowerLayout()
+                end
+            else
+                if not frame.isInEditMode then
+                    addPower:Hide()
+                end
             end
         else
             if not frame.isInEditMode then
@@ -177,7 +187,7 @@ function UF:CreateAdditionalPower(frame)
             addPower:Show()
             addPower:SetStatusBarColor(0, 0.5, 1)
             addPower:SetValue(UnitPowerMax("player", 0))
-            frame.UpdateAdditionalPowerLayout()  -- Force check layout
+            frame.UpdateAdditionalPowerLayout() -- Force check layout
         end)
 
         LEM:RegisterCallback('exit', function()

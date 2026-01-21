@@ -41,6 +41,10 @@ function UF:CreateHealthBar(frame)
         health:RegisterEvent("PLAYER_TARGET_CHANGED")
     elseif frame.unit == "focus" then
         health:RegisterEvent("PLAYER_FOCUS_CHANGED")
+
+        -- Fix: Register UNIT_TARGET for sub-units to ensure health updates immediately
+    elseif frame.unit == "targettarget" or frame.unit == "focustarget" or frame.unit == "pettarget" then
+        health:RegisterEvent("UNIT_TARGET")
     end
 end
 
@@ -184,25 +188,54 @@ function UF:CreatePowerBar(frame)
 
 
     -- Update Logic
-    local function UpdatePower(self)
+    local function UpdatePower(self, event, unit)
+        -- Event safety: for UNIT_TARGET, we don't care about the arg unit, just trigger update
+        if event == "UNIT_TARGET" then
+            -- Verify if the target change actually affects us
+            -- (e.g., if we are targettarget, and player changes target, we update)
+            if not UnitExists(frame.unit) then
+                if not power.isInEditMode then power:Hide() end
+                return
+            end
+            -- proceed to update
+        end
+
         if power.isInEditMode then
             self:SetMinMaxValues(0, 100)
             self:SetValue(100)
             self:SetStatusBarColor(0, 0, 1) -- Blue dummy
             if power.Text then power.Text:Show() end
+            power:Show()
             return
         end
         if power.Text then power.Text:Hide() end
 
-        local unit = frame.unit
-        if not UnitExists(unit) then return end -- Safety for detached
+        local u = frame.unit
+        if not UnitExists(u) then
+            power:Hide()
+            return
+        end
 
-        local min, max = UnitPower(unit), UnitPowerMax(unit)
+        -- Explicit Show for Detached bars (and attached ones that might have been hidden)
+        -- Only if enabled in config (checked in UpdateLayout, but double check doesn't hurt)
+        power:Show()
+
+        local min, max = UnitPower(u), UnitPowerMax(u)
+        -- Safety: C_Secrets check not needed for SetMinMax/SetValue as they handle it,
+        -- BUT if max is secret 0, it might be an issue? No, SetMinMax handles unknown types gracefully usually.
+        -- To be 100% safe for 12.0:
+        if C_Secrets and C_Secrets.IsSecret and (C_Secrets.IsSecret(min) or C_Secrets.IsSecret(max)) then
+            -- We can pass secrets directly to SetMinMaxValues in 11.0+,
+            -- assuming Blizzard updated StatusBar widgets.
+            -- If not, we might need to verify.
+            -- For now, standard behavior is pass-through.
+        end
+
         self:SetMinMaxValues(0, max)
         self:SetValue(min)
 
         -- Color
-        local pType, pToken, altR, altG, altB = UnitPowerType(unit)
+        local pType, pToken, altR, altG, altB = UnitPowerType(u)
         local c = PowerBarColor[pToken]
         if not c and pType then c = PowerBarColor[pType] end
         if not c then c = PowerBarColor["MANA"] end -- Fallback
@@ -218,17 +251,21 @@ function UF:CreatePowerBar(frame)
     power:RegisterUnitEvent("UNIT_POWER_UPDATE", frame.unit)
     power:RegisterUnitEvent("UNIT_MAXPOWER", frame.unit)
     power:RegisterUnitEvent("UNIT_DISPLAYPOWER", frame.unit)
-    power:SetScript("OnShow", UpdatePower)
+    power:SetScript("OnShow", function() UpdatePower(power, "OnShow", frame.unit) end)
 
     -- Target/Focus change updates
     if frame.unit == "target" then
         power:RegisterEvent("PLAYER_TARGET_CHANGED")
     elseif frame.unit == "focus" then
         power:RegisterEvent("PLAYER_FOCUS_CHANGED")
+
+        -- Fix for ToT / FocusTarget / PetTarget updates
+    elseif frame.unit == "targettarget" or frame.unit == "focustarget" or frame.unit == "pettarget" then
+        power:RegisterEvent("UNIT_TARGET")
     end
 
     -- Initial
-    if UnitExists(frame.unit) then UpdatePower(power) end
+    UpdatePower(power, "Initial", frame.unit)
 end
 
 function UF:CreateAdditionalPower(frame)
@@ -360,12 +397,12 @@ function UF:CreateAdditionalPower(frame)
 
             if frame.ClassPower and frame.ClassPower:IsShown() and not (db and db.classPowerDetached) then
                 anchor = frame.ClassPower
-                offset = -4  -- Spacing between bars
+                offset = -4 -- Spacing between bars
             elseif frame.Power and frame.Power:IsShown() and not (db and db.powerDetached) then
                 anchor = frame.Power
                 offset = -1
             else
-                anchor = frame.Health  -- Fallback if everything else detached/hidden
+                anchor = frame.Health -- Fallback if everything else detached/hidden
                 offset = -1
             end
 

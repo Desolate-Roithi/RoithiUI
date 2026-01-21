@@ -12,47 +12,9 @@ end
 -- ----------------------------------------------------------------------------
 local function UpdateFrameFromSettings(unit)
     local UF = RoithiUI:GetModule("UnitFrames")
-    local db = GetDB(unit)
-    local frame = UF and UF.frames and UF.frames[unit]
-    if not frame then return end
-
-    -- Dimension
-    -- Default sizes if not in DB yet
-    local width = db.width or 200
-    local height = db.height or 50
-    frame:SetSize(width, height)
-
-    -- Position
-    -- Only if not handled by EditMode exclusively or if we want to enforce DB
-    -- Usually EditMode callback handles this, but explicit update helps consistency
-    if db.point then
-        frame:ClearAllPoints()
-        frame:SetPoint(db.point, UIParent, db.point, db.x or 0, db.y or 0)
+    if UF and UF.UpdateFrameFromSettings then
+        UF:UpdateFrameFromSettings(unit)
     end
-
-    -- Fonts & Elements Refresh
-    local fontSize = db.fontSize or 12
-    if frame.Name then
-        LibRoithi.mixins:SetFont(frame.Name, "Friz Quadrata TT", fontSize, "OUTLINE")
-        if frame.UpdateName then frame.UpdateName() end
-    end
-    if frame.HealthText then
-        LibRoithi.mixins:SetFont(frame.HealthText, "Friz Quadrata TT", fontSize, "OUTLINE")
-        if frame.UpdateHealthText then frame.UpdateHealthText() end
-    end
-    if frame.PowerText then
-        LibRoithi.mixins:SetFont(frame.PowerText, "Friz Quadrata TT", fontSize, "OUTLINE")
-        if frame.UpdatePowerText then frame.UpdatePowerText() end
-    end
-    if frame.UpdateIndicators then frame.UpdateIndicators() end
-    if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
-    if frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
-    if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
-    if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
-    if frame.UpdateAuras then frame.UpdateAuras() end
-
-    local UF = RoithiUI:GetModule("UnitFrames")
-    if UF.UpdateTags then UF:UpdateTags(frame) end
 end
 
 -- ----------------------------------------------------------------------------
@@ -300,139 +262,9 @@ local function GetSettingsForAdditionalPower(unit)
     }
 end
 
-local function GetSettingsForTags(unit)
-    local settings = {}
-    local db = GetDB(unit)
-    if not db.tags then db.tags = {} end
 
-    -- Helper to get specific tag DB
-    local function GetTagDB(index)
-        if not db.tags[index] then
-            db.tags[index] = {
-                enabled = false,
-                formatString = "", -- Default empty, will ideally be pre-filled by init
-                point = "CENTER",
-                anchorTo = "Frame",
-                x = 0,
-                y = 0
-            }
-        end
-        return db.tags[index]
-    end
 
-    for i = 1, 5 do
-        local tagSettings = {
-            {
-                name = "Tag " .. i,
-                kind = LEM.SettingType.CollapsibleHeader,
-                get = function() return GetTagDB(i).isExpanded end,
-                set = function(_, value)
-                    GetTagDB(i).isExpanded = value
-                    local UF = RoithiUI:GetModule("UnitFrames")
-                    local frame = UF and UF.frames and UF.frames[unit]
-                    if frame then
-                        -- Refreshing here updates the expansion state in UI
-                        LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
-                        LEM:RefreshFrameSettings(frame)
-                    end
-                end,
-            }
-        }
 
-        if GetTagDB(i).isExpanded then
-            local subSettings = {
-                {
-                    name = "Enabled",
-                    kind = LEM.SettingType.Checkbox,
-                    default = false,
-                    get = function() return GetTagDB(i).enabled end,
-                    set = function(_, value)
-                        GetTagDB(i).enabled = value
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-                {
-                    name = "Text",
-                    kind = LEM.SettingType.Input,
-                    default = "@health.current",
-                    get = function() return GetTagDB(i).formatString end,
-                    set = function(_, value)
-                        GetTagDB(i).formatString = value
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-                {
-                    name = "Anchor To",
-                    kind = LEM.SettingType.Dropdown,
-                    default = "Frame",
-                    entries = {
-                        ["Frame"] = "Frame",
-                        ["Health"] = "Health Bar",
-                        ["Power"] = "Power Bar",
-                        ["ClassPower"] = "Class Power",
-                        ["AdditionalPower"] = "Add. Power"
-                    },
-                    get = function() return GetTagDB(i).anchorTo end,
-                    set = function(_, value)
-                        GetTagDB(i).anchorTo = value
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-                {
-                    name = "Point",
-                    kind = LEM.SettingType.Dropdown,
-                    default = "CENTER",
-                    entries = {
-                        ["CENTER"] = "Center",
-                        ["TOP"] = "Top",
-                        ["BOTTOM"] = "Bottom",
-                        ["LEFT"] = "Left",
-                        ["RIGHT"] = "Right",
-                        ["TOPLEFT"] = "Top Left",
-                        ["TOPRIGHT"] = "Top Right",
-                        ["BOTTOMLEFT"] = "Bottom Left",
-                        ["BOTTOMRIGHT"] = "Bottom Right"
-                    },
-                    get = function() return GetTagDB(i).point end,
-                    set = function(_, value)
-                        GetTagDB(i).point = value
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-                {
-                    name = "X",
-                    kind = LEM.SettingType.Slider,
-                    default = 0,
-                    minValue = -200,
-                    maxValue = 200,
-                    valueStep = 1,
-                    get = function() return GetTagDB(i).x end,
-                    set = function(_, value)
-                        GetTagDB(i).x = value
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-                {
-                    name = "Y",
-                    kind = LEM.SettingType.Slider,
-                    default = 0,
-                    minValue = -100,
-                    maxValue = 100,
-                    valueStep = 1,
-                    get = function() return GetDB(unit).tags and GetTagDB(i).y end,
-                    set = function(_, value)
-                        GetTagDB(i).y = value
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-            }
-            for _, s in ipairs(subSettings) do table.insert(tagSettings, s) end
-        end
-        for _, s in ipairs(tagSettings) do table.insert(settings, s) end
-    end
-
-    return settings
-end
 
 local function GetSettingsForMainFrame(unit, frame)
     local settings = {
@@ -443,11 +275,12 @@ local function GetSettingsForMainFrame(unit, frame)
             minValue = 50,
             maxValue = 400,
             valueStep = 1,
-            get = function() return GetDB(unit).width or 200 end,
+            get = function() return GetDB(unit).width end,
             set = function(_, value)
                 GetDB(unit).width = value
                 UpdateFrameFromSettings(unit)
             end,
+            formatter = function(v) return string.format("%.1f", v) end,
         },
         {
             name = "Height",
@@ -456,11 +289,12 @@ local function GetSettingsForMainFrame(unit, frame)
             minValue = 20,
             maxValue = 150,
             valueStep = 1,
-            get = function() return GetDB(unit).height or 50 end,
+            get = function() return GetDB(unit).height end,
             set = function(_, value)
                 GetDB(unit).height = value
                 UpdateFrameFromSettings(unit)
             end,
+            formatter = function(v) return string.format("%.1f", v) end,
         },
         {
             name = "X Position",
@@ -469,11 +303,12 @@ local function GetSettingsForMainFrame(unit, frame)
             minValue = -2500,
             maxValue = 2500,
             valueStep = 1,
-            get = function() return GetDB(unit).x or 0 end,
+            get = function() return GetDB(unit).x end,
             set = function(_, value)
                 GetDB(unit).x = value
                 UpdateFrameFromSettings(unit)
             end,
+            formatter = function(v) return string.format("%.1f", v) end,
         },
         {
             name = "Y Position",
@@ -482,11 +317,12 @@ local function GetSettingsForMainFrame(unit, frame)
             minValue = -1500,
             maxValue = 1500,
             valueStep = 1,
-            get = function() return GetDB(unit).y or 0 end,
+            get = function() return GetDB(unit).y end,
             set = function(_, value)
                 GetDB(unit).y = value
                 UpdateFrameFromSettings(unit)
             end,
+            formatter = function(v) return string.format("%.1f", v) end,
         },
 
 
@@ -549,162 +385,12 @@ local function GetSettingsForMainFrame(unit, frame)
         end
     end
 
-    return settings
-end
 
-local function GetSettingsForTags(unit)
-    local settings = {}
-    local db = GetDB(unit)
-    if not db.tags then db.tags = {} end
-
-    -- Helper to get specific tag DB
-    local function GetTagDB(index)
-        if not db.tags[index] then
-            db.tags[index] = {
-                enabled = false,
-                formatString = "",
-                point = "CENTER",
-                anchorTo = "Frame",
-                x = 0,
-                y = 0
-            }
-        end
-        return db.tags[index]
-    end
-
-    for i = 1, 5 do
-        local tagSettings = {
-            {
-                name = "Tag " .. i,
-                kind = LEM.SettingType.CollapsibleHeader,
-                get = function() return GetTagDB(i).isExpanded end,
-                set = function(_, value)
-                    GetTagDB(i).isExpanded = value
-                    local UF = RoithiUI:GetModule("UnitFrames")
-                    local frame = UF and UF.frames and UF.frames[unit]
-                    if frame then
-                        LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
-                        LEM:RefreshFrameSettings(frame)
-                    end
-                end,
-            }
-        }
-
-        if GetTagDB(i).isExpanded then
-            local subSettings = {
-                {
-                    name = "Enabled",
-                    kind = LEM.SettingType.Checkbox,
-                    default = false,
-                    get = function() return GetTagDB(i).enabled end,
-                    set = function(_, value)
-                        GetTagDB(i).enabled = value
-                        if not value then
-                            -- Reset or clear?
-                            -- If disabled, it should stop rendering.
-                            -- UpdateTags handles this by iterating only active or valid?
-                            -- Actually UpdateTags iterates ipairs(db.tags).
-                            -- We might need to ensure the DB structure aligns.
-                            -- If we use slot-based approach (1..5), UpdateTags needs to check .enabled.
-                        end
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-                {
-                    name = "Text (@health.current)",
-                    kind = LEM.SettingType.Input, -- Assumption: Input exists? Standard LEM usually has it?
-                    -- If Input not available, we might default to Dropdown or Error?
-                    -- Checking LibEditMode source would be good, but assuming standard types.
-                    -- Actually standard types are typically Slider, Checkbox, Dropdown.
-                    -- If Input is missing, I might be blocked.
-                    -- I'll Assume Input exists or use a predefined list if I have to.
-                    -- Wait, the user manual for LEM isn't here.
-                    -- LibEditMode usually maps to EditModeSettingDisplayInfo.
-                    -- Blizzard EditMode doesn't natively support Text Input well in the HUD editor.
-                    -- "Input" might NOT be supported natively by LibEditMode if strictly wrapping Blizzard.
-                    -- RISK: Converting this to a Dropdown of presets might be safer if Input fails.
-                    -- But user asked for "freely creatable".
-                    -- Let's try "Input" or "EditBox".
-                    -- If that fails, I'll fallback to a Dropdown of common patterns.
-                    default = "@health.current",
-                    get = function() return GetTagDB(i).formatString end,
-                    set = function(_, value)
-                        GetTagDB(i).formatString = value
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-                {
-                    name = "Anchor To",
-                    kind = LEM.SettingType.Dropdown,
-                    default = "Frame",
-                    entries = {
-                        ["Frame"] = "Frame",
-                        ["Health"] = "Health Bar",
-                        ["Power"] = "Power Bar",
-                        ["ClassPower"] = "Class Power",
-                        ["AdditionalPower"] = "Add. Power"
-                    },
-                    get = function() return GetTagDB(i).anchorTo end,
-                    set = function(_, value)
-                        GetTagDB(i).anchorTo = value
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-                {
-                    name = "Point",
-                    kind = LEM.SettingType.Dropdown,
-                    default = "CENTER",
-                    entries = {
-                        ["CENTER"] = "Center",
-                        ["TOP"] = "Top",
-                        ["BOTTOM"] = "Bottom",
-                        ["LEFT"] = "Left",
-                        ["RIGHT"] = "Right",
-                        ["TOPLEFT"] = "Top Left",
-                        ["TOPRIGHT"] = "Top Right",
-                        ["BOTTOMLEFT"] = "Bottom Left",
-                        ["BOTTOMRIGHT"] = "Bottom Right"
-                    },
-                    get = function() return GetTagDB(i).point end,
-                    set = function(_, value)
-                        GetTagDB(i).point = value
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-                {
-                    name = "X",
-                    kind = LEM.SettingType.Slider,
-                    default = 0,
-                    minValue = -200,
-                    maxValue = 200,
-                    valueStep = 1,
-                    get = function() return GetTagDB(i).x end,
-                    set = function(_, value)
-                        GetTagDB(i).x = value
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-                {
-                    name = "Y",
-                    kind = LEM.SettingType.Slider,
-                    default = 0,
-                    minValue = -100,
-                    maxValue = 100,
-                    valueStep = 1,
-                    get = function() return GetTagDB(i).y end,
-                    set = function(_, value)
-                        GetTagDB(i).y = value
-                        UpdateFrameFromSettings(unit)
-                    end,
-                },
-            }
-            for _, s in ipairs(subSettings) do table.insert(tagSettings, s) end
-        end
-        for _, s in ipairs(tagSettings) do table.insert(settings, s) end
-    end
 
     return settings
 end
+
+
 
 -- ----------------------------------------------------------------------------
 -- 3. Position Callback
