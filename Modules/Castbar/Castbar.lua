@@ -7,7 +7,8 @@ local LSM = LibStub("LibSharedMedia-3.0")
 -- ----------------------------------------------------------------------------
 function ns.CreateCastBar(unit)
     local bar = CreateFrame("StatusBar", "MidnightCastBar_" .. unit, UIParent)
-    local texture = LSM:Fetch("statusbar", "Solid") or "Interface\\TargetingFrame\\UI-StatusBar"
+    local texture = LSM:Fetch("statusbar", RoithiUI.db.profile.General.castbarBar or "Solid") or
+        "Interface\\TargetingFrame\\UI-StatusBar"
     bar:SetStatusBarTexture(texture)
 
     local bg = bar:CreateTexture(nil, "BACKGROUND")
@@ -17,7 +18,13 @@ function ns.CreateCastBar(unit)
     local icon = bar:CreateTexture(nil, "OVERLAY"); icon:SetPoint("RIGHT", bar, "LEFT", 0, 0);
     icon:SetTexCoord(0.1, 0.9, 0.1, 0.9) -- Square crop/zoom
     bar.Icon = icon
-    local text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); text:SetPoint("CENTER"); bar.Text = text
+
+    local font = LSM:Fetch("font", RoithiUI.db.profile.General.castbarFont or "Friz Quadrata TT")
+    local text = bar:CreateFontString(nil, "OVERLAY");
+    text:SetFont(font, 12, "OUTLINE")
+    text:SetPoint("CENTER");
+    bar.Text = text
+
     -- Spark (Standard Texture)
     local spark = bar:CreateTexture(nil, "OVERLAY")
     spark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
@@ -28,6 +35,26 @@ function ns.CreateCastBar(unit)
     bar.StageTicks = {}
     bar.unit = unit; bar:Hide()
     return bar
+end
+
+function ns.UpdateCastBarMedia(bar)
+    if not bar then return end
+    local texture = LSM:Fetch("statusbar", RoithiUI.db.profile.General.castbarBar or "Solid") or
+        "Interface\\TargetingFrame\\UI-StatusBar"
+    bar:SetStatusBarTexture(texture)
+
+    local font = LSM:Fetch("font", RoithiUI.db.profile.General.castbarFont or "Friz Quadrata TT")
+    -- We assume standard size 12 here, or we could fetch from DB if we added size option
+    if bar.Text then
+        bar.Text:SetFont(font, 12, "OUTLINE")
+    end
+end
+
+function ns.RefreshAllCastbars()
+    if not ns.bars then return end
+    for unit, bar in pairs(ns.bars) do
+        ns.UpdateCastBarMedia(bar)
+    end
 end
 
 function ns.InitializeBars()

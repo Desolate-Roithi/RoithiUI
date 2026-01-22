@@ -23,6 +23,11 @@ ns.Defaults = {
         -- General Settings
         General = {
             Theme = "Class", -- Class or Grayscale
+            -- Media Defaults
+            unitFrameFont = "Friz Quadrata TT",
+            unitFrameBar = "Solid",
+            castbarFont = "Friz Quadrata TT",
+            castbarBar = "Solid",
         },
 
         Theme = "ClassColors",
@@ -258,7 +263,7 @@ ns.Defaults = {
                 indicators = {
                     raidicon = { enabled = true, size = 20, point = "CENTER", relativePoint = "TOP", x = 0, y = 5 },
                 }
-            }
+            },
         },
 
         -- Castbar Defaults

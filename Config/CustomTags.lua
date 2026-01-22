@@ -79,7 +79,8 @@ function RoithiUI.Config.GetCustomTagsOptions()
                         local tags = GetDB()
                         table.insert(tags, {
                             enabled = true,
-                            formatString = "[health.current]",
+                            formatString = "@health.current",
+                            order = 10,
                             point = "CENTER",
                             anchorTo = "Frame",
                             x = 0,
@@ -145,6 +146,20 @@ function RoithiUI.Config.GetCustomTagsOptions()
                         get = function() return tagConfig.fontSize or 12 end,
                         set = function(_, v)
                             tagConfig.fontSize = v
+                            ns.RefreshUnitFrame(unit)
+                        end,
+                    },
+                    order = {
+                        type = "range",
+                        name = "Draw Order",
+                        desc = "Higher numbers draw on top.",
+                        order = 2.6,
+                        min = 1,
+                        max = 100,
+                        step = 1,
+                        get = function() return tagConfig.order or 10 end,
+                        set = function(_, v)
+                            tagConfig.order = v
                             ns.RefreshUnitFrame(unit)
                         end,
                     },

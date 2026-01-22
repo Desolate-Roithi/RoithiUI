@@ -6,16 +6,32 @@ local oUF = ns.oUF or _G.oUF
 
 local LEM = LibStub("LibEditMode", true)
 
-function UF:CreateUnitFrame(unit, name)
+function UF:CreateUnitFrame(unit, name, skipEditMode)
     local frameName = "Roithi" .. (name or unit:gsub("^%l", string.upper))
     local frame = oUF:Spawn(unit, frameName)
     if not self.units then self.units = {} end
     self.units[unit] = frame
 
     -- Edit Mode Registration
-    if LEM then
+    if LEM and not skipEditMode then
         frame.editModeName = name or unit
 
+        -- Register for Layout Persistence
+        local defaults = { point = "CENTER", x = 0, y = 0 }
+        local function OnPosChanged(f, layoutName, point, x, y)
+            if not f.unit then return end
+            -- Save to DB
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[f.unit]
+            if db then
+                db.point = point
+                db.x = x
+                db.y = y
+            end
+            -- Apply
+            f:ClearAllPoints()
+            f:SetPoint(point, UIParent, point, x, y)
+        end
+        LEM:AddFrame(frame, OnPosChanged, defaults)
 
         -- Selection Overlay
         local overlay = frame:CreateTexture(nil, "OVERLAY")
@@ -78,29 +94,6 @@ function UF:UpdateFrameFromSettings(unit)
     if self.UpdateAdditionalPowerSettings then self:UpdateAdditionalPowerSettings(frame) end
 end
 
-function UF:InitializeBossFrames()
-    for i = 1, 5 do
-        local unit = "boss" .. i
-        -- Use generic creation
-        local frame = self:CreateUnitFrame(unit, "Boss" .. i)
-
-        -- Default Positioning logic (mirrors old Core.lua but allows DB override via UpdateFrameFromSettings if we wanted,
-        -- but simpler to keep the hardcoded relative logic for boss frames if no DB entries exist yet,
-        -- OR implement the loop logic here).
-
-        -- Applying the logic from Core.lua:
-        if i == 1 then
-            frame:SetPoint("RIGHT", -100, 100)
-        else
-            frame:SetPoint("TOP", self.units["boss" .. (i - 1)], "BOTTOM", 0, -30)
-        end
-        frame:SetSize(180, 40)
-
-        -- Apply Settings override if exists
-        self:UpdateFrameFromSettings(unit)
-    end
-end
-
 function UF:IsUnitEnabled(unit)
     if not RoithiUI.db.profile.UnitFrames then return true end
     if not RoithiUI.db.profile.UnitFrames[unit] then return true end
@@ -126,10 +119,10 @@ function UF:ToggleFrame(unit, enabled)
     end
 end
 
-function UF:CreateStandardLayout(unit, name)
+function UF:CreateStandardLayout(unit, name, skipEditMode)
     if not self:ShouldCreate(unit) then return end
 
-    local frame = self:CreateUnitFrame(unit, name)
+    local frame = self:CreateUnitFrame(unit, name, skipEditMode)
 
     -- Default Positions (Can be overridden by DB later)
     -- Apply Settings (Dimensions, Position, etc. from DB)

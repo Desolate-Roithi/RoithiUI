@@ -30,6 +30,7 @@
     <Script file="Modules/UnitFrames/Elements/ClassPower.lua"/>
     <Script file="Modules/UnitFrames/Elements/AdditionalPower.lua"/>
     <Script file="Modules/UnitFrames/Elements/EncounterResource.lua"/>
+    <Script file="Modules/UnitFrames/Boss.lua"/>
     <Script file="Modules/UnitFrames/Units.lua"/>
     
     <!-- Timers -->

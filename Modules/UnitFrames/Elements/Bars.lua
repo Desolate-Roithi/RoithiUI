@@ -515,8 +515,8 @@ end
 function UF:UpdateHealthBarSettings(frame)
     if not frame.Health then return end
     local db = RoithiUI.db.profile.UnitFrames[frame.unit]
-    local texture = LSM:Fetch("statusbar", RoithiUI.db.profile.barTexture or "Solid") or
-    "Interface\\TargetingFrame\\UI-StatusBar"
+    local texture = LSM:Fetch("statusbar", RoithiUI.db.profile.General.unitFrameBar or "Solid") or
+        "Interface\\TargetingFrame\\UI-StatusBar"
 
     frame.Health:SetStatusBarTexture(texture)
     if frame.Health.bg then frame.Health.bg:SetTexture(texture) end

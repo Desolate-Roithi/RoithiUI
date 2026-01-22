@@ -41,6 +41,12 @@ _G.canaccessvalue = function(val)
     return not _G.issecretvalue(val)
 end
 
+-- 12.0.1 Secrets Namespace
+_G.C_Secrets = {
+    ShouldUnitHealthMaxBeSecret = function(unit) return unit == "target" end,
+    ShouldUnitPowerBeSecret = function(unit) return unit == "target" end,
+}
+
 -- Mocking C_UnitHealth (Protected in 12.0)
 _G.C_UnitHealth = {}
 function _G.C_UnitHealth.GetHealthPercentage(unit)
@@ -80,6 +86,17 @@ _G.UnitHealthMax = function(unit)
     end
     return 100000
 end
+
+_G.UnitGetTotalAbsorbs = function(unit)
+    if unit == "target" then
+        return Mock.MakeSecret(5000)
+    end
+    return 0
+end
+
+-- State Drivers
+_G.RegisterStateDriver = function(frame, state, condition) end
+_G.UnregisterStateDriver = function(frame, state) end
 
 -- Mocking Helpers needed for "Safe" access
 _G.UnitHealthPercent = function(unit, exact, curve)
@@ -161,6 +178,7 @@ _G.C_UnitAuras = {
             isStealable = false,
             isBossDebuff = false,
             isCastByPlayer = true,
+            sourceUnit = "player", -- Added for 12.0.1 filter tests
         }
     end
 }

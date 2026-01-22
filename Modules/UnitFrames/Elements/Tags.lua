@@ -2,6 +2,7 @@ local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
 local LEM = LibStub("LibEditMode")
+local LSM = LibStub("LibSharedMedia-3.0")
 
 -- WoW APIs
 local _G = _G
@@ -177,6 +178,7 @@ TM.Methods = {
     -- Absorb
     ["absorb"] = function(unit)
         local absorb = UnitGetTotalAbsorbs(unit) or 0
+        if issecretvalue and issecretvalue(absorb) then return absorb end
         if absorb <= 0 then return "" end
         return absorb
     end,
@@ -300,7 +302,16 @@ function UF:UpdateTags(frame)
     frame.TagsPool:ReleaseAll()
     if not db or not db.tags then return end
 
+    -- Sort tags by order (Low -> High)
+    local sortedTags = {}
     for _, tagConfig in ipairs(db.tags) do
+        table.insert(sortedTags, tagConfig)
+    end
+    table.sort(sortedTags, function(a, b)
+        return (a.order or 10) < (b.order or 10)
+    end)
+
+    for i, tagConfig in ipairs(sortedTags) do
         if tagConfig.enabled then
             local tagFrame = frame.TagsPool:Acquire()
 
@@ -324,6 +335,7 @@ function UF:UpdateTags(frame)
             end
 
             tagFrame:SetParent(relativeTo)
+            tagFrame:SetFrameLevel(relativeTo:GetFrameLevel() + 20 + i)
             tagFrame:SetSize(200, 20)
             tagFrame:ClearAllPoints()
             tagFrame:SetPoint(point, relativeTo, point, tagConfig.x or 0, tagConfig.y or 0)
@@ -356,7 +368,8 @@ function UF:UpdateTagFrame(tagFrame)
     local fontStrings = {}
     for i, segment in ipairs(segments) do
         local fs = tagFrame.SegmentPool:Acquire()
-        LibRoithi.mixins:SetFont(fs, "Friz Quadrata TT", tagFrame.fontSize or 12, "OUTLINE")
+        local font = LSM:Fetch("font", RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT")
+        LibRoithi.mixins:SetFont(fs, font, tagFrame.fontSize or 12, "OUTLINE")
 
         -- Special: If the return is a table/mixed, it might be an error from GetSegments
         fs:SetText(segment.text)

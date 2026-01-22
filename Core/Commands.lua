@@ -75,6 +75,17 @@ function RoithiUI:ChatCommand(input)
     elseif cmd == "debug" or cmd == "rd" then
         self.debug = not self.debug
         self:Print("Debug: " .. (self.debug and "|cff00ff00Enabled|r" or "|cffff0000Disabled|r"))
+    elseif cmd == "test" then
+        -- Arg 1 is test type
+        local type = arg and arg:lower() or ""
+        if type == "boss" then
+            local UF = RoithiUI:GetModule("UnitFrames")
+            if UF and UF.ToggleBossTestMode then
+                UF:ToggleBossTestMode()
+            end
+        else
+            self:Print("Usage: /roithi test [boss]")
+        end
     else
         self:Print("Unknown command.")
     end
@@ -101,6 +112,7 @@ end
 
 -- Call Registration immediately as the addon object exists
 RoithiUI:RegisterChatCommand("roithi", "ChatCommand")
+RoithiUI:RegisterChatCommand("rui", "ChatCommand") -- Fix: Register /rui as alias
 -- Register /rd explicitly or just handle in main handler.
 -- Legacy had /rd separately.
 RoithiUI:RegisterChatCommand("rd", "ChatCommandDebug")

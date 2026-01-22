@@ -30,7 +30,18 @@ function UF:CreateAuras(frame)
         icon.overlay:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays")
         icon.overlay:SetAllPoints()
         icon.overlay:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
+        icon.overlay:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
         icon.overlay:Hide()
+
+        -- Pandemic Glow Frame (Secret Safe)
+        local glowFrame = CreateFrame("Frame", nil, icon)
+        glowFrame:SetAllPoints()
+        glowFrame:Hide()
+        local glow = glowFrame:CreateTexture(nil, "OVERLAY")
+        glow:SetTexture("Interface\\Buttons\\CheckButtonGlow")
+        glow:SetAllPoints()
+        glow:SetBlendMode("ADD")
+        icon.GlowFrame = glowFrame
 
         -- Tooltip Scripts
         icon:SetScript("OnEnter", function(self)
@@ -83,6 +94,8 @@ function UF:CreateAuras(frame)
         local icons = element.icons
         local iconIndex = 1
 
+        local isWhiteListActive = (db.Whitelist and next(db.Whitelist))
+
         -- 1. Debuffs
         if showDebuffs then
             for i = 1, 40 do
@@ -90,52 +103,94 @@ function UF:CreateAuras(frame)
                 local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, "HARMFUL")
                 if not aura then break end
 
-                local icon = icons[iconIndex] or CreateIcon(iconIndex)
-                icon:SetSize(size, size) -- Apply Size
-                icon:ClearAllPoints()
-                if iconIndex == 1 then
-                    icon:SetPoint("LEFT", element, "LEFT", 0, 0)
-                else
-                    icon:SetPoint("LEFT", icons[iconIndex - 1], "RIGHT", 4, 0)
-                end
+                -- Defensive Filter Checks (12.0.1 Safety)
+                local isSecretId = issecretvalue(aura.spellId)
+                local isSecretSrc = issecretvalue(aura.sourceUnit)
+                local skip = false
 
-                icon.icon:SetTexture(aura.icon)
-                local count = aura.applications
-                local text = ""
-                if count then
-                    local success, result = pcall(function() return count > 1 end)
-                    if success and result then
-                        text = tostring(count)
+                -- A. Show Only Player
+                if db.ShowOnlyPlayer then
+                    if isSecretSrc then
+                        skip = true -- Fail closed: If source is secret, we can't verify it's player.
+                    elseif aura.sourceUnit ~= "player" then
+                        skip = true
                     end
                 end
-                icon.count:SetText(text)
 
-                -- Store data for Tooltip
-                icon.index = i
-                icon.filter = "HARMFUL"
+                -- B. Blacklist
+                if not skip and db.Blacklist then
+                    if isSecretId then
+                        skip = true
+                    elseif db.Blacklist[aura.spellId] then
+                        skip = true
+                    end
+                end
 
-                -- Debuff Type Color
-                local color = nil
-                ---@diagnostic disable-next-line: undefined-field
-                if _G.DebuffTypeColor then
+                -- C. Whitelist (Strict)
+                if not skip and isWhiteListActive then
+                    if isSecretId then
+                        skip = true
+                    elseif not db.Whitelist[aura.spellId] then
+                        skip = true
+                    end
+                end
+
+                if not skip then
+                    local icon = icons[iconIndex] or CreateIcon(iconIndex)
+                    icon:SetSize(size, size) -- Apply Size
+                    icon:ClearAllPoints()
+                    if iconIndex == 1 then
+                        icon:SetPoint("LEFT", element, "LEFT", 0, 0)
+                    else
+                        icon:SetPoint("LEFT", icons[iconIndex - 1], "RIGHT", 4, 0)
+                    end
+
+                    icon.icon:SetTexture(aura.icon)
+                    local count = aura.applications
+                    local text = ""
+                    if count then
+                        local success, result = pcall(function() return count > 1 end)
+                        if success and result then
+                            text = tostring(count)
+                        end
+                    end
+                    icon.count:SetText(text)
+
+                    -- Store data for Tooltip
+                    icon.index = i
+                    icon.filter = "HARMFUL"
+
+                    -- Debuff Type Color
+                    local color = nil
                     ---@diagnostic disable-next-line: undefined-field
-                    color = _G.DebuffTypeColor[aura.dispelName] or _G.DebuffTypeColor["none"]
-                else
-                    color = { r = 1, g = 0, b = 0 } -- Fallback
+                    if _G.DebuffTypeColor then
+                        ---@diagnostic disable-next-line: undefined-field
+                        color = _G.DebuffTypeColor[aura.dispelName] or _G.DebuffTypeColor["none"]
+                    else
+                        color = { r = 1, g = 0, b = 0 } -- Fallback
+                    end
+
+                    if icon.SetBackdropBorderColor then
+                        icon:SetBackdropBorderColor(color.r, color.g, color.b)
+                    end
+                    icon.overlay:SetVertexColor(color.r, color.g, color.b)
+                    icon.overlay:Show()
+
+                    -- Pandemic Glow (12.0.1+ Safe)
+                    if aura.sourceUnit == "player" and C_UnitAuras.IsAuraInRefreshWindow then
+                        local isPandemic = C_UnitAuras.IsAuraInRefreshWindow(unit, aura.auraInstanceID)
+                        if icon.GlowFrame.SetShownFromSecret then
+                            icon.GlowFrame:SetShownFromSecret(isPandemic)
+                        else
+                            icon.GlowFrame:Hide()
+                        end
+                    else
+                        icon.GlowFrame:Hide()
+                    end
+
+                    icon:Show()
+                    iconIndex = iconIndex + 1
                 end
-
-                -- Highlight Code (simplified) inlined or keep separate?
-                -- The original code has highlight color logic here.
-                -- Let's keep it.
-
-                if icon.SetBackdropBorderColor then
-                    icon:SetBackdropBorderColor(color.r, color.g, color.b)
-                end
-                icon.overlay:SetVertexColor(color.r, color.g, color.b)
-                icon.overlay:Show()
-
-                icon:Show()
-                iconIndex = iconIndex + 1
             end
         end
 
@@ -146,36 +201,82 @@ function UF:CreateAuras(frame)
                 local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
                 if not aura then break end
 
-                local icon = icons[iconIndex] or CreateIcon(iconIndex)
-                icon:SetSize(size, size) -- Apply Size
-                icon:ClearAllPoints()
-                if iconIndex == 1 then
-                    icon:SetPoint("LEFT", element, "LEFT", 0, 0)
-                else
-                    icon:SetPoint("LEFT", icons[iconIndex - 1], "RIGHT", 4, 0)
-                end
+                -- Defensive Filter Checks (12.0.1 Safety)
+                local isSecretId = issecretvalue(aura.spellId)
+                local isSecretSrc = issecretvalue(aura.sourceUnit)
+                local skip = false
 
-                icon.icon:SetTexture(aura.icon)
-                local count = aura.applications
-                local text = ""
-                if count then
-                    local success, result = pcall(function() return count > 1 end)
-                    if success and result then
-                        text = tostring(count)
+                -- A. Show Only Player
+                if db.ShowOnlyPlayer then
+                    if isSecretSrc then
+                        skip = true
+                    elseif aura.sourceUnit ~= "player" then
+                        skip = true
                     end
                 end
-                icon.count:SetText(text)
 
-                icon.index = i
-                icon.filter = "HELPFUL"
-
-                if icon.SetBackdropBorderColor then
-                    icon:SetBackdropBorderColor(0, 0, 0)
+                -- B. Blacklist
+                if not skip and db.Blacklist then
+                    if isSecretId then
+                        skip = true
+                    elseif db.Blacklist[aura.spellId] then
+                        skip = true
+                    end
                 end
-                icon.overlay:Hide()
 
-                icon:Show()
-                iconIndex = iconIndex + 1
+                -- C. Whitelist (Strict)
+                if not skip and isWhiteListActive then
+                    if isSecretId then
+                        skip = true
+                    elseif not db.Whitelist[aura.spellId] then
+                        skip = true
+                    end
+                end
+
+                if not skip then
+                    local icon = icons[iconIndex] or CreateIcon(iconIndex)
+                    icon:SetSize(size, size) -- Apply Size
+                    icon:ClearAllPoints()
+                    if iconIndex == 1 then
+                        icon:SetPoint("LEFT", element, "LEFT", 0, 0)
+                    else
+                        icon:SetPoint("LEFT", icons[iconIndex - 1], "RIGHT", 4, 0)
+                    end
+
+                    icon.icon:SetTexture(aura.icon)
+                    local count = aura.applications
+                    local text = ""
+                    if count then
+                        local success, result = pcall(function() return count > 1 end)
+                        if success and result then
+                            text = tostring(count)
+                        end
+                    end
+                    icon.count:SetText(text)
+
+                    icon.index = i
+                    icon.filter = "HELPFUL"
+
+                    if icon.SetBackdropBorderColor then
+                        icon:SetBackdropBorderColor(0, 0, 0)
+                    end
+                    icon.overlay:Hide()
+
+                    -- Pandemic Glow (12.0.1+ Safe)
+                    if aura.sourceUnit == "player" and C_UnitAuras.IsAuraInRefreshWindow then
+                        local isPandemic = C_UnitAuras.IsAuraInRefreshWindow(unit, aura.auraInstanceID)
+                        if icon.GlowFrame.SetShownFromSecret then
+                            icon.GlowFrame:SetShownFromSecret(isPandemic)
+                        else
+                            icon.GlowFrame:Hide()
+                        end
+                    else
+                        icon.GlowFrame:Hide()
+                    end
+
+                    icon:Show()
+                    iconIndex = iconIndex + 1
+                end
             end
         end
 

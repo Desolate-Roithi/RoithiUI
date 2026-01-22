@@ -7,6 +7,15 @@ local LSM = LibStub("LibSharedMedia-3.0")
 -- ----------------------------------------------------------------------------
 -- AceConfig Table Definition
 -- ----------------------------------------------------------------------------
+local function GetLSMKeys(mediaType)
+    local list = LSM:List(mediaType)
+    local out = {}
+    for _, name in ipairs(list) do
+        out[name] = name
+    end
+    return out
+end
+
 local function GetOptions()
     local options = {
         type = "group",
@@ -29,26 +38,63 @@ local function GetOptions()
                         order = 5,
                         inline = true,
                         args = {
-                            font = {
+                            ufHeader = {
+                                type = "header",
+                                name = "Unit Frames",
+                                order = 1,
+                            },
+                            ufFont = {
                                 type = "select",
                                 dialogControl = "LSM30_Font",
-                                name = "Global Font",
-                                order = 1,
-                                values = LSM:HashTable("font"),
-                                get = function() return RoithiUI.db.profile.font or "Friz Quadrata TT" end,
+                                name = "Font",
+                                order = 2,
+                                values = function() return GetLSMKeys("font") end,
+                                get = function() return RoithiUI.db.profile.General.unitFrameFont end,
                                 set = function(_, v)
-                                    RoithiUI.db.profile.font = v; ns.RefreshUnitFrame("player")
-                                end, -- Ideal: RefreshAll
+                                    RoithiUI.db.profile.General.unitFrameFont = v
+                                    ns.RefreshAllUnitFrames()
+                                end,
                             },
-                            statusBar = {
+                            ufBar = {
                                 type = "select",
                                 dialogControl = "LSM30_Statusbar",
-                                name = "Global Status Bar",
-                                order = 2,
-                                values = LSM:HashTable("statusbar"),
-                                get = function() return RoithiUI.db.profile.barTexture or "Solid" end,
+                                name = "Status Bar",
+                                order = 3,
+                                values = function() return GetLSMKeys("statusbar") end,
+                                get = function() return RoithiUI.db.profile.General.unitFrameBar end,
                                 set = function(_, v)
-                                    RoithiUI.db.profile.barTexture = v; ns.RefreshUnitFrame("player")
+                                    RoithiUI.db.profile.General.unitFrameBar = v
+                                    ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            cbHeader = {
+                                type = "header",
+                                name = "Castbars",
+                                order = 10,
+                            },
+                            cbFont = {
+                                type = "select",
+                                dialogControl = "LSM30_Font",
+                                name = "Font",
+                                order = 11,
+                                values = function() return GetLSMKeys("font") end,
+                                get = function() return RoithiUI.db.profile.General.castbarFont end,
+                                set = function(_, v)
+                                    RoithiUI.db.profile.General.castbarFont = v
+                                    -- Add RefreshAllCastbars call here once implemented
+                                    if ns.RefreshAllCastbars then ns.RefreshAllCastbars() end
+                                end,
+                            },
+                            cbBar = {
+                                type = "select",
+                                dialogControl = "LSM30_Statusbar",
+                                name = "Status Bar",
+                                order = 12,
+                                values = function() return GetLSMKeys("statusbar") end,
+                                get = function() return RoithiUI.db.profile.General.castbarBar end,
+                                set = function(_, v)
+                                    RoithiUI.db.profile.General.castbarBar = v
+                                    if ns.RefreshAllCastbars then ns.RefreshAllCastbars() end
                                 end,
                             },
                         },
@@ -61,7 +107,21 @@ local function GetOptions()
                         func = function() RoithiUI:ResetSettings() end,
                         width = "full",
                     },
-                    -- Add global toggles here later if needed
+                    testBoss = {
+                        type = "toggle",
+                        name = "Boss Frames Test Mode",
+                        desc = "Toggle dummy boss frames for positioning.",
+                        order = 11,
+                        get = function()
+                            local UF = RoithiUI:GetModule("UnitFrames")
+                            return UF and UF.BossTestMode
+                        end,
+                        set = function(_, v)
+                            local UF = RoithiUI:GetModule("UnitFrames")
+                            if UF and UF.ToggleBossTestMode then UF:ToggleBossTestMode() end
+                        end,
+                        width = "full",
+                    },
                 },
             },
             unitframes = {
@@ -350,5 +410,14 @@ function ns.RefreshUnitFrame(unit)
     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
     if UF and UF.UpdateFrameFromSettings then
         UF:UpdateFrameFromSettings(unit)
+    end
+end
+
+function ns.RefreshAllUnitFrames()
+    local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+    if UF and UF.units then
+        for unit in pairs(UF.units) do
+            ns.RefreshUnitFrame(unit)
+        end
     end
 end

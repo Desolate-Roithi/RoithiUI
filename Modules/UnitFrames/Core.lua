@@ -5,11 +5,13 @@ local oUF = ns.oUF or _G.oUF
 
 -- Initialize Module
 ---@class UF : AceAddon, AceModule
----@field CreateUnitFrame fun(self: UF, unit: string, name: string): table
+---@field CreateUnitFrame fun(self: UF, unit: string, name: string, skipEditMode?: boolean): table
 ---@field InitializeBossFrames fun(self: UF)
+---@field ToggleBossTestMode fun(self: UF)
+---@field BossTestMode boolean
 ---@field IsUnitEnabled fun(self: UF, unit: string): boolean
 ---@field ShouldCreate fun(self: UF, unit: string): boolean
----@field CreateStandardLayout fun(self: UF, unit: string, name: string)
+---@field CreateStandardLayout fun(self: UF, unit: string, name: string, skipEditMode?: boolean)
 ---@field CreateHealthBar fun(self: UF, frame: table)
 ---@field CreatePowerBar fun(self: UF, frame: table)
 ---@field CreateHealPrediction fun(self: UF, frame: table)
