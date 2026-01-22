@@ -1,8 +1,26 @@
----@diagnostic disable: undefined-global
 local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
 local LEM = LibStub("LibEditMode")
+
+-- WoW APIs
+local _G = _G
+local pcall, type, tonumber, tostring, ipairs, string = pcall, type, tonumber, tostring, ipairs, string
+local UnitHealth, UnitHealthMax, UnitPower, UnitPowerMax = UnitHealth, UnitHealthMax, UnitPower, UnitPowerMax
+local UnitName, UnitClass, UnitRace, UnitLevel = UnitName, UnitClass, UnitRace, UnitLevel
+local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
+local UnitIsConnected, UnitIsGhost, UnitIsDead = UnitIsConnected, UnitIsGhost, UnitIsDead
+local UnitClassification, UnitCreatureFamily, UnitCreatureType = UnitClassification, UnitCreatureFamily, UnitCreatureType
+local CreateFramePool, CreateFontStringPool = CreateFramePool, CreateFontStringPool
+
+-- 12.0.1 Secret APIs (Localized if present)
+local issecretvalue = _G.issecretvalue
+local C_Secrets = _G.C_Secrets
+local C_UnitHealth = _G.C_UnitHealth
+local C_UnitPower = _G.C_UnitPower
+local CurveConstants = _G.CurveConstants
+local UnitHealthPercent = _G.UnitHealthPercent
+local UnitPowerPercent = _G.UnitPowerPercent
 
 local UF = RoithiUI:GetModule("UnitFrames")
 

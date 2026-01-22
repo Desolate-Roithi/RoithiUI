@@ -1,6 +1,19 @@
 local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
 
+-- WoW APIs
+local _G = _G
+local type, pairs, type = type, pairs, type
+local UnitIsPVPFreeForAll, UnitIsPVP, UnitFactionGroup = UnitIsPVPFreeForAll, UnitIsPVP, UnitFactionGroup
+local UnitIsQuestBoss = UnitIsQuestBoss
+local UnitAffectingCombat, IsResting = UnitAffectingCombat, IsResting
+local UnitIsGroupLeader, UnitIsGroupAssistant = UnitIsGroupLeader, UnitIsGroupAssistant
+local UnitGroupRolesAssigned = UnitGroupRolesAssigned
+local GetRaidTargetIndex, SetRaidTargetIconTexture = GetRaidTargetIndex, SetRaidTargetIconTexture
+local GetReadyCheckStatus = GetReadyCheckStatus
+local UnitHasIncomingResurrection, UnitPhaseReason = UnitHasIncomingResurrection, UnitPhaseReason
+local GetPartyAssignment = _G.GetPartyAssignment or _G.C_PartyInfo.GetPartyAssignment -- Compatibility
+
 local UF = RoithiUI:GetModule("UnitFrames")
 
 function UF:CreateIndicators(frame)
@@ -240,20 +253,32 @@ function UF:CreateIndicators(frame)
         end
 
         -- PvP
-        local pvpType = UnitIsPVPFreeForAll(unit) and "FFA" or
-        (UnitIsPVP(unit) and (UnitFactionGroup(unit) or "Neutral"))
-        if _G.issecretvalue and _G.issecretvalue(pvpType) then pvpType = "Neutral" end -- Safety
+        local pvpType
+        if UnitIsPVPFreeForAll(unit) then
+            pvpType = "FFA"
+        elseif UnitIsPVP(unit) then
+            pvpType = UnitFactionGroup(unit) or "Neutral"
+        end
+
+        -- 12.0.1 Secret Safety: If pvpType is a secret, we can't compare it directly to "Alliance" etc.
+        -- However, we can use it in SetTexture if there's a native path, or just fallback if it's secret.
+        local isSecretFaction = _G.issecretvalue and _G.issecretvalue(pvpType)
 
         if IsEnabled("pvp") and (pvpType or inTestMode) then
-            local faction = pvpType or (UnitFactionGroup("player") or "Neutral")
-            if faction == "FFA" then
-                pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-FFA")
-            elseif faction == "Alliance" then
-                pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Alliance")
-            elseif faction == "Horde" then
-                pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Horde")
-            else
+            if isSecretFaction then
+                -- If it's a secret, we don't know the faction, show Neutral or special "Secret" icon
                 pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
+            else
+                local faction = pvpType or (UnitFactionGroup("player") or "Neutral")
+                if faction == "FFA" then
+                    pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-FFA")
+                elseif faction == "Alliance" then
+                    pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Alliance")
+                elseif faction == "Horde" then
+                    pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Horde")
+                else
+                    pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
+                end
             end
             pvp:Show()
         else
@@ -264,11 +289,8 @@ function UF:CreateIndicators(frame)
         ShowIndicator(quest, "quest", UnitIsQuestBoss and UnitIsQuestBoss(unit))
 
         -- Tank / Assist
-        local isTank = UnitIsGroupAssistant(unit) or UnitIsGroupLeader(unit) -- Simplified for now, or check real MT/MA
-        -- Actually Blizzard has specific MT/MA flags in some APIs.
-        -- Let's check UnitIsMainTank/UnitIsMainAssist if they exist (usually oUF or similar use them)
-        local isMT = _G.UnitIsMainTank and _G.UnitIsMainTank(unit)
-        local isMA = _G.UnitIsMainAssist and _G.UnitIsMainAssist(unit)
+        local isMT = GetPartyAssignment("MAINTANK", unit)
+        local isMA = GetPartyAssignment("MAINASSIST", unit)
 
         if IsEnabled("tankassist") and (isMT or isMA or inTestMode) then
             if isMT or (inTestMode and not isMA) then
