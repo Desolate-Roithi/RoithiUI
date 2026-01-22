@@ -3,7 +3,8 @@ local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
 local LSM = LibStub("LibSharedMedia-3.0")
 
-local UF = RoithiUI:GetModule("UnitFrames")
+---@class UF : AceModule, AceAddon
+local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 
 function UF:CreateAdditionalPower(frame)
     if frame.unit ~= "player" then return end
@@ -27,6 +28,24 @@ function UF:CreateAdditionalPower(frame)
     frame.AdditionalPower = addPower
 
     local function Update(self)
+        -- Check Logic: Is Enabled?
+        local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
+        local isEnabled = db and (db.additionalPowerEnabled ~= false)
+
+        if not isEnabled then
+            addPower:Hide()
+            return
+        end
+
+        if frame.isInEditMode then
+            addPower:Show()
+            addPower:SetMinMaxValues(0, 100)
+            addPower:SetValue(100)
+            addPower:SetStatusBarColor(0, 0.5, 1) -- Visual Indication
+            if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+            return
+        end
+
         local pType = UnitPowerType("player")
         local maxMana = UnitPowerMax("player", 0)
         local curMana = UnitPower("player", 0)
@@ -61,9 +80,9 @@ function UF:CreateAdditionalPower(frame)
     end
 
     addPower:SetScript("OnEvent", Update)
-    addPower:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
-    addPower:RegisterUnitEvent("UNIT_MAXPOWER", "player")
-    addPower:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player")
+    addPower:RegisterEvent("UNIT_POWER_UPDATE")
+    addPower:RegisterEvent("UNIT_MAXPOWER")
+    addPower:RegisterEvent("UNIT_DISPLAYPOWER")
     addPower:SetScript("OnShow", Update)
 
     Update()
@@ -73,8 +92,8 @@ function UF:CreateAdditionalPower(frame)
     frame.UpdateAdditionalPowerLayout = function()
         -- Get DB
         local db
-        if RoithiUIDB and RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[frame.unit] then
-            db = RoithiUIDB.UnitFrames[frame.unit]
+        if RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit] then
+            db = RoithiUI.db.profile.UnitFrames[frame.unit]
         else
             return
         end
@@ -162,7 +181,7 @@ function UF:CreateAdditionalPower(frame)
         local defaults = { point = "CENTER", x = 0, y = -120 }
 
         local function OnPosChanged(f, layoutName, point, x, y)
-            local db = RoithiUIDB and RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[frame.unit]
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
 
             -- If NOT detached, ignore dragging data updates (snap back visual handled by layout update usually)
             if not db or not db.additionalPowerDetached then
@@ -204,5 +223,12 @@ function UF:CreateAdditionalPower(frame)
         end
     end)
 
-    frame.UpdateAdditionalPowerLayout() -- Initial Layout Update
+    frame.UpdateAdditionalPowerSettings = Update -- Hook for Config
+    frame.UpdateAdditionalPowerLayout()          -- Initial Layout Update
+end
+
+function UF:UpdateAdditionalPowerSettings(frame)
+    if frame.UpdateAdditionalPowerSettings then
+        frame.UpdateAdditionalPowerSettings(frame)
+    end
 end

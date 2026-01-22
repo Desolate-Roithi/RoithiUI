@@ -3,6 +3,7 @@ local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
 local LSM = LibStub("LibSharedMedia-3.0")
 
+---@class UF : AceModule, AceAddon
 local UF = RoithiUI:GetModule("UnitFrames")
 
 function UF:CreateHealthBar(frame)
@@ -84,7 +85,7 @@ function UF:CreatePowerBar(frame)
 
         local function OnPowerPosChanged(f, layoutName, point, x, y)
             local unit = frame.unit
-            local db = RoithiUIDB and RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[unit]
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
 
             -- If not detached, ignore movement and enforce attached layout
             if not db or not db.powerDetached then
@@ -110,7 +111,7 @@ function UF:CreatePowerBar(frame)
         -- Only show overlay/movable if Detached
         LEM:RegisterCallback('enter', function()
             local unit = frame.unit
-            local db = RoithiUIDB and RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[unit]
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
             if db and db.powerDetached then
                 power.isInEditMode = true
                 power:SetAlpha(1)
@@ -120,22 +121,13 @@ function UF:CreatePowerBar(frame)
                 -- Do not show distinct edit overlay if attached (it moves with main frame)
             end
         end)
-
-        LEM:RegisterCallback('exit', function()
-            power.isInEditMode = false
-            -- Revert to normal visibility handled by OnEvent
-            -- If detached, we might need to ensure it hides if unit missing?
-            -- Yes, normal OnShow/OnEvent handles this.
-            local UnitExists = UnitExists(frame.unit)
-            if not UnitExists then power:Hide() end
-        end)
     end
 
     -- Layout Updater
     local function UpdatePowerLayout()
         local unit = frame.unit
         local db
-        if RoithiUIDB and RoithiUIDB.UnitFrames then db = RoithiUIDB.UnitFrames[unit] end
+        if RoithiUI.db.profile.UnitFrames then db = RoithiUI.db.profile.UnitFrames[unit] end
 
         local height = db and db.powerHeight or 10
         local detached = db and db.powerDetached
@@ -151,8 +143,6 @@ function UF:CreatePowerBar(frame)
         if frame.isInEditMode then
             power.isInEditMode = true
             power:SetAlpha(1)
-            -- If strictly detached, we might want to ensure it shows.
-            -- UpdatePower handles text/dummy display if isInEditMode is set.
         end
 
         power:SetHeight(height)
@@ -178,94 +168,10 @@ function UF:CreatePowerBar(frame)
             -- Typically bottom
             power:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 0, -1)
             power:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, -1)
-            -- Width is implicit by anchors, but explicit set helps if we changed it previously?
-            -- Anchors override SetWidth usually, but safe to reset if we detach then reattach without reload.
-            -- Actually Anchors TOPLEFT/TOPRIGHT force width.
         end
     end
     frame.UpdatePowerLayout = UpdatePowerLayout
     UpdatePowerLayout() -- Initial
-
-
-    -- Update Logic
-    local function UpdatePower(self, event, unit)
-        -- Event safety: for UNIT_TARGET, we don't care about the arg unit, just trigger update
-        if event == "UNIT_TARGET" then
-            -- Verify if the target change actually affects us
-            -- (e.g., if we are targettarget, and player changes target, we update)
-            if not UnitExists(frame.unit) then
-                if not power.isInEditMode then power:Hide() end
-                return
-            end
-            -- proceed to update
-        end
-
-        if power.isInEditMode then
-            self:SetMinMaxValues(0, 100)
-            self:SetValue(100)
-            self:SetStatusBarColor(0, 0, 1) -- Blue dummy
-            if power.Text then power.Text:Show() end
-            power:Show()
-            return
-        end
-        if power.Text then power.Text:Hide() end
-
-        local u = frame.unit
-        if not UnitExists(u) then
-            power:Hide()
-            return
-        end
-
-        -- Explicit Show for Detached bars (and attached ones that might have been hidden)
-        -- Only if enabled in config (checked in UpdateLayout, but double check doesn't hurt)
-        power:Show()
-
-        local min, max = UnitPower(u), UnitPowerMax(u)
-        -- Safety: C_Secrets check not needed for SetMinMax/SetValue as they handle it,
-        -- BUT if max is secret 0, it might be an issue? No, SetMinMax handles unknown types gracefully usually.
-        -- To be 100% safe for 12.0:
-        if C_Secrets and C_Secrets.IsSecret and (C_Secrets.IsSecret(min) or C_Secrets.IsSecret(max)) then
-            -- We can pass secrets directly to SetMinMaxValues in 11.0+,
-            -- assuming Blizzard updated StatusBar widgets.
-            -- If not, we might need to verify.
-            -- For now, standard behavior is pass-through.
-        end
-
-        self:SetMinMaxValues(0, max)
-        self:SetValue(min)
-
-        -- Color
-        local pType, pToken, altR, altG, altB = UnitPowerType(u)
-        local c = PowerBarColor[pToken]
-        if not c and pType then c = PowerBarColor[pType] end
-        if not c then c = PowerBarColor["MANA"] end -- Fallback
-
-        if c then
-            self:SetStatusBarColor(c.r, c.g, c.b)
-        else
-            self:SetStatusBarColor(0, 0, 1) -- Ultimate fallback
-        end
-    end
-
-    power:SetScript("OnEvent", UpdatePower)
-    power:RegisterUnitEvent("UNIT_POWER_UPDATE", frame.unit)
-    power:RegisterUnitEvent("UNIT_MAXPOWER", frame.unit)
-    power:RegisterUnitEvent("UNIT_DISPLAYPOWER", frame.unit)
-    power:SetScript("OnShow", function() UpdatePower(power, "OnShow", frame.unit) end)
-
-    -- Target/Focus change updates
-    if frame.unit == "target" then
-        power:RegisterEvent("PLAYER_TARGET_CHANGED")
-    elseif frame.unit == "focus" then
-        power:RegisterEvent("PLAYER_FOCUS_CHANGED")
-
-        -- Fix for ToT / FocusTarget / PetTarget updates
-    elseif frame.unit == "targettarget" or frame.unit == "focustarget" or frame.unit == "pettarget" then
-        power:RegisterEvent("UNIT_TARGET")
-    end
-
-    -- Initial
-    UpdatePower(power, "Initial", frame.unit)
 end
 
 function UF:CreateAdditionalPower(frame)
@@ -302,18 +208,10 @@ function UF:CreateAdditionalPower(frame)
 
         local function OnPosChanged(f, layoutName, point, x, y)
             local unit = frame.unit
-            local db = RoithiUIDB and RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[unit]
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
 
             if not db or not db.additionalPowerDetached then
                 f:ClearAllPoints()
-                -- Attached Stack Logic
-                -- If ClassPower is visible and attached, this goes below ClassPower?
-                -- Or Health > Power > Additional > ClassPower?
-                -- Usually Additional Power (Mana) is less important than Class Power (Combo Points).
-                -- Let's stack: Health -> Power -> ClassPower -> AdditionalPower
-                -- BUT ClassPower might be hidden. We need dynamic layout in UpdateLayout.
-                -- For now default reset:
-                -- We entrust UpdateLayout to handle attached positioning.
                 return
             end
 
@@ -330,7 +228,7 @@ function UF:CreateAdditionalPower(frame)
 
         LEM:RegisterCallback('enter', function()
             local unit = frame.unit
-            local db = RoithiUIDB and RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[unit]
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
             if db and db.additionalPowerDetached then
                 power.isInEditMode = true
                 power:SetAlpha(1)
@@ -352,7 +250,7 @@ function UF:CreateAdditionalPower(frame)
     local function UpdateLayout()
         local unit = frame.unit
         local db
-        if RoithiUIDB and RoithiUIDB.UnitFrames then db = RoithiUIDB.UnitFrames[unit] end
+        if RoithiUI.db.profile.UnitFrames then db = RoithiUI.db.profile.UnitFrames[unit] end
 
         local height = db and db.additionalPowerHeight or 10
         local detached = db and db.additionalPowerDetached
@@ -453,19 +351,20 @@ function UF:CreateAdditionalPower(frame)
         self:SetMinMaxValues(0, max)
         self:SetValue(cur)
 
-        -- Color (Mana Blue)
-        local c = PowerBarColor["MANA"]
-        if c then
-            self:SetStatusBarColor(c.r, c.g, c.b)
+        local pType, pToken = UnitPowerType(unit)
+        local color = PowerBarColor[pToken] or PowerBarColor[pType] or PowerBarColor["MANA"]
+
+        if color then
+            self:SetStatusBarColor(color.r, color.g, color.b)
         else
             self:SetStatusBarColor(0, 0, 1)
         end
     end
 
     power:SetScript("OnEvent", UpdatePower)
-    power:RegisterUnitEvent("UNIT_POWER_UPDATE", frame.unit)
-    power:RegisterUnitEvent("UNIT_MAXPOWER", frame.unit)
-    power:RegisterUnitEvent("UNIT_DISPLAYPOWER", frame.unit)
+    power:RegisterEvent("UNIT_POWER_UPDATE")
+    power:RegisterEvent("UNIT_MAXPOWER")
+    power:RegisterEvent("UNIT_DISPLAYPOWER")
     power:SetScript("OnShow", UpdatePower)
 
     -- Initial
@@ -474,18 +373,29 @@ end
 
 -- 12.0 Heal Prediction Implementation
 function UF:CreateHealPrediction(frame)
-    local myHeal = CreateFrame("StatusBar", nil, frame.Health)
-    myHeal:SetStatusBarTexture(LSM:Fetch("statusbar", "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
+    local health = frame.Health or frame.SafeHealth
+    if not health then return end
+    local clipFrame = CreateFrame("Frame", nil, health)
+    clipFrame:SetAllPoints()
+    -- Safety wrap for older clients or environments where this might strict-error
+    pcall(function() clipFrame:SetClipsChildren(true) end)
+    frame.Health.ClipFrame = clipFrame
+
+    local texture = LSM:Fetch("statusbar", RoithiUI.db.profile.barTexture or "Solid") or
+        "Interface\\TargetingFrame\\UI-StatusBar"
+
+    local myHeal = CreateFrame("StatusBar", nil, clipFrame)
+    myHeal:SetStatusBarTexture(texture)
     myHeal:SetStatusBarColor(0, 0.6, 0.3, 0.6)
-    myHeal:SetFrameLevel(frame.Health:GetFrameLevel() + 1)
+    myHeal:SetFrameLevel(health:GetFrameLevel() + 1)
 
-    local otherHeal = CreateFrame("StatusBar", nil, frame.Health)
-    otherHeal:SetStatusBarTexture(LSM:Fetch("statusbar", "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
+    local otherHeal = CreateFrame("StatusBar", nil, clipFrame)
+    otherHeal:SetStatusBarTexture(texture)
     otherHeal:SetStatusBarColor(0, 0.6, 0, 0.6)
-    otherHeal:SetFrameLevel(frame.Health:GetFrameLevel() + 1)
+    otherHeal:SetFrameLevel(health:GetFrameLevel() + 1)
 
-    local absorb = CreateFrame("StatusBar", nil, frame.Health)
-    absorb:SetStatusBarTexture(LSM:Fetch("statusbar", "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
+    local absorb = CreateFrame("StatusBar", nil, clipFrame)
+    absorb:SetStatusBarTexture(texture)
     -- Debug Color (Bright Neon Yellow) and High Strata as requested
     absorb:SetStatusBarColor(1, 1, 0, 1)
     absorb:SetFrameLevel(frame.Health:GetFrameLevel() + 10)
@@ -595,5 +505,32 @@ function UF:CreateHealPrediction(frame)
                 end
             end
         end)
+    end
+end
+
+-- ----------------------------------------------------------------------------
+-- Update Wrappers (Called by Units.lua when DB changes)
+-- ----------------------------------------------------------------------------
+
+function UF:UpdateHealthBarSettings(frame)
+    if not frame.Health then return end
+    local db = RoithiUI.db.profile.UnitFrames[frame.unit]
+    local texture = LSM:Fetch("statusbar", RoithiUI.db.profile.barTexture or "Solid") or
+    "Interface\\TargetingFrame\\UI-StatusBar"
+
+    frame.Health:SetStatusBarTexture(texture)
+    if frame.Health.bg then frame.Health.bg:SetTexture(texture) end
+
+    -- Force update to re-color if needed
+    local onShow = frame.Health:GetScript("OnShow")
+    if onShow then onShow(frame.Health) end
+end
+
+function UF:UpdatePowerBarSettings(frame)
+    if frame.UpdatePowerLayout then
+        frame.UpdatePowerLayout()
+    end
+    if frame.UpdateAdditionalPowerLayout then
+        frame.UpdateAdditionalPowerLayout()
     end
 end

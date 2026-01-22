@@ -60,9 +60,9 @@ function RoithiUI.Config.GetCustomTagsOptions()
         local unit, label = u[1], u[2]
 
         local function GetDB()
-            if not RoithiUIDB.UnitFrames[unit] then RoithiUIDB.UnitFrames[unit] = {} end
-            if not RoithiUIDB.UnitFrames[unit].tags then RoithiUIDB.UnitFrames[unit].tags = {} end
-            return RoithiUIDB.UnitFrames[unit].tags
+            if not RoithiUI.db.profile.UnitFrames[unit] then RoithiUI.db.profile.UnitFrames[unit] = {} end
+            if not RoithiUI.db.profile.UnitFrames[unit].tags then RoithiUI.db.profile.UnitFrames[unit].tags = {} end
+            return RoithiUI.db.profile.UnitFrames[unit].tags
         end
 
         local unitGroup = {

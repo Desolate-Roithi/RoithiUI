@@ -50,12 +50,16 @@ local function BuildEmpowerTimeline(unit)
     -- 3. Fallback (Equal Split)
 
     local durations
+    ---@diagnostic disable-next-line: undefined-field
     if _G.UnitEmpoweredStageDurations then
+        ---@diagnostic disable-next-line: undefined-field
         durations = _G.UnitEmpoweredStageDurations(unit)
     end
 
     local percentages
+    ---@diagnostic disable-next-line: undefined-field
     if not durations and _G.UnitEmpoweredStagePercentages then
+        ---@diagnostic disable-next-line: undefined-field
         percentages = _G.UnitEmpoweredStagePercentages(unit)
     end
 
@@ -101,8 +105,8 @@ local function BuildEmpowerTimeline(unit)
 
     -- 3. Hold Phase
     local holdDuration = 0
-    if GetUnitEmpowerHoldAtMaxTime then
-        holdDuration = GetUnitEmpowerHoldAtMaxTime(unit) or 0
+    if _G.GetUnitEmpowerHoldAtMaxTime then
+        holdDuration = _G.GetUnitEmpowerHoldAtMaxTime(unit) or 0
     end
 
     -- If the API returns seconds (e.g. 2.0), we use it.
@@ -177,7 +181,7 @@ local function LayoutEmpower(bar)
 
     local width = bar:GetWidth() or 1
     local height = bar:GetHeight() or 1
-    local db = RoithiUIDB.Castbar[bar.unit]
+    local db = RoithiUI.db.profile.Castbar[bar.unit]
     local colors = db and db.colors
 
     -- Clean existing
@@ -341,7 +345,7 @@ function ns.OnEmpowerUpdate(bar)
     local stageColorIdx = idx - 1
     if stageColorIdx < 0 then stageColorIdx = 0 end -- Safety
 
-    local db = RoithiUIDB.Castbar[bar.unit]
+    local db = RoithiUI.db.profile.Castbar[bar.unit]
     local colors = db and db.colors
     local c = { 0.5, 0.5, 0.5, 1 } -- Default Grey
 

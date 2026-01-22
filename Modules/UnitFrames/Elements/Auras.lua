@@ -2,13 +2,14 @@ local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
 
-local UF = RoithiUI:GetModule("UnitFrames")
+---@class UF : AceModule, AceAddon
+local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 
 function UF:CreateAuras(frame)
     local element = CreateFrame("Frame", nil, frame)
     element:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 4)
     element:SetSize(frame:GetWidth(), 20)
-    frame.Auras = element
+    frame.RoithiAuras = element
 
     element.icons = {}
 
@@ -55,8 +56,8 @@ function UF:CreateAuras(frame)
         -- Get DB
         -- Get DB
         local db
-        if RoithiUIDB and RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[unit] then
-            db = RoithiUIDB.UnitFrames[unit]
+        if RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit] then
+            db = RoithiUI.db.profile.UnitFrames[unit]
         else
             db = {}
         end
@@ -115,7 +116,9 @@ function UF:CreateAuras(frame)
 
                 -- Debuff Type Color
                 local color = nil
+                ---@diagnostic disable-next-line: undefined-field
                 if _G.DebuffTypeColor then
+                    ---@diagnostic disable-next-line: undefined-field
                     color = _G.DebuffTypeColor[aura.dispelName] or _G.DebuffTypeColor["none"]
                 else
                     color = { r = 1, g = 0, b = 0 } -- Fallback
@@ -191,10 +194,16 @@ function UF:CreateAuras(frame)
             frame.UpdateAuras()
         end
     end)
-    frame:RegisterUnitEvent("UNIT_AURA", frame.unit)
-    frame:RegisterEvent("PLAYER_TARGET_CHANGED")
-    frame:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    frame:RegisterEvent("UNIT_AURA", frame.UpdateAuras)
+    frame:RegisterEvent("PLAYER_TARGET_CHANGED", frame.UpdateAuras, true)
+    frame:RegisterEvent("PLAYER_FOCUS_CHANGED", frame.UpdateAuras, true)
 
     frame:HookScript("OnShow", frame.UpdateAuras)
     frame.UpdateAuras()
+end
+
+function UF:UpdateAuras(frame)
+    if frame.UpdateAuras then
+        frame.UpdateAuras()
+    end
 end

@@ -1,89 +1,73 @@
 local addonName, ns = ...
 
--- Global Addon Object
-_G.RoithiUI = {}
+-- Initialize AceAddon
+-- We mixin AceConsole-3.0 here in anticipation of Commands.lua using it via the main object
+_G.RoithiUI = LibStub("AceAddon-3.0"):NewAddon(addonName, "AceConsole-3.0", "AceEvent-3.0")
 local RoithiUI = _G.RoithiUI
 
 -- Mixin LibRoithi helpers if desired, or access via LibStub("LibRoithi-1.0")
 local LibRoithi = LibStub("LibRoithi-1.0")
 
--- Simple Module System
-RoithiUI.modules = {}
+-- Debug Flag
 RoithiUI.debug = false
 
-function RoithiUI:NewModule(name)
-    local module = {}
-    self.modules[name] = module
-    return module
-end
-
-function RoithiUI:GetModule(name)
-    return self.modules[name]
-end
-
--- Event Handling
-local loader = CreateFrame("Frame")
-loader:RegisterEvent("ADDON_LOADED")
-loader:RegisterEvent("PLAYER_LOGIN")
-
-loader:SetScript("OnEvent", function(self, event, ...)
-    if event == "ADDON_LOADED" and ... == addonName then
-        RoithiUI:OnInitialize()
-    elseif event == "PLAYER_LOGIN" then
-        RoithiUI:OnEnable()
-    end
-end)
+-- Module Handling is now natively provided by AceAddon:
+-- RoithiUI:NewModule(name, prototype, mixins)
+-- RoithiUI:GetModule(name)
+-- We don't need to manually define self.modules or NewModule unless we want custom behavior.
+-- Existing modules use `RoithiUI:NewModule("UnitFrames")` which works with AceAddon.
 
 function RoithiUI:OnInitialize()
-    -- Initialize DB
-    -- Initialize DB with Defaults
-    if not _G.RoithiUIDB then _G.RoithiUIDB = {} end
+    -- Initialize AceDB
+    -- "RoithiUIDB" is the SavedVariables table name in .toc (should be verified)
+    -- ns.Defaults is the default table
+    -- true (defaultProfile) -> "Default"
+    self.db = LibStub("AceDB-3.0"):New("RoithiUIDB", ns.Defaults, true)
 
-    local function MergeTable(target, source)
-        if type(target) ~= "table" then target = {} end
-        for k, v in pairs(source) do
-            if type(v) == "table" then
-                if type(target[k]) ~= "table" then
-                    target[k] = CopyTable(v)
-                else
-                    MergeTable(target[k], v)
-                end
-            else
-                if target[k] == nil then
-                    target[k] = v
+    -- DB Migration Logic: Legacy Manual -> AceDB Profile
+    -- Check if we have legacy root keys that match defaults structure, and no profiles
+    if _G.RoithiUIDB and not _G.RoithiUIDB.profiles then
+        -- This is likely a legacy DB. Move known keys to current profile.
+        -- We can't move everything blindly because AceDB manages the table now.
+        -- But since we just initialized New(), AceDB might have already restructured if it was empty-ish,
+        -- or if it was existing, it might treat it as a profile if structured oddly?
+        -- Actually AceDB puts profiles in .profiles. If keys exist at root, they are ignored or overwritten unless upgraded.
+        -- Best effort: Manually move keys if they exist in the raw global but not in profile?
+        -- AceDB handles this if we use "namespaces" but for raw profile data it's tricky.
+
+        -- Creating a simple migration check:
+        -- Access raw DB not via self.db to avoid AceDB magic for a second
+        local rawDB = _G.RoithiUIDB
+
+        -- If we detect a specific key like "EnabledModules" at root
+        if rawDB.EnabledModules and not rawDB.profiles then
+            -- Copy to current profile
+            for k, v in pairs(rawDB) do
+                if k ~= "profiles" and k ~= "profileKeys" then
+                    self.db.profile[k] = v
+                    -- clear from root? safe to leave garbage or clean it up.
+                    rawDB[k] = nil
                 end
             end
-        end
-        return target
-    end
-
-    if ns.Defaults then
-        MergeTable(_G.RoithiUIDB, ns.Defaults)
-    else
-        -- Fallback if Defaults missing (Safety)
-        if not _G.RoithiUIDB.EnabledModules then
-            _G.RoithiUIDB.EnabledModules = {
-                PlayerFrame = true,
-                TargetFrame = true,
-                FocusFrame = true,
-                Castbars = true,
-            }
+            self:Print("Migrated legacy settings to 'Default' profile.")
         end
     end
 
-    -- DB Migration Logic
+    -- MidnightCastbars Migration (Keep this just in case)
     if _G.MidnightCastbarsDB then
-        _G.RoithiUIDB.Castbar = CopyTable(_G.MidnightCastbarsDB)
+        self.db.profile.Castbar = CopyTable(_G.MidnightCastbarsDB)
         _G.MidnightCastbarsDB = nil
         print("|cff00ccffRoithiUI:|r Migrated MidnightCastbarsDB settings to RoithiUIDB.")
     end
 
-    -- Initialize Modules
-    for name, module in pairs(self.modules) do
-        if module.OnInitialize then
-            module:OnInitialize()
-        end
-    end
+    -- Register Options Table (with DualSpec support if available)
+    -- We can register basic profiles too
+    LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable("RoithiUI_Profiles",
+        LibStub("AceDBOptions-3.0"):GetOptionsTable(self.db))
+    -- Add to Blizzard Options
+    -- LibStub("AceConfigDialog-3.0"):AddToBlizOptions("RoithiUI_Profiles", "Profiles", "RoithiUI") -- Requires main options registered first
+
+    -- AceAddon calls OnInitialize on modules automatically.
 
     -- Register Options
     if self.Config and self.Config.RegisterOptions then
@@ -92,14 +76,19 @@ function RoithiUI:OnInitialize()
 end
 
 function RoithiUI:OnEnable()
-    -- Allow modules to initialize
-    for name, module in pairs(self.modules) do
-        -- Check if module is enabled in DB (default to true if nil, but keys are populated in OnInitialize)
-        local isEnabled = RoithiUIDB.EnabledModules[name]
-        -- Handle "Castbars" vs "Castbar" naming if there's a mismatch, but we'll try to align keys.
-        -- If specific module implementation has OnEnable, call it.
-        if isEnabled ~= false and module.OnEnable then
-            module:OnEnable()
+    -- AceAddon calls OnEnable on modules automatically.
+
+    -- Additional startup logic if needed
+    -- For example checking module enablement from DB manually before Ace enables them?
+    -- AceAddon enables all modules by default.
+    -- If we want to support the "Enable/Disable" toggles from RoithiUIDB.EnabledModules,
+    -- we might need to iterate modules here and Disable them if the DB says so.
+
+    for name, module in self:IterateModules() do
+        local isEnabled = self.db.profile.EnabledModules and self.db.profile.EnabledModules[name]
+        -- Handle explicit disable
+        if isEnabled == false then
+            module:Disable()
         end
     end
 end

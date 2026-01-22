@@ -14,6 +14,7 @@ local GetReadyCheckStatus = GetReadyCheckStatus
 local UnitHasIncomingResurrection, UnitPhaseReason = UnitHasIncomingResurrection, UnitPhaseReason
 local GetPartyAssignment = _G.GetPartyAssignment or _G.C_PartyInfo.GetPartyAssignment -- Compatibility
 
+---@class UF : AceModule, AceAddon
 local UF = RoithiUI:GetModule("UnitFrames")
 
 function UF:CreateIndicators(frame)
@@ -110,8 +111,8 @@ function UF:CreateIndicators(frame)
 
     -- Update Function
     local function GetIndicatorDB(key)
-        if not RoithiUIDB then return nil end
-        local db = RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[frame.unit]
+        if not RoithiUI.db.profile.UnitFrames then return nil end
+        local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
         if not db or not db.indicators then return nil end
         return db.indicators[key]
     end
@@ -124,8 +125,8 @@ function UF:CreateIndicators(frame)
     end
 
     local function UpdateLayout()
-        local db = RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[frame.unit] and
-            RoithiUIDB.UnitFrames[frame.unit].indicators
+        local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit] and
+            RoithiUI.db.profile.UnitFrames[frame.unit].indicators
         if not db then return end
 
         local anchorParent = frame.Health or frame
@@ -173,7 +174,7 @@ function UF:CreateIndicators(frame)
 
     local function UpdateIndicators()
         local unit = frame.unit
-        local inTestMode = RoithiUIDB and RoithiUIDB.IndicatorTestMode
+        local inTestMode = RoithiUI.db.profile.IndicatorTestMode
 
         if not frame.IndicatorLayoutApplying then
             frame.IndicatorLayoutApplying = true
@@ -186,6 +187,10 @@ function UF:CreateIndicators(frame)
             if IsEnabled(key) and (condition or inTestMode) then
                 -- Unit Specific Filtering
                 if key == "resting" and unit ~= "player" then
+                    indicator:Hide()
+                    return
+                end
+                if key == "quest" and unit == "player" then
                     indicator:Hide()
                     return
                 end
@@ -327,23 +332,34 @@ function UF:CreateIndicators(frame)
     frame:HookScript("OnShow", UpdateIndicators)
 
     -- Register Events
+    -- Register Events via oUF (Requires handler function)
     if frame.unit == "player" then
-        frame:RegisterEvent("PLAYER_UPDATE_RESTING")
-        frame:RegisterEvent("PLAYER_REGEN_DISABLED")
-        frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        frame:RegisterEvent("PLAYER_UPDATE_RESTING", UpdateIndicators, true)
+        frame:RegisterEvent("PLAYER_REGEN_DISABLED", UpdateIndicators, true)
+        frame:RegisterEvent("PLAYER_REGEN_ENABLED", UpdateIndicators, true)
     end
-    frame:RegisterEvent("GROUP_ROSTER_UPDATE")
-    frame:RegisterEvent("RAID_TARGET_UPDATE")
-    frame:RegisterEvent("READY_CHECK")
-    frame:RegisterEvent("READY_CHECK_CONFIRM")
-    frame:RegisterEvent("READY_CHECK_FINISHED")
-    if frame.unit then
-        frame:RegisterUnitEvent("UNIT_FLAGS", frame.unit)
-        frame:RegisterUnitEvent("UNIT_PHASE", frame.unit)
-        frame:RegisterUnitEvent("UNIT_CONNECTION", frame.unit)
-        frame:RegisterUnitEvent("INCOMING_RESURRECT_CHANGED", frame.unit)
-    end
+    frame:RegisterEvent("GROUP_ROSTER_UPDATE", UpdateIndicators, true)
+    frame:RegisterEvent("RAID_TARGET_UPDATE", UpdateIndicators, true)
+    frame:RegisterEvent("READY_CHECK", UpdateIndicators, true)
+    frame:RegisterEvent("READY_CHECK_CONFIRM", UpdateIndicators, true)
+    frame:RegisterEvent("READY_CHECK_FINISHED", UpdateIndicators, true)
+
+    -- oUF handles UnitEvents automatically if we use RegisterEvent with a handler
+    -- and the event is a unit event.
+    frame:RegisterEvent("UNIT_FLAGS", UpdateIndicators)
+    frame:RegisterEvent("UNIT_PHASE", UpdateIndicators)
+    frame:RegisterEvent("UNIT_CONNECTION", UpdateIndicators)
+    frame:RegisterEvent("INCOMING_RESURRECT_CHANGED", UpdateIndicators)
 
     -- Initial
     UpdateIndicators()
+end
+
+function UF:UpdateIndicators(frame)
+    if frame.UpdateIndicatorLayout then
+        frame.UpdateIndicatorLayout()
+    end
+    if frame.UpdateIndicators then
+        frame.UpdateIndicators()
+    end
 end

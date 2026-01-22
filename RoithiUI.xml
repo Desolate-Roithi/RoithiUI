@@ -1,22 +1,13 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
     <!-- Libraries -->
-    <Script file="Libs/LibStub/LibStub.lua"/>
-    <Include file="Libs/CallbackHandler-1.0/CallbackHandler-1.0.xml"/>
-    <Include file="Libs/LibSharedMedia-3.0/lib.xml"/>
-    <Include file="Libs/LibEditMode/embed.xml"/>
-    
-    <!-- Ace3 Libraries -->
-    <Include file="Libs/Ace3/AceDB-3.0/AceDB-3.0.xml"/>
-    <Include file="Libs/Ace3/AceConsole-3.0/AceConsole-3.0.xml"/>
-    <Include file="Libs/Ace3/AceGUI-3.0/AceGUI-3.0.xml"/>
-    <Include file="Libs/Ace3/AceConfig-3.0/AceConfig-3.0.xml"/>
+    <Include file="Libs/Init.xml"/>
 
-    <Script file="Libs/LibRoithi/LibRoithi.lua"/>
-    <Script file="Libs/LibRoithi/LibEditModeExtension.lua"/>
 
     <!-- Core -->
     <Script file="Core/Init.lua"/>
+    <Script file="Core/Utils.lua"/>
     <Script file="Core/Commands.lua"/>
+    <Script file="Core/Media.lua"/>
     <Script file="Config/Defaults.lua"/>
     <Script file="Config/General.lua"/>
     <Script file="Config/CustomTags.lua"/>
@@ -26,6 +17,7 @@
 
     <!-- Modules -->
     <!-- UnitFrames -->
+    <Script file="Modules/UnitFrames/Elements/SafeHealth.lua"/>
     <Script file="Modules/UnitFrames/Core.lua"/>
     <Script file="Modules/UnitFrames/Elements/Bars.lua"/>
     <Script file="Modules/UnitFrames/Elements/Text.lua"/>
@@ -33,6 +25,8 @@
     <Script file="Modules/UnitFrames/Elements/Indicators.lua"/>
     <Script file="Modules/UnitFrames/Elements/Auras.lua"/>
     <Script file="Modules/UnitFrames/Elements/Range.lua"/>
+    <Script file="Modules/UnitFrames/Elements/HealthPrediction.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Fader.lua"/>
     <Script file="Modules/UnitFrames/Elements/ClassPower.lua"/>
     <Script file="Modules/UnitFrames/Elements/AdditionalPower.lua"/>
     <Script file="Modules/UnitFrames/Elements/EncounterResource.lua"/>

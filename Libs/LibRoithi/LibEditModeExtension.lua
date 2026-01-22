@@ -201,3 +201,39 @@ end, function(_, frame)
     frame:Hide()
     frame.layoutIndex = nil
 end)
+
+-- 3. Button Widget
+-- Displays a clickable button.
+-- Expects 'name' for label and 'func' for click handler.
+lib.SettingType.Button = 13
+
+local buttonMixin = {}
+function buttonMixin:Setup(data)
+    self.setting = data
+    self:SetText(data.name)
+
+    -- Dynamic Width Logic
+    local parent = self:GetParent()
+    if parent and parent:GetWidth() > 0 then
+        self.fixedWidth = parent:GetWidth()
+        self:SetWidth(self.fixedWidth)
+    end
+
+    self:SetScript("OnClick", function()
+        if data.func then data.func() end
+    end)
+end
+
+if lib.internal and type(lib.internal.CreatePool) == "function" then
+    lib.internal:CreatePool(lib.SettingType.Button, function()
+        local button = CreateFrame('Button', nil, UIParent, "UIPanelButtonTemplate")
+        button.fixedWidth = 350
+        button.fixedHeight = 30
+        button:SetSize(350, 30)
+        Mixin(button, buttonMixin)
+        return button
+    end, function(_, button)
+        button:Hide()
+        button.layoutIndex = nil
+    end)
+end

@@ -272,33 +272,36 @@ function UF:CreateClassPower(frame)
     end
 
     -- Event Handling
-    local events = { "PLAYER_ENTERING_WORLD", "UNIT_POWER_UPDATE", "UNIT_DISPLAYPOWER", "SPELLS_CHANGED" }
-    if class == "DRUID" then
-        table.insert(events, "UPDATE_SHAPESHIFT_FORM")
-    end
-    if class == "DEATHKNIGHT" then
-        table.insert(events, "RUNE_POWER_UPDATE")
-    elseif class == "SHAMAN" or class == "DEMONHUNTER" then
-        table.insert(events, "UNIT_AURA")
-    end
-
+    -- Event Handling
     frame:HookScript("OnEvent", function(self, event, unit)
         if (unit and unit ~= "player") then return end
         Update()
     end)
 
-    for _, e in ipairs(events) do
-        frame:RegisterEvent(e)
-        if e == "UNIT_AURA" or e == "UNIT_POWER_UPDATE" then
-            frame:RegisterUnitEvent(e, "player")
-        end
+    -- Global Events (Use oUF RegisterEvent with handler + unitless)
+    frame:RegisterEvent("PLAYER_ENTERING_WORLD", Update, true)
+    frame:RegisterEvent("SPELLS_CHANGED", Update, true)
+
+    if class == "DRUID" then
+        frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM", Update, true)
+    end
+    if class == "DEATHKNIGHT" then
+        frame:RegisterEvent("RUNE_POWER_UPDATE", Update, true)
+    end
+
+    -- Unit Events (Use Standard RegisterEvent -> Triggers OnEvent Hook + Handler)
+    frame:RegisterEvent("UNIT_POWER_UPDATE", Update)
+    frame:RegisterEvent("UNIT_DISPLAYPOWER", Update)
+
+    if class == "SHAMAN" or class == "DEMONHUNTER" then
+        frame:RegisterEvent("UNIT_AURA", Update)
     end
 
     frame.UpdateClassPowerLayout = function()
         -- Get DB
         local db
-        if RoithiUIDB and RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[frame.unit] then
-            db = RoithiUIDB.UnitFrames[frame.unit]
+        if RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit] then
+            db = RoithiUI.db.profile.UnitFrames[frame.unit]
         else
             return -- No config found, probably not initialized yet
         end
@@ -358,7 +361,8 @@ function UF:CreateClassPower(frame)
 
         local defaults = { point = "CENTER", x = 0, y = -100 }
         local function OnPosChanged(f, layoutName, point, x, y)
-            local db = RoithiUIDB and RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[frame.unit]
+            local unit = frame.unit
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
 
             -- If not detached, ignore movement
             if not db or not db.classPowerDetached then
@@ -375,21 +379,18 @@ function UF:CreateClassPower(frame)
             f:SetPoint(point, UIParent, point, x, y)
         end
 
-        -- Use unique name for LEM
         LEM:AddFrame(element, OnPosChanged, defaults)
-        element:SetMovable(true)
 
         LEM:RegisterCallback('enter', function()
-            -- We always want to allow interaction if enabled?
-            -- Or only if detached?
-            -- EditMode usually allows moving everything if selected.
-            -- If we ONLY allow moving when detached, we should communicate that.
-            -- But standard behavior is: You can select it. If you drag it, it becomes "detached" (if logic supported it).
-            -- Here, we rely on the checkbox. So if not detached, OnPosChanged snaps back.
-
-            -- We force show so user can see what they are configuring
-            element.isInEditMode = true
-            Update()
+            local unit = frame.unit
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
+            if db and db.classPowerDetached then
+                element.isInEditMode = true
+                element:SetAlpha(1)
+                element:Show()
+            else
+                element.isInEditMode = false
+            end
         end)
 
         LEM:RegisterCallback('exit', function()

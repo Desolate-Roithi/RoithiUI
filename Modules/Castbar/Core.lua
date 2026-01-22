@@ -102,6 +102,23 @@ ns.DEFAULTS = {
     },
 }
 
+-- Add Boss Defaults Programmatically
+for i = 1, 5 do
+    ns.DEFAULTS["boss" .. i] = {
+        enabled = true,
+        point = "TOP",
+        relPoint = "BOTTOM",
+        x = 0,
+        y = -10,
+        width = 180,
+        height = 20,
+        fontSize = 10,
+        showIcon = true,
+        iconScale = 1.0,
+        colors = CopyTable(DEFAULT_COLORS)
+    }
+end
+
 -- ... (skipping to PLAYER_LOGIN migration safely) ...
 
 
@@ -110,7 +127,7 @@ ns.DEFAULTS = {
 -- 2. Taint-Safe Blizzard Frame Hiding
 -- ----------------------------------------------------------------------------
 function ns.UpdateBlizzardVisibility()
-    local db = RoithiUIDB.Castbar
+    local db = RoithiUI.db.profile.Castbar
     if not db then return end
 
     -- Helper to hide/show
@@ -163,13 +180,16 @@ end
 -- ----------------------------------------------------------------------------
 -- 3. Main Event Handler
 -- ----------------------------------------------------------------------------
+---@class Castbar : AceAddon, AceModule
 local Castbar = RoithiUI:NewModule("Castbar")
 local MidnightCastbarsDB -- Local reference to RoithiUIDB.Castbar
 
 function Castbar:OnInitialize()
     -- Initialize DB reference
-    if not RoithiUIDB.Castbar then RoithiUIDB.Castbar = {} end
-    MidnightCastbarsDB = RoithiUIDB.Castbar
+    -- RoithiUI.db should handle defaults via AceDB.
+    -- But we might need to verify if "Castbar" key exists if usage was unstructured before.
+    if not RoithiUI.db.profile.Castbar then RoithiUI.db.profile.Castbar = {} end
+    MidnightCastbarsDB = RoithiUI.db.profile.Castbar
 
     -- Apply Defaults
     for unit, defaultCfg in pairs(ns.DEFAULTS) do
@@ -212,7 +232,7 @@ function Castbar:OnInitialize()
 end
 
 function Castbar:OnEnable()
-    MidnightCastbarsDB = RoithiUIDB.Castbar -- Ensure defined
+    MidnightCastbarsDB = RoithiUI.db.profile.Castbar -- Ensure defined
 
     ns.UpdateBlizzardVisibility()
     ns.InitializeBars()          -- Defined in Castbar.lua

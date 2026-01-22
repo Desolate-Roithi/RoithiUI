@@ -17,11 +17,23 @@ local CreateFramePool, CreateFontStringPool = CreateFramePool, CreateFontStringP
 local issecretvalue = _G.issecretvalue
 local C_Secrets = _G.C_Secrets
 local C_UnitHealth = _G.C_UnitHealth
+---@diagnostic disable-next-line: undefined-field
 local C_UnitPower = _G.C_UnitPower
 local CurveConstants = _G.CurveConstants
 local UnitHealthPercent = _G.UnitHealthPercent
 local UnitPowerPercent = _G.UnitPowerPercent
 
+local UnitPowerPercent = _G.UnitPowerPercent
+---@diagnostic disable-next-line: undefined-field
+local UnitHealthDeficit = _G.UnitHealthDeficit
+
+-- Missing Globals for Linter
+---@diagnostic disable-next-line: undefined-field
+local AbbreviateLargeNumbers = _G.AbbreviateLargeNumbers
+---@diagnostic disable-next-line: undefined-field
+local UnitHealthMissing = _G.UnitHealthMissing
+
+---@class UF : AceAddon, AceModule
 local UF = RoithiUI:GetModule("UnitFrames")
 
 ---@class TagManager
@@ -35,8 +47,8 @@ local function AbbreviateNumber(value)
     -- CRITICAL: Check for Secret values using the GLOBAL function
     -- Secrets have type() == "number" or "string" but forbid math/comparison.
     if issecretvalue and issecretvalue(value) then
-        if _G.AbbreviateLargeNumbers then
-            return _G.AbbreviateLargeNumbers(value)
+        if AbbreviateLargeNumbers then
+            return AbbreviateLargeNumbers(value)
         end
         return value
     end
@@ -76,8 +88,10 @@ TM.Methods = {
         local isActuallySecret = issecretvalue and (issecretvalue(cur) or issecretvalue(max))
 
         if isRestricted or isActuallySecret then
-            if _G.UnitHealthMissing then
-                return _G.UnitHealthMissing(unit)
+            if UnitHealthDeficit then
+                return UnitHealthDeficit(unit)
+            elseif UnitHealthMissing then
+                return UnitHealthMissing(unit)
             end
             return ""
         end
@@ -259,9 +273,11 @@ end
 -- ----------------------------------------------------------------------------
 -- 3. Core System (Create & Update)
 -- ----------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------
+-- 3. Core System (Create & Update)
+-- ----------------------------------------------------------------------------
 function UF:CreateTags(frame)
     if not frame.Tags then frame.Tags = {} end
-
     -- We need a container for custom tags if they are anchored to the frame freely
     -- Actually, each tag is its own FontString.
     -- We store them in frame.Tags list.
@@ -269,7 +285,7 @@ end
 
 function UF:UpdateTags(frame)
     local unit = frame.unit
-    local db = RoithiUIDB.UnitFrames[unit]
+    local db = RoithiUI.db.profile.UnitFrames[unit]
 
     if not frame.TagsPool then
         frame.TagsPool = CreateFramePool("Frame", frame, nil, function(_, f)
@@ -327,15 +343,7 @@ end
 -- ----------------------------------------------------------------------------
 -- 4. Event Handling
 -- ----------------------------------------------------------------------------
-local function OnEvent(self, event, unit)
-    if not self.visibleTags then return end
-    -- We need a way to iterate active tags on the unit frame and update them.
-    -- Ideally, the UnitFrame itself triggers an UpdateTags event?
-    -- Or we hook the standard "UNIT_HEALTH", "UNIT_POWER_UPDATE" etc to generic update.
-end
 
--- Hook into UF's central event handler or add specific tag updating logic?
--- Ideally, we add a function `frame:UpdateCustomTags()` and call it on relevant events.
 function UF:UpdateTagFrame(tagFrame)
     if not tagFrame.SegmentPool then return end
 
@@ -411,5 +419,45 @@ function UF:UpdateCustomTags(frame)
     end
 end
 
--- Auto-register events for frames that have tags?
--- For now, let's call UpdateCustomTags from the main `UpdateIndicators` or similar hook in `Units.lua` or `Elements.lua`.
+function UF:EnableTags(frame)
+    if frame.RoithiTagsHooked then return end
+
+    local function UpdateTags() self:UpdateCustomTags(frame) end
+
+    -- Unified Event Handler for oUF
+    local function OnTagEvent(_, event, unit)
+        -- Standard Unit Events
+        if unit == frame.unit then
+            UpdateTags()
+            -- Context Switch Events
+        elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then
+            UpdateTags()
+        elseif event == "UNIT_TARGET" then
+            UpdateTags()
+        end
+    end
+
+    -- Key events for stats
+    if frame.unit then
+        frame:RegisterEvent("UNIT_HEALTH", OnTagEvent)
+        frame:RegisterEvent("UNIT_MAXHEALTH", OnTagEvent)
+        frame:RegisterEvent("UNIT_POWER_UPDATE", OnTagEvent)
+        frame:RegisterEvent("UNIT_MAXPOWER", OnTagEvent)
+        frame:RegisterEvent("UNIT_NAME_UPDATE", OnTagEvent)
+        frame:RegisterEvent("UNIT_LEVEL", OnTagEvent)
+        frame:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED", OnTagEvent)
+    end
+
+    -- Context events for target switching (Must be declared unitless)
+    if frame.unit == "target" then
+        frame:RegisterEvent("PLAYER_TARGET_CHANGED", OnTagEvent, true)
+    elseif frame.unit == "focus" then
+        frame:RegisterEvent("PLAYER_FOCUS_CHANGED", OnTagEvent, true)
+    elseif frame.unit == "targettarget" or frame.unit == "focustarget" or frame.unit == "pettarget" then
+        frame:RegisterEvent("UNIT_TARGET", OnTagEvent)
+    end
+
+    -- Also update on Show to ensure fresh data
+    frame:HookScript("OnShow", UpdateTags)
+    frame.RoithiTagsHooked = true
+end

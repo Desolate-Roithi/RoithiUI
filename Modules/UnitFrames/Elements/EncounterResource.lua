@@ -23,7 +23,7 @@ local function ToggleBlizzard(enableCustom)
         -- Prevent showing via hook
         if not PlayerPowerBarAlt.RoithiHookedShow then
             hooksecurefunc(PlayerPowerBarAlt, "Show", function(self)
-                if RoithiUIDB and RoithiUIDB.EncounterResource and RoithiUIDB.EncounterResource.enabled then
+                if RoithiUI.db.profile.EncounterResource and RoithiUI.db.profile.EncounterResource.enabled then
                     self:Hide()
                 end
             end)
@@ -46,8 +46,8 @@ end
 -- Toggle Function (External Access)
 function UF:ToggleEncounterResource(enabled)
     -- Ensure DB exists if called early
-    if not RoithiUIDB.EncounterResource then
-        RoithiUIDB.EncounterResource = {
+    if not RoithiUI.db.profile.EncounterResource then
+        RoithiUI.db.profile.EncounterResource = {
             enabled = true,
             point = "TOP",
             x = 0,
@@ -55,7 +55,7 @@ function UF:ToggleEncounterResource(enabled)
         }
     end
 
-    local db = RoithiUIDB.EncounterResource
+    local db = RoithiUI.db.profile.EncounterResource
     db.enabled = enabled
 
     -- Find the bar if it exists
@@ -85,15 +85,15 @@ function UF:CreateEncounterResource(frame)
     if frame.unit ~= "player" then return end
 
     -- Defaults
-    if not RoithiUIDB.EncounterResource then
-        RoithiUIDB.EncounterResource = {
+    if not RoithiUI.db.profile.EncounterResource then
+        RoithiUI.db.profile.EncounterResource = {
             enabled = true,
             point = "TOP",
             x = 0,
             y = -100,
         }
     end
-    local db = RoithiUIDB.EncounterResource
+    local db = RoithiUI.db.profile.EncounterResource
 
     -- Enforce defaults for partial DB
     if not db.point then db.point = "TOP" end

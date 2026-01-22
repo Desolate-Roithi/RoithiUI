@@ -167,26 +167,28 @@ function Config:CreateDashboard()
     local generalContent = CreateSection("General", 55)
 
     -- Encounter Bar
-    if not RoithiUIDB.EncounterResource then RoithiUIDB.EncounterResource = { enabled = true } end
-    local ufModule = RoithiUI:GetModule("UnitFrames")
+    if not RoithiUI.db.profile.EncounterResource then RoithiUI.db.profile.EncounterResource = { enabled = true } end
+    local ufModule = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 
-    CreateCheck(generalContent, "Encounter Bar", RoithiUIDB.EncounterResource, "enabled", 15, -5, nil, function(enabled)
-        if ufModule then ufModule:ToggleEncounterResource(enabled) end
-    end)
+    CreateCheck(generalContent, "Encounter Bar", RoithiUI.db.profile.EncounterResource, "enabled", 15, -5, nil,
+        function(enabled)
+            if ufModule then ufModule:ToggleEncounterResource(enabled) end
+        end)
 
     -- Battle Res
-    if not RoithiUIDB.Timers then RoithiUIDB.Timers = {} end
-    if not RoithiUIDB.Timers.BattleRes then RoithiUIDB.Timers.BattleRes = { enabled = true } end
+    if not RoithiUI.db.profile.Timers then RoithiUI.db.profile.Timers = {} end
+    if not RoithiUI.db.profile.Timers.BattleRes then RoithiUI.db.profile.Timers.BattleRes = { enabled = true } end
     local brFrame = _G["RoithiBattleRes"]
-    CreateCheck(generalContent, "Battle Res", RoithiUIDB.Timers.BattleRes, "enabled", 15, -30, brFrame, function(enabled)
-        if brFrame then
-            if enabled then
-                brFrame:Show(); if brFrame.Update then brFrame:Update() end
-            else
-                brFrame:Hide()
+    CreateCheck(generalContent, "Battle Res", RoithiUI.db.profile.Timers.BattleRes, "enabled", 15, -30, brFrame,
+        function(enabled)
+            if brFrame then
+                if enabled then
+                    brFrame:Show(); if brFrame.Update then brFrame:Update() end
+                else
+                    brFrame:Hide()
+                end
             end
-        end
-    end)
+        end)
 
     -- 2. Unit Sections
     local units = {
@@ -206,21 +208,22 @@ function Config:CreateDashboard()
 
         -- UnitFrame Check
         if ufFrame then
-            if not RoithiUIDB.UnitFrames then RoithiUIDB.UnitFrames = {} end
-            if not RoithiUIDB.UnitFrames[unit] then RoithiUIDB.UnitFrames[unit] = { enabled = true } end
+            if not RoithiUI.db.profile.UnitFrames then RoithiUI.db.profile.UnitFrames = {} end
+            if not RoithiUI.db.profile.UnitFrames[unit] then RoithiUI.db.profile.UnitFrames[unit] = { enabled = true } end
 
-            CreateCheck(unitContent, "Frame", RoithiUIDB.UnitFrames[unit], "enabled", 15, -5, ufFrame, function(enabled)
-                if ufModule then ufModule:ToggleFrame(unit, enabled) end
-            end)
+            CreateCheck(unitContent, "Frame", RoithiUI.db.profile.UnitFrames[unit], "enabled", 15, -5, ufFrame,
+                function(enabled)
+                    if ufModule then ufModule:ToggleFrame(unit, enabled) end
+                end)
         end
 
         -- Castbar Check
         if ns.bars and ns.bars[unit] then
-            if not RoithiUIDB.Castbar then RoithiUIDB.Castbar = {} end
-            if not RoithiUIDB.Castbar[unit] then RoithiUIDB.Castbar[unit] = { enabled = true } end
+            if not RoithiUI.db.profile.Castbar then RoithiUI.db.profile.Castbar = {} end
+            if not RoithiUI.db.profile.Castbar[unit] then RoithiUI.db.profile.Castbar[unit] = { enabled = true } end
 
             -- Place next to Frame checkbox (approx 100px offset?)
-            CreateCheck(unitContent, "Castbar", RoithiUIDB.Castbar[unit], "enabled", 110, -5, ns.bars[unit])
+            CreateCheck(unitContent, "Castbar", RoithiUI.db.profile.Castbar[unit], "enabled", 110, -5, ns.bars[unit])
         end
     end
 

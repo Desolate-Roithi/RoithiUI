@@ -3,19 +3,20 @@ local RoithiUI = _G.RoithiUI
 local LEM = LibStub("LibEditMode")
 
 local function GetDB(unit)
-    if not RoithiUIDB.UnitFrames[unit] then RoithiUIDB.UnitFrames[unit] = {} end
-    return RoithiUIDB.UnitFrames[unit]
+    if not RoithiUI.db.profile.UnitFrames[unit] then RoithiUI.db.profile.UnitFrames[unit] = {} end
+    return RoithiUI.db.profile.UnitFrames[unit]
 end
 
 -- ----------------------------------------------------------------------------
 -- 1. Helpers
 -- ----------------------------------------------------------------------------
 local function UpdateFrameFromSettings(unit)
-    local UF = RoithiUI:GetModule("UnitFrames")
+    local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
     if UF and UF.UpdateFrameFromSettings then
         UF:UpdateFrameFromSettings(unit)
     end
 end
+
 
 -- ----------------------------------------------------------------------------
 -- 2. Granular Settings Generators
@@ -53,7 +54,7 @@ local function GetSettingsForPower(unit)
             set = function(_, value)
                 -- Smart Detach Logic
                 if value == true and not GetDB(unit).powerDetached then
-                    local UF = RoithiUI:GetModule("UnitFrames")
+                    local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                     local frame = UF and UF.frames and UF.frames[unit]
                     if frame and frame.Power then
                         local cX, cY = frame.Power:GetCenter()
@@ -80,7 +81,7 @@ local function GetSettingsForPower(unit)
                 GetDB(unit).powerDetached = value
                 UpdateFrameFromSettings(unit)
                 -- Refresh settings to show/hide Width
-                local UF = RoithiUI:GetModule("UnitFrames")
+                local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                 local frame = UF and UF.frames and UF.frames[unit]
                 if frame and frame.Power then LEM:RefreshFrameSettings(frame.Power) end
             end,
@@ -135,7 +136,7 @@ local function GetSettingsForClassPower(unit)
             set = function(_, value)
                 -- Smart Detach Logic
                 if value == true and not GetDB(unit).classPowerDetached then
-                    local UF = RoithiUI:GetModule("UnitFrames")
+                    local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                     local frame = UF and UF.frames and UF.frames[unit]
                     if frame and frame.ClassPower then
                         local cX, cY = frame.ClassPower:GetCenter()
@@ -160,7 +161,7 @@ local function GetSettingsForClassPower(unit)
 
                 GetDB(unit).classPowerDetached = value
                 UpdateFrameFromSettings(unit)
-                local UF = RoithiUI:GetModule("UnitFrames")
+                local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                 local frame = UF and UF.frames and UF.frames[unit]
                 if frame and frame.ClassPower then LEM:RefreshFrameSettings(frame.ClassPower) end
             end,
@@ -215,7 +216,7 @@ local function GetSettingsForAdditionalPower(unit)
             set = function(_, value)
                 -- Smart Detach Logic
                 if value == true and not GetDB(unit).additionalPowerDetached then
-                    local UF = RoithiUI:GetModule("UnitFrames")
+                    local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                     local frame = UF and UF.frames and UF.frames[unit]
                     if frame and frame.AdditionalPower then
                         local cX, cY = frame.AdditionalPower:GetCenter()
@@ -240,7 +241,7 @@ local function GetSettingsForAdditionalPower(unit)
 
                 GetDB(unit).additionalPowerDetached = value
                 UpdateFrameFromSettings(unit)
-                local UF = RoithiUI:GetModule("UnitFrames")
+                local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                 local frame = UF and UF.frames and UF.frames[unit]
                 if frame and frame.AdditionalPower then LEM:RefreshFrameSettings(frame.AdditionalPower) end
             end,
@@ -417,13 +418,11 @@ end
 -- 4. Initialization
 -- ----------------------------------------------------------------------------
 function ns.InitializeUnitFrameConfig()
-    local UF = RoithiUI:GetModule("UnitFrames")
-    if not UF or not UF.frames then return end
+    local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+    if not UF or not UF.units then return end
 
-    for unit, frame in pairs(UF.frames) do
+    for unit, frame in pairs(UF.units) do
         local db = GetDB(unit)
-
-        -- Defaults if missing
         if not db.width then db.width = frame:GetWidth() end
         if not db.height then db.height = frame:GetHeight() end
 
@@ -448,23 +447,12 @@ function ns.InitializeUnitFrameConfig()
             if not db.y then db.y = defaults.y end
 
             -- Add Frame FIRST, then Settings
-            -- Ensure we don't re-add if already registered, or update if supported.
-            -- LibEditMode doesn't always have IsFrameRegistered public, but AddFrame is idempotent-ish.
-            -- However, the error "frame must be registered" implies AddFrame FAILED silently or didn't run?
-            -- We'll try to add it.
             LEM:AddFrame(frame, OnPositionChanged, defaults)
 
-            -- CHECK if registration worked. LibEditMode stores frames in .frameSettings or similar, but we should rely on public API?
-            -- There is no public IsRegistered.
-            -- BUT, AddFrameSettings throws if not found.
-            -- We will wrap AddFrameSettings in a pcall to safely ignore if frame registration failed.
+            -- Add Main Settings
             local success, err = pcall(function()
                 LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
             end)
-            if not success then
-                -- This might spam chat if failing loop, but useful for debug
-                -- print("RoithiUI Debug: Failed to add settings for " .. unit .. ": " .. tostring(err))
-            end
 
             -- Register Specific Settings for Sub-Frames safely
             if frame.Power then
@@ -487,15 +475,17 @@ end
 -- ----------------------------------------------------------------------------
 if LEM then
     LEM:RegisterCallback('enter', function()
-        local UF = RoithiUI:GetModule("UnitFrames")
-        if not UF or not UF.frames then return end
-        for unit, frame in pairs(UF.frames) do
+        local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+        if not UF or not UF.units then return end
+        for unit, frame in pairs(UF.units) do
             local db = GetDB(unit)
             if db and (db.enabled ~= false) then
                 UnregisterUnitWatch(frame) -- Detach from secure driver to allow manual Show
                 frame.isInEditMode = true
                 frame:Show()
                 frame:SetAlpha(1)
+
+                if frame.EditModeOverlay then frame.EditModeOverlay:Show() end
 
                 -- Force Update Power Layout to ensure visibility in Edit Mode (Requested Feature)
                 if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
@@ -507,10 +497,12 @@ if LEM then
     end)
 
     LEM:RegisterCallback('exit', function()
-        local UF = RoithiUI:GetModule("UnitFrames")
-        if not UF or not UF.frames then return end
-        for unit, frame in pairs(UF.frames) do
+        local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+        if not UF or not UF.units then return end
+        for unit, frame in pairs(UF.units) do
             frame.isInEditMode = false
+            if frame.EditModeOverlay then frame.EditModeOverlay:Hide() end
+
             -- We don't Hide() unitframes on exit like Castbars; they might need to stay shown if they have a target.
             -- UF:ToggleFrame handles normal visibility.
             UF:ToggleFrame(unit, UF:IsUnitEnabled(unit))

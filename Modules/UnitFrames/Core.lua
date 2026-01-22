@@ -1,218 +1,121 @@
 local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
-local LibRoithi = LibStub("LibRoithi-1.0")
-local LEM = LibStub("LibEditMode")
+---@diagnostic disable-next-line: undefined-field
+local oUF = ns.oUF or _G.oUF
 
+-- Initialize Module
+---@class UF : AceAddon, AceModule
+---@field CreateUnitFrame fun(self: UF, unit: string, name: string): table
+---@field InitializeBossFrames fun(self: UF)
+---@field IsUnitEnabled fun(self: UF, unit: string): boolean
+---@field ShouldCreate fun(self: UF, unit: string): boolean
+---@field CreateStandardLayout fun(self: UF, unit: string, name: string)
+---@field CreateHealthBar fun(self: UF, frame: table)
+---@field CreatePowerBar fun(self: UF, frame: table)
+---@field CreateHealPrediction fun(self: UF, frame: table)
+---@field CreateIndicators fun(self: UF, frame: table)
+---@field CreateAuras fun(self: UF, frame: table)
+---@field CreateTags fun(self: UF, frame: table)
+---@field UpdateTags fun(self: UF, frame: table)
+---@field CreateRange fun(self: UF, frame: table)
+---@field CreateClassPower fun(self: UF, frame: table)
+---@field CreateAdditionalPower fun(self: UF, frame: table)
+---@field CreateEncounterResource fun(self: UF, frame: table)
+---@field UpdateFrameFromSettings fun(self: UF, unit: string)
+---@field ToggleFrame fun(self: UF, unit: string, enabled: boolean)
+---@field InitializeUnits fun(self: UF)
+---@field ToggleEncounterResource fun(self: UF, enabled: boolean)
+---@field frames table<string, table>
 local UF = RoithiUI:NewModule("UnitFrames")
 
--- Frame Factory
-function UF:CreateUnitFrame(unit, name)
-    local frameName = "Roithi" .. name
-    -- Secure Header
-    local frame = CreateFrame("Button", frameName, UIParent, "SecureUnitButtonTemplate, BackdropTemplate")
+-- ----------------------------------------------------------------------------
+-- Style Function
+-- ----------------------------------------------------------------------------
+local function Shared(self, unit)
+    -- 1. Basics
+    self:SetScript("OnEnter", UnitFrame_OnEnter)
+    self:SetScript("OnLeave", UnitFrame_OnLeave)
 
-    frame:SetAttribute("unit", unit)
-    frame:SetAttribute("type1", "target") -- Target on left click
+    self:RegisterForClicks("AnyUp")
+    self:SetAttribute("type1", "target")
+    self:SetAttribute("type2", "togglemenu")
 
-    -- "togglemenu" is the correct secure action for 11.0+ context menus (matches User Example)
-    frame:SetAttribute("type2", "togglemenu")
-    frame:SetAttribute("*type2", "togglemenu")
-
-    frame:EnableMouse(true)
-    frame:RegisterForClicks("AnyUp")
-
-    -- Debug Hook only (Removed manual logic)
-    -- frame:HookScript("OnClick", function(self, button) end)
-
-    frame:HookScript("OnEnter", function(self)
-        -- Mouse enter
-    end)
-
-    -- No longer assigning frame.menu as we handle it in OnClick directly
-    frame.menu = nil
-
-    -- Visual Setup
-    frame:SetSize(200, 50) -- Default size, can be overridden
-    LibRoithi.mixins:CreateBackdrop(frame)
-
-    -- Mouseover Highlight
-    local highlight = frame:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetAllPoints()
-    highlight:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-    highlight:SetBlendMode("ADD")
-    highlight:SetAlpha(0.2)
-    frame.Highlight = highlight
-
-    frame.unit = unit
-
-    -- Store referencing for configuration
-    self.frames = self.frames or {}
-    self.frames[unit] = frame
-
-    -- Register with LibEditMode if available
-    -- Moved to Config/UnitFrames.lua to centralize settings and registration
-    if LEM then
-        -- We still set the editModeName for Config/UnitFrames.lua to use
-        frame.editModeName = name .. " Frame"
+    -- 2. Backdrop
+    if not self.SetBackdrop then
+        Mixin(self, BackdropTemplateMixin)
     end
+    self:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    self:SetBackdropColor(0.1, 0.1, 0.1, 1)
+    self:SetBackdropBorderColor(0, 0, 0, 1)
 
-    return frame
-end
+    -- 3. Health (SafeHealth)
+    local Health = CreateFrame("StatusBar", nil, self)
+    Health:SetPoint("TOPLEFT", 1, -1)
+    Health:SetPoint("BOTTOMRIGHT", -1, 1)
+    Health:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
 
-function UF:UpdateBlizzardVisibility()
-    -- Only run if we have DB
-    if not RoithiUIDB.UnitFrames then return end
+    -- Options
+    Health.colorTapping = true
+    Health.colorDisconnected = true
+    Health.colorClass = true
+    Health.colorReaction = true
+    Health.colorSmooth = true -- Uses our SafeHealth gradient logic
 
-    -- Safe Hiding Infrastructure
-    local HiddenFrame = CreateFrame("Frame")
-    HiddenFrame:Hide()
+    self.SafeHealth = Health  -- Register as "SafeHealth" element
+    self.Health = Health      -- Register as standard "Health" for compatibility with other elements
 
-    local function ToggleBlizz(frame, show)
-        if not frame then return end
-        if show then
-            -- Restore original parent if known, otherwise default to UIParent
-            local parent = frame.RoithiOriginalParent or UIParent
-            frame:SetParent(parent)
-
-            frame:SetAlpha(1)
-            frame:EnableMouse(true)
-            -- Restore visibility driver
-            RegisterUnitWatch(frame)
-
-            local unit = frame.unit or (frame.GetAttribute and frame:GetAttribute("unit"))
-            if unit and UnitExists(unit) then
-                frame:Show()
-            end
-        else
-            -- Cache original parent once
-            if not frame.RoithiOriginalParent then
-                frame.RoithiOriginalParent = frame:GetParent()
-            end
-
-            -- "Unregister" by moving to the shadow realm
-            -- This hides the frame AND all its children (Auras) automatically
-            UnregisterUnitWatch(frame)
-            frame:SetParent(HiddenFrame)
+    -- 4. Text (Tags)
+    if UF.CreateTags then
+        UF:CreateTags(self)
+        -- Ensure unit is set for DB lookup
+        self.unit = unit
+        if UF.UpdateTags then
+            UF:UpdateTags(self)
         end
     end
 
-    local db = RoithiUIDB.UnitFrames
-
-    -- Player
-    if PlayerFrame then
-        local enabled = db.player and db.player.enabled
-        ToggleBlizz(PlayerFrame, not enabled)
+    -- 5. Range (Phase 3 Prep)
+    self.RoithiRange = {
+        insideAlpha = 1,
+        outsideAlpha = 0.4,
+    }
+    -- 6. Health Prediction
+    if UF.CreateHealPrediction then
+        UF:CreateHealPrediction(self)
     end
 
-    -- Target
-    if TargetFrame then
-        local enabled = db.target and db.target.enabled
-        ToggleBlizz(TargetFrame, not enabled)
-    end
+    -- 7. Combat Fader
+    self.CombatFader = {
+        outsideAlpha = 0.4
+    }
 
-    -- Focus
-    if FocusFrame then
-        local enabled = db.focus and db.focus.enabled
-        ToggleBlizz(FocusFrame, not enabled)
-    end
-
-    -- Pet
-    if PetFrame then
-        local enabled = db.pet and db.pet.enabled
-        ToggleBlizz(PetFrame, not enabled)
-    end
-
-    -- TargetTarget (ToT)
-    if TargetFrameToT then
-        local enabled = db.targettarget and db.targettarget.enabled
-        ToggleBlizz(TargetFrameToT, not enabled)
-    end
-
-    -- Focus Target - Blizzard triggers this via FocusFrame usually?
-    -- There isn't a standalone FocusTargetFrame to hide usually, it's part of FocusFrame or FocusFrameToT (Wait, FocusFrameToT doesn't exist standardly in same way?).
-    -- Actually modern UI has FocusFrame.TargetFrame potentially?
-    -- We'll verify if FocusFrameToT exists.
+    -- 8. Auras (Removed: Handled by Units.lua custom element)
+    -- local Auras = CreateFrame("Frame", nil, self)
+    -- ...
 end
 
-function UF:ToggleFrame(unit, enabled)
-    local frame = self.frames[unit]
-    if not frame then return end
-
-    if InCombatLockdown() then return end -- Update later if needed
-
-    if enabled then
-        -- Check if we are in Edit Mode
-        if LEM and LEM:IsInEditMode() then
-            -- Force Show
-            UnregisterUnitWatch(frame)
-            frame:Show()
-            frame:SetAlpha(1)
-            frame.isInEditMode = true
-        else
-            -- Standard Gameplay
-            RegisterUnitWatch(frame)
-            -- Provide a default state driver for visibility if UnitWatch isn't enough (UnitWatch handles exists/dead)
-            -- But we want standard "Hide if unchecked" which is handled by UnregisterUnitWatch below.
-
-            -- Also ensure it respects show/hide from UnitWatch immediately
-            if UnitExists(unit) then frame:Show() end
-        end
-    else
-        UnregisterUnitWatch(frame)
-        frame:Hide()
-        frame.isInEditMode = false
-    end
-
-    self:UpdateBlizzardVisibility()
+-- ----------------------------------------------------------------------------
+-- Initialization
+-- ----------------------------------------------------------------------------
+function UF:OnInitialize()
+    -- Register Style
+    oUF:RegisterStyle("Roithi", Shared)
+    oUF:SetActiveStyle("Roithi")
 end
 
 function UF:OnEnable()
-    -- Enable is handled in Units.lua effectively by spawning frames,
-    -- or we trigger the spawn here if Units.lua just defines the layouts.
-    -- We will let Units.lua register the specific layouts.
-end
-
-function UF:UpdateFrameFromSettings(unit)
-    local db = RoithiUIDB.UnitFrames and RoithiUIDB.UnitFrames[unit]
-    local frame = self.frames and self.frames[unit]
-    if not frame or not db then return end
-
-    -- Dimension
-    local width = db.width or frame:GetWidth() -- Use current if DB missing, or default? db.width is safe.
-    -- Actually better to use defaults if nil
-    if not db.width then width = 200 end
-    local height = db.height or 50
-    frame:SetSize(width, height)
-
-    -- Position (Only if enforced by DB, usually EditMode handles this via OnPositionChanged)
-    -- But explicit update ensures sync
-    if db.point then
-        frame:ClearAllPoints()
-        frame:SetPoint(db.point, UIParent, db.point, db.x or 0, db.y or 0)
+    -- Reset Test Mode on Reload
+    if RoithiUI.db and RoithiUI.db.profile then
+        RoithiUI.db.profile.IndicatorTestMode = false
     end
 
-    -- Fonts & Elements Refresh
-    local fontSize = db.fontSize or 12
-    if frame.Name then
-        LibRoithi.mixins:SetFont(frame.Name, "Friz Quadrata TT", fontSize, "OUTLINE")
-        if frame.UpdateName then frame.UpdateName() end
-    end
-    if frame.HealthText then
-        LibRoithi.mixins:SetFont(frame.HealthText, "Friz Quadrata TT", fontSize, "OUTLINE")
-        if frame.UpdateHealthText then frame.UpdateHealthText() end
-    end
-    if frame.PowerText then
-        LibRoithi.mixins:SetFont(frame.PowerText, "Friz Quadrata TT", fontSize, "OUTLINE")
-        if frame.UpdatePowerText then frame.UpdatePowerText() end
-    end
+    -- Initialize Units table container if not exists
+    if not self.units then self.units = {} end
 
-    -- Update Layouts
-    if frame.UpdateIndicators then frame.UpdateIndicators() end
-    if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
-    if frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
-    if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
-    if frame.UpdateAuras then frame.UpdateAuras() end
-
-    -- Tags
-    if self.UpdateTags then self:UpdateTags(frame) end
+    -- Note: Actual spawning is handled by Units.lua hooking OnEnable and calling InitializeUnits
 end

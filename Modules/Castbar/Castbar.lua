@@ -43,7 +43,7 @@ end
 function ns.UpdateCast(bar)
     local unit = bar.unit
     -- respecting enabled flag
-    local db = RoithiUIDB.Castbar[unit]
+    local db = RoithiUI.db.profile.Castbar[unit]
     if not db or not db.enabled then
         bar:Hide(); bar:SetScript("OnUpdate", nil)
         return
@@ -79,7 +79,9 @@ function ns.UpdateCast(bar)
         end)
 
         -- 3. Fallback: Check Stage Percentages
+        ---@diagnostic disable-next-line: undefined-field
         if not isEmpoweredSafe and _G.UnitEmpoweredStagePercentages then
+            ---@diagnostic disable-next-line: undefined-field
             local percentages = _G.UnitEmpoweredStagePercentages(unit)
             if percentages and #percentages > 0 then
                 isEmpoweredSafe = true
@@ -125,7 +127,7 @@ function ns.UpdateCast(bar)
         return
     end
 
-    local colors = RoithiUIDB.Castbar[unit].colors
+    local colors = RoithiUI.db.profile.Castbar[unit].colors
     local c = colors[state] or colors.cast
 
     local safeNotInt = false
@@ -142,7 +144,7 @@ function ns.UpdateCast(bar)
     -- Use Raw Secret Values (Matches Blizzard UI exactly)
     bar:SetMinMaxValues(startTime, endTime)
 
-    if RoithiUIDB.Castbar[unit].showIcon then
+    if RoithiUI.db.profile.Castbar[unit].showIcon then
         bar.Icon:Show(); bar.Icon:SetTexture(texture)
     else
         bar.Icon:Hide()
@@ -200,7 +202,7 @@ function ns.HandleInterrupt(bar)
     -- Freeze progress so background is visible
     bar.isInterrupted = true; bar:SetScript("OnUpdate", nil)
 
-    local c = RoithiUIDB.Castbar[bar.unit].colors.interrupted
+    local c = RoithiUI.db.profile.Castbar[bar.unit].colors.interrupted
     -- Change Background to Interrupt Color
     if bar.Background and c then
         bar.Background:SetColorTexture(c[1], c[2], c[3], c[4])

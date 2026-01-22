@@ -1,6 +1,6 @@
 local addonName, ns = ...
 local function GetDB(unit)
-    return RoithiUIDB.Castbar[unit]
+    return RoithiUI.db.profile.Castbar[unit]
 end
 
 local RoithiUI = _G.RoithiUI
@@ -18,7 +18,7 @@ local colorSectionsExpanded = {
 -- 1. Helpers
 -- ----------------------------------------------------------------------------
 local function UpdateBarFromSettings(unit)
-    local db = RoithiUIDB.Castbar[unit]
+    local db = RoithiUI.db.profile.Castbar[unit]
     local bar = ns.bars[unit]
     if not bar then return end
 

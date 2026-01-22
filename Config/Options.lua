@@ -2,6 +2,7 @@ local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
 local Config = RoithiUI.Config or {}
 RoithiUI.Config = Config
+local LSM = LibStub("LibSharedMedia-3.0")
 
 -- ----------------------------------------------------------------------------
 -- AceConfig Table Definition
@@ -21,6 +22,36 @@ local function GetOptions()
                         type = "description",
                         name = "General settings for RoithiUI modules.",
                         order = 1,
+                    },
+                    media = {
+                        type = "group",
+                        name = "Media",
+                        order = 5,
+                        inline = true,
+                        args = {
+                            font = {
+                                type = "select",
+                                dialogControl = "LSM30_Font",
+                                name = "Global Font",
+                                order = 1,
+                                values = LSM:HashTable("font"),
+                                get = function() return RoithiUI.db.profile.font or "Friz Quadrata TT" end,
+                                set = function(_, v)
+                                    RoithiUI.db.profile.font = v; ns.RefreshUnitFrame("player")
+                                end, -- Ideal: RefreshAll
+                            },
+                            statusBar = {
+                                type = "select",
+                                dialogControl = "LSM30_Statusbar",
+                                name = "Global Status Bar",
+                                order = 2,
+                                values = LSM:HashTable("statusbar"),
+                                get = function() return RoithiUI.db.profile.barTexture or "Solid" end,
+                                set = function(_, v)
+                                    RoithiUI.db.profile.barTexture = v; ns.RefreshUnitFrame("player")
+                                end,
+                            },
+                        },
                     },
                     reset = {
                         type = "execute",
@@ -59,6 +90,7 @@ local function GetOptions()
                     },
                 },
             },
+            profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(RoithiUI.db),
         },
     }
 
@@ -77,8 +109,8 @@ local function GetOptions()
 
         -- Helper to get DB
         local function GetDB()
-            if not RoithiUIDB.UnitFrames[unit] then RoithiUIDB.UnitFrames[unit] = {} end
-            return RoithiUIDB.UnitFrames[unit]
+            if not RoithiUI.db.profile.UnitFrames[unit] then RoithiUI.db.profile.UnitFrames[unit] = {} end
+            return RoithiUI.db.profile.UnitFrames[unit]
         end
 
         options.args.unitframes.args[unit] = {
@@ -86,36 +118,8 @@ local function GetOptions()
             name = label,
             order = 10 + i,
             args = {
-                -- Tab: Text
-                text = {
-                    type = "group",
-                    name = "Text",
-                    order = 1,
-                    inline = true,
-                    args = {
-                        healthFormat = {
-                            type = "select",
-                            name = "Health Format",
-                            order = 1,
-                            values = { smart = "Smart", cur = "Current", percent = "Percent", curmax = "Cur / Max", deficit = "Deficit" },
-                            get = function() return GetDB().healthTextFormat or "smart" end,
-                            set = function(_, v)
-                                GetDB().healthTextFormat = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        powerFormat = {
-                            type = "select",
-                            name = "Power Format",
-                            order = 2,
-                            values = { smart = "Smart", cur = "Current", percent = "Percent", curmax = "Cur / Max" },
-                            get = function() return GetDB().powerTextFormat or "smart" end,
-                            set = function(_, v)
-                                GetDB().powerTextFormat = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
 
-                    },
-                },
+
                 -- Tab: Indicators
                 indicators = {
                     type = "group",
@@ -128,9 +132,9 @@ local function GetOptions()
                             name = "|cffffd100Test Mode|r",
                             desc = "Force show all enabled indicators for easier configuration.",
                             order = 0,
-                            get = function() return RoithiUIDB.IndicatorTestMode end,
+                            get = function() return RoithiUI.db.profile.IndicatorTestMode end,
                             set = function(_, v)
-                                RoithiUIDB.IndicatorTestMode = v
+                                RoithiUI.db.profile.IndicatorTestMode = v
                                 ns.RefreshUnitFrame(unit)
                             end,
                             width = "full",
@@ -150,14 +154,15 @@ local function GetOptions()
                                     resurrect = "Resurrect",
                                     pvp = "PvP",
                                     tankassist = "Main Tank / Assist",
+                                    resting = "Resting",
                                 }
                                 if unit == "target" or unit == "focus" then
                                     v.quest = "Quest"
                                 end
                                 return v
                             end,
-                            get = function() return RoithiUIDB.tempIndicatorSelect end,
-                            set = function(_, v) RoithiUIDB.tempIndicatorSelect = v end,
+                            get = function() return RoithiUI.db.profile.tempIndicatorSelect end,
+                            set = function(_, v) RoithiUI.db.profile.tempIndicatorSelect = v end,
                         },
                         -- Details Group (Only shown if selection made)
                         details = {
@@ -165,19 +170,19 @@ local function GetOptions()
                             name = "Settings",
                             order = 2,
                             inline = true,
-                            hidden = function() return not RoithiUIDB.tempIndicatorSelect end,
+                            hidden = function() return not RoithiUI.db.profile.tempIndicatorSelect end,
                             args = {
                                 enabled = {
                                     type = "toggle",
                                     name = "Enable",
                                     order = 1,
                                     get = function()
-                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local k = RoithiUI.db.profile.tempIndicatorSelect
                                         local db = GetDB().indicators and GetDB().indicators[k]
                                         return db and db.enabled
                                     end,
                                     set = function(_, v)
-                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local k = RoithiUI.db.profile.tempIndicatorSelect
                                         if not GetDB().indicators then GetDB().indicators = {} end
                                         if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
                                         GetDB().indicators[k].enabled = v
@@ -192,12 +197,12 @@ local function GetOptions()
                                     max = 64,
                                     step = 1,
                                     get = function()
-                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local k = RoithiUI.db.profile.tempIndicatorSelect
                                         local db = GetDB().indicators and GetDB().indicators[k]
                                         return db and db.size or 20
                                     end,
                                     set = function(_, v)
-                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local k = RoithiUI.db.profile.tempIndicatorSelect
                                         if not GetDB().indicators then GetDB().indicators = {} end
                                         if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
                                         GetDB().indicators[k].size = v
@@ -220,12 +225,12 @@ local function GetOptions()
                                         ["BOTTOMRIGHT"] = "Bottom Right"
                                     },
                                     get = function()
-                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local k = RoithiUI.db.profile.tempIndicatorSelect
                                         local db = GetDB().indicators and GetDB().indicators[k]
                                         return db and db.point or "CENTER"
                                     end,
                                     set = function(_, v)
-                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local k = RoithiUI.db.profile.tempIndicatorSelect
                                         if not GetDB().indicators then GetDB().indicators = {} end
                                         if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
                                         GetDB().indicators[k].point = v
@@ -240,12 +245,12 @@ local function GetOptions()
                                     max = 100,
                                     step = 1,
                                     get = function()
-                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local k = RoithiUI.db.profile.tempIndicatorSelect
                                         local db = GetDB().indicators and GetDB().indicators[k]
                                         return db and db.x or 0
                                     end,
                                     set = function(_, v)
-                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local k = RoithiUI.db.profile.tempIndicatorSelect
                                         if not GetDB().indicators then GetDB().indicators = {} end
                                         if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
                                         GetDB().indicators[k].x = v
@@ -260,12 +265,12 @@ local function GetOptions()
                                     max = 100,
                                     step = 1,
                                     get = function()
-                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local k = RoithiUI.db.profile.tempIndicatorSelect
                                         local db = GetDB().indicators and GetDB().indicators[k]
                                         return db and db.y or 0
                                     end,
                                     set = function(_, v)
-                                        local k = RoithiUIDB.tempIndicatorSelect
+                                        local k = RoithiUI.db.profile.tempIndicatorSelect
                                         if not GetDB().indicators then GetDB().indicators = {} end
                                         if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
                                         GetDB().indicators[k].y = v
@@ -342,7 +347,7 @@ end
 
 -- Refresh Helper (can be moved to Core/UnitFrames if scope issues arise)
 function ns.RefreshUnitFrame(unit)
-    local UF = RoithiUI:GetModule("UnitFrames")
+    local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
     if UF and UF.UpdateFrameFromSettings then
         UF:UpdateFrameFromSettings(unit)
     end

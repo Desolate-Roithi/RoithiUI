@@ -4,6 +4,10 @@ local LEM = LibStub("LibEditMode")
 local LSM = LibStub("LibSharedMedia-3.0")
 local LibRoithi = LibStub("LibRoithi-1.0")
 
+---@class Timers : AceAddon, AceModule
+---@field CreateBattleResTimer fun(self: Timers)
+---@field CreateBloodlustTimer fun(self: Timers)
+---@field CreateTimerFrame fun(self: Timers, name: string, dbKey: string, label: string): table, table
 local Timers = RoithiUI:NewModule("Timers")
 
 -- Defaults
@@ -25,16 +29,17 @@ local DEFAULTS = {
 }
 
 function Timers:OnInitialize()
-    if not RoithiUIDB.Timers then RoithiUIDB.Timers = {} end
+    -- Ensure DB Profile path exists (redundant if defaults are set, but safe)
+    if not RoithiUI.db.profile.Timers then RoithiUI.db.profile.Timers = {} end
 
     -- Merge Defaults
     for k, v in pairs(DEFAULTS) do
-        if not RoithiUIDB.Timers[k] then
-            RoithiUIDB.Timers[k] = CopyTable(v)
+        if not RoithiUI.db.profile.Timers[k] then
+            RoithiUI.db.profile.Timers[k] = CopyTable(v)
         else
             for subK, subV in pairs(v) do
-                if RoithiUIDB.Timers[k][subK] == nil then
-                    RoithiUIDB.Timers[k][subK] = subV
+                if RoithiUI.db.profile.Timers[k][subK] == nil then
+                    RoithiUI.db.profile.Timers[k][subK] = subV
                 end
             end
         end
@@ -49,7 +54,7 @@ end
 
 -- Shared Helper: Create Movable Frame
 function Timers:CreateTimerFrame(name, dbKey, label)
-    local db = RoithiUIDB.Timers[dbKey]
+    local db = RoithiUI.db.profile.Timers[dbKey]
     local frame = CreateFrame("Frame", "Roithi" .. name, UIParent)
     frame:SetSize(40, 40)
     frame:SetPoint(db.point, UIParent, db.point, db.x, db.y)
