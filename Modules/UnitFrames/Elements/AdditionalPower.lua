@@ -28,53 +28,62 @@ function UF:CreateAdditionalPower(frame)
     frame.AdditionalPower = addPower
 
     local function Update(self)
+        -- Track previous state to trigger Castbar updates only on change
+        local wasShown = addPower:IsShown()
+
         -- Check Logic: Is Enabled?
         local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
         local isEnabled = db and (db.additionalPowerEnabled ~= false)
 
         if not isEnabled then
             addPower:Hide()
-            return
-        end
-
-        if frame.isInEditMode then
-            addPower:Show()
-            addPower:SetMinMaxValues(0, 100)
-            addPower:SetValue(100)
-            addPower:SetStatusBarColor(0, 0.5, 1) -- Visual Indication
-            if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
-            return
-        end
-
-        local pType = UnitPowerType("player")
-        local maxMana = UnitPowerMax("player", 0)
-        local curMana = UnitPower("player", 0)
-
-        -- Only show if primary resource is NOT Mana (pType ~= 0) AND we have Mana (max > 0)
-        -- e.g. Druid in Cat Form (Energy) but has Mana.
-        if pType ~= 0 then
-            -- 12.0.1 Safety: Check for Secret
-            local isSecret = C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(maxMana)
-            local hasMana = isSecret or (maxMana and maxMana > 0)
-
-            if hasMana then
+        else
+            if frame.isInEditMode then
                 addPower:Show()
-                addPower:SetMinMaxValues(0, maxMana)
-                addPower:SetValue(curMana)
-                addPower:SetStatusBarColor(0, 0.5, 1) -- Mana Blue
-
-                -- Ensure visibility affects layout
-                if frame.UpdateAdditionalPowerLayout and not frame.isInEditMode then
-                    frame.UpdateAdditionalPowerLayout()
-                end
+                addPower:SetMinMaxValues(0, 100)
+                addPower:SetValue(100)
+                addPower:SetStatusBarColor(0, 0.5, 1) -- Visual Indication
+                if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
             else
-                if not frame.isInEditMode then
+                local pType = UnitPowerType("player")
+                local maxMana = UnitPowerMax("player", 0)
+                local curMana = UnitPower("player", 0)
+
+                -- Only show if primary resource is NOT Mana (pType ~= 0) AND we have Mana (max > 0)
+                if pType ~= 0 then
+                    -- 12.0.1 Safety: Check for Secret
+                    local isSecret = C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(maxMana)
+                    local hasMana = isSecret or (maxMana and maxMana > 0)
+
+                    if hasMana then
+                        addPower:Show()
+                        addPower:SetMinMaxValues(0, maxMana)
+                        addPower:SetValue(curMana)
+                        addPower:SetStatusBarColor(0, 0.5, 1) -- Mana Blue
+
+                        -- Ensure visibility affects layout
+                        if frame.UpdateAdditionalPowerLayout and not frame.isInEditMode then
+                            frame.UpdateAdditionalPowerLayout()
+                        end
+                    else
+                        addPower:Hide()
+                    end
+                else
                     addPower:Hide()
                 end
             end
-        else
-            if not frame.isInEditMode then
-                addPower:Hide()
+        end
+
+        -- Post-Update: Check for Visibility Change
+        local isShown = addPower:IsShown()
+        if wasShown ~= isShown then
+            -- Visibility changed! Update Castbar Attachment
+            if ns.SetCastbarAttachment then
+                -- Check if Castbar is attached (not detached)
+                local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[frame.unit]
+                if cbDB and not cbDB.detached then
+                    ns.SetCastbarAttachment(frame.unit, true)
+                end
             end
         end
     end

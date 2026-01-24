@@ -9,11 +9,15 @@
     <Script file="Core/Commands.lua"/>
     <Script file="Core/Media.lua"/>
     <Script file="Config/Defaults.lua"/>
-    <Script file="Config/General.lua"/>
+    <Script file="Config/Dashboard.lua"/>
     <Script file="Config/CustomTags.lua"/>
+    <Script file="Config/LEMConfig/Extension.lua"/>
+    <Script file="Config/LEMConfig/UnitFrames.lua"/>
+    <Script file="Config/LEMConfig/BossFrames.lua"/>
+    <Script file="Config/LEMConfig/Castbars.lua"/>
     <Script file="Config/Options.lua"/>
-    <Script file="Config/Castbars.lua"/>
-    <Script file="Config/UnitFrames.lua"/>
+
+
 
     <!-- Modules -->
     <!-- UnitFrames -->

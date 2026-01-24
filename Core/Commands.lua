@@ -8,7 +8,8 @@ local RoithiUI = _G.RoithiUI
 
 function RoithiUI:ExportSettings()
     -- Export current profile settings
-    local exportString = "ns.Defaults = " .. ns.Utils.Serialize(self.db.profile)
+    -- Export current profile settings wrapped in 'profile' key for AceDB defaults compatibility
+    local exportString = "ns.Defaults = {\n    profile = " .. ns.Utils.Serialize(self.db.profile, 1) .. "\n}"
     ns.Utils.ShowExportWindow(exportString)
     self:Print("Settings exported. Press Ctrl+C to copy.")
 end

@@ -27,11 +27,11 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
                 db.x = x
                 db.y = y
             end
-            -- Apply
-            f:ClearAllPoints()
-            f:SetPoint(point, UIParent, point, x, y)
-        end
-        LEM:AddFrame(frame, OnPosChanged, defaults)
+        end -- Close OnPosChanged
+
+
+
+
 
         -- Selection Overlay
         local overlay = frame:CreateTexture(nil, "OVERLAY")
@@ -43,10 +43,20 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
         LEM:RegisterCallback('enter', function()
             frame.isInEditMode = true
             overlay:Show()
-            -- Force Show Frame if hidden (e.g. Boss frames when no boss)
-            if not frame:IsShown() then
-                frame.forceShowEditMode = true
-                frame:Show()
+
+            -- FIX: ALWAYS Unregister UnitWatch in Edit Mode to allow manual Show/Hide
+            UnregisterUnitWatch(frame)
+
+            if UF:IsUnitEnabled(unit) then
+                if not frame:IsShown() then
+                    frame.forceShowEditMode = true
+                    frame:Show()
+                end
+            else
+                -- Strict: If disabled, ensure it is HIDDEN and Unregistered
+                frame:Hide()
+                UnregisterUnitWatch(frame)
+                return -- Stop processing
             end
 
             -- Trigger layout updates on sub-elements
@@ -59,6 +69,17 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
             overlay:Hide()
             if frame.forceShowEditMode then
                 frame.forceShowEditMode = nil
+                frame:Hide()
+                -- FIX: Flicker - Restore UnitWatch
+                if UF:IsUnitEnabled(unit) then
+                    RegisterUnitWatch(frame)
+                end
+            elseif UF:IsUnitEnabled(unit) then
+                -- Even if not forced, ensure we restore Watch if enabled
+                RegisterUnitWatch(frame)
+            else
+                -- Ensure disabled
+                UnregisterUnitWatch(frame)
                 frame:Hide()
             end
 
@@ -76,11 +97,40 @@ function UF:UpdateFrameFromSettings(unit)
     if not frame then return end
 
     local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
+
+    -- Special Handling for Boss Frames (Inheritance)
+    -- Boss 2-5 inherit visual settings from Boss 1
+    if string.match(unit, "^boss[2-5]$") then
+        local driverDB = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames["boss1"]
+        if driverDB then
+            -- We construct a composite DB for this update
+            -- Use specific unit DB for position (if any), but Driver DB for dimensions
+            local specificDB = db or {}
+            db = setmetatable({}, {
+                __index = function(_, k)
+                    if k == "width" or k == "height" then
+                        return (driverDB and driverDB[k]) or 180 -- Fallback
+                    end
+                    return specificDB[k]
+                end
+            })
+        end
+    end
+
     if not db then return end
 
-    if db.width then frame:SetWidth(db.width) end
-    if db.height then frame:SetHeight(db.height) end
-    if db.point then
+    -- Defaults
+    local defW, defH = 200, 50
+    if string.match(unit, "boss") then
+        defW, defH = 180, 40
+    elseif unit == "targettarget" or unit == "focustarget" or unit == "pet" then
+        defW, defH = 120, 30
+    end
+
+    frame:SetWidth(db.width or defW)
+    frame:SetHeight(db.height or defH)
+    -- Update position (SKIP for boss 2-5, managed by Boss.lua)
+    if db.point and not string.match(unit, "^boss[2-5]$") then
         frame:ClearAllPoints()
         frame:SetPoint(db.point, UIParent, db.point, db.x or 0, db.y or 0)
     end
@@ -101,21 +151,110 @@ function UF:IsUnitEnabled(unit)
 end
 
 function UF:ShouldCreate(unit)
-    -- Always create to allow toggling, unless disabled at addon load?
-    -- User wants to toggle. So we must create them.
-    return true
+    -- Lazy Creation: Only create if enabled in DB
+    return self:IsUnitEnabled(unit)
+end
+
+-- Helper for Restoration
+function UF:RestoreBlizzardFrame(unit)
+    local blizzFrame
+    if unit == "player" then
+        blizzFrame = PlayerFrame
+    elseif unit == "target" then
+        blizzFrame = TargetFrame
+    elseif unit == "focus" then
+        blizzFrame = FocusFrame
+    elseif unit == "pet" then
+        blizzFrame = PetFrame
+        -- Expand as needed
+    end
+
+    if blizzFrame then
+        -- oUF disables by parenting to HiddenParent or checking DisableBlizzard
+        -- We try to restore typical state
+        -- NOTE: This might fight oUF if we don't re-parent?
+        -- oUF usually SetParents to a hidden frame. We set back to UIParent.
+        if blizzFrame:GetParent() ~= UIParent then
+            blizzFrame:SetParent(UIParent)
+        end
+        blizzFrame:SetAlpha(1)
+        if not blizzFrame:IsShown() and UnitExists(unit) then
+            blizzFrame:Show()
+        end
+        -- Some frames need re-registering events if oUF unregistered them?
+        -- oUF generally doesn't Unregister events on Blizzard frames, just Hides them.
+    end
 end
 
 function UF:ToggleFrame(unit, enabled)
     local frame = self.units[unit]
-    if not frame then return end
 
     if enabled then
+        -- 1. Enable / Create Path
+        -- Lazy Create if missing
+        if not frame then
+            -- Need to know friendly name?
+            -- CreateStandardLayout requires name.
+            -- We can infer or map it.
+            local names = {
+                player = "Player",
+                target = "Target",
+                focus = "Focus",
+                pet = "Pet",
+                targettarget = "Target of Target",
+                focustarget = "Focus Target",
+            }
+            if string.match(unit, "boss") then
+                -- Delegate to Boss Module logic to ensure Driver/Passengers are linked correctly
+                if self.InitializeBossFrames then self:InitializeBossFrames() end
+                frame = self.units[unit]
+            else
+                self:CreateStandardLayout(unit, names[unit] or unit)
+                frame = self.units[unit]
+            end
+        end
+
+        if not frame then return end -- Creation failed?
+
         if frame.Enable then frame:Enable() end
-        frame:Show()
+        RegisterUnitWatch(frame) -- Drive visibility
+
+        -- Let oUF decide show/hide based on UnitExists, but force update
+        if UnitExists(unit) then frame:Show() end
+
+        -- Disable Blizzard Frame (Ensure it stays hidden)
+        if self.DisableBlizzard then
+            local oUF = _G.oUF
+            if oUF and oUF.DisableBlizzard then
+                oUF:DisableBlizzard(unit)
+            end
+        end
     else
-        if frame.Disable then frame:Disable() end
+        -- 2. Disable Path
+        if not frame then return end -- If never created, nothing to disable
+
+        UnregisterUnitWatch(frame)
         frame:Hide()
+        if frame.Disable then frame:Disable() end
+
+        -- FIX: Auto-Detach Castbar if it should remain enabled
+        -- "when hiding the frame the castbar should detatch and stay enabled"
+        if ns.SetCastbarAttachment and RoithiUI.db.profile.Castbar then
+            local cbDB = RoithiUI.db.profile.Castbar[unit]
+            if cbDB and cbDB.enabled then
+                -- Check if currently attached (default is attached if nil?)
+                -- SetCastbarAttachment logic: if attached and uFrame...
+                -- We verify if we need to detach.
+                if cbDB.attached ~= false then
+                    cbDB.attached = false
+                    ns.SetCastbarAttachment(unit, false)
+                    print("|cff00ccffRoithiUI:|r Auto-Detached " .. unit .. " Castbar to keep it visible.")
+                end
+            end
+        end
+
+        -- FIX: Restore Blizzard Frame if we disable ours
+        self:RestoreBlizzardFrame(unit)
     end
 end
 

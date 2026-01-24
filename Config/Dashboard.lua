@@ -3,7 +3,11 @@ local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
 
 -- Config Logic
--- Config Logic
+-- ============================================================================
+-- THE DASHBOARD WINDOW
+-- This file controls the "RoithiUI Dashboard" floating window.
+-- It is the MASTER CONTROLLER for enabling/disabling frames.
+-- ============================================================================
 local Config = RoithiUI.Config or {}
 RoithiUI.Config = Config
 
@@ -29,7 +33,7 @@ function Config:CreateDashboard()
 
     local title = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     title:SetPoint("CENTER", header, "CENTER", 0, 0)
-    title:SetText("RoithiUI Edit Mode")
+    title:SetText("RoithiUI Dashboard")
 
     -- Main Expand/Collapse Arrow
     local function CreateArrow(parent)
@@ -123,7 +127,94 @@ function Config:CreateDashboard()
         return sContent
     end
 
+    -- Helpers for Edit Mode States
+    local function SetEditModeState(frame, enabled)
+        if not frame then return end
+        if enabled then
+            frame.isInEditMode = true
+            frame:SetAlpha(1)
+            frame:Show()
+
+            -- If user has oUF frames (like Boss/UnitFrames), they need more persuasion
+            -- We assume LibEditMode usually handles this via callbacks,
+            -- but the dashboard is a manual trigger.
+            -- Check if frame has an EditModeOverlay (UnitFrames)
+            if frame.EditModeOverlay then frame.EditModeOverlay:Show() end
+
+            -- Force Layout Updates
+            if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
+
+            -- Prevent oUF from hiding it immediately via RegisterUnitWatch?
+            -- We can set a temporary override flag if needed, like 'forceShowEditMode'
+            frame.forceShowEditMode = true
+
+            -- Fix: Disable UnitWatch for oUF frames
+            if frame.unit or frame.style then
+                UnregisterUnitWatch(frame)
+            end
+        else
+            frame.isInEditMode = false
+            if frame.EditModeOverlay then frame.EditModeOverlay:Hide() end
+            frame.forceShowEditMode = nil
+
+            -- Let normal visibility rules take over
+            -- We hide it explicitly first to ensure 'Edit Mode State' is cleared visually
+            frame:Hide()
+
+            -- FIX: Only restore UnitWatch if the frame is actually enabled in settings
+            local isEnabled = true
+            if frame.unit and RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit] then
+                isEnabled = RoithiUI.db.profile.UnitFrames[frame.unit].enabled ~= false
+            end
+
+            -- Also check Boss Frames if applicable (simplified check)
+
+            if isEnabled then
+                -- If unit exists, RegisterUnitWatch usually shows it again on next update?
+                -- Or we can trigger an update.
+                if frame.unit or frame.style then
+                    RegisterUnitWatch(frame)
+                end
+
+                if frame.unit and UnitExists(frame.unit) then
+                    frame:Show()
+                end
+            else
+                -- Ensure it stays dead
+                if frame.unit or frame.style then
+                    UnregisterUnitWatch(frame)
+                end
+                frame:Hide()
+            end
+        end
+    end
+
+    local function SetCastbarEditModeState(bar, enabled)
+        if not bar then return end
+        if enabled then
+            bar.isInEditMode = true
+            bar:Show()
+            -- Fake Data for Visibility
+            bar:SetMinMaxValues(0, 1)
+            bar:SetValue(1)
+            local c = { 1, 0.95, 0, 1 } -- Default Cast Color
+            if RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[bar.unit] then
+                c = RoithiUI.db.profile.Castbar[bar.unit].colors.cast
+            end
+            bar:SetStatusBarColor(c[1], c[2], c[3], 1)
+            if bar.Text then bar.Text:SetText(string.upper(bar.unit or "CASTBAR")) end
+            if bar.Icon then
+                bar.Icon:SetTexture(136243); bar.Icon:Show()
+            end
+            if bar.Spark then bar.Spark:Show() end
+        else
+            bar.isInEditMode = false
+            bar:Hide()
+        end
+    end
+
     -- Checkbox Helper
+
     local function CreateCheck(parent, text, dbTable, key, xOffset, yOffset, frameObj, customToggleFunc)
         local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
         cb:SetPoint("TOPLEFT", xOffset, yOffset)
@@ -142,16 +233,11 @@ function Config:CreateDashboard()
             if customToggleFunc then
                 customToggleFunc(enabled)
             elseif frameObj then
-                -- Generic frame toggle logic (mostly for castbars)
-                if enabled then
-                    frameObj:Show()
-                    if frameObj.isInEditMode ~= nil then
-                        frameObj.isInEditMode = true
-                        if LibStub("LibEditMode") then LibStub("LibEditMode"):RefreshFrameSettings(frameObj) end
-                    end
+                -- Auto-detect type
+                if frameObj.StageTicks or frameObj.Spark then -- Is Castbar?
+                    SetCastbarEditModeState(frameObj, enabled)
                 else
-                    if frameObj.isInEditMode ~= nil then frameObj.isInEditMode = false end
-                    frameObj:Hide()
+                    SetEditModeState(frameObj, enabled)
                 end
             end
 
@@ -164,29 +250,25 @@ function Config:CreateDashboard()
     end
 
     -- 1. General Section
-    local generalContent = CreateSection("General", 55)
-
-    -- Encounter Bar
-    if not RoithiUI.db.profile.EncounterResource then RoithiUI.db.profile.EncounterResource = { enabled = true } end
+    local generalContent = CreateSection("General", 35)
     local ufModule = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 
-    CreateCheck(generalContent, "Encounter Bar", RoithiUI.db.profile.EncounterResource, "enabled", 15, -5, nil,
+    -- Combined Utility Frames
+    CreateCheck(generalContent, "Utility Frames", nil, nil, 15, -5, nil,
         function(enabled)
-            if ufModule then ufModule:ToggleEncounterResource(enabled) end
-        end)
+            local db = RoithiUI.db.profile
+            if not db.EncounterResource then db.EncounterResource = { enabled = true } end
+            db.EncounterResource.enabled = enabled
+            if not db.Timers then db.Timers = {} end
+            if not db.Timers.BattleRes then db.Timers.BattleRes = { enabled = true } end
+            db.Timers.BattleRes.enabled = enabled
 
-    -- Battle Res
-    if not RoithiUI.db.profile.Timers then RoithiUI.db.profile.Timers = {} end
-    if not RoithiUI.db.profile.Timers.BattleRes then RoithiUI.db.profile.Timers.BattleRes = { enabled = true } end
-    local brFrame = _G["RoithiBattleRes"]
-    CreateCheck(generalContent, "Battle Res", RoithiUI.db.profile.Timers.BattleRes, "enabled", 15, -30, brFrame,
-        function(enabled)
+            local ufModule = RoithiUI:GetModule("UnitFrames")
+            if ufModule and ufModule.ToggleEncounterResource then ufModule:ToggleEncounterResource(enabled) end
+
+            local brFrame = _G["RoithiBattleRes"]
             if brFrame then
-                if enabled then
-                    brFrame:Show(); if brFrame.Update then brFrame:Update() end
-                else
-                    brFrame:Hide()
-                end
+                if enabled then brFrame:Show() else brFrame:Hide() end
             end
         end)
 
@@ -204,7 +286,8 @@ function Config:CreateDashboard()
         local label, unit = u[1], u[2]
         local unitContent = CreateSection(label, 35) -- Reduced height for single row
 
-        local ufFrame = ufModule and ufModule.frames and ufModule.frames[unit]
+        -- Fix: Use .units instead of .frames
+        local ufFrame = ufModule and ufModule.units and ufModule.units[unit]
 
         -- UnitFrame Check
         if ufFrame then
@@ -214,6 +297,8 @@ function Config:CreateDashboard()
             CreateCheck(unitContent, "Frame", RoithiUI.db.profile.UnitFrames[unit], "enabled", 15, -5, ufFrame,
                 function(enabled)
                     if ufModule then ufModule:ToggleFrame(unit, enabled) end
+                    -- Force Visuals
+                    SetEditModeState(ufFrame, enabled)
                 end)
         end
 
@@ -225,6 +310,33 @@ function Config:CreateDashboard()
             -- Place next to Frame checkbox (approx 100px offset?)
             CreateCheck(unitContent, "Castbar", RoithiUI.db.profile.Castbar[unit], "enabled", 110, -5, ns.bars[unit])
         end
+    end
+
+    -- 3. Boss Frames Section
+    local bossContent = CreateSection("Boss Frames", 35)
+    local bossUnit = "boss1" -- Driver
+    -- We assume enabling Boss1 enables the group usually, or we iterate all.
+    -- UF:ToggleFrame handles simple Hide/Show.
+    -- Let's just create one checkbox "Enable" that toggles all 5?
+    -- Currently Config logic stores per-unit enabled state.
+
+    local bossFrame = ufModule and ufModule.units and ufModule.units[bossUnit]
+    if bossFrame then
+        if not RoithiUI.db.profile.UnitFrames[bossUnit] then RoithiUI.db.profile.UnitFrames[bossUnit] = { enabled = true } end
+
+        CreateCheck(bossContent, "Frame", RoithiUI.db.profile.UnitFrames[bossUnit], "enabled", 15, -5, nil,
+            function(enabled)
+                -- Toggle ALL boss frames
+                if ufModule then
+                    for i = 1, 5 do
+                        local f = ufModule.units["boss" .. i]
+                        if f then
+                            ufModule:ToggleFrame("boss" .. i, enabled)
+                            SetEditModeState(f, enabled)
+                        end
+                    end
+                end
+            end)
     end
 
     -- Bottom "Open Settings" Button

@@ -122,6 +122,35 @@ local function GetOptions()
                         end,
                         width = "full",
                     },
+                    utilityFrames = {
+                        type = "toggle",
+                        name = "Enable Utility Frames",
+                        desc = "Toggle both Encounter Resource Bar and Battle Rez Timer.",
+                        order = 12,
+                        get = function()
+                            local db = RoithiUI.db.profile
+                            return db.EncounterResource and db.EncounterResource.enabled and db.Timers and
+                                db.Timers.BattleRes and db.Timers.BattleRes.enabled
+                        end,
+                        set = function(_, v)
+                            local db = RoithiUI.db.profile
+                            if not db.EncounterResource then db.EncounterResource = {} end
+                            db.EncounterResource.enabled = v
+                            if not db.Timers then db.Timers = {} end
+                            if not db.Timers.BattleRes then db.Timers.BattleRes = {} end
+                            db.Timers.BattleRes.enabled = v
+
+                            -- Update Live
+                            local ufModule = RoithiUI:GetModule("UnitFrames")
+                            if ufModule and ufModule.ToggleEncounterResource then ufModule:ToggleEncounterResource(v) end
+
+                            local brFrame = _G["RoithiBattleRes"]
+                            if brFrame then
+                                if v then brFrame:Show() else brFrame:Hide() end
+                            end
+                        end,
+                        width = "full",
+                    },
                 },
             },
             unitframes = {
@@ -178,6 +207,8 @@ local function GetOptions()
             name = label,
             order = 10 + i,
             args = {
+
+
 
 
                 -- Tab: Indicators
@@ -357,10 +388,37 @@ local function GetOptions()
                                 GetDB().aurasEnabled = v; ns.RefreshUnitFrame(unit)
                             end,
                         },
+                        showBuffs = {
+                            type = "toggle",
+                            name = "Show Buffs",
+                            order = 1.1,
+                            get = function() return GetDB().showBuffs ~= false end,
+                            set = function(_, v)
+                                GetDB().showBuffs = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        showDebuffs = {
+                            type = "toggle",
+                            name = "Show Debuffs",
+                            order = 1.2,
+                            get = function() return GetDB().showDebuffs ~= false end,
+                            set = function(_, v)
+                                GetDB().showDebuffs = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        showOnlyPlayer = {
+                            type = "toggle",
+                            name = "Show Only My Auras",
+                            order = 2,
+                            get = function() return GetDB().ShowOnlyPlayer end,
+                            set = function(_, v)
+                                GetDB().ShowOnlyPlayer = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
                         size = {
                             type = "range",
                             name = "Size",
-                            order = 2,
+                            order = 3,
                             min = 10,
                             max = 50,
                             step = 1,
@@ -372,13 +430,65 @@ local function GetOptions()
                         max = {
                             type = "range",
                             name = "Max Auras",
-                            order = 3,
+                            order = 4,
                             min = 1,
                             max = 40,
                             step = 1,
                             get = function() return GetDB().maxAuras or 8 end,
                             set = function(_, v)
                                 GetDB().maxAuras = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        anchor = {
+                            type = "select",
+                            name = "Anchor Point",
+                            order = 5,
+                            values = {
+                                ["TOP"] = "Top",
+                                ["BOTTOM"] = "Bottom",
+                                ["LEFT"] = "Left",
+                                ["RIGHT"] = "Right",
+                            },
+                            get = function() return GetDB().auraAnchor or "BOTTOM" end,
+                            set = function(_, v)
+                                GetDB().auraAnchor = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        grow = {
+                            type = "select",
+                            name = "Grow Direction",
+                            order = 6,
+                            values = {
+                                ["RIGHT"] = "Left to Right",
+                                ["LEFT"] = "Right to Left",
+                            },
+                            get = function() return GetDB().auraGrowDirection or "RIGHT" end,
+                            set = function(_, v)
+                                GetDB().auraGrowDirection = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        x = {
+                            type = "range",
+                            name = "X Offset",
+                            order = 7,
+                            min = -100,
+                            max = 100,
+                            step = 1,
+                            get = function() return GetDB().auraX or 0 end,
+                            set = function(_, v)
+                                GetDB().auraX = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        y = {
+                            type = "range",
+                            name = "Y Offset",
+                            order = 8,
+                            min = -100,
+                            max = 100,
+                            step = 1,
+                            get = function() return GetDB().auraY or 4 end,
+                            set = function(_, v)
+                                GetDB().auraY = v; ns.RefreshUnitFrame(unit)
                             end,
                         },
                     },

@@ -22,8 +22,14 @@ function ns.CreateCastBar(unit)
     local font = LSM:Fetch("font", RoithiUI.db.profile.General.castbarFont or "Friz Quadrata TT")
     local text = bar:CreateFontString(nil, "OVERLAY");
     text:SetFont(font, 12, "OUTLINE")
-    text:SetPoint("CENTER");
+    text:SetPoint("LEFT", 4, 0); -- Align Left with padding
     bar.Text = text
+
+    -- Time Text (Remaining Only)
+    local timeText = bar:CreateFontString(nil, "OVERLAY")
+    timeText:SetFont(font, 12, "OUTLINE")
+    timeText:SetPoint("RIGHT", -4, 0)
+    bar.TimeFS = timeText
 
     -- Spark (Standard Texture)
     local spark = bar:CreateTexture(nil, "OVERLAY")
@@ -33,7 +39,18 @@ function ns.CreateCastBar(unit)
     bar.Spark = spark
 
     bar.StageTicks = {}
+
+    -- Latency Bar (Safe Zone)
+    local latency = bar:CreateTexture(nil, "ARTWORK")
+    latency:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    latency:SetVertexColor(1, 0, 0, 0.5) -- Red semi-transparent
+    latency:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+    latency:SetHeight(bar:GetHeight())
+    latency:Hide()
+    bar.Latency = latency
+
     bar.unit = unit; bar:Hide()
+    bar:SetClampedToScreen(true)
     return bar
 end
 
@@ -48,6 +65,8 @@ function ns.UpdateCastBarMedia(bar)
     if bar.Text then
         bar.Text:SetFont(font, 12, "OUTLINE")
     end
+    -- Update Font for Time string
+    if bar.TimeFS then bar.TimeFS:SetFont(font, 12, "OUTLINE") end
 end
 
 function ns.RefreshAllCastbars()
@@ -61,6 +80,71 @@ function ns.InitializeBars()
     for unit, _ in pairs(ns.DEFAULTS) do
         ns.bars[unit] = ns.CreateCastBar(unit)
     end
+end
+
+-- ----------------------------------------------------------------------------
+-- 1.5. Safety Wrappers (12.0.1+ Helper mocks)
+-- ----------------------------------------------------------------------------
+local function FormatDuration(val)
+    if not val then return "" end
+    -- Secret Safety: If issecretvalue(val), we can't do math.
+    -- We assume val might be a formatted string or we trust it works with standard formatters if whitelisted.
+    -- If it's a number:
+    if type(val) == "number" then
+        if val >= 60 then
+            return string.format("%d:%02d", math.floor(val / 60), val % 60)
+        end
+        return string.format("%.1f", val)
+    end
+    -- Fallback for secrets or handled types
+    return val
+end
+
+local function GetUnitCastBarCurrentTime(unit)
+    local name, _, _, startTime, endTime = UnitCastingInfo(unit)
+    if not name then
+        name, _, _, startTime, endTime = UnitChannelInfo(unit)
+    end
+    if not startTime or not endTime then return 0 end
+
+    -- Safe Math via pcall
+    local success, result = pcall(function()
+        local now = GetTime() * 1000
+        -- For Cast: Current = Now - Start
+        -- For Channel: Current = End - Now (Inverse) or just Now - Start?
+        -- Usually bars show "elapsed".
+        -- Let's stick to elapsed:
+        return (now - startTime) / 1000
+    end)
+    return success and result or 0
+end
+
+local function GetUnitCastBarRemainingTime(unit)
+    local name, _, _, startTime, endTime = UnitCastingInfo(unit)
+    if not name then
+        name, _, _, startTime, endTime = UnitChannelInfo(unit)
+    end
+    if not startTime or not endTime then return 0 end
+
+    -- Remaining = End - Now
+    local success, result = pcall(function()
+        local now = GetTime() * 1000
+        local remaining = (endTime - now) / 1000
+        if remaining < 0 then remaining = 0 end
+        return remaining
+    end)
+    return success and result or 0
+end
+
+local function GetSafeLatency()
+    -- Try C_Castbar first (12.0.1)
+    if C_Castbar and C_Castbar.GetLatencyAspect then
+        local success, latency = pcall(C_Castbar.GetLatencyAspect)
+        if success and latency then return latency / 1000 end
+    end
+    -- Fallback: Network World Latency
+    local _, _, home, world = GetNetStats()
+    return (world or home) / 1000
 end
 
 -- ----------------------------------------------------------------------------
@@ -79,7 +163,9 @@ function ns.UpdateCast(bar)
     -- If in Edit Mode, do NOT update (keep dummy bar visible)
     if bar.isInEditMode then return end
 
-    if bar.isInterrupted then return end
+    -- If inside the Interrupt animation, we allow new casts to OVERRIDE it.
+    -- We do NOT return early anymore.
+
     local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID, numStages
     local state = "cast"
 
@@ -150,9 +236,15 @@ function ns.UpdateCast(bar)
         -- Stop any existing empower state
         if bar.isEmpower and ns.StopEmpower then ns.StopEmpower(bar) end
 
-        bar:Hide(); bar:SetScript("OnUpdate", nil)
+        -- Only hide if we aren't showing an interrupt animation
+        if not bar.isInterrupted then
+            bar:Hide(); bar:SetScript("OnUpdate", nil)
+        end
         return
     end
+
+    -- New Cast Detected: Clear Interrupt State so pending timers don't hide us
+    bar.isInterrupted = false
 
     local colors = RoithiUI.db.profile.Castbar[unit].colors
     local c = colors[state] or colors.cast
@@ -170,6 +262,33 @@ function ns.UpdateCast(bar)
 
     -- Use Raw Secret Values (Matches Blizzard UI exactly)
     bar:SetMinMaxValues(startTime, endTime)
+
+    -- Latency Indicator
+    if bar.Latency then
+        local latencySec = GetSafeLatency()
+        local duration = (endTime - startTime) / 1000
+        if duration > 0 then
+            local width = bar:GetWidth() * (latencySec / duration)
+            -- Cap width to bar width
+            if width > bar:GetWidth() then width = bar:GetWidth() end
+
+            bar.Latency:SetWidth(width)
+            bar.Latency:SetHeight(bar:GetHeight()) -- Ensure height matches if bar resizes
+            bar.Latency:ClearAllPoints()
+
+            -- If Channeling or Reverse Fill, safe zone is on LEFT (start of bar visually? No, channeling depletes L->R or R->L?)
+            -- Standard Cast: Fills L->R. Safe zone is at end (RIGHT).
+            -- Channel: Depletes R->L (usually). Safe zone is at end of cast (LEFT).
+            if state == "channel" then
+                bar.Latency:SetPoint("LEFT", bar, "LEFT", 0, 0)
+            else
+                bar.Latency:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+            end
+            bar.Latency:Show()
+        else
+            bar.Latency:Hide()
+        end
+    end
 
     if RoithiUI.db.profile.Castbar[unit].showIcon then
         bar.Icon:Show(); bar.Icon:SetTexture(texture)
@@ -217,6 +336,13 @@ function ns.UpdateCast(bar)
     -- OnUpdate Loop
     bar:SetScript("OnUpdate", function(self, elapsed)
         self:SetValue(GetTime() * 1000)
+
+        -- Time Text Updates (Remaining Only)
+        if self.TimeFS then
+            local remaining = GetUnitCastBarRemainingTime(unit)
+            self.TimeFS:SetText(FormatDuration(remaining))
+        end
+
         if self.isEmpower and ns.OnEmpowerUpdate then
             ns.OnEmpowerUpdate(self)
         end
@@ -237,6 +363,9 @@ function ns.HandleInterrupt(bar)
 
     bar.Text:SetText("INTERRUPTED"); bar.Spark:Hide()
     C_Timer.After(1.0, function()
-        bar.isInterrupted = false; bar:Hide()
+        -- Only hide if we are STILL interrupted (didn't start a new cast)
+        if bar.isInterrupted then
+            bar.isInterrupted = false; bar:Hide()
+        end
     end)
 end

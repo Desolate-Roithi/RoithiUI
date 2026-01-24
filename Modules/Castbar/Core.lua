@@ -133,26 +133,51 @@ function ns.UpdateBlizzardVisibility()
     -- Helper to hide/show
     local function ToggleBlizzBar(frame, shouldHide)
         if not frame then return end
+
         if shouldHide then
-            frame:UnregisterAllEvents()
-            frame:Hide()
+            -- Hide visually but keep events running to avoid Taint/Restoration issues
+            -- (UnregisterAllEvents is too destructive and hard to reverse correctly)
             frame:SetAlpha(0)
-            -- Hook Show to keep hidden?
-            -- Better to just ensure events are gone.
+            if frame.EnableMouse then frame:EnableMouse(false) end
+            frame:Hide()
+
+            -- Hook OnShow to force hide?
+            -- No, SetAlpha(0) allows standard code to run without visible artifacts.
+            -- But standard code might SetAlpha(1).
+            -- Let's try explicit Unregister if Safe, but user reported failure.
+            -- We'll try SetParent(Hidden) approach if possible, but SetAlpha is safest for 12.0.1
+
+            -- Actually, if we just Unregister "OnEvent", that stops it?
+            -- Let's try Unregister for key events only, and Re-Register them.
+            -- Events: UNIT_SPELLCAST_START, STOP, CHANNEL_START, STOP, DELAYED, INTERRUPTED
+            -- But there are many.
+
+            -- COMPROMISE: We will just Hide it and Hook Show.
+            if not frame.RoithiHooked then
+                hooksecurefunc(frame, "Show", function(self)
+                    if self.shouldBeHiddenRoithi then
+                        self:Hide()
+                    end
+                end)
+                frame.RoithiHooked = true
+            end
+            frame.shouldBeHiddenRoithi = true
+            frame:Hide()
         else
+            frame.shouldBeHiddenRoithi = false
+            -- If it was hidden, let it be shown by game engine when needed.
             frame:SetAlpha(1)
-            -- Re-register events if we know them, or reload UI hint?
-            -- Blizzard code usually registers these on load or via Mixins.
-            -- Modern frames use Mixins. We might need to call OnLoad or re-register specific events.
-            -- For now, we restore Alpha and let the user reload if needed,
-            -- OR we try to re-hook events.
-            -- Re-registering all events manually is brittle.
-            -- A reload is safer for "Show" but we can try basic ones.
-            if frame.unit then
-                frame:RegisterUnitEvent("UNIT_SPELLCAST_START", frame.unit)
-                frame:RegisterUnitEvent("UNIT_SPELLCAST_STOP", frame.unit)
-                frame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", frame.unit)
-                frame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", frame.unit)
+            if frame.EnableMouse then frame:EnableMouse(true) end
+
+            -- FIX: Restoration if currently casting
+            -- We assume frame unit based on frame name or similar?
+            -- frame.unit usually exists on CastBars
+            local u = frame.unit or (frame.GetUnit and frame:GetUnit()) or "player"
+            -- PlayerCastingBarFrame doesn't have .unit usually? It watches 'player'.
+            if frame == PlayerCastingBarFrame or frame == PlayerFrame.Spellbar then u = "player" end
+
+            if u and (UnitCastingInfo(u) or UnitChannelInfo(u)) then
+                frame:Show()
             end
         end
     end
@@ -299,5 +324,83 @@ SlashCmdList["MIDNIGHTCB"] = function(msg)
         end
     else
         print("MidnightCastbars: Edit Mode not available.")
+    end
+end
+
+-- ----------------------------------------------------------------------------
+-- 4. Attachment Logic
+-- ----------------------------------------------------------------------------
+function ns.SetCastbarAttachment(unit, attached)
+    local bar = ns.bars[unit]
+    if not bar then return end
+
+    local db = RoithiUI.db.profile.Castbar[unit]
+
+    local UF = RoithiUI:GetModule("UnitFrames")
+    local uFrame = UF and UF.units and UF.units[unit]
+
+    -- Special Case for Boss Frames: Snap to specific boss frame
+    if string.find(unit, "boss") then
+        uFrame = UF and UF.units and UF.units[unit]
+    end
+
+    if attached and uFrame then
+        -- SMART ATTACHMENT LOGIC
+        -- Priority: AdditionalPower > ClassPower > Power > Frame
+        -- BUT only if they are NOT DETACHED.
+        local anchor = uFrame
+
+        -- Access UnitFrame DB safely to check for detachment
+        local ufDB = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
+
+        -- Default to attached if no DB entry (safe fallback)
+        local powerDetached = ufDB and ufDB.powerDetached
+        local classPowerDetached = ufDB and ufDB.classPowerDetached
+        local additionalPowerDetached = ufDB and ufDB.additionalPowerDetached
+
+        if uFrame.Power and uFrame.Power:IsShown() and not powerDetached then
+            anchor = uFrame.Power
+        end
+
+        if uFrame.ClassPower and uFrame.ClassPower:IsShown() and not classPowerDetached then
+            -- Assumes ClassPower is visually below Power.
+            -- If ClassPower is present but Power is detached, does ClassPower move up?
+            -- Typically yes, in standard layouts.
+            anchor = uFrame.ClassPower
+        end
+
+        if uFrame.AdditionalPower and uFrame.AdditionalPower:IsShown() and not additionalPowerDetached then
+            -- Assumes AdditionalPower is visually below ClassPower/Power.
+            anchor = uFrame.AdditionalPower
+        end
+
+        bar:SetParent(uFrame)
+        bar:ClearAllPoints()
+        -- Offset logic: Use db.x / db.y as offset from the smart anchor
+        -- Check if db.x is reasonable offset (usually huge if formerly detached).
+        -- If attached, we might want to ignore large saved coordinates or clamp them?
+        -- Let's just use 0, -5 hardcoded + db.x/y if user wants fine tuning?
+        -- The user asked for X/Y sliders. If attached, they act as offsets.
+        local offX = db.x or 0
+        local offY = (db.y or 0) - 5
+
+        -- FIX: Visual Centering with Icon
+        -- If icon is shown, the bar width is reduced, but centering the BAR makes the ICON overhang left.
+        -- We shift RIGHT by half the icon width to center the whole (Icon + Bar) group.
+        if db.showIcon then
+            local iconSize = (db.height or 20) * (db.iconScale or 1.0)
+            offX = offX + (iconSize / 2)
+        end
+
+        bar:SetPoint("TOP", anchor, "BOTTOM", offX, offY)
+    else
+        bar:SetParent(UIParent)
+        -- Restore position from DB
+        -- If db.x/y were used as offsets while attached, they might be small.
+        -- If detaching, we probably want to keep them or restore absolute?
+        -- For now, we trust the DB.
+        local point = db.point or "CENTER"
+        bar:ClearAllPoints()
+        bar:SetPoint(point, UIParent, point, db.x or 0, db.y or 0)
     end
 end

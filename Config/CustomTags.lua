@@ -39,9 +39,24 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     "  |cff00ff00@power.current|r - Current power\n" ..
                     "  |cff00ff00@power.percent|r - Power percentage\n" ..
                     "  |cff00ff00@power.missing|r - Missing power\n" ..
-                    "  |cff00ff00@absorb|r - Total absorbs\n\n" ..
+                    "  |cff00ff00@absorb|r - Total absorbs\n" ..
+                    "  |cff00ff00@power.class|r - Class Power (Resources/Runes)\n" ..
+                    "  |cff00ff00@power.class.max|r - Max Class Power\n" ..
+                    "  |cff00ff00@power.class.percent|r - Class Power %\n" ..
+                    "  |cff00ff00@power.add.current|r - Add. Power (Mana/Alt)\n" ..
+                    "  |cff00ff00@power.add.maximum|r - Max Add. Power\n" ..
+                    "  |cff00ff00@power.add.percent|r - Add. Power %\n" ..
+                    "  |cff00ff00@power.add.missing|r - Missing Add. Power\n" ..
+                    "  |cff00ff00@power.stagger|r - Current Stagger\n" ..
+                    "  |cff00ff00@power.stagger.percent|r - Stagger % of HP\n\n" ..
                     "|cffffd100Modifiers:|r\n" ..
-                    "  Append |cff00ff00:short|r to any numeric tag to abbreviate values (e.g. |cff00ff00@health.current:short|r -> 1.2M)",
+                    "  Append |cff00ff00:short|r to any numeric tag to abbreviate values (e.g. |cff00ff00@health.current:short|r -> 1.2M)\n\n" ..
+                    "|cffffd100Conditions:|r\n" ..
+                    "  Use |cff00ff00[type](tags)|r to show tags only for specific power types.\n" ..
+                    "  Example: |cff00ff00[mana](@power.percent) @power.current|r\n" ..
+                    "  Use |cff00ff00{class:spec}(tags)|r to show tags only for specific spec.\n" ..
+                    "  Example: |cff00ff00{DH:3}(@power.class)|r\n" ..
+                    "  (Shows % if Mana class, otherwise current value)",
                 order = 0,
             },
         },
@@ -54,6 +69,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
         { "focus",        "Focus" },
         { "focustarget",  "Focus Target" }, -- If supported by core
         { "pet",          "Pet" },
+        { "boss1",        "Boss Frames" },
     }
 
     for i, u in ipairs(units) do

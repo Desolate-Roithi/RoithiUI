@@ -53,5 +53,7 @@ end
 -- In a real environment with lfs, we could scan.
 table.insert(tests, "Tests/Test_UnitFrames.lua")
 table.insert(tests, "Tests/Test_Libs.lua")
+table.insert(tests, "Tests/Test_BossFrames_EditMode.lua")
+table.insert(tests, "Tests/Tests_UnitFrames_Persistence.lua")
 
 RunTests()

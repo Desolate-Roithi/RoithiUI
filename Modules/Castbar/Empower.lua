@@ -20,20 +20,23 @@ local function BuildEmpowerTimeline(unit)
     local stageEnds = {}
     local totalStage = 0
 
-    -- 1. Duration from UnitChannelInfo (usually Charge Duration)
-    -- Empowered spells are channels, but UnitCastingInfo might return data too.
-    -- Empowered spells are channels, but UnitCastingInfo might return data too.
-    local name, text, texture, startTime, endTime, isTradeSkill, castID, notInterruptible, spellID, _, numStages
-    local isEmpowered -- Declare local
-    name, text, texture, startTime, endTime, isTradeSkill, castID, notInterruptible, spellID, _, numStages =
-        UnitCastingInfo(unit)
+    -- 1. Get Cast Data
+    -- Note: We check ChannelInfo first because most Empowered spells are channels.
+    local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID, isEmpowered, numStages =
+        UnitChannelInfo(unit)
 
     if not name then
-        name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID, isEmpowered, numStages =
-            UnitChannelInfo(unit)
+        -- Fallback to CastingInfo (unlikely for Empowered, but possible)
+        -- Note: casting info return values differ slightly
+        local castID
+        name, text, texture, startTime, endTime, isTradeSkill, castID, notInterruptible, spellID = UnitCastingInfo(unit)
+        isEmpowered = false
     end
 
-    -- Safety Check for Secret Values (Protected Targets)
+    -- 2. SECRET VALUE SAFETY CHECK
+    -- In 12.0.1, 'startTime' is a Secret (userdata) for the Player in combat.
+    -- We CANNOT do math on it. If it's not a number, we must abort the visual ticks.
+    -- This allows the bar to work for Targets (where it's a number) without crashing on Player.
     if not startTime or not endTime or type(startTime) ~= "number" or type(endTime) ~= "number" then
         return nil
     end
@@ -41,87 +44,84 @@ local function BuildEmpowerTimeline(unit)
     local chargeDuration = (endTime - startTime) / 1000
     local startSec = startTime / 1000
 
-    -- 2. Stage Percentages (12.0 API)
-    -- These define the breakpoints relative to the chargeDuration.
-    -- 2. Stage Logic (12.0 API Support)
-    -- Priorities:
-    -- 1. UnitEmpoweredStageDurations (New 12.0.1 preferred)
-    -- 2. UnitEmpoweredStagePercentages (Legacy/Deprecated?)
-    -- 3. Fallback (Equal Split)
-
-    local durations
-    ---@diagnostic disable-next-line: undefined-field
-    if _G.UnitEmpoweredStageDurations then
-        ---@diagnostic disable-next-line: undefined-field
-        durations = _G.UnitEmpoweredStageDurations(unit)
-    end
+    -- 3. Stage Configuration (12.0.1+ API)
+    -- The new APIs return vectors where the LAST element is the HOLD phase.
+    -- We can simply accumulate these to get the full timeline landmarks.
 
     local percentages
-    ---@diagnostic disable-next-line: undefined-field
-    if not durations and _G.UnitEmpoweredStagePercentages then
-        ---@diagnostic disable-next-line: undefined-field
-        percentages = _G.UnitEmpoweredStagePercentages(unit)
+    local durations
+
+    -- Priority 1: UnitEmpoweredStageDurations (Absolute Sequence)
+    if UnitEmpoweredStageDurations then
+        durations = UnitEmpoweredStageDurations(unit)
+    end
+
+    -- Safety: Ensure durations are numbers. If they are Userdata (Secrets), we cannot use them.
+    if durations and #durations > 0 and type(durations[1]) ~= "number" then
+        durations = nil
     end
 
     if durations and #durations > 0 then
-        -- Durations -> Ends
         local accum = 0
         for i, dur in ipairs(durations) do
-            -- Duration is likely in ms or seconds? Usually match UnitChannelInfo format.
-            -- If huge, normalize. If small, assume seconds.
-            -- UnitChannelInfo returns ms but we converted to seconds (chargeDuration).
-            -- Let's verify standard API return. Usually Duration APIs return MS if integer, Seconds if float.
-            -- Safest: if dur > 100 then dur = dur / 1000 end
-
+            -- Normalize MS to S (Duration objects usually return MS in this context)
             if dur > 50 then dur = dur / 1000 end
-
             accum = accum + dur
             stageEnds[i] = accum
         end
-        totalStage = accum -- Total duration defined by sum of stages
+        totalStage = accum
 
-        -- Override chargeDuration source of truth?
-        -- Sometimes chargeDuration (from ChannelInfo) differs slightly from sum of stages due to latency window.
-        -- We trust sum of stages for the timeline visual.
-        chargeDuration = totalStage
-    elseif percentages and #percentages > 0 then
-        for i, pct in ipairs(percentages) do
-            stageEnds[i] = pct * chargeDuration
-        end
-        totalStage = stageEnds[#stageEnds] or chargeDuration
+        -- If the API is accurate, totalStage should roughly equal chargeDuration (endTime - startTime).
+        -- We trust the stage sums for the visual milestones.
+
+        -- Priority 2: UnitEmpoweredStagePercentages (Relative Sequence)
     else
-        -- Fallback if no data (guess)
-        if chargeDuration > 0 then
-            local count = numStages or 3
-            if count < 1 then count = 3 end -- safety
+        if UnitEmpoweredStagePercentages then
+            percentages = UnitEmpoweredStagePercentages(unit)
+        end
 
-            stageEnds = {}
-            for i = 1, count do
-                stageEnds[i] = chargeDuration * (i / count)
+        if percentages and #percentages > 0 then
+            -- Percentages also include the Hold Phase as the last element.
+            -- So they map 0-100% of the UnitEmpoweredChannelDuration (or chargeDuration).
+
+            for i, pct in ipairs(percentages) do
+                -- Normalize 0-100 to 0-1 if necessary
+                if pct > 1.0 then pct = pct / 100 end
+                stageEnds[i] = pct * chargeDuration
             end
-            totalStage = chargeDuration
+            totalStage = stageEnds[#stageEnds] or chargeDuration
+        else
+            -- Priority 3: Fallback (Equal Split)
+            -- If no API data, we assume standard behavior.
+            -- We assume chargeDuration is mostly Charging if we lack hold info.
+            if chargeDuration > 0 then
+                local count = numStages or 3
+                if count < 1 then count = 3 end
+
+                for i = 1, count do
+                    stageEnds[i] = chargeDuration * (i / count)
+                end
+                totalStage = chargeDuration
+            end
         end
     end
 
-    -- 3. Hold Phase
-    local holdDuration = 0
-    if _G.GetUnitEmpowerHoldAtMaxTime then
-        holdDuration = _G.GetUnitEmpowerHoldAtMaxTime(unit) or 0
-    end
+    -- 4. Hold Phase
+    -- Since the new APIs include Hold in the stages vector as the last element,
+    -- we treat it as just another stage end in our stageEnds array.
+    -- We do NOT add an extra Hold Duration on top.
 
-    -- If the API returns seconds (e.g. 2.0), we use it.
-    -- Some 12.0 APIs might return milliseconds, so normalize if huge.
-    if holdDuration > 20 then holdDuration = holdDuration / 1000 end
-
-    local totalDuration = chargeDuration + holdDuration
+    -- Safety: If APIs calculated a total > chargeDuration, trust the API sum.
+    local finalDuration = totalStage
+    if finalDuration <= 0 then finalDuration = chargeDuration end
 
     return {
         stageEnds = stageEnds,
-        chargeDuration = chargeDuration, -- Duration of the stages
-        holdDuration = holdDuration,     -- Extra time after stages
-        totalDuration = totalDuration,   -- Combined
+        chargeDuration = chargeDuration,
+        holdDuration = 0, -- Effectively handled inside stageEnds
+        totalDuration = finalDuration,
         startTime = startSec,
-        endTime = endTime / 1000         -- Original simplified charge end
+        endTime = endTime / 1000
     }
 end
 
@@ -195,7 +195,7 @@ local function LayoutEmpower(bar)
     -- Avoid div/0
     if total <= 0 then total = 0.001 end
 
-    -- Draw Start -> Charge End
+    -- Draw Stages (including Hold Phase which is now the last stage)
     for i, endSec in ipairs(stageEnds) do
         local pct = endSec / total
         if pct > 1 then pct = 1 end
@@ -208,7 +208,10 @@ local function LayoutEmpower(bar)
         zone:SetHeight(height)
 
         -- Determine Color based on Specific Logic
-        local c = { 0.5, 0.5, 0.5, 1 } -- Default Grey for Stage 0 (i=1)
+        -- i=1 is Stage 0 -> 1 (Grey)
+        -- i=last is potentially Hold Phase
+
+        local c = { 0.5, 0.5, 0.5, 1 } -- Default
 
         if i == 1 then
             -- Stage 0 (Start -> Pip 1): Grey (Hardcoded)
@@ -220,7 +223,7 @@ local function LayoutEmpower(bar)
             -- Stage 2 (Pip 2 -> Pip 3): Empower 2
             if colors and colors.empower2 then c = colors.empower2 end
         elseif i == 4 then
-            -- Stage 3 (Pip 3 -> Pip 4/End): Empower 3
+            -- Stage 3 (Pip 3 -> End or Hold): Empower 3 (Green)
             if colors and colors.empower3 then c = colors.empower3 end
         elseif i >= 5 then
             -- Stage 4+ (Pip 4 -> End): Empower 4 (Blue)
@@ -230,7 +233,7 @@ local function LayoutEmpower(bar)
         zone:SetColorTexture(c[1], c[2], c[3], c[4])
         zone:Show()
 
-        -- Draw Tick
+        -- Draw Tick at the END of this stage (unless it's the very last one/Hold)
         if pct < 0.995 then
             local tick = CreateOrGetTexture(bar, "StageTicks", i, "ARTWORK")
             tick:ClearAllPoints()
@@ -243,41 +246,6 @@ local function LayoutEmpower(bar)
         end
 
         lastPos = pct
-    end
-
-    -- Draw Hold Phase (if any)
-    if lastPos < 0.995 then
-        local i = #stageEnds + 1
-        local zone = CreateOrGetTexture(bar, "StageZones", i, "BACKGROUND")
-        zone:ClearAllPoints()
-        zone:SetPoint("LEFT", bar, "LEFT", width * lastPos, 0)
-        zone:SetWidth(math.max(0, (1.0 - lastPos) * width))
-        zone:SetHeight(height)
-
-        -- Hold Phase uses the color of the FINAL stage achieved
-        -- If we have 3 pips (#stageEnds=3), the stages were:
-        -- i=1 (Grey), i=2 (Emp1), i=3 (Emp2).
-        -- The segment AFTER i=3 is "Stage 3" (Green).
-
-        -- Logic:
-        -- If #stageEnds == 3 -> implies standard 3-stage spell. Hold is Stage 3 (Empower 3).
-        -- If #stageEnds == 4 -> implies 4-stage spell. Hold is Stage 4 (Empower 4).
-
-        local c = { 0.2, 1, 0.2, 1 } -- Fallback Green
-
-        if #stageEnds == 3 then
-            -- Standard 3-stage spell
-            if colors and colors.empower3 then c = colors.empower3 end
-        elseif #stageEnds >= 4 then
-            -- 4-stage spell or more
-            if colors and colors.empower4 then c = colors.empower4 end
-        else
-            -- Unusual (1 or 2 stages?), use Emp1 or Emp2
-            if colors and colors.empower1 then c = colors.empower1 end
-        end
-
-        zone:SetColorTexture(c[1], c[2], c[3], c[4])
-        zone:Show()
     end
 
     -- Update the Castbar MinMax to match the NEW total duration including hold

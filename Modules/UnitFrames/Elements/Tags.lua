@@ -13,6 +13,7 @@ local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
 local UnitIsConnected, UnitIsGhost, UnitIsDead = UnitIsConnected, UnitIsGhost, UnitIsDead
 local UnitClassification, UnitCreatureFamily, UnitCreatureType = UnitClassification, UnitCreatureFamily, UnitCreatureType
 local CreateFramePool, CreateFontStringPool = CreateFramePool, CreateFontStringPool
+local strsplit = strsplit
 
 -- 12.0.1 Secret APIs (Localized if present)
 local issecretvalue = _G.issecretvalue
@@ -24,7 +25,7 @@ local CurveConstants = _G.CurveConstants
 local UnitHealthPercent = _G.UnitHealthPercent
 local UnitPowerPercent = _G.UnitPowerPercent
 
-local UnitPowerPercent = _G.UnitPowerPercent
+
 ---@diagnostic disable-next-line: undefined-field
 local UnitHealthDeficit = _G.UnitHealthDeficit
 
@@ -141,7 +142,8 @@ TM.Methods = {
             -- 12.0.1 Power Approach
             local curve = (CurveConstants and CurveConstants.ScaleTo100) or 0
             local success, result = pcall(function()
-                local pct = UnitPowerPercent(unit, false, curve)
+                local pType = UnitPowerType(unit)
+                local pct = UnitPowerPercent(unit, pType, false, curve)
                 return string.format("%.2f%%", pct)
             end)
 
@@ -173,6 +175,198 @@ TM.Methods = {
         local missing = max - cur
         if missing > 0 then return missing end
         return ""
+    end,
+
+    -- Class Power / Advanced Power (New for 12.0.1)
+    -- Renamed from classpower.* to power.class.*
+    ["power.class"] = function(unit)
+        if unit ~= "player" then return "" end
+        local _, class = UnitClass("player")
+        local spec = GetSpecialization()
+        local classConfig = UF.ClassPowerConfig and UF.ClassPowerConfig[class]
+        local config = nil
+
+        if classConfig then
+            if classConfig[spec] then
+                config = classConfig[spec]
+            elseif classConfig.mode then
+                config = classConfig
+            end
+        end
+        if not config then return "" end
+        if config.spec and config.spec ~= spec then return "" end
+
+        if config.mode == "AURA" then
+            local aura = C_UnitAuras.GetPlayerAuraBySpellID(config.spellID)
+            if not aura and config.backupID then aura = C_UnitAuras.GetPlayerAuraBySpellID(config.backupID) end
+
+            if config.requireAura and not aura then return "" end
+
+            return aura and aura.applications or 0
+        elseif config.mode == "POWER" then
+            return UnitPower("player", config.type)
+        end
+        return ""
+    end,
+
+    ["power.class.max"] = function(unit)
+        if unit ~= "player" then return "" end
+        local _, class = UnitClass("player")
+        local spec = GetSpecialization()
+        local classConfig = UF.ClassPowerConfig and UF.ClassPowerConfig[class]
+        local config = nil
+
+        if classConfig then
+            if classConfig[spec] then
+                config = classConfig[spec]
+            elseif classConfig.mode then
+                config = classConfig
+            end
+        end
+        if not config then return "" end
+        if config.spec and config.spec ~= spec then return "" end
+
+        local max = config.maxDisplay or 5
+        if config.mode == "AURA" then
+            local aura = C_UnitAuras.GetPlayerAuraBySpellID(config.spellID)
+            if not aura and config.backupID then aura = C_UnitAuras.GetPlayerAuraBySpellID(config.backupID) end
+
+            if config.requireAura and not aura then return "" end
+
+            if aura and aura.maxStack and aura.maxStack > 0 then
+                max = aura.maxStack
+                if class == "SHAMAN" then max = 5 end
+            end
+            return max
+        elseif config.mode == "POWER" then
+            local pMax = UnitPowerMax("player", config.type)
+            if pMax and pMax > 0 then max = pMax end
+            return max
+        end
+        return ""
+    end,
+
+    ["power.class.percent"] = function(unit)
+        if unit ~= "player" then return "" end
+        local _, class = UnitClass("player")
+        local spec = GetSpecialization()
+        local classConfig = UF.ClassPowerConfig and UF.ClassPowerConfig[class]
+        local config = nil
+
+        if classConfig then
+            if classConfig[spec] then
+                config = classConfig[spec]
+            elseif classConfig.mode then
+                config = classConfig
+            end
+        end
+        if not config or (config.spec and config.spec ~= spec) then return "" end
+
+        local cur, max = 0, config.maxDisplay or 5
+
+        if config.mode == "AURA" then
+            local aura = C_UnitAuras.GetPlayerAuraBySpellID(config.spellID)
+            if not aura and config.backupID then aura = C_UnitAuras.GetPlayerAuraBySpellID(config.backupID) end
+
+            if config.requireAura and not aura then return "" end
+
+            cur = aura and aura.applications or 0
+            if aura and aura.maxStack and aura.maxStack > 0 then
+                max = aura.maxStack
+                if class == "SHAMAN" then max = 5 end
+            end
+        elseif config.mode == "POWER" then
+            cur = UnitPower("player", config.type)
+            local pMax = UnitPowerMax("player", config.type)
+            if pMax and pMax > 0 then max = pMax end
+        end
+
+        if max == 0 then return "0%" end
+        return string.format("%.0f%%", (cur / max) * 100)
+    end,
+
+    -- Additional Power (Mana when in form)
+    ["power.add.current"] = function(unit)
+        local pType = UnitPowerType(unit)
+        if pType == 0 then return "" end -- Primary is already Mana
+
+        local max = UnitPowerMax(unit, 0)
+        -- Secret Safety
+        if issecretvalue and issecretvalue(max) then return UnitPower(unit, 0) end
+        if not max or max == 0 then return "" end
+
+        return UnitPower(unit, 0)
+    end,
+
+    ["power.add.maximum"] = function(unit)
+        local pType = UnitPowerType(unit)
+        if pType == 0 then return "" end
+
+        local max = UnitPowerMax(unit, 0)
+        -- Secret Safety: Secrets behave like numbers/strings but no comparison
+        -- We assume if it exists it's valid to show
+        if issecretvalue and issecretvalue(max) then return max end
+        if not max or max == 0 then return "" end
+
+        return max
+    end,
+
+    ["power.add.percent"] = function(unit)
+        local pType = UnitPowerType(unit)
+        if pType == 0 then return "" end
+
+        local cur = UnitPower(unit, 0)
+        local max = UnitPowerMax(unit, 0)
+
+        -- Handle Secrets via Helper API
+        if issecretvalue and (issecretvalue(cur) or issecretvalue(max)) then
+            local curve = (CurveConstants and CurveConstants.ScaleTo100) or 0
+            local success, result = pcall(function()
+                -- Explicitly request percent for MANA (0)
+                local pct = UnitPowerPercent(unit, 0, false, curve)
+                if pct then return string.format("%.0f%%", pct) end
+            end)
+            if success and result then return result end
+            return ""
+        end
+
+        if not max or max == 0 then return "" end
+        return string.format("%.0f%%", (cur / max) * 100)
+    end,
+
+    ["power.add.missing"] = function(unit)
+        local pType = UnitPowerType(unit)
+        if pType == 0 then return "" end
+
+        local cur = UnitPower(unit, 0)
+        local max = UnitPowerMax(unit, 0)
+
+        if issecretvalue and (issecretvalue(cur) or issecretvalue(max)) then return "" end
+        if not max or max == 0 then return "" end
+
+        local missing = max - cur
+        if missing > 0 then return missing end
+        return ""
+    end,
+
+    -- Monk Stagger
+    ["power.stagger"] = function(unit)
+        local stagger = UnitStagger(unit)
+        if not stagger or stagger == 0 then return "" end
+        if issecretvalue and issecretvalue(stagger) then return stagger end
+        return stagger
+    end,
+
+    ["power.stagger.percent"] = function(unit)
+        local stagger = UnitStagger(unit)
+        if not stagger or stagger == 0 then return "" end
+
+        local healthMax = UnitHealthMax(unit)
+        if not healthMax or healthMax == 0 then return "" end
+
+        if issecretvalue and (issecretvalue(stagger) or issecretvalue(healthMax)) then return "" end
+
+        return string.format("%.0f%%", (stagger / healthMax) * 100)
     end,
 
     -- Absorb
@@ -219,26 +413,88 @@ TM.Methods = {
 function TM:GetSegments(formatString, unit)
     if not formatString then return {} end
 
-    -- Tokenization (Conditionals removed as requested)
+    -- 1. Conditional Logic [type](format) for Power Type
+    if formatString:find("%[") then
+        local pType, pToken = UnitPowerType(unit or "player")
+        if pToken then
+            for cond, content in formatString:gmatch("%[([^%]]+)%]%(([^%)]+)%)") do
+                if cond:upper() == pToken then
+                    return TM:GetSegments(content, unit)
+                end
+            end
+            local stripped = formatString:gsub("%[([^%]]+)%]%(([^%)]+)%)%s?", "")
+            formatString = stripped
+        end
+    end
+
+    -- 2. Conditional Logic {class:spec}(format)
+    -- Supports {DH:3}(...) or {MAGE}(...)
+    if formatString:find("%{") then
+        local _, class = UnitClass(unit or "player")
+        local spec = GetSpecialization()
+
+        -- Class Abbreviation Map
+        local classMap = {
+            ["DH"] = "DEMONHUNTER",
+            ["DK"] = "DEATHKNIGHT",
+            ["PALA"] = "PALADIN",
+            ["WAR"] = "WARRIOR",
+            ["WL"] = "WARLOCK",
+            ["SH"] = "SHAMAN",
+            ["DR"] = "DRUID",
+            ["H"] = "HUNTER",
+            ["M"] = "MAGE",
+            ["PR"] = "PRIEST",
+            ["ROG"] = "ROGUE",
+            ["EVO"] = "EVOKER",
+            ["MONK"] = "MONK"
+        }
+
+        -- Iterate all {cond}(content) blocks
+        for cond, content in formatString:gmatch("%{([^%}]+)%}%(([^%)]+)%)") do
+            local reqClass, reqSpec = strsplit(":", cond)
+            reqClass = reqClass and reqClass:upper()
+
+            -- Resolve Abbr
+            if classMap[reqClass] then reqClass = classMap[reqClass] end
+
+            local classMatch = (reqClass == class)
+            local specMatch = true
+
+            if reqSpec then
+                if tonumber(reqSpec) ~= spec then specMatch = false end
+            end
+
+            if classMatch and specMatch then
+                return TM:GetSegments(content, unit)
+            end
+        end
+
+        -- If conditional blocks existed but none matched context, strip them
+        local stripped = formatString:gsub("%{([^%}]+)%}%(([^%)]+)%)%s?", "")
+        formatString = stripped
+    end
+
+    -- Tokenization
     local result = {}
     local lastPos = 1
 
-    -- Pattern: Capture @tag optionally followed by :modifier
-    -- Using a greedy match for the tag part which may include :modifier, extracting it manually
     for startPos, token, endPos in formatString:gmatch("()@([%w_%.%:]+)()") do
-        -- Add preceding static text
         if startPos > lastPos then
             table.insert(result, { text = formatString:sub(lastPos, startPos - 1), isTag = false })
         end
 
-        -- Split token into tagName and modifier
         local tagName, modifier = strsplit(":", token)
+
+        -- Legacy support (if config wasn't updated)
+        if tagName == "classpower.current" then tagName = "power.class" end
+        if tagName == "classpower.maximum" then tagName = "power.class.max" end
+        if tagName == "classpower.percent" then tagName = "power.class.percent" end
 
         local method = TM.Methods[tagName]
         if method then
             local success, val = pcall(method, unit)
             if success then
-                -- Apply modifiers
                 if modifier and modifier:lower() == "short" then
                     val = AbbreviateNumber(val)
                 end
@@ -255,10 +511,6 @@ function TM:GetSegments(formatString, unit)
                 table.insert(result, { text = "<Err>", isTag = true })
             end
         else
-            -- If not a valid tag method, treat as literal text (or ignore?)
-            -- Usually we might want to print the raw token if invalid tag,
-            -- but for now let's just ignore or insert empty?
-            -- Let's insert the raw text for debugging or fallback
             table.insert(result, { text = "@" .. token, isTag = false })
         end
         lastPos = endPos
@@ -275,19 +527,20 @@ end
 -- ----------------------------------------------------------------------------
 -- 3. Core System (Create & Update)
 -- ----------------------------------------------------------------------------
--- ----------------------------------------------------------------------------
--- 3. Core System (Create & Update)
--- ----------------------------------------------------------------------------
 function UF:CreateTags(frame)
     if not frame.Tags then frame.Tags = {} end
-    -- We need a container for custom tags if they are anchored to the frame freely
-    -- Actually, each tag is its own FontString.
-    -- We store them in frame.Tags list.
 end
 
 function UF:UpdateTags(frame)
     local unit = frame.unit
-    local db = RoithiUI.db.profile.UnitFrames[unit]
+
+    -- Boss Inheritance: Boss 2-5 use Boss 1 settings
+    local dbUnit = unit
+    if unit and unit:match("^boss[2-5]$") then
+        dbUnit = "boss1"
+    end
+
+    local db = RoithiUI.db.profile.UnitFrames[dbUnit]
 
     if not frame.TagsPool then
         frame.TagsPool = CreateFramePool("Frame", frame, nil, function(_, f)
@@ -440,7 +693,8 @@ function UF:EnableTags(frame)
     -- Unified Event Handler for oUF
     local function OnTagEvent(_, event, unit)
         -- Standard Unit Events
-        if unit == frame.unit then
+        -- Use UnitIsUnit to handle dynamic units (e.g., targettarget == player)
+        if unit and frame.unit and (unit == frame.unit or UnitIsUnit(unit, frame.unit)) then
             UpdateTags()
             -- Context Switch Events
         elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then
@@ -450,24 +704,31 @@ function UF:EnableTags(frame)
         end
     end
 
+    -- Create a dedicated listener frame to ensure events are caught properly
+    local listener = CreateFrame("Frame", nil, frame)
+    listener:SetScript("OnEvent", OnTagEvent)
+
     -- Key events for stats
     if frame.unit then
-        frame:RegisterEvent("UNIT_HEALTH", OnTagEvent)
-        frame:RegisterEvent("UNIT_MAXHEALTH", OnTagEvent)
-        frame:RegisterEvent("UNIT_POWER_UPDATE", OnTagEvent)
-        frame:RegisterEvent("UNIT_MAXPOWER", OnTagEvent)
-        frame:RegisterEvent("UNIT_NAME_UPDATE", OnTagEvent)
-        frame:RegisterEvent("UNIT_LEVEL", OnTagEvent)
-        frame:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED", OnTagEvent)
+        listener:RegisterEvent("UNIT_HEALTH")
+        listener:RegisterEvent("UNIT_MAXHEALTH")
+        listener:RegisterEvent("UNIT_POWER_UPDATE")
+        listener:RegisterEvent("UNIT_POWER_UPDATE")
+        listener:RegisterEvent("UNIT_MAXPOWER")
+        listener:RegisterEvent("UNIT_DISPLAYPOWER") -- For Additional Power toggling
+        listener:RegisterEvent("UNIT_NAME_UPDATE")
+        listener:RegisterEvent("UNIT_LEVEL")
+        listener:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
+        listener:RegisterEvent("UNIT_AURA") -- Added for ClassPower Aura tags
     end
 
     -- Context events for target switching (Must be declared unitless)
     if frame.unit == "target" then
-        frame:RegisterEvent("PLAYER_TARGET_CHANGED", OnTagEvent, true)
+        listener:RegisterEvent("PLAYER_TARGET_CHANGED")
     elseif frame.unit == "focus" then
-        frame:RegisterEvent("PLAYER_FOCUS_CHANGED", OnTagEvent, true)
+        listener:RegisterEvent("PLAYER_FOCUS_CHANGED")
     elseif frame.unit == "targettarget" or frame.unit == "focustarget" or frame.unit == "pettarget" then
-        frame:RegisterEvent("UNIT_TARGET", OnTagEvent)
+        listener:RegisterEvent("UNIT_TARGET")
     end
 
     -- Also update on Show to ensure fresh data

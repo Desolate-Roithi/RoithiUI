@@ -218,7 +218,11 @@ _G.CreateFrame = function(type, name, parent, template)
             end
             -- In mock, we assume it works.
         end,
-        SetAllPoints = function() end, -- Added missing mixin
+        SetAllPoints = function() end,               -- Added missing mixin
+        HookScript = function(self, script, handler) -- Added for 12.0.1+ Elements
+            -- Mock: Store handler? Or just no-op.
+            -- No-op is fine for simple visibility tests.
+        end,
     }
     return frame
 end
@@ -263,6 +267,16 @@ _G.tremove = table.remove
 _G.wipe = function(t)
     for k in pairs(t) do t[k] = nil end
     return t
+end
+
+
+_G.UnitExists = function(unit)
+    -- Mock: return true if unit has some valid string?
+    -- For tests, usually "player", "target" etc are valid.
+    -- Or check if unit is in some mock db?
+    -- Simplest: Return true for now, or true for standard units.
+    return unit and
+        (unit == "player" or unit == "target" or unit == "focus" or unit == "pet" or string.match(unit, "boss%d"))
 end
 
 return Mock

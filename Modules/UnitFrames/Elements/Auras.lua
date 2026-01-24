@@ -72,11 +72,34 @@ function UF:CreateAuras(frame)
         else
             db = {}
         end
+
+        -- Special Handling for Boss Frames (Inheritance)
+        if string.match(unit, "^boss[2-5]$") then
+            local driverDB = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames["boss1"]
+            if driverDB then
+                local specificDB = db
+                db = setmetatable({}, {
+                    __index = function(_, k)
+                        -- Inherit Visual/Logic Aura Settings
+                        if k == "aurasEnabled" or k == "auraSize" or k == "maxAuras" or k == "Whitelist" or k == "Blacklist" or k == "ShowOnlyPlayer" or k == "auraAnchor" or k == "auraX" or k == "auraY" or k == "auraGrowDirection" or k == "showBuffs" or k == "showDebuffs" then
+                            return driverDB[k]
+                        end
+                        return specificDB[k]
+                    end
+                })
+            end
+        end
         local enabled = db.aurasEnabled ~= false
         local size = db.auraSize or 20
         local maxIcons = db.maxAuras or 8
-        local showDebuffs = true
-        local showBuffs = true
+        -- Anchor & Position
+        local anchor = db.auraAnchor or "BOTTOMLEFT"
+        local offX = db.auraX or 0
+        local offY = db.auraY or 4
+        local growDir = db.auraGrowDirection or "RIGHT"
+
+        local showDebuffs = db.showDebuffs ~= false
+        local showBuffs = db.showBuffs ~= false
 
         if not enabled then
             element:Hide()
@@ -84,12 +107,38 @@ function UF:CreateAuras(frame)
         end
         element:Show()
 
-        if unit == "player" then
-            showBuffs = false
+        -- Apply Layout
+        element:ClearAllPoints()
+        -- Map "TOP" -> TOPLEFT, "BOTTOM" -> BOTTOMLEFT etc logic?
+        -- User dropdown has TOP, BOTTOM, LEFT, RIGHT.
+        -- Let's assume standard anchoring logic:
+        -- If user picks "TOP", we anchor element's BOTTOM to frame's TOP? Or element's TOP to frame's TOP?
+        -- Usually:
+        -- TOP: Element BOTTOM -> Frame TOP
+        -- BOTTOM: Element TOP -> Frame BOTTOM
+        -- LEFT: Element RIGHT -> Frame LEFT
+        -- RIGHT: Element LEFT -> Frame RIGHT
+
+        local p, rP = "BOTTOMLEFT", "TOPLEFT" -- Defaults
+
+        if anchor == "TOP" then
+            p, rP = "BOTTOM", "TOP"
+        elseif anchor == "BOTTOM" then
+            p, rP = "TOP", "BOTTOM"
+        elseif anchor == "LEFT" then
+            p, rP = "RIGHT", "LEFT"
+        elseif anchor == "RIGHT" then
+            p, rP = "LEFT", "RIGHT"
         end
 
-        -- Resize container height approx
+        element:SetPoint(p, frame, rP, offX, offY)
         element:SetHeight(size)
+
+        -- Grow Params
+        local anchor1, anchor2, relPoint, xSpace = "LEFT", "LEFT", "RIGHT", 4
+        if growDir == "LEFT" then
+            anchor1, anchor2, relPoint, xSpace = "RIGHT", "RIGHT", "LEFT", -4
+        end
 
         local icons = element.icons
         local iconIndex = 1
@@ -98,9 +147,12 @@ function UF:CreateAuras(frame)
 
         -- 1. Debuffs
         if showDebuffs then
+            local debuffFilter = "HARMFUL"
+            if db.ShowOnlyPlayer then debuffFilter = debuffFilter .. "|PLAYER" end
+
             for i = 1, 40 do
                 if iconIndex > maxIcons then break end
-                local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, "HARMFUL")
+                local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, debuffFilter)
                 if not aura then break end
 
                 -- Defensive Filter Checks (12.0.1 Safety)
@@ -108,14 +160,7 @@ function UF:CreateAuras(frame)
                 local isSecretSrc = issecretvalue(aura.sourceUnit)
                 local skip = false
 
-                -- A. Show Only Player
-                if db.ShowOnlyPlayer then
-                    if isSecretSrc then
-                        skip = true -- Fail closed: If source is secret, we can't verify it's player.
-                    elseif aura.sourceUnit ~= "player" then
-                        skip = true
-                    end
-                end
+                -- A. Show Only Player check is handled by API filter now
 
                 -- B. Blacklist
                 if not skip and db.Blacklist then
@@ -139,10 +184,11 @@ function UF:CreateAuras(frame)
                     local icon = icons[iconIndex] or CreateIcon(iconIndex)
                     icon:SetSize(size, size) -- Apply Size
                     icon:ClearAllPoints()
+                    -- Dynamic Grow
                     if iconIndex == 1 then
-                        icon:SetPoint("LEFT", element, "LEFT", 0, 0)
+                        icon:SetPoint(anchor1, element, anchor1, 0, 0)
                     else
-                        icon:SetPoint("LEFT", icons[iconIndex - 1], "RIGHT", 4, 0)
+                        icon:SetPoint(anchor1, icons[iconIndex - 1], relPoint, xSpace, 0)
                     end
 
                     icon.icon:SetTexture(aura.icon)
@@ -158,7 +204,7 @@ function UF:CreateAuras(frame)
 
                     -- Store data for Tooltip
                     icon.index = i
-                    icon.filter = "HARMFUL"
+                    icon.filter = debuffFilter
 
                     -- Debuff Type Color
                     local color = nil
@@ -177,7 +223,10 @@ function UF:CreateAuras(frame)
                     icon.overlay:Show()
 
                     -- Pandemic Glow (12.0.1+ Safe)
-                    if aura.sourceUnit == "player" and C_UnitAuras.IsAuraInRefreshWindow then
+                    -- If ShowOnlyPlayer is true, it IS player. If false, check source safely.
+                    local isPlayerAura = db.ShowOnlyPlayer or (not isSecretSrc and aura.sourceUnit == "player")
+
+                    if isPlayerAura and C_UnitAuras.IsAuraInRefreshWindow then
                         local isPandemic = C_UnitAuras.IsAuraInRefreshWindow(unit, aura.auraInstanceID)
                         if icon.GlowFrame.SetShownFromSecret then
                             icon.GlowFrame:SetShownFromSecret(isPandemic)
@@ -196,9 +245,12 @@ function UF:CreateAuras(frame)
 
         -- 2. Buffs
         if showBuffs then
+            local buffFilter = "HELPFUL"
+            if db.ShowOnlyPlayer then buffFilter = buffFilter .. "|PLAYER" end
+
             for i = 1, 40 do
                 if iconIndex > maxIcons then break end
-                local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+                local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, buffFilter)
                 if not aura then break end
 
                 -- Defensive Filter Checks (12.0.1 Safety)
@@ -206,14 +258,7 @@ function UF:CreateAuras(frame)
                 local isSecretSrc = issecretvalue(aura.sourceUnit)
                 local skip = false
 
-                -- A. Show Only Player
-                if db.ShowOnlyPlayer then
-                    if isSecretSrc then
-                        skip = true
-                    elseif aura.sourceUnit ~= "player" then
-                        skip = true
-                    end
-                end
+                -- A. Show Only Player handled by API filter
 
                 -- B. Blacklist
                 if not skip and db.Blacklist then
@@ -237,10 +282,11 @@ function UF:CreateAuras(frame)
                     local icon = icons[iconIndex] or CreateIcon(iconIndex)
                     icon:SetSize(size, size) -- Apply Size
                     icon:ClearAllPoints()
+                    -- Dynamic Grow
                     if iconIndex == 1 then
-                        icon:SetPoint("LEFT", element, "LEFT", 0, 0)
+                        icon:SetPoint(anchor1, element, anchor1, 0, 0)
                     else
-                        icon:SetPoint("LEFT", icons[iconIndex - 1], "RIGHT", 4, 0)
+                        icon:SetPoint(anchor1, icons[iconIndex - 1], relPoint, xSpace, 0)
                     end
 
                     icon.icon:SetTexture(aura.icon)
@@ -255,7 +301,7 @@ function UF:CreateAuras(frame)
                     icon.count:SetText(text)
 
                     icon.index = i
-                    icon.filter = "HELPFUL"
+                    icon.filter = buffFilter
 
                     if icon.SetBackdropBorderColor then
                         icon:SetBackdropBorderColor(0, 0, 0)
@@ -263,7 +309,9 @@ function UF:CreateAuras(frame)
                     icon.overlay:Hide()
 
                     -- Pandemic Glow (12.0.1+ Safe)
-                    if aura.sourceUnit == "player" and C_UnitAuras.IsAuraInRefreshWindow then
+                    local isPlayerAura = db.ShowOnlyPlayer or (not isSecretSrc and aura.sourceUnit == "player")
+
+                    if isPlayerAura and C_UnitAuras.IsAuraInRefreshWindow then
                         local isPandemic = C_UnitAuras.IsAuraInRefreshWindow(unit, aura.auraInstanceID)
                         if icon.GlowFrame.SetShownFromSecret then
                             icon.GlowFrame:SetShownFromSecret(isPandemic)
@@ -277,6 +325,42 @@ function UF:CreateAuras(frame)
                     icon:Show()
                     iconIndex = iconIndex + 1
                 end
+            end
+        end
+
+        -- Mock Data for Edit Mode (WYSIWYG)
+        if frame.forceShowEditMode or frame.forceShowTest then
+            for i = 1, 3 do
+                local icon = icons[iconIndex] or CreateIcon(iconIndex)
+                icon:SetSize(size, size)
+                icon:ClearAllPoints()
+                -- Dynamic Grow
+                if iconIndex == 1 then
+                    icon:SetPoint(anchor1, element, anchor1, 0, 0)
+                else
+                    icon:SetPoint(anchor1, icons[iconIndex - 1], relPoint, xSpace, 0)
+                end
+
+                -- Mock Textures (1: Green Buff, 2: Red Debuff, 3: Purple Curse etc)
+                local tex = "Interface\\Icons\\Spell_Nature_Regeneration"
+                if i == 2 then tex = "Interface\\Icons\\Spell_Shadow_ShadowWordPain" end
+                if i == 3 then tex = "Interface\\Icons\\Spell_Holy_WordFortitude" end
+
+                icon.icon:SetTexture(tex)
+                icon.count:SetText("")
+
+                if i == 2 then
+                    if icon.SetBackdropBorderColor then icon:SetBackdropBorderColor(1, 0, 0) end
+                    icon.overlay:SetVertexColor(1, 0, 0)
+                    icon.overlay:Show()
+                else
+                    if icon.SetBackdropBorderColor then icon:SetBackdropBorderColor(0, 0, 0) end
+                    icon.overlay:Hide()
+                end
+
+                icon.GlowFrame:Hide()
+                icon:Show()
+                iconIndex = iconIndex + 1
             end
         end
 

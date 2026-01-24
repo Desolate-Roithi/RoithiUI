@@ -4,7 +4,34 @@ local LibRoithi = LibStub("LibRoithi-1.0")
 local LSM = LibStub("LibSharedMedia-3.0")
 
 ---@class UF : AceModule, AceAddon
+---@class UF : AceModule, AceAddon
 local UF = RoithiUI:GetModule("UnitFrames")
+
+-- Default Power Colors (Fallback)
+local DefaultPowerColors = {
+    ["MANA"] = { r = 0, g = 0, b = 1 },
+    ["RAGE"] = { r = 1, g = 0, b = 0 },
+    ["FOCUS"] = { r = 1, g = 0.5, b = 0.25 },
+    ["ENERGY"] = { r = 1, g = 1, b = 0 },
+    ["COMBO_POINTS"] = { r = 1, g = 0.96, b = 0.41 },
+    ["RUNES"] = { r = 0.5, g = 0.5, b = 0.5 },
+    ["RUNIC_POWER"] = { r = 0, g = 0.82, b = 1 },
+    ["SOUL_SHARDS"] = { r = 0.5, g = 0.32, b = 0.55 },
+    ["LUNAR_POWER"] = { r = 0.3, g = 0.52, b = 0.9 },
+    ["HOLY_POWER"] = { r = 0.95, g = 0.9, b = 0.6 },
+    ["MAELSTROM"] = { r = 0, g = 0.5, b = 1 },
+    ["INSANITY"] = { r = 0.4, g = 0, b = 0.8 },
+    ["CHI"] = { r = 0.71, g = 1, b = 0.92 },
+    ["ARCANE_CHARGES"] = { r = 0.1, g = 0.1, b = 0.98 },
+    ["FURY"] = { r = 0.788, g = 0.259, b = 0.992 },
+    ["PAIN"] = { r = 1, g = 0.611, b = 0 },
+    ["ESSENCE"] = { r = 0.4, g = 0.8, b = 1 },
+}
+-- Assign numeric indices for classic lookup
+DefaultPowerColors[0] = DefaultPowerColors["MANA"]
+DefaultPowerColors[1] = DefaultPowerColors["RAGE"]
+DefaultPowerColors[2] = DefaultPowerColors["FOCUS"]
+DefaultPowerColors[3] = DefaultPowerColors["ENERGY"]
 
 function UF:CreateHealthBar(frame)
     local health = CreateFrame("StatusBar", nil, frame)
@@ -121,13 +148,51 @@ function UF:CreatePowerBar(frame)
                 -- Do not show distinct edit overlay if attached (it moves with main frame)
             end
         end)
+
+        LEM:RegisterCallback('exit', function()
+            power.isInEditMode = false
+            -- Visibility handled by Update, but ensure we don't vanish if valid
+            -- Actually, UpdatePower will handle showing it if unit exists.
+            -- But we can trigger an update?
+            if UnitExists(frame.unit) then
+                if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
+                -- Force color update
+                if power.SetStatusBarColor then power:SetStatusBarColor(0, 0, 1) end -- Reset? No.
+                -- Just let next update handle it or force one.
+                if power:GetScript("OnShow") then power:GetScript("OnShow")(power) end
+            else
+                power:Hide()
+            end
+        end)
     end
 
     -- Layout Updater
     local function UpdatePowerLayout()
         local unit = frame.unit
         local db
+        local db
         if RoithiUI.db.profile.UnitFrames then db = RoithiUI.db.profile.UnitFrames[unit] end
+
+        -- Special Handling for Boss Frames (Inheritance)
+        if string.match(unit, "^boss[2-5]$") then
+            local driverDB = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames["boss1"]
+            if driverDB then
+                local specificDB = db or {}
+                db = setmetatable({}, {
+                    __index = function(_, k)
+                        -- Inherit Power Settings
+                        if k == "powerHeight" or k == "powerEnabled" then
+                            return driverDB[k]
+                        end
+                        -- Force Detach OFF for passengers
+                        if k == "powerDetached" then
+                            return false
+                        end
+                        return specificDB[k]
+                    end
+                })
+            end
+        end
 
         local height = db and db.powerHeight or 10
         local detached = db and db.powerDetached
@@ -172,6 +237,69 @@ function UF:CreatePowerBar(frame)
     end
     frame.UpdatePowerLayout = UpdatePowerLayout
     UpdatePowerLayout() -- Initial
+
+    -- Update Logic (Main Power)
+    local function UpdatePower(self)
+        if power.isInEditMode then
+            self:SetMinMaxValues(0, 100)
+            self:SetValue(100)
+            self:SetStatusBarColor(0, 0, 1)
+            if power.Text then power.Text:Show() end
+            return
+        end
+        if power.Text then power.Text:Hide() end
+
+        local unit = frame.unit
+        if not UnitExists(unit) then return end
+
+        -- Main Power always shows unless specifically disabled?
+        -- Actually main power logic is usually just "Show".
+        power:Show()
+
+        local cur = UnitPower(unit)
+        local max = UnitPowerMax(unit)
+        self:SetMinMaxValues(0, max)
+        self:SetValue(cur)
+
+        local pTypeIndex, pToken = UnitPowerType(unit)
+
+        -- Safe Color Lookup
+        local info = PowerBarColor and (PowerBarColor[pToken] or PowerBarColor[pTypeIndex])
+        if not info then
+            info = DefaultPowerColors[pToken] or DefaultPowerColors[pTypeIndex] or DefaultPowerColors["MANA"]
+        end
+
+        if info then
+            self:SetStatusBarColor(info.r, info.g, info.b)
+        else
+            -- Debugging Color Failure
+            local pName = UnitName(unit) or "?"
+            print(string.format("[RoithiUI Dbg] Unit: %s | Type: %s (%s) | Info: Nil? Fallback to Blue.", pName,
+                tostring(pToken), tostring(pTypeIndex)))
+            if not DefaultPowerColors["RAGE"] then print("[RoithiUI Dbg] DefaultPowerColors[RAGE] is missing!") end
+
+            self:SetStatusBarColor(0, 0, 1) -- Fallback Blue
+        end
+    end
+
+    power:SetScript("OnEvent", UpdatePower)
+    power:RegisterUnitEvent("UNIT_POWER_UPDATE", frame.unit)
+    power:RegisterUnitEvent("UNIT_MAXPOWER", frame.unit)
+    power:RegisterUnitEvent("UNIT_DISPLAYPOWER", frame.unit)
+    -- Also hook OnShow
+    power:SetScript("OnShow", UpdatePower)
+
+    -- Target/Focus change updates (Mirroring Health Bar Logic)
+    if frame.unit == "target" then
+        power:RegisterEvent("PLAYER_TARGET_CHANGED")
+    elseif frame.unit == "focus" then
+        power:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    elseif frame.unit == "targettarget" or frame.unit == "focustarget" or frame.unit == "pettarget" then
+        power:RegisterEvent("UNIT_TARGET")
+    end
+
+    -- Initial Update
+    if UnitExists(frame.unit) then UpdatePower(power) end
 end
 
 function UF:CreateAdditionalPower(frame)
@@ -310,7 +438,9 @@ function UF:CreateAdditionalPower(frame)
     end
     frame.UpdateAdditionalPowerLayout = UpdateLayout
 
-    -- Update Logic
+    -- Default Power Colors (Fallback) Moved to File Scope
+
+
     local function UpdatePower(self)
         if power.isInEditMode then
             self:SetMinMaxValues(0, 100)
@@ -338,8 +468,6 @@ function UF:CreateAdditionalPower(frame)
             end
         end
 
-        -- Override for Edit Mode testing if force enabled? No, stick to game logic.
-
         if not show then
             power:Hide()
             return
@@ -351,13 +479,18 @@ function UF:CreateAdditionalPower(frame)
         self:SetMinMaxValues(0, max)
         self:SetValue(cur)
 
-        local pType, pToken = UnitPowerType(unit)
-        local color = PowerBarColor[pToken] or PowerBarColor[pType] or PowerBarColor["MANA"]
+        local pTypeIndex, pToken = UnitPowerType(unit)
 
-        if color then
-            self:SetStatusBarColor(color.r, color.g, color.b)
+        -- Safe Color Lookup
+        local info = PowerBarColor and (PowerBarColor[pToken] or PowerBarColor[pTypeIndex])
+        if not info then
+            info = DefaultPowerColors[pToken] or DefaultPowerColors[pTypeIndex] or DefaultPowerColors["MANA"]
+        end
+
+        if info then
+            self:SetStatusBarColor(info.r, info.g, info.b)
         else
-            self:SetStatusBarColor(0, 0, 1)
+            self:SetStatusBarColor(0, 0, 1) -- Ultimate Fallback Blue
         end
     end
 

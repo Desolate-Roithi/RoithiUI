@@ -1,11 +1,19 @@
 local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
-local LEM = LibStub("LibEditMode")
+local LEM = LibStub("LibEditMode", true)
+
+if not LEM then return end
 
 local function GetDB(unit)
     if not RoithiUI.db.profile.UnitFrames[unit] then RoithiUI.db.profile.UnitFrames[unit] = {} end
     return RoithiUI.db.profile.UnitFrames[unit]
 end
+
+-- ============================================================================
+-- THE RIGHT-CLICK MENUS
+-- This file controls the settings available when right-clicking a frame in Edit Mode.
+-- It handles DETAILED configuration (size, position, etc.), NOT global enabling.
+-- ============================================================================
 
 -- ----------------------------------------------------------------------------
 -- 1. Helpers
@@ -31,6 +39,12 @@ local function GetSettingsForPower(unit)
             set = function(_, value)
                 GetDB(unit).powerEnabled = value
                 UpdateFrameFromSettings(unit)
+                if ns.SetCastbarAttachment then
+                    local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
+                    if cbDB and not cbDB.detached then
+                        ns.SetCastbarAttachment(unit, true)
+                    end
+                end
             end,
         },
         {
@@ -84,6 +98,14 @@ local function GetSettingsForPower(unit)
                 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                 local frame = UF and UF.frames and UF.frames[unit]
                 if frame and frame.Power then LEM:RefreshFrameSettings(frame.Power) end
+
+                -- Update Castbar Attachment if needed (stacking change)
+                if ns.SetCastbarAttachment then
+                    local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
+                    if cbDB and not cbDB.detached then
+                        ns.SetCastbarAttachment(unit, true)
+                    end
+                end
             end,
         },
         {
@@ -113,6 +135,12 @@ local function GetSettingsForClassPower(unit)
             set = function(_, value)
                 GetDB(unit).classPowerEnabled = value
                 UpdateFrameFromSettings(unit)
+                if ns.SetCastbarAttachment then
+                    local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
+                    if cbDB and not cbDB.detached then
+                        ns.SetCastbarAttachment(unit, true)
+                    end
+                end
             end,
         },
         {
@@ -164,6 +192,14 @@ local function GetSettingsForClassPower(unit)
                 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                 local frame = UF and UF.frames and UF.frames[unit]
                 if frame and frame.ClassPower then LEM:RefreshFrameSettings(frame.ClassPower) end
+
+                -- Update Castbar Attachment
+                if ns.SetCastbarAttachment then
+                    local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
+                    if cbDB and not cbDB.detached then
+                        ns.SetCastbarAttachment(unit, true)
+                    end
+                end
             end,
         },
         {
@@ -193,6 +229,12 @@ local function GetSettingsForAdditionalPower(unit)
             set = function(_, value)
                 GetDB(unit).additionalPowerEnabled = value
                 UpdateFrameFromSettings(unit)
+                if ns.SetCastbarAttachment then
+                    local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
+                    if cbDB and not cbDB.detached then
+                        ns.SetCastbarAttachment(unit, true)
+                    end
+                end
             end,
         },
         {
@@ -244,6 +286,14 @@ local function GetSettingsForAdditionalPower(unit)
                 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                 local frame = UF and UF.frames and UF.frames[unit]
                 if frame and frame.AdditionalPower then LEM:RefreshFrameSettings(frame.AdditionalPower) end
+
+                -- Update Castbar Attachment
+                if ns.SetCastbarAttachment then
+                    local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
+                    if cbDB and not cbDB.detached then
+                        ns.SetCastbarAttachment(unit, true)
+                    end
+                end
             end,
         },
         {
@@ -268,7 +318,16 @@ end
 
 
 local function GetSettingsForMainFrame(unit, frame)
+    local function OpenSettings()
+        -- Ensure AceConfig dialog is ready
+        if LibStub("AceConfigDialog-3.0") then
+            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", unit)
+            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+        end
+    end
+
     local settings = {
+        -- Enabled checkbox REMOVED as per user request (Use Dashboard)
         {
             name = "Width",
             kind = LEM.SettingType.Slider,
@@ -386,7 +445,13 @@ local function GetSettingsForMainFrame(unit, frame)
         end
     end
 
-
+    -- Internal Settings Button
+    table.insert(settings, { kind = LEM.SettingType.Divider })
+    table.insert(settings, {
+        name = "Open Detailed Settings",
+        kind = LEM.SettingType.Button,
+        func = OpenSettings
+    })
 
     return settings
 end
@@ -422,51 +487,54 @@ function ns.InitializeUnitFrameConfig()
     if not UF or not UF.units then return end
 
     for unit, frame in pairs(UF.units) do
-        local db = GetDB(unit)
-        if not db.width then db.width = frame:GetWidth() end
-        if not db.height then db.height = frame:GetHeight() end
+        -- Skip Boss Frames (handled by BossFrames.lua)
+        if not string.find(unit, "boss") then
+            local db = GetDB(unit)
+            if not db.width then db.width = frame:GetWidth() end
+            if not db.height then db.height = frame:GetHeight() end
 
-        -- EditMode Registration using LibEditMode
-        if LEM then
-            -- We Must Assign a Unique Name for Drag/Drop to work correctly
-            frame.editModeName = "Roithi " .. unit:gsub("^%l", string.upper)
+            -- EditMode Registration using LibEditMode
+            if LEM then
+                -- We Must Assign a Unique Name for Drag/Drop to work correctly
+                frame.editModeName = "Roithi " .. unit:gsub("^%l", string.upper)
 
-            -- Ensure Frame is Movable for LibEditMode to handle it
-            frame:SetMovable(true)
-            frame:SetClampedToScreen(true)
+                -- Ensure Frame is Movable for LibEditMode to handle it
+                frame:SetMovable(true)
+                frame:SetClampedToScreen(true)
 
-            local defaults = {
-                point = db.point or "CENTER",
-                x = db.x or 0,
-                y = db.y or 0
-            }
+                local defaults = {
+                    point = db.point or "CENTER",
+                    x = db.x or 0,
+                    y = db.y or 0
+                }
 
-            -- Ensure DB has defaults
-            if not db.point then db.point = defaults.point end
-            if not db.x then db.x = defaults.x end
-            if not db.y then db.y = defaults.y end
+                -- Ensure DB has defaults
+                if not db.point then db.point = defaults.point end
+                if not db.x then db.x = defaults.x end
+                if not db.y then db.y = defaults.y end
 
-            -- Add Frame FIRST, then Settings
-            LEM:AddFrame(frame, OnPositionChanged, defaults)
+                -- Add Frame FIRST, then Settings
+                LEM:AddFrame(frame, OnPositionChanged, defaults)
 
-            -- Add Main Settings
-            local success, err = pcall(function()
-                LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
-            end)
+                -- Add Main Settings
+                local success, err = pcall(function()
+                    LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
+                end)
 
-            -- Register Specific Settings for Sub-Frames safely
-            if frame.Power then
-                pcall(function() LEM:AddFrameSettings(frame.Power, GetSettingsForPower(unit)) end)
+                -- Register Specific Settings for Sub-Frames safely
+                if frame.Power then
+                    pcall(function() LEM:AddFrameSettings(frame.Power, GetSettingsForPower(unit)) end)
+                end
+                if frame.ClassPower then
+                    pcall(function() LEM:AddFrameSettings(frame.ClassPower, GetSettingsForClassPower(unit)) end)
+                end
+                if frame.AdditionalPower then
+                    pcall(function() LEM:AddFrameSettings(frame.AdditionalPower, GetSettingsForAdditionalPower(unit)) end)
+                end
             end
-            if frame.ClassPower then
-                pcall(function() LEM:AddFrameSettings(frame.ClassPower, GetSettingsForClassPower(unit)) end)
-            end
-            if frame.AdditionalPower then
-                pcall(function() LEM:AddFrameSettings(frame.AdditionalPower, GetSettingsForAdditionalPower(unit)) end)
-            end
+
+            UpdateFrameFromSettings(unit)
         end
-
-        UpdateFrameFromSettings(unit)
     end
 end
 
@@ -478,20 +546,29 @@ if LEM then
         local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
         if not UF or not UF.units then return end
         for unit, frame in pairs(UF.units) do
-            local db = GetDB(unit)
-            if db and (db.enabled ~= false) then
-                UnregisterUnitWatch(frame) -- Detach from secure driver to allow manual Show
+            -- Skip boss frames here too if BossFrames.lua handles them (it does)
+            if not string.find(unit, "boss") then
+                local db = GetDB(unit)
+                -- FIX: Always detach secure driver in Edit Mode to ensure we have manual control
+                UnregisterUnitWatch(frame)
                 frame.isInEditMode = true
-                frame:Show()
-                frame:SetAlpha(1)
 
-                if frame.EditModeOverlay then frame.EditModeOverlay:Show() end
+                if db and (db.enabled ~= false) then
+                    frame:Show()
+                    frame:SetAlpha(1)
 
-                -- Force Update Power Layout to ensure visibility in Edit Mode (Requested Feature)
-                if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
-                -- Force Update Class/Additional Power too just in case
-                if frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
-                if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+                    if frame.EditModeOverlay then frame.EditModeOverlay:Show() end
+
+                    -- Force Update Power Layout to ensure visibility in Edit Mode (Requested Feature)
+                    if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
+                    -- Force Update Class/Additional Power too just in case
+                    if frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
+                    if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+                else
+                    -- Disabled: Force Hide
+                    frame:Hide()
+                    if frame.EditModeOverlay then frame.EditModeOverlay:Hide() end
+                end
             end
         end
     end)
@@ -500,12 +577,15 @@ if LEM then
         local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
         if not UF or not UF.units then return end
         for unit, frame in pairs(UF.units) do
-            frame.isInEditMode = false
-            if frame.EditModeOverlay then frame.EditModeOverlay:Hide() end
+            if not string.find(unit, "boss") then
+                frame.isInEditMode = false
+                if frame.EditModeOverlay then frame.EditModeOverlay:Hide() end
 
-            -- We don't Hide() unitframes on exit like Castbars; they might need to stay shown if they have a target.
-            -- UF:ToggleFrame handles normal visibility.
-            UF:ToggleFrame(unit, UF:IsUnitEnabled(unit))
+                -- We don't Hide() unitframes on exit like Castbars; they might need to stay shown if they have a target.
+                -- UF:ToggleFrame handles normal visibility.
+                UF:ToggleFrame(unit, UF:IsUnitEnabled(unit))
+                RegisterUnitWatch(frame) -- Re-register secure driver
+            end
         end
     end)
 end

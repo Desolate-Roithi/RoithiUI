@@ -38,7 +38,17 @@ local function ToggleBlizzard(enableCustom)
 
         PlayerPowerBarAlt:RegisterEvent("UNIT_POWER_BAR_SHOW")
         if UnitPowerBarID("player") then
-            PlayerPowerBarAlt:Show()
+            -- FIX: Force initialization so 'barInfo' exists before OnUpdate runs
+            local onEvent = PlayerPowerBarAlt:GetScript("OnEvent")
+            if onEvent then
+                -- Must pass 'player' as unit, otherwise some handlers bail out early
+                onEvent(PlayerPowerBarAlt, "UNIT_POWER_BAR_SHOW", "player")
+            end
+
+            -- DOUBLE CHECK: Do not show if barInfo is still missing (failed init)
+            if PlayerPowerBarAlt.barInfo then
+                PlayerPowerBarAlt:Show()
+            end
         end
     end
 end

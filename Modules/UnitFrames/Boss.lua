@@ -4,7 +4,7 @@ local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 local LEM = LibStub("LibEditMode", true)
 
 -- Constants
-local BOSS_SPACING = 30
+
 -- Note: Height/Width is generic from CreateStandardLayout -> Defaults
 
 function UF:InitializeBossFrames()
@@ -54,6 +54,47 @@ function UF:InitializeBossFrames()
         -- Backwards compatibility if something looks for .EditModeOverlay on Driver
         driver.EditModeOverlay = overlays[1]
 
+        -- Logic for Position Saving
+        local defaults = { point = "RIGHT", x = -250, y = 0 }
+        local function OnPosChanged(f, layoutName, point, x, y)
+            if not RoithiUI.db.profile.UnitFrames[unit1] then
+                RoithiUI.db.profile.UnitFrames[unit1] = {}
+            end
+            local dDb = RoithiUI.db.profile.UnitFrames[unit1]
+            dDb.point = point
+            dDb.x = x
+            dDb.y = y
+
+            f:ClearAllPoints()
+            f:SetPoint(point, UIParent, point, x, y)
+        end
+
+        -- Register Frame
+        LEM:AddFrame(driver, OnPosChanged, defaults, "Boss Frames")
+
+        -- Register Settings via Config/LEMConfig/UnitFrames.lua
+        -- Register Settings via Config/LEMConfig/BossFrames.lua
+        if ns.ApplyLEMBossConfiguration then
+            ns.ApplyLEMBossConfiguration(driver, "boss1")
+        end
+
+        -- Helper for WYSIWYG
+        local function MockUnitValues(f, i)
+            if f.Health then
+                f.Health:SetMinMaxValues(0, 100)
+                f.Health:SetValue(100 - (i * 10))
+                f.Health:SetStatusBarColor(0.9, 0.1, 0.1) -- Enemy Red
+            end
+            if f.Power then
+                f.Power:SetMinMaxValues(0, 100)
+                f.Power:SetValue(50)
+                f.Power:SetStatusBarColor(0.1, 0.1, 0.9) -- Mana Blue
+            end
+            if f.Name then
+                f.Name:SetText("Boss " .. i)
+            end
+        end
+
         LEM:RegisterCallback('enter', function()
             driver.isInEditMode = true
 
@@ -62,10 +103,25 @@ function UF:InitializeBossFrames()
                 if overlays[i] then overlays[i]:Show() end
 
                 local f = self.units["boss" .. i]
-                if f and not f:IsShown() then
-                    f.forceShowEditMode = true
-                    f:Show()
+                -- Strict Check: Only show if enabled
+                if f and UF:IsUnitEnabled("boss" .. i) then
+                    if not f:IsShown() then
+                        f.forceShowEditMode = true
+                        UnregisterUnitWatch(f) -- Disable oUF secure driver
+                        f:Show()
+
+                        -- Inject Mock Data (WYSIWYG)
+                        MockUnitValues(f, i)
+                    end
+                elseif f then
+                    -- Disabled: Force Hide
+                    f:Hide()
+                    UnregisterUnitWatch(f)
                 end
+
+                -- Refresh Layouts
+                if f and f.UpdatePowerLayout then f.UpdatePowerLayout() end
+                if f and f.UpdateAuras then f.UpdateAuras() end
             end
         end)
 
@@ -80,7 +136,25 @@ function UF:InitializeBossFrames()
                 if f and f.forceShowEditMode then
                     f.forceShowEditMode = nil
                     f:Hide()
+
+                    if UF:IsUnitEnabled("boss" .. i) then
+                        RegisterUnitWatch(f) -- Re-enable oUF secure driver
+                    else
+                        UnregisterUnitWatch(f)
+                    end
+                elseif f then
+                    -- Fallback for frames that weren't forced shown but might be in bad state
+                    if UF:IsUnitEnabled("boss" .. i) then
+                        RegisterUnitWatch(f)
+                    else
+                        UnregisterUnitWatch(f)
+                        f:Hide()
+                    end
                 end
+
+                -- Refresh Layouts
+                if f and f.UpdatePowerLayout then f.UpdatePowerLayout() end
+                if f and f.UpdateAuras then f.UpdateAuras() end
             end
         end)
     end
@@ -89,53 +163,25 @@ function UF:InitializeBossFrames()
     for i = 2, 5 do
         local unit = "boss" .. i
         self:CreateStandardLayout(unit, "Boss " .. i, true) -- Skip EditMode
-
-        local passenger = self.units[unit]
-        if passenger then
-            passenger:ClearAllPoints()
-            -- Bottom-to-Top: Boss 2 Bottom -> Boss 1 Top
-            local prev = self.units["boss" .. (i - 1)]
-            passenger:SetPoint("BOTTOM", prev, "TOP", 0, BOSS_SPACING)
-
-            passenger:SetMovable(false) -- Passengers locked to Driver
-            -- Actually hooking script works better if EnableMouse is true.
-        end
     end
 
-    -- 3. Unified Drag Logic
-    -- Function to Save Driver Position
-    local function SaveDriverPosition()
-        local point, _, _, x, y = driver:GetPoint()
-        if not RoithiUI.db.profile.UnitFrames[unit1] then
-            RoithiUI.db.profile.UnitFrames[unit1] = {}
-        end
-        local dDb = RoithiUI.db.profile.UnitFrames[unit1]
-        dDb.point = point
-        dDb.x = x
-        dDb.y = y
-    end
+    self:UpdateBossAnchors()
+end
 
-    -- Attach to ALL frames (including Driver)
-    -- Attach Proxy Drag to ALL frames
-    for i = 1, 5 do
-        local f = self.units["boss" .. i]
-        if f then
-            f:EnableMouse(true)
-            f:RegisterForDrag("LeftButton")
+function UF:UpdateBossAnchors()
+    local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames["boss1"]
+    local spacing = db and db.spacing or 30
 
-            -- Use SetScript to ensure we own the drag behavior
-            f:SetScript("OnDragStart", function()
-                if driver.isInEditMode then
-                    driver:StartMoving()
-                end
-            end)
+    for i = 2, 5 do
+        local unit = "boss" .. i
+        local frame = self.units[unit]
+        local prev = self.units["boss" .. (i - 1)]
 
-            f:SetScript("OnDragStop", function()
-                if driver.isInEditMode then
-                    driver:StopMovingOrSizing()
-                    SaveDriverPosition()
-                end
-            end)
+        if frame and prev then
+            frame:ClearAllPoints()
+            -- Bottom-to-Top stack
+            frame:SetPoint("BOTTOM", prev, "TOP", 0, spacing)
+            frame:SetMovable(false)
         end
     end
 end
