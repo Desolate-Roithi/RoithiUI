@@ -99,7 +99,6 @@ local function GetSettingsForPower(unit)
                 local frame = UF and UF.frames and UF.frames[unit]
                 if frame and frame.Power then LEM:RefreshFrameSettings(frame.Power) end
 
-                -- Update Castbar Attachment if needed (stacking change)
                 if ns.SetCastbarAttachment then
                     local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
                     if cbDB and not cbDB.detached then
@@ -108,6 +107,44 @@ local function GetSettingsForPower(unit)
                 end
             end,
         },
+        {
+            name = "X Position",
+            kind = LEM.SettingType.Slider,
+            default = 0,
+            minValue = -1000,
+            maxValue = 1000,
+            valueStep = 1,
+            get = function() return GetDB(unit).powerX or 0 end,
+            set = function(_, value)
+                GetDB(unit).powerX = value
+                UpdateFrameFromSettings(unit)
+                -- Force Update to ensure it moves visually immediately
+                local UF = RoithiUI:GetModule("UnitFrames")
+                local frame = UF and UF.frames and UF.frames[unit]
+                if frame and frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
+            end,
+            formatter = function(v) return string.format("%.1f", v) end,
+            isHidden = function() return not GetDB(unit).powerDetached end,
+        },
+        {
+            name = "Y Position",
+            kind = LEM.SettingType.Slider,
+            default = -50,
+            minValue = -1000,
+            maxValue = 1000,
+            valueStep = 1,
+            get = function() return GetDB(unit).powerY or -50 end,
+            set = function(_, value)
+                GetDB(unit).powerY = value
+                UpdateFrameFromSettings(unit)
+                local UF = RoithiUI:GetModule("UnitFrames")
+                local frame = UF and UF.frames and UF.frames[unit]
+                if frame and frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
+            end,
+            formatter = function(v) return string.format("%.1f", v) end,
+            isHidden = function() return not GetDB(unit).powerDetached end,
+        },
+
         {
             name = "Width",
             kind = LEM.SettingType.Slider,
@@ -203,6 +240,43 @@ local function GetSettingsForClassPower(unit)
             end,
         },
         {
+            name = "X Position",
+            kind = LEM.SettingType.Slider,
+            default = 0,
+            minValue = -1000,
+            maxValue = 1000,
+            valueStep = 1,
+            get = function() return GetDB(unit).classPowerX or 0 end,
+            set = function(_, value)
+                GetDB(unit).classPowerX = value
+                UpdateFrameFromSettings(unit)
+                local UF = RoithiUI:GetModule("UnitFrames")
+                local frame = UF and UF.frames and UF.frames[unit]
+                if frame and frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
+            end,
+            formatter = function(v) return string.format("%.1f", v) end,
+            isHidden = function() return not GetDB(unit).classPowerDetached end,
+        },
+        {
+            name = "Y Position",
+            kind = LEM.SettingType.Slider,
+            default = -50,
+            minValue = -1000,
+            maxValue = 1000,
+            valueStep = 1,
+            get = function() return GetDB(unit).classPowerY or -50 end,
+            set = function(_, value)
+                GetDB(unit).classPowerY = value
+                UpdateFrameFromSettings(unit)
+                local UF = RoithiUI:GetModule("UnitFrames")
+                local frame = UF and UF.frames and UF.frames[unit]
+                if frame and frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
+            end,
+            formatter = function(v) return string.format("%.1f", v) end,
+            isHidden = function() return not GetDB(unit).classPowerDetached end,
+        },
+
+        {
             name = "Width",
             kind = LEM.SettingType.Slider,
             default = 200,
@@ -296,6 +370,43 @@ local function GetSettingsForAdditionalPower(unit)
                 end
             end,
         },
+        {
+            name = "X Position",
+            kind = LEM.SettingType.Slider,
+            default = 0,
+            minValue = -1000,
+            maxValue = 1000,
+            valueStep = 1,
+            get = function() return GetDB(unit).additionalPowerX or 0 end,
+            set = function(_, value)
+                GetDB(unit).additionalPowerX = value
+                UpdateFrameFromSettings(unit)
+                local UF = RoithiUI:GetModule("UnitFrames")
+                local frame = UF and UF.frames and UF.frames[unit]
+                if frame and frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+            end,
+            formatter = function(v) return string.format("%.1f", v) end,
+            isHidden = function() return not GetDB(unit).additionalPowerDetached end,
+        },
+        {
+            name = "Y Position",
+            kind = LEM.SettingType.Slider,
+            default = -50,
+            minValue = -1000,
+            maxValue = 1000,
+            valueStep = 1,
+            get = function() return GetDB(unit).additionalPowerY or -50 end,
+            set = function(_, value)
+                GetDB(unit).additionalPowerY = value
+                UpdateFrameFromSettings(unit)
+                local UF = RoithiUI:GetModule("UnitFrames")
+                local frame = UF and UF.frames and UF.frames[unit]
+                if frame and frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+            end,
+            formatter = function(v) return string.format("%.1f", v) end,
+            isHidden = function() return not GetDB(unit).additionalPowerDetached end,
+        },
+
         {
             name = "Width",
             kind = LEM.SettingType.Slider,

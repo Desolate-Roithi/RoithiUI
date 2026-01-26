@@ -5,128 +5,77 @@ local RoithiUI = _G.RoithiUI
 -- ----------------------------------------------------------------------------
 -- Constants & Configuration
 -- ----------------------------------------------------------------------------
-
-
--- Flash Settings
 local FLASH_DURATION = 0.25
 local FLASH_WIDTH = 6
 local TICK_WIDTH = 2
 local TICK_COLOR = { 0, 0, 0, 1 }
 
 -- ----------------------------------------------------------------------------
--- Timeline Logic
+-- Helper: Duration Object Extraction
+-- ----------------------------------------------------------------------------
+local function GetSecondsFromObject(obj)
+    if not obj then return 0 end
+    if type(obj) == "number" then return obj end
+
+    -- 12.0.1 DurationObject Methods
+    -- If Secret, return 0 to be safe (layout effectively collapses)
+    if obj.HasSecretValues and obj:HasSecretValues() then return 0 end
+
+    if obj.GetTotalDuration then return obj:GetTotalDuration() end
+    if obj.GetSeconds then return obj:GetSeconds() end
+    if obj.GetMilliseconds then return obj:GetMilliseconds() / 1000 end
+
+    return 0
+end
+
+-- ----------------------------------------------------------------------------
+-- Timeline Logic (Strict SSOT)
 -- ----------------------------------------------------------------------------
 local function BuildEmpowerTimeline(unit)
-    local stageEnds = {}
-    local totalStage = 0
+    -- 1. Get Start Time (API) - Only for debug/logging
+    -- local name = UnitChannelInfo(unit) or UnitCastingInfo(unit)
 
-    -- 1. Get Cast Data
-    -- Note: We check ChannelInfo first because most Empowered spells are channels.
-    local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID, isEmpowered, numStages =
-        UnitChannelInfo(unit)
-
-    if not name then
-        -- Fallback to CastingInfo (unlikely for Empowered, but possible)
-        -- Note: casting info return values differ slightly
-        local castID
-        name, text, texture, startTime, endTime, isTradeSkill, castID, notInterruptible, spellID = UnitCastingInfo(unit)
-        isEmpowered = false
+    -- 2. FETCH TOTAL DURATION (SSOT)
+    -- UnitEmpoweredChannelDuration(unit, true) -> DurationObject
+    local totalObj = nil
+    if UnitEmpoweredChannelDuration then
+        totalObj = UnitEmpoweredChannelDuration(unit, true)
     end
 
-    -- 2. SECRET VALUE SAFETY CHECK
-    -- In 12.0.1, 'startTime' is a Secret (userdata) for the Player in combat.
-    -- We CANNOT do math on it. If it's not a number, we must abort the visual ticks.
-    -- This allows the bar to work for Targets (where it's a number) without crashing on Player.
-    if not startTime or not endTime or type(startTime) ~= "number" or type(endTime) ~= "number" then
-        return nil
-    end
+    local totalDuration = GetSecondsFromObject(totalObj)
 
-    local chargeDuration = (endTime - startTime) / 1000
-    local startSec = startTime / 1000
-
-    -- 3. Stage Configuration (12.0.1+ API)
-    -- The new APIs return vectors where the LAST element is the HOLD phase.
-    -- We can simply accumulate these to get the full timeline landmarks.
-
-    local percentages
-    local durations
-
-    -- Priority 1: UnitEmpoweredStageDurations (Absolute Sequence)
+    -- 3. FETCH STAGE DURATIONS (SSOT)
+    local stageObjs = nil
     if UnitEmpoweredStageDurations then
-        durations = UnitEmpoweredStageDurations(unit)
+        stageObjs = UnitEmpoweredStageDurations(unit)
     end
 
-    -- Safety: Ensure durations are numbers. If they are Userdata (Secrets), we cannot use them.
-    if durations and #durations > 0 and type(durations[1]) ~= "number" then
-        durations = nil
-    end
+    local stageEnds = {}
+    local accum = 0
+    local totalStages = 0
 
-    if durations and #durations > 0 then
-        local accum = 0
-        for i, dur in ipairs(durations) do
-            -- Normalize MS to S (Duration objects usually return MS in this context)
-            if dur > 50 then dur = dur / 1000 end
+    if stageObjs then
+        totalStages = #stageObjs
+
+        for i, obj in ipairs(stageObjs) do
+            local dur = GetSecondsFromObject(obj)
             accum = accum + dur
             stageEnds[i] = accum
         end
-        totalStage = accum
-
-        -- If the API is accurate, totalStage should roughly equal chargeDuration (endTime - startTime).
-        -- We trust the stage sums for the visual milestones.
-
-        -- Priority 2: UnitEmpoweredStagePercentages (Relative Sequence)
-    else
-        if UnitEmpoweredStagePercentages then
-            percentages = UnitEmpoweredStagePercentages(unit)
-        end
-
-        if percentages and #percentages > 0 then
-            -- Percentages also include the Hold Phase as the last element.
-            -- So they map 0-100% of the UnitEmpoweredChannelDuration (or chargeDuration).
-
-            for i, pct in ipairs(percentages) do
-                -- Normalize 0-100 to 0-1 if necessary
-                if pct > 1.0 then pct = pct / 100 end
-                stageEnds[i] = pct * chargeDuration
-            end
-            totalStage = stageEnds[#stageEnds] or chargeDuration
-        else
-            -- Priority 3: Fallback (Equal Split)
-            -- If no API data, we assume standard behavior.
-            -- We assume chargeDuration is mostly Charging if we lack hold info.
-            if chargeDuration > 0 then
-                local count = numStages or 3
-                if count < 1 then count = 3 end
-
-                for i = 1, count do
-                    stageEnds[i] = chargeDuration * (i / count)
-                end
-                totalStage = chargeDuration
-            end
-        end
     end
 
-    -- 4. Hold Phase
-    -- Since the new APIs include Hold in the stages vector as the last element,
-    -- we treat it as just another stage end in our stageEnds array.
-    -- We do NOT add an extra Hold Duration on top.
-
-    -- Safety: If APIs calculated a total > chargeDuration, trust the API sum.
-    local finalDuration = totalStage
-    if finalDuration <= 0 then finalDuration = chargeDuration end
+    -- Strict Rule: Do not modify or guess.
+    -- If API returns 0 total, we return 0 total.
 
     return {
         stageEnds = stageEnds,
-        chargeDuration = chargeDuration,
-        holdDuration = 0, -- Effectively handled inside stageEnds
-        totalDuration = finalDuration,
-        startTime = startSec,
-        endTime = endTime / 1000
+        totalDuration = totalDuration,
+        totalStages = totalStages,
     }
 end
 
 -- ----------------------------------------------------------------------------
--- Visuals: Ticks & Segments
+-- Visuals
 -- ----------------------------------------------------------------------------
 local function CreateOrGetTexture(bar, collection, index, layer, subLevel)
     if not bar[collection] then bar[collection] = {} end
@@ -140,9 +89,6 @@ end
 
 local function BlinkTick(bar, tick)
     if not tick or not bar then return end
-
-    -- Create Flash on the BAR (Parent), anchored to the TICK
-    -- Use a cache on the tick to store reference to its flash texture
     local flash = tick.Flash
     if not flash then
         flash = bar:CreateTexture(nil, "OVERLAY")
@@ -154,23 +100,18 @@ local function BlinkTick(bar, tick)
         flash:Hide()
         tick.Flash = flash
     end
-
-    -- Animation
     flash:Show()
     flash:SetAlpha(1)
-
     local animGroup = tick.AnimGroup
     if not animGroup then
-        animGroup = bar:CreateAnimationGroup() -- Parent anim to bar (safe)
+        animGroup = bar:CreateAnimationGroup()
         local alpha = animGroup:CreateAnimation("Alpha")
         alpha:SetFromAlpha(1); alpha:SetToAlpha(0); alpha:SetDuration(FLASH_DURATION)
         alpha:SetTarget(flash)
         animGroup.Alpha = alpha
-
         animGroup:SetScript("OnFinished", function() flash:Hide() end)
         tick.AnimGroup = animGroup
     end
-
     tick.AnimGroup:Stop()
     tick.AnimGroup:Play()
 end
@@ -179,81 +120,90 @@ local function LayoutEmpower(bar)
     local tl = bar.empowerTimeline
     if not tl then return end
 
-    local width = bar:GetWidth() or 1
-    local height = bar:GetHeight() or 1
-    local db = RoithiUI.db.profile.Castbar[bar.unit]
-    local colors = db and db.colors
+    local width = bar:GetWidth()
+    if not width or width < 1 then
+        bar.empowerLayoutPending = true
+        return
+    end
+    bar.empowerLayoutPending = nil
 
-    -- Clean existing
+    -- Note: We do NOT SetMinMaxValues here. Castbar.lua calls SetTimerDuration.
+    -- We assume the bar max is tl.totalDuration for layout ratio purposes.
+
+    local height = bar:GetHeight() or 20
     if bar.StageTicks then for _, t in pairs(bar.StageTicks) do t:Hide() end end
     if bar.StageZones then for _, z in pairs(bar.StageZones) do z:Hide() end end
 
-    local lastPos = 0
-    local stageEnds = tl.stageEnds
     local total = tl.totalDuration
+    -- Avoid div/0 visual errors
+    if total <= 0.001 then total = 1 end
 
-    -- Avoid div/0
-    if total <= 0 then total = 0.001 end
+    local lastPos = 0
 
-    -- Draw Stages (including Hold Phase which is now the last stage)
-    for i, endSec in ipairs(stageEnds) do
-        local pct = endSec / total
+    -- DRAW ZONES & TICKS (Iterate 1 to TotalStages)
+    -- Zones are drawn on BORDER layer (behind main fill) to act as background indicators.
+    -- Ticks are drawn on ARTWORK (above fill) to remain visible.
+
+    for i, absVal in ipairs(tl.stageEnds) do
+        local pct = absVal / total
         if pct > 1 then pct = 1 end
+        if pct < 0 then pct = 0 end
 
-        -- Draw Zone
-        local zone = CreateOrGetTexture(bar, "StageZones", i, "BACKGROUND")
+        -- 1. Draw Zone (Background)
+        local zone = CreateOrGetTexture(bar, "StageZones", i, "BORDER", 2)
         zone:ClearAllPoints()
+
+        local segWidth = (pct - lastPos) * width
+        -- Minimum width check
+        if segWidth < 0.1 then
+            -- If segments are weirdly small, just hide or cap.
+            -- For visual consistency we keep it.
+            segWidth = 0.1
+        end
+
         zone:SetPoint("LEFT", bar, "LEFT", width * lastPos, 0)
-        zone:SetWidth(math.max(0, (pct - lastPos) * width))
+        zone:SetWidth(segWidth)
         zone:SetHeight(height)
 
-        -- Determine Color based on Specific Logic
-        -- i=1 is Stage 0 -> 1 (Grey)
-        -- i=last is potentially Hold Phase
+        -- Determine Zone Color (Static Map)
+        local db = RoithiUI.db.profile.Castbar[bar.unit]
+        local colors = db and db.colors
+        local c = { 0.5, 0.5, 0.5, 0.5 } -- Default greyish background
 
-        local c = { 0.5, 0.5, 0.5, 1 } -- Default
+        -- STRICT USER MAPPING:
+        -- 0 -> 1 = Grey
+        -- 1 -> 2 = empower1
+        -- 2 -> 3 = empower2
+        -- 3 -> 4 = empower3 (Only applies if >3 stages)
 
         if i == 1 then
-            -- Stage 0 (Start -> Pip 1): Grey (Hardcoded)
-            c = { 0.5, 0.5, 0.5, 1 }
-        elseif i == 2 then
-            -- Stage 1 (Pip 1 -> Pip 2): Empower 1
-            if colors and colors.empower1 then c = colors.empower1 end
-        elseif i == 3 then
-            -- Stage 2 (Pip 2 -> Pip 3): Empower 2
-            if colors and colors.empower2 then c = colors.empower2 end
-        elseif i == 4 then
-            -- Stage 3 (Pip 3 -> End or Hold): Empower 3 (Green)
-            if colors and colors.empower3 then c = colors.empower3 end
-        elseif i >= 5 then
-            -- Stage 4+ (Pip 4 -> End): Empower 4 (Blue)
-            if colors and colors.empower4 then c = colors.empower4 end
+            c = { 0.5, 0.5, 0.5, 1 } -- Stage 1 is always Grey
+        elseif i == 2 and colors.empower1 then
+            c = colors.empower1
+        elseif i == 3 and colors.empower2 then
+            c = colors.empower2
+        elseif i == 4 and colors.empower3 then
+            c = colors.empower3
+        elseif i >= 5 and colors.empower4 then
+            c = colors.empower4
         end
 
         zone:SetColorTexture(c[1], c[2], c[3], c[4])
         zone:Show()
 
-        -- Draw Tick at the END of this stage (unless it's the very last one/Hold)
-        if pct < 0.995 then
-            local tick = CreateOrGetTexture(bar, "StageTicks", i, "ARTWORK")
+        -- 2. Draw Tick (Separator)
+        -- Do not draw tick at the very end of the bar
+        if i < tl.totalStages then
+            local tick = CreateOrGetTexture(bar, "StageTicks", i, "ARTWORK", 3)
             tick:ClearAllPoints()
             tick:SetPoint("CENTER", bar, "LEFT", width * pct, 0)
             tick:SetSize(TICK_WIDTH, height)
             tick:SetColorTexture(TICK_COLOR[1], TICK_COLOR[2], TICK_COLOR[3], TICK_COLOR[4])
             tick:Show()
-
-            if tick.Flash then tick.Flash:SetHeight(height) end
         end
 
         lastPos = pct
     end
-
-    -- Update the Castbar MinMax to match the NEW total duration including hold
-    if bar.SetMinMaxValues then
-        bar:SetMinMaxValues(0, total)
-    end
-
-    bar.empowerStartTime = tl.startTime
 end
 
 -- ----------------------------------------------------------------------------
@@ -266,7 +216,6 @@ function ns.SetupEmpower(bar)
 
     bar.empowerTimeline = tl
     bar.isEmpower = true
-    bar.empowerNextStageIndex = 1
 
     LayoutEmpower(bar)
 end
@@ -274,71 +223,126 @@ end
 function ns.OnEmpowerUpdate(bar)
     if not bar.isEmpower or not bar.empowerTimeline then return end
 
-    -- Calculate elapsed based on OUR timeline start
-    -- (Castbar.lua SetValue might be setting absolute time, but for logic we use relative)
-    local now = GetTime()
-    local elapsed = now - bar.empowerTimeline.startTime
-    local total = bar.empowerTimeline.totalDuration
-
-    if elapsed < 0 then elapsed = 0 end
-    if elapsed > total then elapsed = total end
-
-    -- Override the visual value to match our 0..total scale
-    if bar.SetValue then
-        bar:SetValue(elapsed)
+    if bar.empowerLayoutPending then
+        LayoutEmpower(bar)
+        if bar.empowerLayoutPending then return end
     end
 
-    local stageEnds = bar.empowerTimeline.stageEnds
+    local tl = bar.empowerTimeline
+    local total = tl.totalDuration
+    local elapsed = 0
 
-    -- Check if we passed a stage end
-    local idx = bar.empowerNextStageIndex
-    while idx <= #stageEnds do
-        local endSec = stageEnds[idx]
-        if elapsed >= endSec then
-            -- Trigger Flash on the tick correspond to this stage end
-            if bar.StageTicks and bar.StageTicks[idx] then
-                BlinkTick(bar, bar.StageTicks[idx])
-            end
+    -- Use Duration Object for Elapsed Time if available (Preferred)
+    if bar.durationObj and bar.durationObj.GetElapsedDuration then
+        elapsed = bar.durationObj:GetElapsedDuration()
+    else
+        -- Fallback
+        if bar.GetValue then
+            elapsed = bar:GetValue()
+        end
+    end
 
-            idx = idx + 1
+    -- -----------------------------------------
+    -- Visual Triggers (Ticks) & Color Logic
+    -- -----------------------------------------
+    local progressRatio = 0
+    if total > 0 then progressRatio = elapsed / total end
+    if progressRatio > 1 then progressRatio = 1 end
+
+    -- Auto-Reset: If progress drops to near zero, assume new cast or restart.
+    if progressRatio < 0.05 then
+        if bar.empowerFlashed then
+            for k in pairs(bar.empowerFlashed) do bar.empowerFlashed[k] = nil end
         else
+            bar.empowerFlashed = {}
+        end
+    end
+    if not bar.empowerFlashed then bar.empowerFlashed = {} end
+
+    -- Determine Dynamic Stage (Color) & Trigger Ticks
+    local currentStage = 1
+
+    for i, threshold in ipairs(tl.stageEnds) do
+        local targetRatio = threshold / total
+
+        -- Check if we passed this stage
+        if progressRatio >= targetRatio then
+            -- We have completed stage 'i'. So we are at least in stage 'i+1'.
+            currentStage = i + 1
+
+            -- Trigger Tick Flash (One-shot)
+            if i < tl.totalStages then
+                if not bar.empowerFlashed[i] then
+                    if bar.StageTicks and bar.StageTicks[i] then
+                        BlinkTick(bar, bar.StageTicks[i])
+                    end
+                    bar.empowerFlashed[i] = true
+                end
+            end
+        else
+            -- We are IN stage 'i'.
+            currentStage = i
             break
         end
     end
 
-    -- Dynamic Color Update (Change Bar Color based on current stage)
-    -- We use the NEXT stage index (idx) to determine current stage logic
-    -- If idx=1 (Waiting for Stage 1 End) -> Stage 0 (Grey)
-    -- If idx=2 (Passed Stage 1 End, waiting for Stage 2) -> Stage 1 (Org)
-    local stageColorIdx = idx - 1
-    if stageColorIdx < 0 then stageColorIdx = 0 end -- Safety
+    -- Bound to prevent index errors
+    if currentStage > tl.totalStages + 1 then currentStage = tl.totalStages + 1 end
 
+    -- Color Logic (Progressive)
     local db = RoithiUI.db.profile.Castbar[bar.unit]
     local colors = db and db.colors
-    local c = { 0.5, 0.5, 0.5, 1 } -- Default Grey
+    local c = { 1, 1, 0, 1 }
 
-    if stageColorIdx == 0 then
-        c = { 0.5, 0.5, 0.5, 1 }
-    elseif stageColorIdx == 1 then
-        if colors and colors.empower1 then c = colors.empower1 end
-    elseif stageColorIdx == 2 then
-        if colors and colors.empower2 then c = colors.empower2 end
-    elseif stageColorIdx == 3 then
-        if colors and colors.empower3 then c = colors.empower3 end
-    elseif stageColorIdx >= 4 then
-        if colors and colors.empower4 then c = colors.empower4 end
+    if currentStage > tl.totalStages then
+        -- HOLD PHASE (Matches Final Charge Level)
+        local total = tl.totalStages
+
+        -- "stage 3 -> hold = empower3"
+        -- "stage 4 -> hold = empower4"
+        if total == 3 and colors.empower3 then
+            c = colors.empower3
+        elseif total == 4 and colors.empower4 then
+            c = colors.empower4
+        elseif total == 2 and colors.empower2 then
+            c = colors.empower2
+        elseif total == 1 and colors.empower1 then
+            c = colors.empower1
+        elseif colors.empowerHold then
+            -- Fallback if mapped color missing or unexpected >4
+            c = colors.empowerHold
+        else
+            c = { 0, 0, 1, 1 }  -- Blue default
+        end
+    else
+        -- CHARGE PHASE (Filling Up)
+        -- 0->1: Grey
+        -- 1->2: emp1
+        -- 2->3: emp2
+        -- 3->4: emp3
+        if currentStage == 1 then
+            c = { 0.5, 0.5, 0.5, 1 }  -- Grey
+        elseif currentStage == 2 and colors.empower1 then
+            c = colors.empower1
+        elseif currentStage == 3 and colors.empower2 then
+            c = colors.empower2
+        elseif currentStage == 4 and colors.empower3 then
+            c = colors.empower3
+        elseif currentStage >= 5 and colors.empower4 then
+            c = colors.empower4
+        end
     end
 
     if bar.SetStatusBarColor then
         bar:SetStatusBarColor(c[1], c[2], c[3], c[4])
     end
-
-    bar.empowerNextStageIndex = idx
 end
 
 function ns.StopEmpower(bar)
     bar.isEmpower = false
     bar.empowerTimeline = nil
+    -- Also clear flashed state
+    bar.empowerFlashed = nil
 
     if bar.StageTicks then for _, t in pairs(bar.StageTicks) do t:Hide() end end
     if bar.StageZones then for _, z in pairs(bar.StageZones) do z:Hide() end end

@@ -55,5 +55,8 @@ table.insert(tests, "Tests/Test_UnitFrames.lua")
 table.insert(tests, "Tests/Test_Libs.lua")
 table.insert(tests, "Tests/Test_BossFrames_EditMode.lua")
 table.insert(tests, "Tests/Tests_UnitFrames_Persistence.lua")
+table.insert(tests, "Tests/Test_Castbar_Empowered.lua")
+table.insert(tests, "Tests/Test_Startup_Defaults.lua")
+table.insert(tests, "Tests/Test_Castbar_Interruption.lua")
 
 RunTests()
