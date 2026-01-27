@@ -35,5 +35,6 @@
 
     <!-- Custom Libraries -->
     <Script file="LibRoithi/LibRoithi.lua"/>
+    <Script file="LibRoithi/LibEditModeExtension.lua"/>
 
 </Ui>

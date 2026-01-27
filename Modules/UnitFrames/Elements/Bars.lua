@@ -303,6 +303,7 @@ function UF:CreatePowerBar(frame)
 end
 
 function UF:CreateAdditionalPower(frame)
+    if frame.unit ~= "player" then return end
     local power = CreateFrame("StatusBar", frame:GetName() .. "_AdditionalPower", frame)
     -- Initial defaults
     power:SetPoint("TOPLEFT", frame.Power, "BOTTOMLEFT", 0, -4)
@@ -332,7 +333,7 @@ function UF:CreateAdditionalPower(frame)
         frame.AdditionalPower.editModeName = (frame.editModeName or frame:GetName()) .. " Additional Power"
 
         -- Default position (detached)
-        local defaults = { point = "CENTER", x = 0, y = -125 }
+        local defaults = { point = "CENTER", x = 0, y = 0 }
 
         local function OnPosChanged(f, layoutName, point, x, y)
             local unit = frame.unit
@@ -388,8 +389,6 @@ function UF:CreateAdditionalPower(frame)
             power:Hide()
             return
         end
-        -- Note: Actual visibility is controlled by power type check in Update,
-        -- but here we handle sizing and positioning.
 
         -- Sync Edit Mode State
         if frame.isInEditMode then
@@ -402,9 +401,10 @@ function UF:CreateAdditionalPower(frame)
 
         if detached then
             power:SetParent(UIParent)
+            -- Default 0,0
             local point = db and db.additionalPowerPoint or "CENTER"
             local x = db and db.additionalPowerX or 0
-            local y = db and db.additionalPowerY or -125
+            local y = db and db.additionalPowerY or 0
 
             power:SetPoint(point, UIParent, point, x, y)
 
@@ -413,27 +413,35 @@ function UF:CreateAdditionalPower(frame)
             power:SetWidth(width)
         else
             power:SetParent(frame)
-            -- Stacking Logic:
-            -- Ideally we want: Health -> Power -> ClassPower -> AdditionalPower
-            -- But ClassPower visibility varies.
-            -- We anchor to ClassPower if shown, else Power.
+            -- Stacking Logic: "Add is still at the unitframe"
+            -- We only anchor to Class/Power if they are ALSO at the unitframe.
 
-            local anchor = frame.Power
+            local anchor = frame.Health
             local offset = -1
 
-            if frame.ClassPower and frame.ClassPower:IsShown() and not (db and db.classPowerDetached) then
+            local powerIsAtUF = not (db and db.powerDetached) and frame.Power:IsShown()
+            local classIsAtUF = not (db and db.classPowerDetached) and frame.ClassPower and frame.ClassPower:IsShown() and
+                powerIsAtUF
+
+            -- Note: ClassPower is only "At UF" if Power is also "At UF", because Class follows Power.
+            -- If Power is detached, Class follows it away, so Class is NOT at UF.
+
+            if classIsAtUF then
                 anchor = frame.ClassPower
-                offset = -4 -- Spacing between bars
-            elseif frame.Power and frame.Power:IsShown() and not (db and db.powerDetached) then
+                offset = -4
+            elseif powerIsAtUF then
                 anchor = frame.Power
                 offset = -1
             else
-                anchor = frame.Health -- Fallback if everything else detached/hidden
+                anchor = frame.Health
                 offset = -1
             end
 
             power:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, offset)
             power:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, offset)
+
+            -- Force Frame Width when attached
+            power:SetWidth(frame:GetWidth())
         end
     end
     frame.UpdateAdditionalPowerLayout = UpdateLayout

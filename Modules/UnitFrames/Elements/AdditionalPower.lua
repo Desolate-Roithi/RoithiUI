@@ -190,11 +190,21 @@ function UF:CreateAdditionalPower(frame)
         local defaults = { point = "CENTER", x = 0, y = -120 }
 
         local function OnPosChanged(f, layoutName, point, x, y)
-            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
+            local unit = frame.unit
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
 
-            -- If NOT detached, ignore dragging data updates (snap back visual handled by layout update usually)
+            -- If not detached, ignore movement and enforce attached layout
             if not db or not db.additionalPowerDetached then
-                frame.UpdateAdditionalPowerLayout()
+                f:ClearAllPoints()
+                if frame.ClassPower and frame.ClassPower:IsShown() then
+                    f:SetParent(frame.ClassPower)
+                    f:SetPoint("TOPLEFT", frame.ClassPower, "BOTTOMLEFT", 0, -4)
+                    f:SetPoint("TOPRIGHT", frame.ClassPower, "BOTTOMRIGHT", 0, -4)
+                else
+                    f:SetParent(frame.Power)
+                    f:SetPoint("TOPLEFT", frame.Power, "BOTTOMLEFT", 0, -4)
+                    f:SetPoint("TOPRIGHT", frame.Power, "BOTTOMRIGHT", 0, -4)
+                end
                 return
             end
 

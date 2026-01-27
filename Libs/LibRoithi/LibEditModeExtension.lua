@@ -1,13 +1,41 @@
 local lib = LibStub('LibEditMode')
 if not lib then return end
 
+-- [[ Polyfill for Missing Internal API ]]
+-- If LibEditMode is missing its internals (e.g. standalone version vs embedded), we recreate the pool logic here.
+if not lib.internal then lib.internal = {} end
+
+if not lib.internal.CreatePool then
+    local pools = {}
+    local Acquire = CreateUnsecuredObjectPool().Acquire
+
+    local function acquire(self, parent)
+        local obj, new = Acquire(self)
+        if parent then
+            obj:SetParent(parent)
+        end
+        return obj, new
+    end
+
+    function lib.internal:CreatePool(kind, creationFunc, resetterFunc)
+        local pool = CreateUnsecuredObjectPool(creationFunc, resetterFunc)
+        -- We inject our acquire wrapper to ensure parenting
+        pool.Acquire = acquire
+        pools[kind] = pool
+    end
+
+    function lib.internal:GetPool(kind)
+        return pools[kind]
+    end
+end
+-- [[ End Polyfill ]]
+
 -- Add New Setting Types
 lib.SettingType.CollapsibleHeader = 11
 lib.SettingType.ColorRow = 12
+lib.SettingType.Button = 13
 
 -- 1. Collapsible Header Widget
--- Data-driven widget that displays a label and a rotating triangle symbol.
--- Expects 'name' in settings data for the label (e.g., "Colors").
 local headerMixin = {}
 function headerMixin:Setup(data)
     self.setting = data
@@ -52,51 +80,43 @@ function headerMixin:OnHeaderClick()
     end
 end
 
-if lib.internal and type(lib.internal.CreatePool) == "function" then
-    lib.internal:CreatePool(lib.SettingType.CollapsibleHeader, function()
-        local button = CreateFrame('Button', nil, UIParent)
-        button.fixedWidth = 350
-        button.fixedHeight = 45
-        button:SetSize(350, 45)
-        Mixin(button, headerMixin)
+lib.internal:CreatePool(lib.SettingType.CollapsibleHeader, function()
+    local button = CreateFrame('Button', nil, UIParent)
+    button.fixedWidth = 350
+    button.fixedHeight = 45
+    button:SetSize(350, 45)
+    Mixin(button, headerMixin)
 
-        -- Standard Font for the label text
-        local text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
-        button.Text = text
+    -- Standard Font for the label text
+    local text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+    button.Text = text
 
-        -- Arial Narrow specifically for the triangle symbols (better support in WoW client)
-        local symbol = button:CreateFontString(nil, "OVERLAY")
-        symbol:SetFont("Fonts\\ARIALN.TTF", 14, "")
-        symbol:SetTextColor(1, 0.82, 0) -- Blizzard Yellow
-        button.Symbol = symbol
+    -- Arial Narrow specifically for the triangle symbols (better support in WoW client)
+    local symbol = button:CreateFontString(nil, "OVERLAY")
+    symbol:SetFont("Fonts\\ARIALN.TTF", 14, "")
+    symbol:SetTextColor(1, 0.82, 0) -- Blizzard Yellow
+    button.Symbol = symbol
 
-        button:SetScript("OnClick", function(self) self:OnHeaderClick() end)
+    button:SetScript("OnClick", function(self) self:OnHeaderClick() end)
 
-        -- Hover effect
-        button:SetScript("OnEnter", function(self)
-            self.Text:SetTextColor(1, 1, 1)
-            self.Symbol:SetShadowOffset(1, -1)
-        end)
-        button:SetScript("OnLeave", function(self)
-            self.Text:SetTextColor(1, 1, 1)
-            self.Symbol:SetShadowOffset(0, 0)
-        end)
-
-        return button
-    end, function(_, button)
-        button:Hide()
-        button.layoutIndex = nil
+    -- Hover effect
+    button:SetScript("OnEnter", function(self)
+        self.Text:SetTextColor(1, 1, 1)
+        self.Symbol:SetShadowOffset(1, -1)
     end)
-else
-    -- Fallback or Warning: LibEditMode internal API missing
-    -- Likely implies incompatible version or protected internals
-    print("|cffFF0000[LibEditModeExtension]|r Error: lib.internal:CreatePool not found. Collapsible Headers disabled.")
-    -- If we can't register, we just skip. The options won't render or will fallback (hopefully).
-end
+    button:SetScript("OnLeave", function(self)
+        self.Text:SetTextColor(1, 1, 1)
+        self.Symbol:SetShadowOffset(0, 0)
+    end)
+
+    return button
+end, function(_, button)
+    button:Hide()
+    button.layoutIndex = nil
+end)
+
 
 -- 2. Color Row Widget
--- Displays a label and a horizontal row of color swatches.
--- Expects 'colors' table in settings data (each with get/set).
 local colorRowMixin = {}
 
 local function onColorChanged(swatch)
@@ -202,11 +222,8 @@ end, function(_, frame)
     frame.layoutIndex = nil
 end)
 
--- 3. Button Widget
--- Displays a clickable button.
--- Expects 'name' for label and 'func' for click handler.
-lib.SettingType.Button = 13
 
+-- 3. Button Widget
 local buttonMixin = {}
 function buttonMixin:Setup(data)
     self.setting = data
@@ -224,16 +241,14 @@ function buttonMixin:Setup(data)
     end)
 end
 
-if lib.internal and type(lib.internal.CreatePool) == "function" then
-    lib.internal:CreatePool(lib.SettingType.Button, function()
-        local button = CreateFrame('Button', nil, UIParent, "UIPanelButtonTemplate")
-        button.fixedWidth = 350
-        button.fixedHeight = 30
-        button:SetSize(350, 30)
-        Mixin(button, buttonMixin)
-        return button
-    end, function(_, button)
-        button:Hide()
-        button.layoutIndex = nil
-    end)
-end
+lib.internal:CreatePool(lib.SettingType.Button, function()
+    local button = CreateFrame('Button', nil, UIParent, "UIPanelButtonTemplate")
+    button.fixedWidth = 350
+    button.fixedHeight = 30
+    button:SetSize(350, 30)
+    Mixin(button, buttonMixin)
+    return button
+end, function(_, button)
+    button:Hide()
+    button.layoutIndex = nil
+end)

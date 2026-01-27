@@ -58,5 +58,6 @@ table.insert(tests, "Tests/Tests_UnitFrames_Persistence.lua")
 table.insert(tests, "Tests/Test_Castbar_Empowered.lua")
 table.insert(tests, "Tests/Test_Startup_Defaults.lua")
 table.insert(tests, "Tests/Test_Castbar_Interruption.lua")
+table.insert(tests, "Tests/Test_ClassPower_Detach.lua")
 
 RunTests()

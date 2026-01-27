@@ -215,8 +215,9 @@ local function GetSettingsForClassPower(unit)
                             GetDB(unit).classPowerX = finalX
                             GetDB(unit).classPowerY = finalY
 
+                            -- Initialize separate width on first detach
                             if not GetDB(unit).classPowerWidth then
-                                GetDB(unit).classPowerWidth = frame:GetWidth()
+                                GetDB(unit).classPowerWidth = frame.ClassPower:GetWidth()
                             end
                         end
                     end
@@ -225,12 +226,23 @@ local function GetSettingsForClassPower(unit)
                 end
 
                 GetDB(unit).classPowerDetached = value
+                print("DEBUG_DETACH: DB Set. Calling UpdateFrameFromSettings...")
                 UpdateFrameFromSettings(unit)
+
+                print("DEBUG_DETACH: Calling LEM Refresh...")
+                -- Refresh settings to show/hide Width
                 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                 local frame = UF and UF.frames and UF.frames[unit]
-                if frame and frame.ClassPower then LEM:RefreshFrameSettings(frame.ClassPower) end
+                if frame and frame.ClassPower then
+                    LEM:RefreshFrameSettings(frame.ClassPower)
+                    print("DEBUG_DETACH: LEM Refresh Done. Forcing Layout Update...")
+                    -- Fix: Re-apply layout AFTER refresh to ensure Attachment overrides LEM positioning
+                    if frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
+                    if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+                end
 
-                -- Update Castbar Attachment
+                print("DEBUG_DETACH: Sequence Complete.")
+
                 if ns.SetCastbarAttachment then
                     local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
                     if cbDB and not cbDB.detached then
@@ -346,8 +358,9 @@ local function GetSettingsForAdditionalPower(unit)
                             GetDB(unit).additionalPowerX = finalX
                             GetDB(unit).additionalPowerY = finalY
 
+                            -- Initialize separate width on first detach
                             if not GetDB(unit).additionalPowerWidth then
-                                GetDB(unit).additionalPowerWidth = frame:GetWidth()
+                                GetDB(unit).additionalPowerWidth = frame.AdditionalPower:GetWidth()
                             end
                         end
                     end
@@ -357,11 +370,15 @@ local function GetSettingsForAdditionalPower(unit)
 
                 GetDB(unit).additionalPowerDetached = value
                 UpdateFrameFromSettings(unit)
+                -- Refresh settings to show/hide Width
                 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                 local frame = UF and UF.frames and UF.frames[unit]
-                if frame and frame.AdditionalPower then LEM:RefreshFrameSettings(frame.AdditionalPower) end
+                if frame and frame.AdditionalPower then
+                    LEM:RefreshFrameSettings(frame.AdditionalPower)
+                    -- Fix: Re-apply layout AFTER refresh
+                    if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+                end
 
-                -- Update Castbar Attachment
                 if ns.SetCastbarAttachment then
                     local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
                     if cbDB and not cbDB.detached then

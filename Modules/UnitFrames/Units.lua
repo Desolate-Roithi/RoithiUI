@@ -95,7 +95,6 @@ end
 function UF:UpdateFrameFromSettings(unit)
     local frame = self.units[unit]
     if not frame then return end
-
     local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
 
     -- Special Handling for Boss Frames (Inheritance)
@@ -138,6 +137,7 @@ function UF:UpdateFrameFromSettings(unit)
     -- Update Elements Live
     if self.UpdateHealthBarSettings then self:UpdateHealthBarSettings(frame) end
     if self.UpdatePowerBarSettings then self:UpdatePowerBarSettings(frame) end
+    if self.UpdateClassPowerSettings then self:UpdateClassPowerSettings(frame) end
     if self.UpdateTags then self:UpdateTags(frame) end
     if self.UpdateIndicators then self:UpdateIndicators(frame) end
     if self.UpdateAuras then self:UpdateAuras(frame) end

@@ -53,7 +53,8 @@ function UF:CreateClassPower(frame)
 
     local name = frame:GetName() and (frame:GetName() .. "_ClassPower") or nil
     local element = CreateFrame("Frame", name, frame)
-    element:SetPoint("BOTTOMLEFT", frame.Power, "TOPLEFT", 0, 4)
+    -- Initial Anchor (will be updated by layout)
+    element:SetPoint("TOPLEFT", frame.Power, "BOTTOMLEFT", 0, -4)
     element:SetSize(frame:GetWidth(), 12)
     frame.ClassPower = element
 
@@ -116,6 +117,10 @@ function UF:CreateClassPower(frame)
         element.markers[i] = marker
     end
 
+    -- Enable movement for Edit Mode (Handled by LibEditMode)
+    -- element:SetMovable(true)
+    -- element:SetClampedToScreen(true)
+
     local function UpdateLayout(numPoints)
         if numPoints == 0 then return end
 
@@ -125,10 +130,10 @@ function UF:CreateClassPower(frame)
         element.lastMax = numPoints
         element.forceLayout = false
 
-        local width = frame:GetWidth()
+        local width = element:GetWidth()
         if width <= 0 then
             local db = RoithiUI.db.profile.UnitFrames[frame.unit]
-            width = db and db.width or 200
+            width = db and (db.classPowerWidth or db.width) or 200
         end
 
         local spacing = 2
@@ -137,6 +142,7 @@ function UF:CreateClassPower(frame)
         for i = 1, numPoints do
             local point = element.points[i]
             point:SetWidth(pWidth)
+            point:SetHeight(element:GetHeight()) -- Ensure height updates dynamically
             point:ClearAllPoints()
             if i == 1 then
                 point:SetPoint("LEFT", element, "LEFT", 0, 0)
@@ -175,6 +181,14 @@ function UF:CreateClassPower(frame)
     end
 
     local function Update()
+        -- Global Enable Check
+        local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
+        if db and db.classPowerEnabled == false then
+            element:Hide()
+            element:SetScript("OnUpdate", nil)
+            return
+        end
+
         local _, class = UnitClass("player")
         local spec = GetSpecialization()
 
@@ -412,42 +426,132 @@ function UF:CreateClassPower(frame)
         frame:RegisterEvent("UNIT_MAXHEALTH", Update)
     end
 
+    -- ------------------------------------------------------------------------
+    -- Robust Layout Updater (Stacked: Below Power)
+    -- ------------------------------------------------------------------------
     frame.UpdateClassPowerLayout = function()
-        element.forceLayout = true
+        -- element.forceLayout = true -- (Removed, rely on direct updates)
         local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
         if not db then return end
 
         local detached = db.classPowerDetached
-        element:SetHeight(db.classPowerHeight or 12)
+        local enabled = db.classPowerEnabled ~= false -- Default true
+        local height = db.classPowerHeight or 12
+
+        if not enabled then
+            element:Hide()
+            return
+        end
+
+        -- Fix: Height update should happen before any coordinate setting
+        element:SetHeight(height)
+        element:ClearAllPoints()
 
         if detached then
             element:SetParent(UIParent)
-            element:ClearAllPoints()
-            element:SetPoint(db.classPowerPoint or "CENTER", UIParent, db.classPowerPoint or "CENTER",
-                db.classPowerX or 0, db.classPowerY or -50)
-            element:SetWidth(db.classPowerWidth or frame:GetWidth())
+            -- Default to 0,0 if nil
+            local point = db.classPowerPoint or "CENTER"
+            local x = db.classPowerX or 0
+            local y = db.classPowerY or 0
+            element:SetPoint(point, UIParent, point, x, y)
+
+            -- Independent Width
+            local width = db.classPowerWidth or frame:GetWidth()
+            element:SetWidth(width)
         else
-            element:SetParent(frame)
-            element:ClearAllPoints()
-            element:SetPoint("TOPLEFT", frame.Power, "BOTTOMLEFT", 0, -4)
-            element:SetPoint("TOPRIGHT", frame.Power, "BOTTOMRIGHT", 0, -4)
+            element:SetParent(frame.Power) -- Parent to Power so we follow it
+            print("DEBUG_LAYOUT: Attached to Power.")
+
+            -- STACKING LOGIC: Always Below Power if attached
+            -- This satisfies "Pd Ca = Power and Class move together"
+            local anchor = frame.Power
+            local anchorPoint = "TOPLEFT"
+            local relPoint = "BOTTOMLEFT"
+            local offset = -4
+
+            element:SetPoint(anchorPoint, anchor, relPoint, 0, offset)
+            element:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, offset)
+
+            -- Match Frame Width (Or Power Width?)
+            -- User said "all bars should not use any width... when attached"
+            -- Usually matching frame width is safest for alignment, but if Power is detached and scaled...
+            -- Let's match Power width if possible, or Frame.
+            -- "Attached" usually implies Frame width visually, but if following Power...
+            element:SetWidth(frame.Power:GetWidth())
         end
+
         Update()
     end
 
+    -- ------------------------------------------------------------------------
+    -- Edit Mode Integration
+    -- ------------------------------------------------------------------------
     local LEM = LibStub("LibEditMode", true)
     if LEM then
-        element.editModeName = "Class Power"
-        LEM:AddFrame(element, function(f, layout, p, x, y)
-            local udb = RoithiUI.db.profile.UnitFrames[frame.unit]
-            if udb and udb.classPowerDetached then
-                udb.classPowerPoint, udb.classPowerX, udb.classPowerY = p, x, y
+        element.editModeName = (frame.editModeName or frame:GetName()) .. " Class Power"
+
+        -- Default position (detached)
+        local defaults = { point = "CENTER", x = 0, y = 0 }
+
+        -- Callback: Called when LibEditMode tries to move the frame
+        local function OnClassPowerPosChanged(f, layoutName, point, x, y)
+            print("DEBUG_CP_POS_CHANGED:", point, x, y)
+            local unit = frame.unit
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
+
+            -- If not detached, ignore movement and enforce attached layout
+            if not db or not db.classPowerDetached then
+                f:ClearAllPoints()
+                f:SetParent(frame.Power)
+                f:SetPoint("TOPLEFT", frame.Power, "BOTTOMLEFT", 0, -4)
+                f:SetPoint("TOPRIGHT", frame.Power, "BOTTOMRIGHT", 0, -4)
+                return
+            end
+
+            if db then
+                db.classPowerPoint = point
+                db.classPowerX = x
+                db.classPowerY = y
             end
             f:ClearAllPoints()
-            f:SetPoint(p, UIParent, p, x, y)
-        end, { point = "CENTER", x = 0, y = -100 })
+            f:SetPoint(point, UIParent, point, x, y)
+        end
+
+        LEM:AddFrame(element, OnClassPowerPosChanged, defaults)
+
+        -- Edit Mode Visibility
+        LEM:RegisterCallback('enter', function()
+            local unit = frame.unit
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
+            if db and db.classPowerDetached then
+                element.isInEditMode = true
+                element:SetAlpha(1)
+                element:Show()
+                -- Force render of dummy points
+                for i = 1, 5 do
+                    if element.points[i] then
+                        element.points[i]:Show()
+                        element.points[i]:SetValue(1)
+                    end
+                end
+            else
+                element.isInEditMode = false
+            end
+        end)
+
+        LEM:RegisterCallback('exit', function()
+            element.isInEditMode = false
+            Update()
+        end)
     end
 
-    frame:HookScript("OnShow", function() Update() end)
+    -- Hook for Config: Must trigger LAYOUT update, not just value update
+    frame.UpdateClassPowerSettings = frame.UpdateClassPowerLayout
     frame.UpdateClassPowerLayout()
+end
+
+function UF:UpdateClassPowerSettings(frame)
+    if frame.UpdateClassPowerSettings then
+        frame.UpdateClassPowerSettings(frame)
+    end
 end
