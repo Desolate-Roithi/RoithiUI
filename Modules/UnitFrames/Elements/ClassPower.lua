@@ -64,7 +64,7 @@ function UF:CreateClassPower(frame)
 
     element.points = {}
 
-    local font = LSM:Fetch("font", RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT")
+    local fontName = RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT"
 
     -- Main Points (Bars/Nodes)
     for i = 1, 10 do
@@ -90,7 +90,7 @@ function UF:CreateClassPower(frame)
         -- Timer Text (For Runes)
         point.Timer = point:CreateFontString(nil, "OVERLAY")
         -- 8pt Font, Outline, 1 digit precision requested
-        LibRoithi.mixins:SetFont(point.Timer, font, 12, "OUTLINE")
+        LibRoithi.mixins:SetFont(point.Timer, fontName, 12, "OUTLINE")
         point.Timer:SetPoint("CENTER", point, "CENTER", 0, 0)
         point.Timer:SetText("")
 

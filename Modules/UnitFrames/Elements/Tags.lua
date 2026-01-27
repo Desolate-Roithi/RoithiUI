@@ -594,6 +594,7 @@ function UF:UpdateTags(frame)
             tagFrame:SetPoint(point, relativeTo, point, tagConfig.x or 0, tagConfig.y or 0)
 
             tagFrame.formatString = tagConfig.formatString
+            tagFrame.font = tagConfig.font
             tagFrame.fontSize = tagConfig.fontSize or 12
             tagFrame.point = point -- Save point for alignment logic
             tagFrame.unit = unit
@@ -621,8 +622,8 @@ function UF:UpdateTagFrame(tagFrame)
     local fontStrings = {}
     for i, segment in ipairs(segments) do
         local fs = tagFrame.SegmentPool:Acquire()
-        local font = LSM:Fetch("font", RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT")
-        LibRoithi.mixins:SetFont(fs, font, tagFrame.fontSize or 12, "OUTLINE")
+        local fontName = tagFrame.font or RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT"
+        LibRoithi.mixins:SetFont(fs, fontName, tagFrame.fontSize or 12, "OUTLINE")
 
         -- Special: If the return is a table/mixed, it might be an error from GetSegments
         fs:SetText(segment.text)

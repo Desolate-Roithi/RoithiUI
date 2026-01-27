@@ -152,6 +152,19 @@ function RoithiUI.Config.GetCustomTagsOptions()
                             RefreshConfig() -- Update header name
                         end,
                     },
+                    font = {
+                        type = "select",
+                        dialogControl = "LSM30_Font",
+                        name = "Font",
+                        desc = "Leave empty to use general Unit Frame font.",
+                        order = 2.4,
+                        values = AceGUIWidgetLSMlists.font,
+                        get = function() return tagConfig.font end,
+                        set = function(_, v)
+                            tagConfig.font = v
+                            ns.RefreshUnitFrame(unit)
+                        end,
+                    },
                     fontSize = {
                         type = "range",
                         name = "Font Size",

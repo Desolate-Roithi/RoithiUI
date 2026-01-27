@@ -23,7 +23,8 @@ function UF:CreateAuras(frame)
         icon.icon:SetTexCoord(0.1, 0.9, 0.1, 0.9)
 
         icon.count = icon:CreateFontString(nil, "OVERLAY")
-        LibRoithi.mixins:SetFont(icon.count, "Friz Quadrata TT", 10, "OUTLINE")
+        local fontName = RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT"
+        LibRoithi.mixins:SetFont(icon.count, fontName, 10, "OUTLINE")
         icon.count:SetPoint("BOTTOMRIGHT", 2, -2)
 
         icon.overlay = icon:CreateTexture(nil, "OVERLAY")
