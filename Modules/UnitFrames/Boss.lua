@@ -104,7 +104,7 @@ function UF:InitializeBossFrames()
 
                 local f = self.units["boss" .. i]
                 -- Strict Check: Only show if enabled
-                if f and UF:IsUnitEnabled("boss" .. i) then
+                if f and UF:IsUnitEnabled("boss" .. i) and not InCombatLockdown() then
                     if not f:IsShown() then
                         f.forceShowEditMode = true
                         UnregisterUnitWatch(f) -- Disable oUF secure driver
@@ -113,7 +113,7 @@ function UF:InitializeBossFrames()
                         -- Inject Mock Data (WYSIWYG)
                         MockUnitValues(f, i)
                     end
-                elseif f then
+                elseif f and not InCombatLockdown() then
                     -- Disabled: Force Hide
                     f:Hide()
                     UnregisterUnitWatch(f)
@@ -133,22 +133,24 @@ function UF:InitializeBossFrames()
                 if overlays[i] then overlays[i]:Hide() end
 
                 local f = self.units["boss" .. i]
-                if f and f.forceShowEditMode then
-                    f.forceShowEditMode = nil
-                    f:Hide()
-
-                    if UF:IsUnitEnabled("boss" .. i) then
-                        RegisterUnitWatch(f) -- Re-enable oUF secure driver
-                    else
-                        UnregisterUnitWatch(f)
-                    end
-                elseif f then
-                    -- Fallback for frames that weren't forced shown but might be in bad state
-                    if UF:IsUnitEnabled("boss" .. i) then
-                        RegisterUnitWatch(f)
-                    else
-                        UnregisterUnitWatch(f)
+                if not InCombatLockdown() then
+                    if f and f.forceShowEditMode then
+                        f.forceShowEditMode = nil
                         f:Hide()
+
+                        if UF:IsUnitEnabled("boss" .. i) then
+                            RegisterUnitWatch(f) -- Re-enable oUF secure driver
+                        else
+                            UnregisterUnitWatch(f)
+                        end
+                    elseif f then
+                        -- Fallback for frames that weren't forced shown but might be in bad state
+                        if UF:IsUnitEnabled("boss" .. i) then
+                            RegisterUnitWatch(f)
+                        else
+                            UnregisterUnitWatch(f)
+                            f:Hide()
+                        end
                     end
                 end
 
@@ -196,6 +198,8 @@ function UF:ToggleBossTestMode()
             if frame then
                 UnregisterUnitWatch(frame)
                 frame.forceShowTest = true
+                frame:SetParent(UIParent)
+                frame:SetAlpha(1)
                 frame:Show()
 
                 -- Fake Data

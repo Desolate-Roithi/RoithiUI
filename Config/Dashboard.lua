@@ -254,22 +254,18 @@ function Config:CreateDashboard()
     local ufModule = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 
     -- Combined Utility Frames
-    CreateCheck(generalContent, "Utility Frames", nil, nil, 15, -5, nil,
+    -- Combined Utility Frames (DISABLED & HIDDEN per user request)
+    -- CreateCheck(generalContent, "Utility Frames", nil, nil, 15, -5, nil, ...)
+
+    -- Direction Indicators
+    local directionModule = RoithiUI:GetModule("Direction")
+    CreateCheck(generalContent, "Direction Indicators", RoithiUI.db.profile.Direction, "enabled", 15, -5, nil,
         function(enabled)
-            local db = RoithiUI.db.profile
-            if not db.EncounterResource then db.EncounterResource = { enabled = true } end
-            db.EncounterResource.enabled = enabled
-            if not db.Timers then db.Timers = {} end
-            if not db.Timers.BattleRes then db.Timers.BattleRes = { enabled = true } end
-            db.Timers.BattleRes.enabled = enabled
-
-            local ufModule = RoithiUI:GetModule("UnitFrames")
-            if ufModule and ufModule.ToggleEncounterResource then ufModule:ToggleEncounterResource(enabled) end
-
-            local brFrame = _G["RoithiBattleRes"]
-            if brFrame then
-                if enabled then brFrame:Show() else brFrame:Hide() end
-            end
+            if directionModule then directionModule:Toggle(enabled) end
+            local left = _G["RoithiDirectionLeft"]
+            local right = _G["RoithiDirectionRight"]
+            SetEditModeState(left, enabled)
+            SetEditModeState(right, enabled)
         end)
 
     -- 2. Unit Sections

@@ -11,7 +11,7 @@
     <Script file="Config/Defaults.lua"/>
     <Script file="Config/Dashboard.lua"/>
     <Script file="Config/CustomTags.lua"/>
-    <Script file="Config/LEMConfig/Extension.lua"/>
+
     <Script file="Config/LEMConfig/UnitFrames.lua"/>
     <Script file="Config/LEMConfig/BossFrames.lua"/>
     <Script file="Config/LEMConfig/Castbars.lua"/>
@@ -41,6 +41,7 @@
     <Script file="Modules/Timers/Core.lua"/>
     <Script file="Modules/Timers/BattleRes.lua"/>
     <Script file="Modules/Timers/Bloodlust.lua"/>
+    <Script file="Modules/Direction.lua"/>
     
     <!-- Castbar Integration (Loaded here or by Core if it was pure Lua, but XML loading implies direct file reference) -->
     <!-- User asked for integration of existing Castbar. We'll add the likely entry point. -->

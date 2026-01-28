@@ -460,7 +460,7 @@ function UF:CreateClassPower(frame)
             element:SetWidth(width)
         else
             element:SetParent(frame.Power) -- Parent to Power so we follow it
-            print("DEBUG_LAYOUT: Attached to Power.")
+
 
             -- STACKING LOGIC: Always Below Power if attached
             -- This satisfies "Pd Ca = Power and Class move together"
@@ -495,7 +495,6 @@ function UF:CreateClassPower(frame)
 
         -- Callback: Called when LibEditMode tries to move the frame
         local function OnClassPowerPosChanged(f, layoutName, point, x, y)
-            print("DEBUG_CP_POS_CHANGED:", point, x, y)
             local unit = frame.unit
             local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
 

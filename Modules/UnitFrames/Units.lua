@@ -116,8 +116,6 @@ function UF:UpdateFrameFromSettings(unit)
         end
     end
 
-    if not db then return end
-
     -- Defaults
     local defW, defH = 200, 50
     if string.match(unit, "boss") then
@@ -126,12 +124,23 @@ function UF:UpdateFrameFromSettings(unit)
         defW, defH = 120, 30
     end
 
-    frame:SetWidth(db.width or defW)
-    frame:SetHeight(db.height or defH)
+    -- Fix: Use separate local variables for final values, handling nil DB gracefully
+    local width = (db and db.width and db.width > 0) and db.width or defW
+    local height = (db and db.height and db.height > 0) and db.height or defH
+
+
+
+    frame:SetWidth(width)
+    frame:SetHeight(height)
+
     -- Update position (SKIP for boss 2-5, managed by Boss.lua)
-    if db.point and not string.match(unit, "^boss[2-5]$") then
+    if not string.match(unit, "^boss[2-5]$") then
+        local point = (db and db.point) or "CENTER"
+        local x = (db and db.x) or 0
+        local y = (db and db.y) or 0
+
         frame:ClearAllPoints()
-        frame:SetPoint(db.point, UIParent, db.point, db.x or 0, db.y or 0)
+        frame:SetPoint(point, UIParent, point, x, y)
     end
 
     -- Update Elements Live

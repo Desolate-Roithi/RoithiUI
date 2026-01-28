@@ -678,7 +678,10 @@ if LEM then
             if not string.find(unit, "boss") then
                 local db = GetDB(unit)
                 -- FIX: Always detach secure driver in Edit Mode to ensure we have manual control
-                UnregisterUnitWatch(frame)
+                -- BUT ONLY IF NOT IN COMBAT to avoid Taint/Block
+                if not InCombatLockdown() then
+                    UnregisterUnitWatch(frame)
+                end
                 frame.isInEditMode = true
 
                 if db and (db.enabled ~= false) then
@@ -712,7 +715,9 @@ if LEM then
                 -- We don't Hide() unitframes on exit like Castbars; they might need to stay shown if they have a target.
                 -- UF:ToggleFrame handles normal visibility.
                 UF:ToggleFrame(unit, UF:IsUnitEnabled(unit))
-                RegisterUnitWatch(frame) -- Re-register secure driver
+                if not InCombatLockdown() then
+                    RegisterUnitWatch(frame) -- Re-register secure driver
+                end
             end
         end
     end)
