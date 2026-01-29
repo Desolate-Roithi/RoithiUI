@@ -17,6 +17,7 @@ local VISIBILITY = {
 function Direction:OnInitialize()
     self.db = RoithiUI.db.profile.Direction
     self.db.visibility = self.db.visibility or VISIBILITY.ALWAYS
+    self.db.scale = self.db.scale or 1
     self:CreateIndicators()
 end
 
@@ -26,6 +27,8 @@ function Direction:OnEnable()
         self:RegisterEvent("PLAYER_REGEN_ENABLED", "UpdateVisibility")
         self:RegisterEvent("PLAYER_ENTERING_WORLD", "UpdateVisibility")
         self:UpdateVisibility()
+        self.Left:SetScale(self.db.scale)
+        self.Right:SetScale(self.db.scale)
     else
         self:UnregisterAllEvents()
         self.Left:Hide()
@@ -101,6 +104,7 @@ function Direction:CreateIndicators()
     left.Text:SetText("Links")
 
     left:SetPoint(self.db.left.point, UIParent, self.db.left.point, self.db.left.x, self.db.left.y)
+    left:SetScale(self.db.scale)
     self.Left = left
 
     -- Right Indicator
@@ -117,48 +121,99 @@ function Direction:CreateIndicators()
     right.Text:SetText("Rechts")
 
     right:SetPoint(self.db.right.point, UIParent, self.db.right.point, self.db.right.x, self.db.right.y)
+    right:SetScale(self.db.scale)
     self.Right = right
 
     -- Edit Mode
     local LEM = LibStub("LibEditMode", true)
     if LEM then
-        local settings = {
-            {
-                kind = LEM.SettingType.Dropdown,
-                name = "Visibility",
-                get = function() return self.db.visibility end,
-                set = function(_, val)
-                    self.db.visibility = val
-                    self:UpdateVisibility()
-                end,
-                values = {
-                    { text = "Always",        value = 1 },
-                    { text = "In Combat",     value = 2 },
-                    { text = "Out of Combat", value = 3 },
-                    { text = "Never",         value = 4 },
-                }
+        local function GetSettings(db, frame)
+            return {
+                {
+                    kind = LEM.SettingType.Dropdown,
+                    name = "Visibility",
+                    get = function() return self.db.visibility end,
+                    set = function(_, val)
+                        self.db.visibility = val
+                        self:UpdateVisibility()
+                    end,
+                    values = {
+                        { text = "Always",        value = 1 },
+                        { text = "In Combat",     value = 2 },
+                        { text = "Out of Combat", value = 3 },
+                        { text = "Never",         value = 4 },
+                    }
+                },
+                {
+                    kind = LEM.SettingType.Slider,
+                    name = "Scale",
+                    default = 1,
+                    minValue = 0.5,
+                    maxValue = 2.5,
+                    valueStep = 0.1,
+                    get = function() return self.db.scale end,
+                    set = function(_, val)
+                        self.db.scale = val
+                        self.Left:SetScale(val)
+                        self.Right:SetScale(val)
+                    end,
+                    formatter = function(v) return string.format("%.1f", v) end,
+                },
+                {
+                    name = "X Position",
+                    kind = LEM.SettingType.Slider,
+                    default = 0,
+                    minValue = -2500,
+                    maxValue = 2500,
+                    valueStep = 1,
+                    get = function() return db.x end,
+                    set = function(_, value)
+                        db.x = value
+                        frame:ClearAllPoints()
+                        frame:SetPoint(db.point, UIParent, db.point, db.x, db.y)
+                    end,
+                    formatter = function(v) return string.format("%.1f", v) end,
+                },
+                {
+                    name = "Y Position",
+                    kind = LEM.SettingType.Slider,
+                    default = 0,
+                    minValue = -1500,
+                    maxValue = 1500,
+                    valueStep = 1,
+                    get = function() return db.y end,
+                    set = function(_, value)
+                        db.y = value
+                        frame:ClearAllPoints()
+                        frame:SetPoint(db.point, UIParent, db.point, db.x, db.y)
+                    end,
+                    formatter = function(v) return string.format("%.1f", v) end,
+                },
             }
-        }
+        end
+
+        local function OnPositionChanged(frame, layoutName, point, x, y)
+            -- Round to 1 decimal place
+            x = math.floor(x * 10 + 0.5) / 10
+            y = math.floor(y * 10 + 0.5) / 10
+
+            local db = (frame == left) and self.db.left or self.db.right
+            db.point = point
+            db.x = x
+            db.y = y
+
+            frame:ClearAllPoints()
+            frame:SetPoint(point, UIParent, point, x, y)
+            LEM:RefreshFrameSettings(frame)
+        end
 
         -- Left
-        LEM:AddFrame(left, function(f, layoutName, point, x, y)
-            self.db.left.point = point
-            self.db.left.x = x
-            self.db.left.y = y
-            f:ClearAllPoints()
-            f:SetPoint(point, UIParent, point, x, y)
-        end, { point = "CENTER", x = -500, y = 50 })
-        LEM:AddFrameSettings(left, settings)
+        LEM:AddFrame(left, OnPositionChanged, { point = "CENTER", x = -500, y = 50 })
+        LEM:AddFrameSettings(left, GetSettings(self.db.left, left))
 
         -- Right
-        LEM:AddFrame(right, function(f, layoutName, point, x, y)
-            self.db.right.point = point
-            self.db.right.x = x
-            self.db.right.y = y
-            f:ClearAllPoints()
-            f:SetPoint(point, UIParent, point, x, y)
-        end, { point = "CENTER", x = 500, y = 50 })
-        LEM:AddFrameSettings(right, settings)
+        LEM:AddFrame(right, OnPositionChanged, { point = "CENTER", x = 500, y = 50 })
+        LEM:AddFrameSettings(right, GetSettings(self.db.right, right))
 
         -- Edit Mode Visibility
         LEM:RegisterCallback('enter', function()
