@@ -788,22 +788,7 @@ ns.Defaults = {
             outsideAlpha = 0.4,
         },
         Theme = "ClassColors",
-        Timers = {
-            BattleRes = {
-                enabled = true,
-                point = "BOTTOM",
-                scale = 1,
-                x = -567.99978637695,
-                y = 106.00060272217,
-            },
-            Bloodlust = {
-                enabled = true,
-                point = "TOP",
-                scale = 1,
-                x = 0,
-                y = -100,
-            },
-        },
+
         UnitFrames = {
             BossGroup = {
                 resetFix_V2 = true,

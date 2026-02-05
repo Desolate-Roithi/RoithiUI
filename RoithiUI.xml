@@ -37,10 +37,8 @@
     <Script file="Modules/UnitFrames/Boss.lua"/>
     <Script file="Modules/UnitFrames/Units.lua"/>
     
-    <!-- Timers -->
-    <Script file="Modules/Timers/Core.lua"/>
-    <Script file="Modules/Timers/BattleRes.lua"/>
-    <Script file="Modules/Timers/Bloodlust.lua"/>
+    <!-- Timers (Removed) -->
+
     <Script file="Modules/Direction.lua"/>
     
     <!-- Castbar Integration (Loaded here or by Core if it was pure Lua, but XML loading implies direct file reference) -->

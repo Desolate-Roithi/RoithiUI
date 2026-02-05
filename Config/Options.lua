@@ -124,30 +124,21 @@ local function GetOptions()
                     },
                     utilityFrames = {
                         type = "toggle",
-                        name = "Enable Utility Frames",
-                        desc = "Toggle both Encounter Resource Bar and Battle Rez Timer.",
+                        name = "Encounter Resource Bar",
+                        desc = "Toggle the Encounter Resource Bar (e.g., Vigor).",
                         order = 12,
                         get = function()
                             local db = RoithiUI.db.profile
-                            return db.EncounterResource and db.EncounterResource.enabled and db.Timers and
-                                db.Timers.BattleRes and db.Timers.BattleRes.enabled
+                            return db.EncounterResource and db.EncounterResource.enabled
                         end,
                         set = function(_, v)
                             local db = RoithiUI.db.profile
                             if not db.EncounterResource then db.EncounterResource = {} end
                             db.EncounterResource.enabled = v
-                            if not db.Timers then db.Timers = {} end
-                            if not db.Timers.BattleRes then db.Timers.BattleRes = {} end
-                            db.Timers.BattleRes.enabled = v
 
                             -- Update Live
                             local ufModule = RoithiUI:GetModule("UnitFrames")
                             if ufModule and ufModule.ToggleEncounterResource then ufModule:ToggleEncounterResource(v) end
-
-                            local brFrame = _G["RoithiBattleRes"]
-                            if brFrame then
-                                if v then brFrame:Show() else brFrame:Hide() end
-                            end
                         end,
                         width = "full",
                     },
