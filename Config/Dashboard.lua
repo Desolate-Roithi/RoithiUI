@@ -249,24 +249,24 @@ function Config:CreateDashboard()
         return cb
     end
 
-    -- 1. General Section
-    local generalContent = CreateSection("General", 35)
+    -- 1. General Section (Hidden by user request & Direction moved out)
+    -- local generalContent = CreateSection("General", 35)
     local ufModule = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 
     -- Combined Utility Frames
     -- Combined Utility Frames (DISABLED & HIDDEN per user request)
     -- CreateCheck(generalContent, "Utility Frames", nil, nil, 15, -5, nil, ...)
 
-    -- Direction Indicators
-    local directionModule = RoithiUI:GetModule("Direction")
-    CreateCheck(generalContent, "Direction Indicators", RoithiUI.db.profile.Direction, "enabled", 15, -5, nil,
-        function(enabled)
-            if directionModule then directionModule:Toggle(enabled) end
-            local left = _G["RoithiDirectionLeft"]
-            local right = _G["RoithiDirectionRight"]
-            SetEditModeState(left, enabled)
-            SetEditModeState(right, enabled)
-        end)
+    -- Direction Indicators (Moved to RoithiQoL)
+    -- local directionModule = RoithiUI:GetModule("Direction")
+    -- CreateCheck(generalContent, "Direction Indicators", RoithiUI.db.profile.Direction, "enabled", 15, -5, nil,
+    --     function(enabled)
+    --         if directionModule then directionModule:Toggle(enabled) end
+    --         local left = _G["RoithiDirectionLeft"]
+    --         local right = _G["RoithiDirectionRight"]
+    --         SetEditModeState(left, enabled)
+    --         SetEditModeState(right, enabled)
+    --     end)
 
     -- 2. Unit Sections
     local units = {
