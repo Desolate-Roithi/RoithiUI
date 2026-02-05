@@ -2,7 +2,7 @@ local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
 local LSM = LibStub("LibSharedMedia-3.0")
-local LEM = LibStub("LibEditMode")
+local LEM = LibStub("LibEditMode-Roithi")
 
 local UF = RoithiUI:GetModule("UnitFrames")
 

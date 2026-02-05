@@ -1,13 +1,13 @@
-local MINOR = 12
-local lib, minor = LibStub('LibEditMode')
+local MINOR = 14
+local lib, minor = LibStub("LibEditMode-Roithi")
 if minor > MINOR then
 	return
 end
 
 local function showTooltip(self)
 	if self.setting and self.setting.desc then
-		SettingsTooltip:SetOwner(self, 'ANCHOR_NONE')
-		SettingsTooltip:SetPoint('BOTTOMRIGHT', self, 'TOPLEFT')
+		SettingsTooltip:SetOwner(self, "ANCHOR_NONE")
+		SettingsTooltip:SetPoint("BOTTOMRIGHT", self, "TOPLEFT")
 		SettingsTooltip:SetText(self.setting.name, 1, 1, 1)
 		SettingsTooltip:AddLine(self.setting.desc)
 		SettingsTooltip:Show()
@@ -18,7 +18,7 @@ local function get(data)
 	local value = data.get(lib:GetActiveLayoutName())
 	if value then
 		if data.multiple then
-			assert(type(value) == 'table', "multiple choice dropdowns expects a table from 'get'")
+			assert(type(value) == "table", "multiple choice dropdowns expects a table from 'get'")
 
 			for _, v in next, value do
 				if v == data.value then
@@ -33,13 +33,15 @@ end
 
 local function set(data)
 	data.set(lib:GetActiveLayoutName(), data.value, false)
+
+	data.widget:GetParent():GetParent():RefreshWidgets()
 end
 
 local dropdownMixin = {}
 function dropdownMixin:Setup(data)
 	self.setting = data
 	self.Label:SetText(data.name)
-	self:SetEnabled(not data.disabled)
+	self:Refresh()
 
 	if data.generator then
 		-- let the user have full control
@@ -59,6 +61,7 @@ function dropdownMixin:Setup(data)
 						set = data.set,
 						value = value.value or value.text,
 						multiple = data.multiple,
+						widget = self,
 					})
 				else
 					rootDescription:CreateRadio(value.text, get, set, {
@@ -66,10 +69,26 @@ function dropdownMixin:Setup(data)
 						set = data.set,
 						value = value.value or value.text,
 						multiple = data.multiple,
+						widget = self,
 					})
 				end
 			end
 		end)
+	end
+end
+
+function dropdownMixin:Refresh()
+	local data = self.setting
+	if type(data.disabled) == "function" then
+		self:SetEnabled(not data.disabled(lib:GetActiveLayoutName()))
+	else
+		self:SetEnabled(not data.disabled)
+	end
+
+	if type(data.hidden) == "function" then
+		self:SetShown(not data.hidden(lib:GetActiveLayoutName()))
+	else
+		self:SetShown(not data.hidden)
 	end
 end
 
@@ -79,20 +98,20 @@ function dropdownMixin:SetEnabled(enabled)
 end
 
 lib.internal:CreatePool(lib.SettingType.Dropdown, function()
-	local frame = CreateFrame('Frame', nil, UIParent, 'ResizeLayoutFrame')
-	frame:SetScript('OnLeave', DefaultTooltipMixin.OnLeave)
-	frame:SetScript('OnEnter', showTooltip)
+	local frame = CreateFrame("Frame", nil, UIParent, "ResizeLayoutFrame")
+	frame:SetScript("OnLeave", DefaultTooltipMixin.OnLeave)
+	frame:SetScript("OnEnter", showTooltip)
 	frame.fixedHeight = 32
 	Mixin(frame, dropdownMixin)
 
-	local label = frame:CreateFontString(nil, nil, 'GameFontHighlightMedium')
-	label:SetPoint('LEFT')
+	local label = frame:CreateFontString(nil, nil, "GameFontHighlightMedium")
+	label:SetPoint("LEFT")
 	label:SetWidth(100)
-	label:SetJustifyH('LEFT')
+	label:SetJustifyH("LEFT")
 	frame.Label = label
 
-	local dropdown = CreateFrame('DropdownButton', nil, frame, 'WowStyle1DropdownTemplate')
-	dropdown:SetPoint('LEFT', label, 'RIGHT', 5, 0)
+	local dropdown = CreateFrame("DropdownButton", nil, frame, "WowStyle1DropdownTemplate")
+	dropdown:SetPoint("LEFT", label, "RIGHT", 5, 0)
 	dropdown:SetSize(200, 30)
 	frame.Dropdown = dropdown
 

@@ -23,7 +23,7 @@ local MockLEM = {
 }
 -- Inject into global for Boss.lua to find
 _G.LibStub = function(lib)
-    if lib == "LibEditMode" then return MockLEM end
+    if lib == "LibEditMode-Roithi" then return MockLEM end
     return { RegisterCallback = function() end } -- generic fallback
 end
 

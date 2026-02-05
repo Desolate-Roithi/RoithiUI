@@ -126,12 +126,30 @@ _G.UnitClass = function() return "Warrior", "WARRIOR" end
 _G.UnitFactionGroup = function() return "Alliance", "Alliance" end
 _G.UnitRace = function() return "Human", "Human" end
 _G.GetCurrentRegion = function() return 1 end
+_G.issecurevariable = function() return false end
+_G.DefaultTooltipMixin = {
+    OnLeave = function() end,
+}
+_G.InCombatLockdown = function() return false end
+
+_G.GenerateClosure = function(func, ...)
+    local args = { ... }
+    return function(...)
+        local callArgs = { unpack(args) }
+        local moreArgs = { ... }
+        for _, v in ipairs(moreArgs) do
+            table.insert(callArgs, v)
+        end
+        return func(unpack(callArgs))
+    end
+end
 _G.GetCVar = function(cvar) return nil end
 _G.GetBuildInfo = function() return "11.0.0", "123456", "Jan 01 2025", 110000 end
 ---@diagnostic disable-next-line: undefined-global
 _G.GetTime = function() return os.time() end
 _G.Enum = {
     SpellBookSpellBank = { Player = 0, Pet = 1 },
+    EditModeSettingDisplayType = { Checkbox = 0, Dropdown = 1, Slider = 2, Divider = 3 },
 }
 
 _G.C_SpellBook = {
@@ -147,10 +165,7 @@ _G.C_Seasons = {
 }
 
 ---@diagnostic disable-next-line: assign-type-mismatch
-_G.UIParent = {
-    firstTimeLoaded = true,
-    variablesLoaded = true
-}
+
 
 _G.C_Timer = {
     After = function(duration, func)
@@ -178,40 +193,111 @@ _G.C_UnitAuras = {
             isStealable = false,
             isBossDebuff = false,
             isCastByPlayer = true,
-            sourceUnit = "player", -- Added for 12.0.1 filter tests
         }
     end
+}
+
+-- Global Frames (mocked)
+_G.UIParent = {
+    name = "UIParent",
+    GetSize = function() return 1920, 1080 end,
+    GetWidth = function() return 1920 end,
+    GetHeight = function() return 1080 end,
+    GetParent = function() return nil end,
+    IsVisible = function() return true end,
+    GetScale = function() return 1 end,
 }
 
 _G.CreateFrame = function(type, name, parent, template)
     local frame = {
         name = name,
-        SetScript = function() end,
-        RegisterEvent = function() end,
-        UnregisterEvent = function() end,
-        UnregisterAllEvents = function() end,
-        SetParent = function() end,
-        SetPoint = function() end,
+        parent = parent,
+        Layout = function() end,
         SetSize = function() end,
+        SetPoint = function() end,
+        GetPoint = function() return "CENTER", nil, "CENTER", 0, 0 end,
+        ClearAllPoints = function() end,
+        SetAllPoints = function() end,
+        SetParent = function() end,
+        GetParent = function() return parent end,
+        GetWidth = function() return 350 end,
+        GetHeight = function() return 50 end,
+        GetSize = function() return 350, 50 end,
         Hide = function() end,
         Show = function() end,
-        GetParent = function() return parent end,
-        GetName = function(self) return self.name end,
+        SetShown = function() end,
         IsVisible = function() return true end,
+        IsShown = function() return true end,
         SetAlpha = function() end,
+        SetScale = function() end,
+        GetScale = function() return 1 end,
+        SetText = function() end,
+        SetEnabled = function() end,
+        SetOnClickHandler = function() end,
+        SetMovable = function() end,
+        StartMoving = function() end,
+        StopMovingOrSizing = function() end,
+        SetClampedToScreen = function() end,
+        SetDontSavePosition = function() end,
+        SetFrameStrata = function() end,
+        SetFrameLevel = function() end,
+        SetPropagateKeyboardInput = function() end,
+        SetAttribute = function() end,
         EnableMouse = function() end,
+        RegisterForDrag = function() end,
+        SetRegisterForClicks = function() end,
+        ShowSelected = function() end,
+        ShowSelectedFromSecret = function() end,
+        GetName = function(self) return self.name or "" end,
+        RegisterEvent = function() end,
+        UnregisterEvent = function() end,
+        scripts = {},
+        SetScript = function(self, script, handler)
+            self.scripts = self.scripts or {}
+            self.scripts[script] = handler
+        end,
+        GetScript = function(self, script)
+            self.scripts = self.scripts or {}
+            return self.scripts[script]
+        end,
+
+        GetLeft = function() return 0 end,
+        GetTop = function() return 0 end,
+        GetRight = function() return 0 end,
+        GetBottom = function() return 0 end,
+        CreateFontString = function()
+            return {
+                SetPoint = function() end,
+                SetText = function() end,
+                SetTextColor = function() end,
+                SetFont = function() end,
+                GetStringWidth = function() return 100 end,
+                SetJustifyH = function() end,
+                SetJustifyV = function() end,
+                SetWidth = function() end,
+                SetHeight = function() end,
+                SetSize = function() end,
+                Show = function() end,
+                Hide = function() end,
+                SetAlpha = function() end,
+                ClearAllPoints = function() end,
+                SetShadowOffset = function() end,
+            }
+        end,
         CreateTexture = function()
             return {
                 SetTexture = function() end,
                 SetAllPoints = function() end,
                 SetPoint = function() end,
-                SetVertexColor = function() end,
+                SetSize = function() end,
+                SetAlpha = function() end,
+                SetBlendMode = function() end,
                 Show = function() end,
                 Hide = function() end,
-                SetBlendMode = function() end,
+                SetShown = function() end,
+                SetColorTexture = function() end,
             }
         end,
-        -- 12.0.1 Secret API
         SetShownFromSecret = function(self, secret)
             if not issecretvalue(secret) then
                 error("LUA_ERR: SetShownFromSecret requires a secret value")
@@ -227,6 +313,135 @@ _G.CreateFrame = function(type, name, parent, template)
     return frame
 end
 
+-- WoW 10.0+ Object Pools
+_G.CreateUnsecuredObjectPool = function(creationFunc, resetterFunc)
+    local pool = {
+        activeObjects = {},
+        inactiveObjects = {},
+        creationFunc = creationFunc,
+        resetterFunc = resetterFunc,
+    }
+    function pool:Acquire(...)
+        local obj = table.remove(self.inactiveObjects)
+        local isNew = false
+        if not obj then
+            obj = self.creationFunc(self, ...)
+            isNew = true
+        end
+        table.insert(self.activeObjects, obj)
+        return obj, isNew
+    end
+
+    function pool:Release(obj)
+        for i, o in ipairs(self.activeObjects) do
+            if o == obj then
+                table.remove(self.activeObjects, i)
+                break
+            end
+        end
+        if self.resetterFunc then
+            self.resetterFunc(self, obj)
+        end
+        table.insert(self.inactiveObjects, obj)
+    end
+
+    function pool:ReleaseAll()
+        for _, obj in ipairs(self.activeObjects) do
+            if self.resetterFunc then
+                self.resetterFunc(self, obj)
+            end
+            table.insert(self.inactiveObjects, obj)
+        end
+        self.activeObjects = {}
+    end
+
+    return pool
+end
+
+-- WoW Mixin Utility
+_G.Mixin = function(target, ...)
+    for i = 1, select("#", ...) do
+        local source = select(i, ...)
+        for k, v in pairs(source or {}) do
+            target[k] = v
+        end
+    end
+    return target
+end
+
+-- Global Frames (mocked)
+_G.EditModeManagerFrame = _G.CreateFrame("Frame", "EditModeManagerFrame", _G.UIParent)
+_G.EditModeManagerFrame.ClearSelectedSystem = function() end
+_G.EditModeSystemSettingsDialog = _G.CreateFrame("Frame", "EditModeSystemSettingsDialog", _G.UIParent)
+
+-- EventRegistry Mock
+_G.EventRegistry = {
+    callbacks = {},
+    RegisterCallback = function(self, event, func)
+        self.callbacks[event] = self.callbacks[event] or {}
+        table.insert(self.callbacks[event], func)
+    end,
+    TriggerEvent = function(self, event, ...)
+        if self.callbacks[event] then
+            for _, func in ipairs(self.callbacks[event]) do
+                func(event, ...)
+            end
+        end
+    end,
+    RegisterFrameEventAndCallback = function(self, event, func)
+        self:RegisterCallback(event, func)
+    end
+}
+
+-- C_EditMode Mock
+_G.BACKDROP_TUTORIAL_16_16 = {
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    tile = true,
+    tileSize = 16,
+    edgeSize = 16,
+    insets = { left = 4, right = 4, top = 4, bottom = 4 },
+}
+
+_G.WHITE_FONT_COLOR = { r = 1, g = 1, b = 1, GetRGB = function() return 1, 1, 1 end }
+_G.DISABLED_FONT_COLOR = { r = 0.5, g = 0.5, b = 0.5, GetRGB = function() return 0.5, 0.5, 0.5 end }
+
+_G.C_EditMode = {
+    GetLayouts = function()
+        return {
+            activeLayout = 1,
+            layouts = {
+                { layoutName = "Modern" },
+                { layoutName = "Classic" }
+            }
+        }
+    end
+}
+
+_G.CopyTable = function(t)
+    if not t then return nil end
+    local res = {}
+    for k, v in pairs(t) do
+        if type(v) == "table" then
+            res[k] = _G.CopyTable(v)
+        else
+            res[k] = v
+        end
+    end
+    return res
+end
+
+-- Secure call mocks
+_G.securecallfunction = function(f, ...) return f(...) end
+_G.hooksecurefunc = function(t, k, f)
+    local original = t[k]
+    t[k] = function(...)
+        original(...)
+        f(...)
+    end
+end
+
+
 -- Mocking bit library (WoW 5.1 extension)
 _G.bit = {
     band   = function(a, b) return 0 end, -- Dummy
@@ -240,21 +455,27 @@ _G.bit = {
 _G.LibStub = {
     libs = {},
     minors = {},
-    minor = 0, -- Force upgrade by real lib
+    minor = 0,
     GetLibrary = function(self, major, silent)
-        if major == "LibSharedMedia-3.0" then
+        if major == "LibSharedMedia-3.0" and not self.libs[major] then
             return {
                 Register = function() end,
                 Fetch = function(_, _, default) return default or "Interface\\Addons\\Mock\\Texture" end,
                 MediaType = { STATUSBAR = "statusbar", FONT = "font" }
             }
         end
-        return self.libs[major]
+        if not self.libs[major] and not silent then
+            error("Library " .. major .. " not found")
+        end
+        return self.libs[major], self.minors[major]
     end,
     NewLibrary = function(self, major, minor)
-        self.libs[major] = {}
+        if self.minors[major] and self.minors[major] >= minor then
+            return nil
+        end
+        self.libs[major] = self.libs[major] or {}
         self.minors[major] = minor
-        return self.libs[major]
+        return self.libs[major], minor
     end
 }
 setmetatable(_G.LibStub, { __call = _G.LibStub.GetLibrary })
@@ -268,6 +489,7 @@ _G.wipe = function(t)
     for k in pairs(t) do t[k] = nil end
     return t
 end
+table.wipe = _G.wipe
 
 
 _G.UnitExists = function(unit)

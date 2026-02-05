@@ -1,6 +1,6 @@
 local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
-local LEM = LibStub("LibEditMode", true)
+local LEM = LibStub("LibEditMode-Roithi", true)
 
 if not LEM then return end
 
@@ -69,7 +69,7 @@ local function GetSettingsForPower(unit)
                 -- Smart Detach Logic
                 if value == true and not GetDB(unit).powerDetached then
                     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
-                    local frame = UF and UF.frames and UF.frames[unit]
+                    local frame = UF and UF.units and UF.units[unit]
                     if frame and frame.Power then
                         local cX, cY = frame.Power:GetCenter()
                         local uScale = UIParent:GetEffectiveScale()
@@ -124,7 +124,7 @@ local function GetSettingsForPower(unit)
                 if frame and frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
-            isHidden = function() return not GetDB(unit).powerDetached end,
+            hidden = function() return not GetDB(unit).powerDetached end,
         },
         {
             name = "Y Position",
@@ -142,7 +142,7 @@ local function GetSettingsForPower(unit)
                 if frame and frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
-            isHidden = function() return not GetDB(unit).powerDetached end,
+            hidden = function() return not GetDB(unit).powerDetached end,
         },
 
         {
@@ -157,7 +157,7 @@ local function GetSettingsForPower(unit)
                 GetDB(unit).powerWidth = value
                 UpdateFrameFromSettings(unit)
             end,
-            isHidden = function() return not GetDB(unit).powerDetached end,
+            hidden = function() return not GetDB(unit).powerDetached end,
         },
     }
 end
@@ -202,7 +202,7 @@ local function GetSettingsForClassPower(unit)
                 -- Smart Detach Logic
                 if value == true and not GetDB(unit).classPowerDetached then
                     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
-                    local frame = UF and UF.frames and UF.frames[unit]
+                    local frame = UF and UF.units and UF.units[unit]
                     if frame and frame.ClassPower then
                         local cX, cY = frame.ClassPower:GetCenter()
                         local uScale = UIParent:GetEffectiveScale()
@@ -267,7 +267,7 @@ local function GetSettingsForClassPower(unit)
                 if frame and frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
-            isHidden = function() return not GetDB(unit).classPowerDetached end,
+            hidden = function() return not GetDB(unit).classPowerDetached end,
         },
         {
             name = "Y Position",
@@ -285,7 +285,7 @@ local function GetSettingsForClassPower(unit)
                 if frame and frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
-            isHidden = function() return not GetDB(unit).classPowerDetached end,
+            hidden = function() return not GetDB(unit).classPowerDetached end,
         },
 
         {
@@ -300,7 +300,7 @@ local function GetSettingsForClassPower(unit)
                 GetDB(unit).classPowerWidth = value
                 UpdateFrameFromSettings(unit)
             end,
-            isHidden = function() return not GetDB(unit).classPowerDetached end,
+            hidden = function() return not GetDB(unit).classPowerDetached end,
         },
     }
 end
@@ -345,7 +345,7 @@ local function GetSettingsForAdditionalPower(unit)
                 -- Smart Detach Logic
                 if value == true and not GetDB(unit).additionalPowerDetached then
                     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
-                    local frame = UF and UF.frames and UF.frames[unit]
+                    local frame = UF and UF.units and UF.units[unit]
                     if frame and frame.AdditionalPower then
                         local cX, cY = frame.AdditionalPower:GetCenter()
                         local uScale = UIParent:GetEffectiveScale()
@@ -403,7 +403,7 @@ local function GetSettingsForAdditionalPower(unit)
                 if frame and frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
-            isHidden = function() return not GetDB(unit).additionalPowerDetached end,
+            hidden = function() return not GetDB(unit).additionalPowerDetached end,
         },
         {
             name = "Y Position",
@@ -421,7 +421,7 @@ local function GetSettingsForAdditionalPower(unit)
                 if frame and frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
-            isHidden = function() return not GetDB(unit).additionalPowerDetached end,
+            hidden = function() return not GetDB(unit).additionalPowerDetached end,
         },
 
         {
@@ -436,7 +436,7 @@ local function GetSettingsForAdditionalPower(unit)
                 GetDB(unit).additionalPowerWidth = value
                 UpdateFrameFromSettings(unit)
             end,
-            isHidden = function() return not GetDB(unit).additionalPowerDetached end,
+            hidden = function() return not GetDB(unit).additionalPowerDetached end,
         },
     }
 end
@@ -518,21 +518,26 @@ local function GetSettingsForMainFrame(unit, frame)
         { kind = LEM.SettingType.Divider },
         {
             name = "Primary Power",
-            kind = LEM.SettingType.CollapsibleHeader,
+            kind = LEM.SettingType.Expander,
             get = function() return GetDB(unit).powerSectionExpanded end,
             set = function(_, value)
                 GetDB(unit).powerSectionExpanded = value
-                -- Re-register settings to update the list (Add/Remove items)
-                LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
+                -- Refresh only the current frame settings to toggle visibility of items
                 LEM:RefreshFrameSettings(frame)
             end,
         },
     }
 
-    -- Insert Power Settings if expanded
-    if GetDB(unit).powerSectionExpanded then
-        local pSettings = GetSettingsForPower(unit)
-        for _, s in ipairs(pSettings) do table.insert(settings, s) end
+    -- Insert Power Settings (Always, with dynamic visibility)
+    local pSettings = GetSettingsForPower(unit)
+    for _, s in ipairs(pSettings) do
+        local originalHidden = s.hidden
+        s.hidden = function()
+            if not GetDB(unit).powerSectionExpanded then return true end
+            if originalHidden then return originalHidden() end
+            return false
+        end
+        table.insert(settings, s)
     end
 
     -- Secondary Power Settings (Shared Control)
@@ -540,36 +545,46 @@ local function GetSettingsForMainFrame(unit, frame)
         table.insert(settings, { kind = LEM.SettingType.Divider })
         table.insert(settings, {
             name = "Secondary Power",
-            kind = LEM.SettingType.CollapsibleHeader,
+            kind = LEM.SettingType.Expander,
             get = function() return GetDB(unit).classPowerSectionExpanded end,
             set = function(_, value)
                 GetDB(unit).classPowerSectionExpanded = value
-                LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
                 LEM:RefreshFrameSettings(frame)
             end,
         })
 
-        if GetDB(unit).classPowerSectionExpanded then
-            local cSettings = GetSettingsForClassPower(unit)
-            for _, s in ipairs(cSettings) do table.insert(settings, s) end
+        local cSettings = GetSettingsForClassPower(unit)
+        for _, s in ipairs(cSettings) do
+            local originalHidden = s.hidden
+            s.hidden = function()
+                if not GetDB(unit).classPowerSectionExpanded then return true end
+                if originalHidden then return originalHidden() end
+                return false
+            end
+            table.insert(settings, s)
         end
 
         -- Additional Power Settings (Shared Control)
         table.insert(settings, { kind = LEM.SettingType.Divider })
         table.insert(settings, {
             name = "Additional Power",
-            kind = LEM.SettingType.CollapsibleHeader,
+            kind = LEM.SettingType.Expander,
             get = function() return GetDB(unit).additionalPowerSectionExpanded end,
             set = function(_, value)
                 GetDB(unit).additionalPowerSectionExpanded = value
-                LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
                 LEM:RefreshFrameSettings(frame)
             end,
         })
 
-        if GetDB(unit).additionalPowerSectionExpanded then
-            local aSettings = GetSettingsForAdditionalPower(unit)
-            for _, s in ipairs(aSettings) do table.insert(settings, s) end
+        local aSettings = GetSettingsForAdditionalPower(unit)
+        for _, s in ipairs(aSettings) do
+            local originalHidden = s.hidden
+            s.hidden = function()
+                if not GetDB(unit).additionalPowerSectionExpanded then return true end
+                if originalHidden then return originalHidden() end
+                return false
+            end
+            table.insert(settings, s)
         end
     end
 

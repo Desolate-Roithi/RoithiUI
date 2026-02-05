@@ -101,7 +101,7 @@ function UF:CreatePowerBar(frame)
     frame.Power = power
 
     -- Edit Mode Registration (Lazy)
-    local LEM = LibStub("LibEditMode", true)
+    local LEM = LibStub("LibEditMode-Roithi", true)
     if LEM then
         -- We won't AddFrame immediately, but prepare for it?
         -- Actually, usually better to Add once.

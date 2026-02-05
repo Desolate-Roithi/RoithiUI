@@ -1,6 +1,49 @@
 local addonName, ns = ...
+-- Mock Environment
+if not _G.RoithiUI then
+    dofile("Tests/Mock/WoWAPI.lua")
+    _G.RoithiUI = {
+        db = { profile = { UnitFrames = {} } },
+        GetModule = function(self, name)
+            if not self.modules then self.modules = {} end
+            if not self.modules[name] then self.modules[name] = {} end
+            return self.modules[name]
+        end
+    }
+end
+
 local RoithiUI = _G.RoithiUI
 local UF = RoithiUI:GetModule("UnitFrames")
+
+-- Mock oUF
+_G.oUF = _G.oUF or {
+    Spawn = function() return CreateFrame("Frame") end,
+    RegisterStyle = function() end,
+    SetActiveStyle = function() end,
+}
+ns = ns or {}
+ns.oUF = _G.oUF
+
+-- Mock LibEditMode
+_G.LibStub = function(name)
+    if name == "LibEditMode-Roithi" then
+        return {
+            RegisterCallback = function() end,
+            AddFrame = function() end
+        }
+    end
+    return {}
+end
+
+-- Load Units.lua
+if not UF.InitializeUnits then
+    local chunk, err = loadfile("Modules/UnitFrames/Units.lua")
+    if chunk then
+        chunk("RoithiUI", ns)
+    else
+        print("FAIL loading Units.lua: " .. tostring(err))
+    end
+end
 
 -- Mock DB
 RoithiUI.db = {

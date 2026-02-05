@@ -1,7 +1,7 @@
 local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
-local LEM = LibStub("LibEditMode", true)
+local LEM = LibStub("LibEditMode-Roithi", true)
 
 -- Constants
 

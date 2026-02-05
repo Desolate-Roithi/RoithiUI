@@ -114,6 +114,12 @@ end
 -- Call Registration immediately as the addon object exists
 RoithiUI:RegisterChatCommand("roithi", "ChatCommand")
 RoithiUI:RegisterChatCommand("rui", "ChatCommand") -- Fix: Register /rui as alias
+RoithiUI:RegisterChatCommand("lemdiag", function()
+    local lib = LibStub("LibRoithi-1.0", true)
+    if lib and lib.Diagnostic then
+        lib:Diagnostic()
+    end
+end)
 -- Register /rd explicitly or just handle in main handler.
 -- Legacy had /rd separately.
 RoithiUI:RegisterChatCommand("rd", "ChatCommandDebug")

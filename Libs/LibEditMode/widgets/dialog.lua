@@ -1,11 +1,11 @@
-local MINOR = 12
-local lib, minor = LibStub('LibEditMode')
+local MINOR = 14
+local lib, minor = LibStub("LibEditMode-Roithi")
 if minor > MINOR then
 	return
 end
 
 local CENTER = {
-	point = 'CENTER',
+	point = "CENTER",
 	x = 0,
 	y = 0,
 }
@@ -26,18 +26,31 @@ function dialogMixin:Update(selection)
 	self:Layout()
 end
 
+function dialogMixin:RefreshWidgets()
+	for _, widget in next, self.Settings.widgets do
+		if widget.Refresh then
+			widget:Refresh()
+		end
+	end
+
+	self:Layout()
+end
+
 function dialogMixin:UpdateSettings()
 	internal.ReleaseAllPools()
+
+	self.Settings.widgets = table.wipe(self.Settings.widgets or {})
 
 	local settings, num = internal:GetFrameSettings(self.selection.parent)
 	if num > 0 then
 		for index, data in next, settings do
 			local pool = internal:GetPool(data.kind)
 			if pool then
-				local setting = pool:Acquire(self.Settings)
-				setting.layoutIndex = index
-				setting:Setup(data)
-				setting:Show()
+				local widget = pool:Acquire(self.Settings)
+				widget.layoutIndex = index
+				widget:Setup(data)
+
+				table.insert(self.Settings.widgets, widget)
 			end
 		end
 	end
@@ -50,7 +63,7 @@ end
 function dialogMixin:Reset()
 	self.selection = nil
 	self:ClearAllPoints()
-	self:SetPoint('BOTTOMRIGHT', UIParent, -250, 250)
+	self:SetPoint("BOTTOMRIGHT", UIParent, -250, 250)
 end
 
 local function closeEnough(a, b)
@@ -72,7 +85,7 @@ function dialogMixin:UpdateButtons()
 	local buttons, num = internal:GetFrameButtons(parent)
 	if num > 0 then
 		for index, data in next, buttons do
-			local button = internal:GetPool('button'):Acquire(self.Buttons)
+			local button = internal:GetPool("button"):Acquire(self.Buttons)
 			button.layoutIndex = index
 			button:SetText(data.text)
 			button:SetOnClickHandler(data.click)
@@ -81,7 +94,7 @@ function dialogMixin:UpdateButtons()
 		end
 	end
 
-	local resetPosition = internal:GetPool('button'):Acquire(self.Buttons)
+	local resetPosition = internal:GetPool("button"):Acquire(self.Buttons)
 	resetPosition.layoutIndex = num + 1
 	resetPosition:SetText(HUD_EDIT_MODE_RESET_POSITION)
 	resetPosition:SetOnClickHandler(GenerateClosure(self.ResetPosition, self))
@@ -133,13 +146,13 @@ function dialogMixin:OnKeyDown(key)
 	if self.selection then
 		self:SetPropagateKeyboardInput(false) -- protected
 
-		if key == 'LEFT' then
+		if key == "LEFT" then
 			internal:MoveParent(self.selection, IsShiftKeyDown() and -BIG_STEP or -SMALL_STEP)
-		elseif key == 'RIGHT' then
+		elseif key == "RIGHT" then
 			internal:MoveParent(self.selection, IsShiftKeyDown() and BIG_STEP or SMALL_STEP)
-		elseif key == 'UP' then
+		elseif key == "UP" then
 			internal:MoveParent(self.selection, 0, IsShiftKeyDown() and BIG_STEP or SMALL_STEP)
-		elseif key == 'DOWN' then
+		elseif key == "DOWN" then
 			internal:MoveParent(self.selection, 0, IsShiftKeyDown() and -BIG_STEP or -SMALL_STEP)
 		else
 			self:SetPropagateKeyboardInput(true) -- protected
@@ -150,9 +163,9 @@ function dialogMixin:OnKeyDown(key)
 end
 
 function internal:CreateDialog()
-	local dialog = Mixin(CreateFrame('Frame', nil, UIParent, 'ResizeLayoutFrame'), dialogMixin)
+	local dialog = Mixin(CreateFrame("Frame", nil, UIParent, "ResizeLayoutFrame"), dialogMixin)
 	dialog:SetSize(300, 350)
-	dialog:SetFrameStrata('DIALOG')
+	dialog:SetFrameStrata("DIALOG")
 	dialog:SetFrameLevel(200)
 	dialog:Hide()
 	dialog.widthPadding = 40
@@ -165,41 +178,44 @@ function internal:CreateDialog()
 	dialog:SetMovable(true)
 	dialog:SetClampedToScreen(true)
 	dialog:SetDontSavePosition(true)
-	dialog:RegisterForDrag('LeftButton')
-	dialog:SetScript('OnDragStart', dialog.StartMoving)
-	dialog:SetScript('OnDragStop', dialog.StopMovingOrSizing)
-	dialog:SetScript('OnKeyDown', dialog.OnKeyDown)
+	dialog:RegisterForDrag("LeftButton")
+	dialog:SetScript("OnDragStart", dialog.StartMoving)
+	dialog:SetScript("OnDragStop", dialog.StopMovingOrSizing)
+	dialog:SetScript("OnKeyDown", dialog.OnKeyDown)
 
-	local dialogTitle = dialog:CreateFontString(nil, nil, 'GameFontHighlightLarge')
-	dialogTitle:SetPoint('TOP', 0, -15)
+	local dialogTitle = dialog:CreateFontString(nil, nil, "GameFontHighlightLarge")
+	dialogTitle:SetPoint("TOP", 0, -15)
 	dialog.Title = dialogTitle
 
-	local dialogBorder = CreateFrame('Frame', nil, dialog, 'DialogBorderTranslucentTemplate')
+	local dialogBorder = CreateFrame("Frame", nil, dialog, "DialogBorderTranslucentTemplate")
 	dialogBorder.ignoreInLayout = true
 	dialog.Border = dialogBorder
 
-	local dialogClose = CreateFrame('Button', nil, dialog, 'UIPanelCloseButton')
-	dialogClose:SetPoint('TOPRIGHT')
+	local dialogClose = CreateFrame("Button", nil, dialog, "UIPanelCloseButton")
+	dialogClose:SetPoint("TOPRIGHT")
 	dialogClose.ignoreInLayout = true
+	dialogClose:HookScript("OnClick", function()
+		dialog:Reset()
+	end)
 	dialog.Close = dialogClose
 
-	local dialogSettings = CreateFrame('Frame', nil, dialog, 'VerticalLayoutFrame')
-	dialogSettings:SetPoint('TOP', dialogTitle, 'BOTTOM', 0, -12)
+	local dialogSettings = CreateFrame("Frame", nil, dialog, "VerticalLayoutFrame")
+	dialogSettings:SetPoint("TOP", dialogTitle, "BOTTOM", 0, -12)
 	dialogSettings.spacing = 2
 	dialog.Settings = dialogSettings
 
-	local resetSettingsButton = CreateFrame('Button', nil, dialogSettings, 'EditModeSystemSettingsDialogButtonTemplate')
+	local resetSettingsButton = CreateFrame("Button", nil, dialogSettings, "EditModeSystemSettingsDialogButtonTemplate")
 	resetSettingsButton:SetText(RESET_TO_DEFAULT)
 	resetSettingsButton:SetOnClickHandler(GenerateClosure(dialog.ResetSettings, dialog))
 	dialogSettings.ResetButton = resetSettingsButton
 
-	local divider = dialogSettings:CreateTexture(nil, 'ARTWORK')
+	local divider = dialogSettings:CreateTexture(nil, "ARTWORK")
 	divider:SetSize(330, 16)
 	divider:SetTexture([[Interface\FriendsFrame\UI-FriendsFrame-OnlineDivider]])
 	dialogSettings.Divider = divider
 
-	local dialogButtons = CreateFrame('Frame', nil, dialog, 'VerticalLayoutFrame')
-	dialogButtons:SetPoint('TOP', dialogSettings, 'BOTTOM', 0, -12)
+	local dialogButtons = CreateFrame("Frame", nil, dialog, "VerticalLayoutFrame")
+	dialogButtons:SetPoint("TOP", dialogSettings, "BOTTOM", 0, -12)
 	dialogButtons.spacing = 2
 	dialog.Buttons = dialogButtons
 

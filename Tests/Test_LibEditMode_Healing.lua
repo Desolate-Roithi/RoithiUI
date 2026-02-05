@@ -55,11 +55,7 @@ LoadLibFile("Libs/LibStub/LibStub.lua")
 LoadLibFile("Libs/LibEditMode/LibEditMode.lua")
 
 -- Verify LibEditMode loaded
-local lib = LibStub("LibEditMode")
-if not lib then error("LibEditMode failed to load") end
-
--- Load Extension (Our Fix)
-LoadLibFile("Libs/LibRoithi/LibEditModeExtension.lua")
+local lib = LibStub("LibEditMode-Roithi")
 
 -- Verify Widgets Installed (Phase 1)
 if lib.SettingType.CollapsibleHeader ~= 11 then

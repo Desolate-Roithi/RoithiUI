@@ -4,7 +4,7 @@ local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 ---@diagnostic disable-next-line: undefined-field
 local oUF = ns.oUF or _G.oUF
 
-local LEM = LibStub("LibEditMode", true)
+local LEM = LibStub("LibEditMode-Roithi", true)
 
 function UF:CreateUnitFrame(unit, name, skipEditMode)
     local frameName = "Roithi" .. (name or unit:gsub("^%l", string.upper))
@@ -251,11 +251,9 @@ function UF:ToggleFrame(unit, enabled)
         if ns.SetCastbarAttachment and RoithiUI.db.profile.Castbar then
             local cbDB = RoithiUI.db.profile.Castbar[unit]
             if cbDB and cbDB.enabled then
-                -- Check if currently attached (default is attached if nil?)
-                -- SetCastbarAttachment logic: if attached and uFrame...
-                -- We verify if we need to detach.
-                if cbDB.attached ~= false then
-                    cbDB.attached = false
+                -- Check if currently attached
+                if not cbDB.detached then
+                    cbDB.detached = true
                     ns.SetCastbarAttachment(unit, false)
                     print("|cff00ccffRoithiUI:|r Auto-Detached " .. unit .. " Castbar to keep it visible.")
                 end

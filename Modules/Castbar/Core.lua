@@ -106,6 +106,7 @@ ns.DEFAULTS = {
 for i = 1, 5 do
     ns.DEFAULTS["boss" .. i] = {
         enabled = true,
+        detached = false,
         point = "TOP",
         relPoint = "BOTTOM",
         x = 0,
@@ -264,9 +265,9 @@ function Castbar:OnEnable()
     ns.InitializeCastbarConfig() -- Defined in Config/Castbars.lua
 
     -- Register Cast Events
-    local f = CreateFrame("Frame") -- or use module? Module doesn't have event mixins by default in my Init.lua
-    -- I'll use a local frame or if RoithiUI had AceEvent-3.0...
-    -- My Init.lua was simple. I'll stick to a frame.
+    self.eventFrame = CreateFrame("Frame")
+    local f = self.eventFrame
+    -- Registered via self.eventFrame to avoid GC and allow external access/teardown
 
     f:SetScript("OnEvent", function(self, event, ...)
         if event == "PLAYER_TARGET_CHANGED" then
@@ -284,6 +285,10 @@ function Castbar:OnEnable()
             end
         elseif event == "UNIT_PET" then
             ns.UpdateCast(ns.bars["pet"])
+            -- Sync attachment on pet change
+            local cbDB = RoithiUI.db.profile.Castbar["pet"]
+            local isDetached = cbDB and cbDB.detached
+            ns.SetCastbarAttachment("pet", not isDetached)
         else
             local unit = ...
             if ns.bars[unit] then
@@ -335,25 +340,23 @@ function ns.SetCastbarAttachment(unit, attached)
     if not bar then return end
 
     local db = RoithiUI.db.profile.Castbar[unit]
+    if not db then return end
 
     local UF = RoithiUI:GetModule("UnitFrames")
     local uFrame = UF and UF.units and UF.units[unit]
 
-    -- Special Case for Boss Frames: Snap to specific boss frame
-    if string.find(unit, "boss") then
-        uFrame = UF and UF.units and UF.units[unit]
-    end
+    -- 1. Full Reset (Extract frame from any current family connections)
+    bar:ClearAllPoints()
+    pcall(function() bar:SetParent(nil) end)
+    bar:SetParent(UIParent)
 
     if attached and uFrame then
         -- SMART ATTACHMENT LOGIC
         -- Priority: AdditionalPower > ClassPower > Power > Frame
-        -- BUT only if they are NOT DETACHED.
         local anchor = uFrame
 
-        -- Access UnitFrame DB safely to check for detachment
+        -- Default to Frame-wide flags if unit-specific missing (e.g. boss)
         local ufDB = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
-
-        -- Default to attached if no DB entry (safe fallback)
         local powerDetached = ufDB and ufDB.powerDetached
         local classPowerDetached = ufDB and ufDB.classPowerDetached
         local additionalPowerDetached = ufDB and ufDB.additionalPowerDetached
@@ -363,44 +366,88 @@ function ns.SetCastbarAttachment(unit, attached)
         end
 
         if uFrame.ClassPower and uFrame.ClassPower:IsShown() and not classPowerDetached then
-            -- Assumes ClassPower is visually below Power.
-            -- If ClassPower is present but Power is detached, does ClassPower move up?
-            -- Typically yes, in standard layouts.
             anchor = uFrame.ClassPower
         end
 
         if uFrame.AdditionalPower and uFrame.AdditionalPower:IsShown() and not additionalPowerDetached then
-            -- Assumes AdditionalPower is visually below ClassPower/Power.
             anchor = uFrame.AdditionalPower
         end
 
-        bar:SetParent(uFrame)
-        bar:ClearAllPoints()
-        -- Offset logic: Use db.x / db.y as offset from the smart anchor
-        -- Check if db.x is reasonable offset (usually huge if formerly detached).
-        -- If attached, we might want to ignore large saved coordinates or clamp them?
-        -- Let's just use 0, -5 hardcoded + db.x/y if user wants fine tuning?
-        -- The user asked for X/Y sliders. If attached, they act as offsets.
+        -- Final Guard against Circularity
+        if bar == anchor or bar == uFrame then
+            bar:SetParent(UIParent)
+            bar:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+            return
+        end
+
+        local up = uFrame:GetParent()
+        local udepth = 0
+        while up and udepth < 20 do
+            if up == bar then
+                bar:SetParent(UIParent)
+                bar:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+                return
+            end
+            up = up:GetParent()
+            udepth = udepth + 1
+        end
+
+        -- Recursion check with limit
+        local p = anchor:GetParent()
+        local depth = 0
+        while p and depth < 20 do
+            if p == bar then
+                bar:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+                return
+            end
+            p = p:GetParent()
+            depth = depth + 1
+        end
+
         local offX = db.x or 0
         local offY = (db.y or 0) - 5
-
-        -- FIX: Visual Centering with Icon
-        -- If icon is shown, the bar width is reduced, but centering the BAR makes the ICON overhang left.
-        -- We shift RIGHT by half the icon width to center the whole (Icon + Bar) group.
         if db.showIcon then
             local iconSize = (db.height or 20) * (db.iconScale or 1.0)
             offX = offX + (iconSize / 2)
         end
 
-        bar:SetPoint("TOP", anchor, "BOTTOM", offX, offY)
+        -- 2. Attempt Attachment (Wrapped)
+        local ok, err = pcall(function()
+            bar:SetParent(uFrame)
+            bar:SetPoint("TOP", anchor, "BOTTOM", offX, offY)
+        end)
+
+        if not ok then
+            print(string.format(
+                "|cffff0000RoithiUI [SetCastbarAttachment] ATTACH FAILED for %s.|r Anchor: %s, Error: %s",
+                unit, anchor:GetName() or "nil", err))
+
+            -- Emergency Recovery (Atomic)
+            pcall(function()
+                bar:SetParent(UIParent)
+                bar:ClearAllPoints()
+                bar:SetPoint("CENTER", UIParent, "CENTER", 0, (unit == "player" and -150 or 0))
+            end)
+        end
     else
-        bar:SetParent(UIParent)
-        -- Restore position from DB
-        -- If db.x/y were used as offsets while attached, they might be small.
-        -- If detaching, we probably want to keep them or restore absolute?
-        -- For now, we trust the DB.
+        -- DETACHED MODE: Match the DB exactly
         local point = db.point or "CENTER"
+        local x = db.x or 0
+        local y = db.y or 0
+
         bar:ClearAllPoints()
-        bar:SetPoint(point, UIParent, point, db.x or 0, db.y or 0)
+        bar:SetParent(UIParent)
+
+        local ok, err = pcall(function()
+            bar:SetPoint(point, UIParent, point, x, y)
+        end)
+
+        if not ok then
+            print(string.format("|cffff0000RoithiUI [SetCastbarAttachment] DETACH FAILED for %s:|r %s", unit, err))
+            pcall(function()
+                bar:ClearAllPoints()
+                bar:SetPoint("CENTER", UIParent, "CENTER", 0, (unit == "player" and -150 or 0))
+            end)
+        end
     end
 end

@@ -1,6 +1,6 @@
 local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
-local LEM = LibStub("LibEditMode")
+local LEM = LibStub("LibEditMode-Roithi")
 local LSM = LibStub("LibSharedMedia-3.0")
 local LibRoithi = LibStub("LibRoithi-1.0")
 

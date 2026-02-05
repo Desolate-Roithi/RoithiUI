@@ -7,7 +7,9 @@ local LSM = LibStub("LibSharedMedia-3.0")
 -- ----------------------------------------------------------------------------
 function ns.CreateCastBar(unit)
     local bar = CreateFrame("StatusBar", "MidnightCastBar_" .. unit, UIParent)
-    local texture = LSM:Fetch("statusbar", RoithiUI.db.profile.General.castbarBar or "Solid") or
+    local profile = RoithiUI.db and RoithiUI.db.profile
+    local general = profile and profile.General
+    local texture = LSM:Fetch("statusbar", (general and general.barTexture) or "Solid") or
         "Interface\\TargetingFrame\\UI-StatusBar"
     bar:SetStatusBarTexture(texture)
 
@@ -19,17 +21,19 @@ function ns.CreateCastBar(unit)
     icon:SetTexCoord(0.1, 0.9, 0.1, 0.9) -- Square crop/zoom
     bar.Icon = icon
 
-    local font = LSM:Fetch("font", RoithiUI.db.profile.General.castbarFont or "Friz Quadrata TT")
-    local text = bar:CreateFontString(nil, "OVERLAY");
-    text:SetFont(font, 12, "OUTLINE")
-    text:SetPoint("LEFT", 4, 0); -- Align Left with padding
-    bar.Text = text
+    local font = LSM:Fetch("font", (general and general.font) or "Friz Quadrata TT") or [[Fonts\FRIZQT__.TTF]]
 
-    -- Time Text (Remaining Only)
+    -- 1. Create sub-widgets first to allow relative anchoring
     local timeText = bar:CreateFontString(nil, "OVERLAY")
     timeText:SetFont(font, 12, "OUTLINE")
     timeText:SetPoint("RIGHT", -4, 0)
     bar.TimeFS = timeText
+
+    local text = bar:CreateFontString(nil, "OVERLAY");
+    text:SetFont(font, 12, "OUTLINE")
+    text:SetPoint("LEFT", 4, 0);                      -- Align Left with padding
+    text:SetPoint("RIGHT", bar.TimeFS, "LEFT", -4, 0) -- Now valid as TimeFS exists
+    bar.Text = text
 
     -- Spark (Standard Texture)
     local spark = bar:CreateTexture(nil, "OVERLAY")
@@ -45,7 +49,8 @@ function ns.CreateCastBar(unit)
     latency:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
     latency:SetVertexColor(1, 0, 0, 0.5) -- Red semi-transparent
     latency:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
-    latency:SetHeight(bar:GetHeight())
+    local h = bar:GetHeight()
+    if h and h > 0 then latency:SetHeight(h) end
     latency:Hide()
     bar.Latency = latency
 
@@ -56,11 +61,12 @@ end
 
 function ns.UpdateCastBarMedia(bar)
     if not bar then return end
-    local texture = LSM:Fetch("statusbar", RoithiUI.db.profile.General.castbarBar or "Solid") or
+    local profile = RoithiUI.db and RoithiUI.db.profile
+    local general = profile and profile.General
+    local texture = LSM:Fetch("statusbar", (general and general.barTexture) or "Solid") or
         "Interface\\TargetingFrame\\UI-StatusBar"
-    bar:SetStatusBarTexture(texture)
-
-    local font = LSM:Fetch("font", RoithiUI.db.profile.General.castbarFont or "Friz Quadrata TT")
+    bar:SetStatusBarTexture(texture) -- Keep this line as it's essential for setting the texture
+    local font = LSM:Fetch("font", (general and general.font) or "Friz Quadrata TT") or [[Fonts\FRIZQT__.TTF]]
     -- We assume standard size 12 here, or we could fetch from DB if we added size option
     if bar.Text then
         bar.Text:SetFont(font, 12, "OUTLINE")
@@ -208,9 +214,12 @@ function ns.UpdateCast(bar)
 
 
 
-    -- Feature: Cap cast name length at 22
-    if text and string.len(text) > 22 then
-        text = string.sub(text, 1, 22) .. "..."
+    -- Feature: Cap cast name length at 22 (Safe handling for Secret values)
+    local isSecret = (issecretvalue and issecretvalue(text)) or (canaccessvalue and not canaccessvalue(text))
+    if text and not isSecret then
+        if string.len(text) > 22 then
+            text = string.sub(text, 1, 22) .. "..."
+        end
     end
     bar.Text:SetText(text)
 

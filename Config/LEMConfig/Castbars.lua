@@ -1,6 +1,6 @@
 local addonName, ns = ...
 local RoithiUI = _G.RoithiUI
-local LEM = LibStub("LibEditMode", true)
+local LEM = LibStub("LibEditMode-Roithi", true)
 
 if not LEM then return end
 

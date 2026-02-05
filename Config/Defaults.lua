@@ -13,7 +13,6 @@ ns.Defaults = {
         },
         Castbar = {
             boss1 = {
-                attached = false,
                 colors = {
                     cast = {
                         [1] = 1,
@@ -77,7 +76,6 @@ ns.Defaults = {
                 y = 0,
             },
             boss2 = {
-                attached = false,
                 colors = {
                     cast = {
                         [1] = 1,
@@ -141,7 +139,6 @@ ns.Defaults = {
                 y = 0,
             },
             boss3 = {
-                attached = false,
                 colors = {
                     cast = {
                         [1] = 1,
@@ -205,7 +202,6 @@ ns.Defaults = {
                 y = 0,
             },
             boss4 = {
-                attached = false,
                 colors = {
                     cast = {
                         [1] = 1,
@@ -269,7 +265,6 @@ ns.Defaults = {
                 y = 0,
             },
             boss5 = {
-                attached = false,
                 colors = {
                     cast = {
                         [1] = 1,
@@ -334,7 +329,6 @@ ns.Defaults = {
             },
             colors_v4 = true,
             focus = {
-                attached = false,
                 colors = {
                     cast = {
                         [1] = 1,
@@ -405,7 +399,6 @@ ns.Defaults = {
                 y = 67.09,
             },
             focustarget = {
-                attached = false,
                 colors = {
                     cast = {
                         [1] = 1,
@@ -470,7 +463,6 @@ ns.Defaults = {
                 y = 0,
             },
             pet = {
-                attached = false,
                 colors = {
                     cast = {
                         [1] = 1,
@@ -535,7 +527,6 @@ ns.Defaults = {
                 y = 0,
             },
             player = {
-                attached = false,
                 colors = {
                     cast = {
                         [1] = 1,
@@ -613,7 +604,6 @@ ns.Defaults = {
                 y = 0,
             },
             target = {
-                attached = false,
                 colors = {
                     cast = {
                         [1] = 1,

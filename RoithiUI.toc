@@ -4,6 +4,6 @@
 ## Author: Roithi
 ## Version: 1.0
 ## SavedVariables: RoithiUIDB
-## OptionalDeps: LibStub, CallbackHandler-1.0, LibEditMode, LibSharedMedia-3.0
+## OptionalDeps: LibStub, CallbackHandler-1.0, LibEditMode-Roithi, LibSharedMedia-3.0
 
 RoithiUI.xml

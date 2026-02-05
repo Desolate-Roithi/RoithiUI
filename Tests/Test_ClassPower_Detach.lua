@@ -93,9 +93,11 @@ local function CreateMockFrame(name, parent)
         GetParent = function(self) return self.parent end,
         Hide = function(self) self.shown = false end,
         Show = function(self) self.shown = true end,
+        SetShown = function(self, shown) self.shown = shown end,
         GetName = function(self) return self.name end,
-        CreateFontString = function() return { SetPoint = function() end, SetText = function() end, Hide = function() end } end,
-        CreateTexture = function() return { SetAllPoints = function() end, SetColorTexture = function() end, SetAlpha = function() end, Hide = function() end, SetSize = function() end, ClearAllPoints = function() end, SetPoint = function() end, SetHeight = function() end, SetVertexColor = function() end } end,
+        CreateFontString = function() return { SetPoint = function() end, SetText = function() end, Hide = function() end, SetJustifyH = function() end, SetJustifyV = function() end, SetTextColor = function() end } end,
+        CreateTexture = function() return { SetAllPoints = function() end, SetColorTexture = function() end, SetAlpha = function() end, Hide = function() end, Show = function() end, SetShown = function() end, SetSize = function() end, ClearAllPoints = function() end, SetPoint = function() end, SetHeight = function() end, SetVertexColor = function() end, SetTexture = function() end } end,
+        EnableMouse = function() end,
         HookScript = function(self, script, func) self.scripts[script] = func end,
         SetScript = function(self, script, func) self.scripts[script] = func end,
         RegisterEvent = function() end, -- No-op

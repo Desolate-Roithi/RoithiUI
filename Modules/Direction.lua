@@ -125,7 +125,7 @@ function Direction:CreateIndicators()
     self.Right = right
 
     -- Edit Mode
-    local LEM = LibStub("LibEditMode", true)
+    local LEM = LibStub("LibEditMode-Roithi", true)
     if LEM then
         local function GetSettings(db, frame)
             return {

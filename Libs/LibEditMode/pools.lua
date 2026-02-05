@@ -1,5 +1,5 @@
-local MINOR = 12
-local lib, minor = LibStub('LibEditMode')
+local MINOR = 14
+local lib, minor = LibStub("LibEditMode-Roithi")
 if minor > MINOR then
 	return
 end

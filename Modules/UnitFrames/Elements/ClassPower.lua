@@ -486,7 +486,7 @@ function UF:CreateClassPower(frame)
     -- ------------------------------------------------------------------------
     -- Edit Mode Integration
     -- ------------------------------------------------------------------------
-    local LEM = LibStub("LibEditMode", true)
+    local LEM = LibStub("LibEditMode-Roithi", true)
     if LEM then
         element.editModeName = (frame.editModeName or frame:GetName()) .. " Class Power"
 

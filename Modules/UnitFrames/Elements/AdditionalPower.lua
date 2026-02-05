@@ -182,7 +182,7 @@ function UF:CreateAdditionalPower(frame)
     end
 
     -- Edit Mode Registration
-    local LEM = LibStub("LibEditMode", true)
+    local LEM = LibStub("LibEditMode-Roithi", true)
     if LEM then
         -- Name for Selection Overlay
         addPower.editModeName = "Additional Power"
