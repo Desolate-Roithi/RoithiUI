@@ -39,7 +39,7 @@
     
     <!-- Timers (Removed) -->
 
-    <Script file="Modules/Direction.lua"/>
+
     
     <!-- Castbar Integration (Loaded here or by Core if it was pure Lua, but XML loading implies direct file reference) -->
     <!-- User asked for integration of existing Castbar. We'll add the likely entry point. -->

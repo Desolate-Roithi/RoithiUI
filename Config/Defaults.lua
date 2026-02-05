@@ -739,22 +739,7 @@ ns.Defaults = {
                 y = 0,
             },
         },
-        Direction = {
-            enabled = true,
-            visibility = 1, -- 1:Always, 2:InCombat, 3:OutCombat, 4:Never
-            left = {
-                point = "CENTER",
-                x = -200,
-                y = 0,
-                scale = 1,
-            },
-            right = {
-                point = "CENTER",
-                x = 200,
-                y = 0,
-                scale = 1,
-            },
-        },
+
         EnabledModules = {
             EncounterBar = true,
             FocusCastbar = true,
