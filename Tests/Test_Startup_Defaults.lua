@@ -33,6 +33,10 @@ local function Test_Defaults_Loading()
         error("Unexpected default Theme value: " .. tostring(ns.Defaults.profile.General.Theme))
     end
 
+    if ns.Defaults.profile.General.debugMode ~= false then
+        error("debugMode should be false by default")
+    end
+
     print("  > OK")
 end
 

@@ -232,7 +232,7 @@ function ns.UpdateCast(bar)
         bar:SetTimerDuration(durationObj)
     else
         -- Fallback for pre-12.0 environments (should never happen based on user context)
-        print("Error: SetTimerDuration not supported on this client.")
+        RoithiUI:Log("Error: SetTimerDuration not supported on this client.")
     end
 
     -- Store for Latency/OnUpdate

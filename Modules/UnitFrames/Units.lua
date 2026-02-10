@@ -255,7 +255,7 @@ function UF:ToggleFrame(unit, enabled)
                 if not cbDB.detached then
                     cbDB.detached = true
                     ns.SetCastbarAttachment(unit, false)
-                    print("|cff00ccffRoithiUI:|r Auto-Detached " .. unit .. " Castbar to keep it visible.")
+                    RoithiUI:Log("Auto-Detached " .. unit .. " Castbar to keep it visible.")
                 end
             end
         end

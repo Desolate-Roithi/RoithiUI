@@ -766,6 +766,7 @@ ns.Defaults = {
             castbarFont = "Friz Quadrata TT",
             unitFrameBar = "Solid",
             unitFrameFont = "Friz Quadrata TT",
+            debugMode = false,
         },
         IndicatorTestMode = false,
         Range = {

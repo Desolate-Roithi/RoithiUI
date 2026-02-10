@@ -274,9 +274,9 @@ function UF:CreatePowerBar(frame)
         else
             -- Debugging Color Failure
             local pName = UnitName(unit) or "?"
-            print(string.format("[RoithiUI Dbg] Unit: %s | Type: %s (%s) | Info: Nil? Fallback to Blue.", pName,
-                tostring(pToken), tostring(pTypeIndex)))
-            if not DefaultPowerColors["RAGE"] then print("[RoithiUI Dbg] DefaultPowerColors[RAGE] is missing!") end
+            RoithiUI:Log(string.format("Unit: %s | Type: %s (%s) | Info: Nil? Fallback to Blue.", pName,
+                pTypeIndex, pToken))
+            if not DefaultPowerColors["RAGE"] then RoithiUI:Log("DefaultPowerColors[RAGE] is missing!") end
 
             self:SetStatusBarColor(0, 0, 1) -- Fallback Blue
         end
@@ -642,7 +642,7 @@ function UF:CreateHealPrediction(frame)
                 local t = GetTime()
                 if not frame.lastErr or (t - frame.lastErr > 3) then
                     frame.lastErr = t
-                    print("[RoithiUI Error]: " .. tostring(err))
+                    RoithiUI:Log("Error: ", tostring(err))
                 end
             end
         end)

@@ -268,7 +268,11 @@ function Config:CreateDashboard()
     --         SetEditModeState(right, enabled)
     --     end)
 
-    -- 2. Unit Sections
+    -- 2. Debug Section
+    local debugContent = CreateSection("Debug", 25)
+    CreateCheck(debugContent, "Enable Debug Logging", RoithiUI.db.profile.General, "debugMode", 15, -5)
+
+    -- 3. Unit Sections
     local units = {
         { "Player",       "player" },
         { "Target",       "target" },

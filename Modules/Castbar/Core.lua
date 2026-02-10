@@ -328,7 +328,7 @@ SlashCmdList["MIDNIGHTCB"] = function(msg)
             HideUIPanel(EditModeManagerFrame)
         end
     else
-        print("MidnightCastbars: Edit Mode not available.")
+        RoithiUI:Log("MidnightCastbars: Edit Mode not available.")
     end
 end
 
@@ -418,8 +418,8 @@ function ns.SetCastbarAttachment(unit, attached)
         end)
 
         if not ok then
-            print(string.format(
-                "|cffff0000RoithiUI [SetCastbarAttachment] ATTACH FAILED for %s.|r Anchor: %s, Error: %s",
+            RoithiUI:Log(string.format(
+                "|cffff0000[SetCastbarAttachment] ATTACH FAILED for %s.|r Anchor: %s, Error: %s",
                 unit, anchor:GetName() or "nil", err))
 
             -- Emergency Recovery (Atomic)
@@ -443,7 +443,7 @@ function ns.SetCastbarAttachment(unit, attached)
         end)
 
         if not ok then
-            print(string.format("|cffff0000RoithiUI [SetCastbarAttachment] DETACH FAILED for %s:|r %s", unit, err))
+            RoithiUI:Log(string.format("|cffff0000[SetCastbarAttachment] DETACH FAILED for %s:|r %s", unit, err))
             pcall(function()
                 bar:ClearAllPoints()
                 bar:SetPoint("CENTER", UIParent, "CENTER", 0, (unit == "player" and -150 or 0))

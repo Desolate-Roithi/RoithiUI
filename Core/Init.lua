@@ -11,6 +11,12 @@ local LibRoithi = LibStub("LibRoithi-1.0")
 -- Debug Flag
 RoithiUI.debug = false
 
+function RoithiUI:Log(...)
+    if not self.db or not self.db.profile.General.debugMode then return end
+    local prefix = "|cff00ccffRoithiUI:|r"
+    print(prefix, ...)
+end
+
 -- Module Handling is now natively provided by AceAddon:
 -- RoithiUI:NewModule(name, prototype, mixins)
 -- RoithiUI:GetModule(name)

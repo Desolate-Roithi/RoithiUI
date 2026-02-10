@@ -507,7 +507,7 @@ function TM:GetSegments(formatString, unit)
                     table.insert(result, { text = val, isTag = true })
                 end
             else
-                print("|cffff0000[RoithiUI Tag Error]|r", tagName, val)
+                RoithiUI:Log("|cffff0000[RoithiUI Tag Error]|r", tagName, val)
                 table.insert(result, { text = "<Err>", isTag = true })
             end
         else
@@ -695,7 +695,8 @@ function UF:EnableTags(frame)
     local function OnTagEvent(_, event, unit)
         -- Standard Unit Events
         -- Use UnitIsUnit to handle dynamic units (e.g., targettarget == player)
-        if unit and frame.unit and (unit == frame.unit or UnitIsUnit(unit, frame.unit)) then
+        local match = unit and frame.unit and (unit == frame.unit or UnitIsUnit(unit, frame.unit))
+        if (issecretvalue and issecretvalue(match)) or match then
             UpdateTags()
             -- Context Switch Events
         elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then

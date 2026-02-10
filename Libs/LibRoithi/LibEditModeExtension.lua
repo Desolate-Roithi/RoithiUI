@@ -54,7 +54,11 @@ if not lib.internal.IsHealed then
         if not lib.internal.dialog then
             -- Trigger restoration of pools/dialog/widgets if they are missing
             -- This is a simplified version of the healing logic mentioned in SESSIONS.ctx
-            print("|cffff0000[LibRoithi]|r LibEditMode Corruption Detected! Healing...")
+            if _G.RoithiUI and _G.RoithiUI.Log then
+                _G.RoithiUI:Log("LibEditMode Corruption Detected! Healing...")
+            else
+                print("|cffff0000[LibRoithi]|r LibEditMode Corruption Detected! Healing...")
+            end
             -- (In a real scenario, we'd reload the files here or re-run the creation functions)
         end
         return oldAddFrame(self, frame, callback, default, name)

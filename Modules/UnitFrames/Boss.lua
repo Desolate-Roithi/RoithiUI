@@ -192,7 +192,7 @@ function UF:ToggleBossTestMode()
     self.BossTestMode = not self.BossTestMode
 
     if self.BossTestMode then
-        print("|cff00ccffRoithiUI:|r Boss Frames Test Mode: |cff00ff00ON|r")
+        RoithiUI:Log("Boss Frames Test Mode: |cff00ff00ON|r")
         for i = 1, 5 do
             local frame = self.units["boss" .. i]
             if frame then
@@ -217,7 +217,7 @@ function UF:ToggleBossTestMode()
             end
         end
     else
-        print("|cff00ccffRoithiUI:|r Boss Frames Test Mode: |cffff0000OFF|r")
+        RoithiUI:Log("Boss Frames Test Mode: |cffff0000OFF|r")
         for i = 1, 5 do
             local frame = self.units["boss" .. i]
             if frame then

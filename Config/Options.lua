@@ -142,6 +142,15 @@ local function GetOptions()
                         end,
                         width = "full",
                     },
+                    debugMode = {
+                        type = "toggle",
+                        name = "|cffff0000Debug Mode|r",
+                        desc = "Enable debug logging to the chat window.",
+                        order = 50,
+                        get = function() return RoithiUI.db.profile.General.debugMode end,
+                        set = function(_, v) RoithiUI.db.profile.General.debugMode = v end,
+                        width = "full",
+                    },
                 },
             },
             unitframes = {
