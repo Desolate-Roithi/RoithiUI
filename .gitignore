@@ -1,5 +1,24 @@
-.vscode
-.agent
+# --- Editor & System Junk ---
+.vscode/
+.agent/
+.DS_Store
+Thumbs.db
+
+# --- Development Tools ---
 .luacheckrc
-Tests
-Libs/Ace3/tests
+Tests/
+
+# --- Libraries (Externals) ---
+Libs/Ace3/
+Libs/LibStub/
+Libs/CallbackHandler-1.0/
+Libs/LibSharedMedia-3.0/
+Libs/LibDeflate/
+Libs/LibRangeCheck-3.0/
+Libs/LibDualSpec-1.0/
+Libs/oUF/
+Libs/TaintLess/
+
+# --- Packager Output ---
+.release/
+*.zip
