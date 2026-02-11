@@ -2,7 +2,6 @@
     <!-- Base Libraries -->
     <Script file="LibStub/LibStub.lua"/>
     <Include file="CallbackHandler-1.0/CallbackHandler-1.0.xml"/>
-    <Include file="TaintLess/TaintLess.xml"/>
     
     <!-- Utilities -->
     <Include file="LibSharedMedia-3.0/lib.xml"/>
