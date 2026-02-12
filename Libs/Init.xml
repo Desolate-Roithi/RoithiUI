@@ -7,7 +7,7 @@
     <Include file="LibSharedMedia-3.0/lib.xml"/>
     <Include file="LibEditMode/embed.xml"/>
     <Script file="LibDeflate/LibDeflate.lua"/>
-    <Script file="LibRangeCheck-3.0/LibRangeCheck-3.0.lua"/>
+    <Script file="LibRangeCheck-3.0/LibRangeCheck-3.0/LibRangeCheck-3.0.lua"/>
 
     <!-- Ace3 -->
     <Include file="Ace3/AceAddon-3.0/AceAddon-3.0.xml"/>
@@ -23,7 +23,7 @@
     <Include file="Ace3/AceConfig-3.0/AceConfig-3.0.xml"/>
     <Include file="Ace3/AceDB-3.0/AceDB-3.0.xml"/>
     <Include file="Ace3/AceDBOptions-3.0/AceDBOptions-3.0.xml"/>
-    <Include file="Ace3/AceGUI-3.0-SharedMediaWidgets/widget.xml"/>
+    <Include file="AceGUI-3.0-SharedMediaWidgets/widget.xml"/>
 
     
     <!-- Ace3 Extensions -->

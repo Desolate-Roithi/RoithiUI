@@ -3,6 +3,7 @@
 .agent/
 .DS_Store
 Thumbs.db
+CHANGELOG.md
 
 # --- Development Tools ---
 .luacheckrc

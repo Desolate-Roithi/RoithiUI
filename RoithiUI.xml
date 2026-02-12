@@ -48,5 +48,5 @@
     <Script file="Modules/Castbar/Castbar.lua"/>
     
     <!-- Manual Tests (Safe to load, requires /rs on to activate) -->
-    <Script file="Tests/Manual/SimulateSecrets.lua"/>
+    <!-- <Script file="Tests/Manual/SimulateSecrets.lua"/> -->
 </Ui>
