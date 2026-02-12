@@ -247,8 +247,9 @@ function UF:CreateClassPower(frame)
 
             curValue = aura and aura.applications or 0
 
-            if aura and aura.maxStack and aura.maxStack > 0 then
-                max = aura.maxStack
+            ---@diagnostic disable-next-line: undefined-field
+            if aura and config.maxDisplay then
+                max = config.maxDisplay
                 if class == "SHAMAN" then max = 5 end
             end
         elseif config.mode == "POWER" then
@@ -427,59 +428,26 @@ function UF:CreateClassPower(frame)
     end
 
     -- ------------------------------------------------------------------------
-    -- Robust Layout Updater (Stacked: Below Power)
+    -- Robust Layout Updater (Centralized Attachment)
     -- ------------------------------------------------------------------------
     frame.UpdateClassPowerLayout = function()
-        -- element.forceLayout = true -- (Removed, rely on direct updates)
+        local AL = ns.AttachmentLogic
+        if AL then
+            AL:ApplyLayout(frame.unit, "ClassPower")
+        end
+
         local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
         if not db then return end
 
-        local detached = db.classPowerDetached
-        local enabled = db.classPowerEnabled ~= false -- Default true
         local height = db.classPowerHeight or 12
+        local enabled = db.classPowerEnabled ~= false
 
         if not enabled then
             element:Hide()
             return
         end
 
-        -- Fix: Height update should happen before any coordinate setting
         element:SetHeight(height)
-        element:ClearAllPoints()
-
-        if detached then
-            element:SetParent(UIParent)
-            -- Default to 0,0 if nil
-            local point = db.classPowerPoint or "CENTER"
-            local x = db.classPowerX or 0
-            local y = db.classPowerY or 0
-            element:SetPoint(point, UIParent, point, x, y)
-
-            -- Independent Width
-            local width = db.classPowerWidth or frame:GetWidth()
-            element:SetWidth(width)
-        else
-            element:SetParent(frame.Power) -- Parent to Power so we follow it
-
-
-            -- STACKING LOGIC: Always Below Power if attached
-            -- This satisfies "Pd Ca = Power and Class move together"
-            local anchor = frame.Power
-            local anchorPoint = "TOPLEFT"
-            local relPoint = "BOTTOMLEFT"
-            local offset = -4
-
-            element:SetPoint(anchorPoint, anchor, relPoint, 0, offset)
-            element:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, offset)
-
-            -- Match Frame Width (Or Power Width?)
-            -- User said "all bars should not use any width... when attached"
-            -- Usually matching frame width is safest for alignment, but if Power is detached and scaled...
-            -- Let's match Power width if possible, or Frame.
-            -- "Attached" usually implies Frame width visually, but if following Power...
-            element:SetWidth(frame.Power:GetWidth())
-        end
-
         Update()
     end
 
@@ -500,10 +468,7 @@ function UF:CreateClassPower(frame)
 
             -- If not detached, ignore movement and enforce attached layout
             if not db or not db.classPowerDetached then
-                f:ClearAllPoints()
-                f:SetParent(frame.Power)
-                f:SetPoint("TOPLEFT", frame.Power, "BOTTOMLEFT", 0, -4)
-                f:SetPoint("TOPRIGHT", frame.Power, "BOTTOMRIGHT", 0, -4)
+                if frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
                 return
             end
 
@@ -514,6 +479,9 @@ function UF:CreateClassPower(frame)
             end
             f:ClearAllPoints()
             f:SetPoint(point, UIParent, point, x, y)
+
+            local AL = ns.AttachmentLogic
+            if AL then AL:GlobalLayoutRefresh(unit) end
         end
 
         LEM:AddFrame(element, OnClassPowerPosChanged, defaults)
@@ -535,6 +503,8 @@ function UF:CreateClassPower(frame)
                 end
             else
                 element.isInEditMode = false
+                -- Force layout update to ensure SetMovable(false) is applied
+                if frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
             end
         end)
 

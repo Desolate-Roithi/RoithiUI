@@ -1,50 +1,57 @@
 # RoithiUI
 
-**RoithiUI** is a modular, high-performance User Interface replacement for World of Warcraft: Midnight (Patch 12.0) Beta. It is designed to provide a clean, modern aesthetic similar to ElvUI but built on a lightweight, module-first architecture that heavily leverages the native WoW Edit Mode.
+**RoithiUI** is a modular, high-performance User Interface replacement for **World of Warcraft: Midnight (Patch 12.0)**. It is designed to provide a clean, modern aesthetic with pixel-perfect precision, built on a lightweight, module-first architecture that heavily leverages the native **WoW Edit Mode**.
 
 ## Features
 
-- **Modular Core**: Features are split into independent modules (UnitFrames, Castbars, etc.) for better performance and maintainability.
-- **Edit Mode Integration**: All UI elements are fully integrated with Blizzard's Edit Mode ("HUD Edit Mode"). You can move, scale, and configure frames directly using the native tools.
+- **Modular Core**: Functionality is split into independent modules (UnitFrames, Castbars, etc.) for optimal performance.
+- **Edit Mode Integration**: All UI elements are fully integrated with Blizzard's "HUD Edit Mode". You can move, scale, and configure frames directly using native tools.
+- **Strict Attachment Logic**: Unit frame elements (Power, Class Power, Additional Power, Castbar) follow a strict hierarchy to ensure they snap together perfectly.
+  - *Hierarchy*: UnitFrame -> Power -> ClassPower -> AdditionalPower -> Castbar.
+  - *Drag Lock*: Attached elements remain locked to their parent to prevent accidental misalignment. To move them, simply "Detach" them in the settings.
 - **SharedMedia Support**: Includes custom textures and fonts, and supports global SharedMedia libraries.
-- **Modern Aesthetic**: Pixel-perfect borders, smooth status bars, and clean typography.
 
 ## Modules
 
 ### 1. UnitFrames
-A complete replacement for Player, Target, and Focus frames.
-- **Health & Power**: Custom status bars with class colors.
-- **Heal Prediction**: Supports the new 12.0 Heal Prediction APIs for accurate incoming heal visuals.
-- **Buffs/Debuffs**: Integrated aura handling.
+A complete replacement for Player, Target, Focus, Pet, and Boss frames.
+- **Health & Power**: Custom status bars with dynamic class colors.
+- **Additional Power**: Native support for Mana on Druids/Shamans/Priests when in specific forms.
+- **Heal Prediction**: Supports the new 12.0 Heal Prediction APIs for accurate incoming heal/absorb visuals.
+- **Buffs/Debuffs**: Integrated aura handling with whitelist/blacklist support.
 
 ### 2. Castbars
 A robust castbar module supporting all major units.
-- **Supported Units**: Player, Target, Focus, Pet, Target of Target, Focus Target.
-- **Empowered Spells**: Native support for Evoker/modern empowered cast stages.
+- **Supported Units**: Player, Target, Focus, Pet, TargetTarget, FocusTarget.
+- **Empowered Spells**: Native support for Evoker and modern empowered cast stages.
 - **Channeling**: Supports ticks and precise channel timing.
-- **Configuration**: Fully configurable via Edit Mode (Settings dialog attached to the frame).
-
-## Installation
-
-1. Download the `RoithiUI` folder.
-2. Place it in your `World of Warcraft/_beta_/Interface/AddOns/` directory.
-3. Launch the game.
+- **Smart Anchoring**: Automatically anchors to the UnitFrame stack but can be detached and placed anywhere.
 
 ## Configuration
 
-RoithiUI uses a "Zero-Config" philosophy where possible, relying on logical defaults. However, customization is easy:
+RoithiUI uses a **"Zero-Config"** philosophy regarding defaults, but customization is fully supported via **Edit Mode**.
 
-1. **Enter Edit Mode**: Right-click your unit frame or open the Game Menu -> Edit Mode.
-2. **Select a Frame**: Click on any RoithiUI frame (e.g., "Roithi Player Frame", "Midnight Player Bar") to select it.
-3. **Adjust Settings**: A settings dialog will appear (courtesy of `LibEditMode`) allowing you to adjust Width, Height, Position, Colors, and more.
-4. **Global Toggle**: A generic "Midnight Castbars" menu usually appears in Edit Mode to toggle individual bar visibility.
+### How to Customize
+1.  **Enter Edit Mode**: Open the Game Menu -> Edit Mode (or right-click a unit frame).
+2.  **Select a Frame**: Click on any RoithiUI element (e.g., "Roithi Player Frame", "Player Castbar").
+3.  **Adjust Settings**: A configuration window will appear, allowing you to:
+    -   **Detach/Attach**: Break the dependency chain to move elements freely.
+    -   **Size & Scale**: Adjust width and height.
+    -   **Colors**: Customize bar colors.
+
+### Debug Mode
+If you encounter issues, you can enable **Debug Mode** to see detailed logs in the chat.
+-   Go to `RoithiUI Options` (via Addon Compartment or `/rui`).
+-   Toggle **Debug Mode** in the General settings.
+-    *Note: Logs are zero-overhead when disabled.*
 
 ## Slash Commands
 
-- `/rl` - Reload UI (if using standard Dev tools)
-- `/mcb` - Shortcut to open Edit Mode (Castbar specific alias)
+- `/rl` - Reload UI
+- `/rui` - Open Options Panel
+- `/mcb` - Shortcut to open Edit Mode (Legacy alias)
 
-## Libraries Used
+## Libraries
 
 - **LibStub** & **CallbackHandler-1.0**
 - **LibSharedMedia-3.0**

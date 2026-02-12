@@ -27,7 +27,8 @@ local function UpdateBar(unit)
 
     if not db.detached then
         -- ATTACHED MODE: Match UnitFrame Width
-        local UF = RoithiUI:GetModule("UnitFrames")
+        local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+        ---@diagnostic disable-next-line: undefined-field
         local uFrame = UF and UF.units and UF.units[unit]
 
         if uFrame then
@@ -39,6 +40,9 @@ local function UpdateBar(unit)
                 if finalWidth < 1 then finalWidth = 1 end
             end
         end
+
+        local AL = ns.AttachmentLogic
+        if AL then AL:GlobalLayoutRefresh(unit) end
     elseif not ns.SetCastbarAttachment and db.detached then
         -- Fallback for dragging in detached mode
         if not bar.isInEditMode then

@@ -41,6 +41,7 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
         frame.EditModeOverlay = overlay
 
         LEM:RegisterCallback('enter', function()
+            if InCombatLockdown() then return end
             frame.isInEditMode = true
             overlay:Show()
 
@@ -65,6 +66,7 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
         end)
 
         LEM:RegisterCallback('exit', function()
+            if InCombatLockdown() then return end
             frame.isInEditMode = false
             overlay:Hide()
             if frame.forceShowEditMode then

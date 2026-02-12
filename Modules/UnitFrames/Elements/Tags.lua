@@ -281,6 +281,19 @@ TM.Methods = {
             if pMax and pMax > 0 then max = pMax end
         end
 
+        if issecretvalue and (issecretvalue(cur) or issecretvalue(max)) then
+            local curve = (CurveConstants and CurveConstants.ScaleTo100) or 0
+            local success, result = pcall(function()
+                -- 12.0.1: Native Class Power Percent usually via UnitPowerPercent
+                -- but we need to know the type. Prototype check:
+                local pType = config.type
+                local pct = UnitPowerPercent(unit, pType, false, curve)
+                return string.format("%.0f%%", pct)
+            end)
+            if success and result then return result end
+            return ""
+        end
+
         if max == 0 then return "0%" end
         return string.format("%.0f%%", (cur / max) * 100)
     end,
@@ -373,7 +386,12 @@ TM.Methods = {
     ["absorb"] = function(unit)
         local absorb = UnitGetTotalAbsorbs(unit) or 0
         if issecretvalue and issecretvalue(absorb) then return absorb end
-        if absorb <= 0 then return "" end
+
+        -- Safe check for > 0 using pcall to avoid crash if comparison fails
+        local isPositive = false
+        pcall(function() if absorb > 0 then isPositive = true end end)
+
+        if not isPositive then return "" end
         return absorb
     end,
 

@@ -8,6 +8,7 @@
     <Script file="Core/Utils.lua"/>
     <Script file="Core/Commands.lua"/>
     <Script file="Core/Media.lua"/>
+    <Script file="Core/AttachmentLogic.lua"/>
     <Script file="Config/Defaults.lua"/>
     <Script file="Config/Dashboard.lua"/>
     <Script file="Config/CustomTags.lua"/>

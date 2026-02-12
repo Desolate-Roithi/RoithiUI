@@ -96,89 +96,16 @@ function UF:CreateAdditionalPower(frame)
 
     Update()
 
-    -- Layout Update Function (Dynamic Anchoring)
-    -- This ensures we sit below the "lowest" visible element
+    -- Layout Update Function (Delegated to AttachmentLogic)
     frame.UpdateAdditionalPowerLayout = function()
-        -- Get DB
-        local db
-        if RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit] then
-            db = RoithiUI.db.profile.UnitFrames[frame.unit]
-        else
-            return
+        local AL = ns.AttachmentLogic
+        if AL then
+            AL:ApplyLayout(frame.unit, "AdditionalPower")
         end
 
-        local detached = db.additionalPowerDetached
-
-        if frame.isInEditMode then
-            addPower.isInEditMode = true
-        end
-
-        local height = db.additionalPowerHeight or 10
-        addPower:SetHeight(height)
-
-        if detached then
-            addPower:SetParent(UIParent)
-            local point = db.additionalPowerPoint or "CENTER"
-            local x = db.additionalPowerX or 0
-            local y = db.additionalPowerY or -120
-            addPower:ClearAllPoints()
-            addPower:SetPoint(point, UIParent, point, x, y)
-
-            local width = db.additionalPowerWidth or frame:GetWidth()
-            addPower:SetWidth(width)
-        else
-            addPower:SetParent(frame)
-            addPower:ClearAllPoints()
-            addPower:SetWidth(frame:GetWidth())
-
-            -- Anchoring Logic: Lowest Visible Bar
-            local cp = frame.ClassPower
-            local p = frame.Power
-            local spacing = 4
-
-            local cpVisible = cp and cp:IsShown()
-            local pVisible = p and p:IsShown()
-
-            -- Check detached states of parents
-            local pDetached = db.powerDetached
-            local cpDetached = db.classPowerDetached
-
-            -- Logic:
-            -- 1. If CP is attached and visible, anchor to CP. (CP is assumed below Power if Power attached)
-            -- 2. Else if Power is attached and visible, anchor to Power.
-            -- 3. Else anchor to Frame.
-
-            if cpVisible and not cpDetached then
-                -- CP is here. CP anchors to Power (if att) or Frame?
-                -- CP logic: attached to Power.
-                -- If Power is DETACHED, CP follows it (usually).
-                -- User rule: "if primary power is detached, class power should stay attached to this bar [primary power]"
-                -- So if Power is detached, CP is with it.
-                -- User rule: "additional power should stay attached to the health frame unless its detached by itself"
-                -- So AP stays with Health.
-
-                -- So if Power (and thus CP) is DETACHED, AP is alone on Frame.
-                if pDetached then
-                    addPower:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 0, -spacing)
-                    addPower:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, -spacing)
-                else
-                    -- Power is ATTACHED. CP is ATTACHED (to Power).
-                    -- So we anchor to CP.
-                    addPower:SetPoint("TOPLEFT", cp, "BOTTOMLEFT", 0, -spacing)
-                    addPower:SetPoint("TOPRIGHT", cp, "BOTTOMRIGHT", 0, -spacing)
-                end
-            elseif pVisible and not pDetached then
-                -- CP Hidden or Detached. Power is here.
-                -- Anchor to Power.
-                addPower:SetPoint("TOPLEFT", p, "BOTTOMLEFT", 0, -spacing)
-                addPower:SetPoint("TOPRIGHT", p, "BOTTOMRIGHT", 0, -spacing)
-            else
-                -- Power Hidden or Detached.
-                -- Anchor to Frame.
-                addPower:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 0, -spacing)
-                addPower:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, -spacing)
-            end
-        end
+        -- Visibility / Height Fallback handling (if needed specific to AddPower)
+        -- AL:ApplyLayout handles sizing and positioning.
+        -- We just need to ensure visibility is correct via the Update function.
     end
 
     -- Edit Mode Registration
@@ -191,47 +118,61 @@ function UF:CreateAdditionalPower(frame)
 
         local function OnPosChanged(f, layoutName, point, x, y)
             local unit = frame.unit
-            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
+            local AL = ns.AttachmentLogic
 
-            -- If not detached, ignore movement and enforce attached layout
-            if not db or not db.additionalPowerDetached then
-                f:ClearAllPoints()
-                if frame.ClassPower and frame.ClassPower:IsShown() then
-                    f:SetParent(frame.ClassPower)
-                    f:SetPoint("TOPLEFT", frame.ClassPower, "BOTTOMLEFT", 0, -4)
-                    f:SetPoint("TOPRIGHT", frame.ClassPower, "BOTTOMRIGHT", 0, -4)
-                else
-                    f:SetParent(frame.Power)
-                    f:SetPoint("TOPLEFT", frame.Power, "BOTTOMLEFT", 0, -4)
-                    f:SetPoint("TOPRIGHT", frame.Power, "BOTTOMRIGHT", 0, -4)
-                end
+            -- 1. Check Detached State via AL
+            local isDetached = AL and AL:IsDetached(unit, "AdditionalPower")
+
+            if not isDetached then
+                -- Force layout update to ensure SetMovable(false) is applied
+                if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
                 return
             end
 
+            -- 2. Save Positions if Detached
+            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
             if db then
                 db.additionalPowerPoint = point
                 db.additionalPowerX = x
                 db.additionalPowerY = y
             end
+
+            -- 3. Move Frame
             f:ClearAllPoints()
             f:SetPoint(point, UIParent, point, x, y)
+
+            -- 4. Trigger Global Refresh
+            if AL then AL:GlobalLayoutRefresh(unit) end
         end
 
         LEM:AddFrame(addPower, OnPosChanged, defaults)
-        addPower:SetMovable(true)
+        -- NOTE: Do NOT call SetMovable(true) here explicitly. AL:ApplyLayout will handle it.
 
+        -- Custom Visibility for Edit Mode
         LEM:RegisterCallback('enter', function()
-            addPower.isInEditMode = true
-            addPower:Show()
-            addPower:SetStatusBarColor(0, 0.5, 1)
-            addPower:SetValue(UnitPowerMax("player", 0))
-            frame.UpdateAdditionalPowerLayout() -- Force check layout
+            local unit = frame.unit
+            local AL = ns.AttachmentLogic
+            local isDetached = AL and AL:IsDetached(unit, "AdditionalPower")
+
+            if isDetached then
+                addPower.isInEditMode = true
+                addPower:Show()
+                addPower:SetAlpha(1)
+                -- Visuals
+                addPower:SetMinMaxValues(0, 100)
+                addPower:SetValue(100)
+                addPower:SetStatusBarColor(0, 0.5, 1)
+            else
+                addPower.isInEditMode = false
+                -- Force layout to ensure locked
+                if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+            end
         end)
 
         LEM:RegisterCallback('exit', function()
             addPower.isInEditMode = false
-            Update()
-            frame.UpdateAdditionalPowerLayout()
+            Update(addPower) -- Restore normal state
+            if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
         end)
     end
 

@@ -21,3 +21,10 @@ ignore:
   - README.md
   - .github
   - .vscode
+
+changelog:
+  line-label: "-"
+  template: |
+    # Changelog for @project-version@
+    @debug@
+    @commits-short@

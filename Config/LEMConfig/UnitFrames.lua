@@ -39,12 +39,8 @@ local function GetSettingsForPower(unit)
             set = function(_, value)
                 GetDB(unit).powerEnabled = value
                 UpdateFrameFromSettings(unit)
-                if ns.SetCastbarAttachment then
-                    local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
-                    if cbDB and not cbDB.detached then
-                        ns.SetCastbarAttachment(unit, true)
-                    end
-                end
+                local AL = ns.AttachmentLogic
+                if AL then AL:GlobalLayoutRefresh(unit) end
             end,
         },
         {
@@ -66,45 +62,24 @@ local function GetSettingsForPower(unit)
             default = false,
             get = function() return GetDB(unit).powerDetached end,
             set = function(_, value)
-                -- Smart Detach Logic
-                if value == true and not GetDB(unit).powerDetached then
+                -- Initialize separate width on first detach
+                if value == true and not GetDB(unit).powerWidth then
                     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                     local frame = UF and UF.units and UF.units[unit]
                     if frame and frame.Power then
-                        local cX, cY = frame.Power:GetCenter()
-                        local uScale = UIParent:GetEffectiveScale()
-                        if cX and cY then
-                            local screenWidth, screenHeight = UIParent:GetSize()
-                            local finalX = (cX / uScale) - (screenWidth / 2)
-                            local finalY = (cY / uScale) - (screenHeight / 2)
-
-                            GetDB(unit).powerPoint = "CENTER"
-                            GetDB(unit).powerX = finalX
-                            GetDB(unit).powerY = finalY
-
-                            -- Initialize separate width on first detach
-                            if not GetDB(unit).powerWidth then
-                                GetDB(unit).powerWidth = frame:GetWidth()
-                            end
-                        end
+                        GetDB(unit).powerWidth = frame.Power:GetWidth()
                     end
-                elseif value == false then
-                    GetDB(unit).powerWidth = nil
                 end
 
                 GetDB(unit).powerDetached = value
                 UpdateFrameFromSettings(unit)
                 -- Refresh settings to show/hide Width
                 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
-                local frame = UF and UF.frames and UF.frames[unit]
+                local frame = UF and UF.units and UF.units[unit]
                 if frame and frame.Power then LEM:RefreshFrameSettings(frame.Power) end
 
-                if ns.SetCastbarAttachment then
-                    local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
-                    if cbDB and not cbDB.detached then
-                        ns.SetCastbarAttachment(unit, true)
-                    end
-                end
+                local AL = ns.AttachmentLogic
+                if AL then AL:GlobalLayoutRefresh(unit) end
             end,
         },
         {
@@ -119,8 +94,9 @@ local function GetSettingsForPower(unit)
                 GetDB(unit).powerX = value
                 UpdateFrameFromSettings(unit)
                 -- Force Update to ensure it moves visually immediately
-                local UF = RoithiUI:GetModule("UnitFrames")
-                local frame = UF and UF.frames and UF.frames[unit]
+                local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                ---@diagnostic disable-next-line: undefined-field
+                local frame = UF and UF.units and UF.units[unit]
                 if frame and frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
@@ -137,8 +113,9 @@ local function GetSettingsForPower(unit)
             set = function(_, value)
                 GetDB(unit).powerY = value
                 UpdateFrameFromSettings(unit)
-                local UF = RoithiUI:GetModule("UnitFrames")
-                local frame = UF and UF.frames and UF.frames[unit]
+                local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                ---@diagnostic disable-next-line: undefined-field
+                local frame = UF and UF.units and UF.units[unit]
                 if frame and frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
@@ -172,12 +149,8 @@ local function GetSettingsForClassPower(unit)
             set = function(_, value)
                 GetDB(unit).classPowerEnabled = value
                 UpdateFrameFromSettings(unit)
-                if ns.SetCastbarAttachment then
-                    local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
-                    if cbDB and not cbDB.detached then
-                        ns.SetCastbarAttachment(unit, true)
-                    end
-                end
+                local AL = ns.AttachmentLogic
+                if AL then AL:GlobalLayoutRefresh(unit) end
             end,
         },
         {
@@ -199,56 +172,27 @@ local function GetSettingsForClassPower(unit)
             default = false,
             get = function() return GetDB(unit).classPowerDetached end,
             set = function(_, value)
-                -- Smart Detach Logic
-                if value == true and not GetDB(unit).classPowerDetached then
+                -- Initialize separate width on first detach
+                if value == true and not GetDB(unit).classPowerWidth then
                     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                     local frame = UF and UF.units and UF.units[unit]
                     if frame and frame.ClassPower then
-                        local cX, cY = frame.ClassPower:GetCenter()
-                        local uScale = UIParent:GetEffectiveScale()
-                        if cX and cY then
-                            local screenWidth, screenHeight = UIParent:GetSize()
-                            local finalX = (cX / uScale) - (screenWidth / 2)
-                            local finalY = (cY / uScale) - (screenHeight / 2)
-
-                            GetDB(unit).classPowerPoint = "CENTER"
-                            GetDB(unit).classPowerX = finalX
-                            GetDB(unit).classPowerY = finalY
-
-                            -- Initialize separate width on first detach
-                            if not GetDB(unit).classPowerWidth then
-                                GetDB(unit).classPowerWidth = frame.ClassPower:GetWidth()
-                            end
-                        end
+                        GetDB(unit).classPowerWidth = frame.ClassPower:GetWidth()
                     end
-                elseif value == false then
-                    GetDB(unit).classPowerWidth = nil
                 end
 
                 GetDB(unit).classPowerDetached = value
-                print("DEBUG_DETACH: DB Set. Calling UpdateFrameFromSettings...")
                 UpdateFrameFromSettings(unit)
 
-                print("DEBUG_DETACH: Calling LEM Refresh...")
                 -- Refresh settings to show/hide Width
                 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
-                local frame = UF and UF.frames and UF.frames[unit]
+                local frame = UF and UF.units and UF.units[unit]
                 if frame and frame.ClassPower then
                     LEM:RefreshFrameSettings(frame.ClassPower)
-                    print("DEBUG_DETACH: LEM Refresh Done. Forcing Layout Update...")
-                    -- Fix: Re-apply layout AFTER refresh to ensure Attachment overrides LEM positioning
-                    if frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
-                    if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
                 end
 
-                print("DEBUG_DETACH: Sequence Complete.")
-
-                if ns.SetCastbarAttachment then
-                    local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
-                    if cbDB and not cbDB.detached then
-                        ns.SetCastbarAttachment(unit, true)
-                    end
-                end
+                local AL = ns.AttachmentLogic
+                if AL then AL:GlobalLayoutRefresh(unit) end
             end,
         },
         {
@@ -262,8 +206,9 @@ local function GetSettingsForClassPower(unit)
             set = function(_, value)
                 GetDB(unit).classPowerX = value
                 UpdateFrameFromSettings(unit)
-                local UF = RoithiUI:GetModule("UnitFrames")
-                local frame = UF and UF.frames and UF.frames[unit]
+                local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                ---@diagnostic disable-next-line: undefined-field
+                local frame = UF and UF.units and UF.units[unit]
                 if frame and frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
@@ -280,8 +225,9 @@ local function GetSettingsForClassPower(unit)
             set = function(_, value)
                 GetDB(unit).classPowerY = value
                 UpdateFrameFromSettings(unit)
-                local UF = RoithiUI:GetModule("UnitFrames")
-                local frame = UF and UF.frames and UF.frames[unit]
+                local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                ---@diagnostic disable-next-line: undefined-field
+                local frame = UF and UF.units and UF.units[unit]
                 if frame and frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
@@ -342,49 +288,26 @@ local function GetSettingsForAdditionalPower(unit)
             default = false,
             get = function() return GetDB(unit).additionalPowerDetached end,
             set = function(_, value)
-                -- Smart Detach Logic
-                if value == true and not GetDB(unit).additionalPowerDetached then
+                -- Initialize separate width on first detach
+                if value == true and not GetDB(unit).additionalPowerWidth then
                     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                     local frame = UF and UF.units and UF.units[unit]
                     if frame and frame.AdditionalPower then
-                        local cX, cY = frame.AdditionalPower:GetCenter()
-                        local uScale = UIParent:GetEffectiveScale()
-                        if cX and cY then
-                            local screenWidth, screenHeight = UIParent:GetSize()
-                            local finalX = (cX / uScale) - (screenWidth / 2)
-                            local finalY = (cY / uScale) - (screenHeight / 2)
-
-                            GetDB(unit).additionalPowerPoint = "CENTER"
-                            GetDB(unit).additionalPowerX = finalX
-                            GetDB(unit).additionalPowerY = finalY
-
-                            -- Initialize separate width on first detach
-                            if not GetDB(unit).additionalPowerWidth then
-                                GetDB(unit).additionalPowerWidth = frame.AdditionalPower:GetWidth()
-                            end
-                        end
+                        GetDB(unit).additionalPowerWidth = frame.AdditionalPower:GetWidth()
                     end
-                elseif value == false then
-                    GetDB(unit).additionalPowerWidth = nil
                 end
 
                 GetDB(unit).additionalPowerDetached = value
                 UpdateFrameFromSettings(unit)
                 -- Refresh settings to show/hide Width
                 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
-                local frame = UF and UF.frames and UF.frames[unit]
+                local frame = UF and UF.units and UF.units[unit]
                 if frame and frame.AdditionalPower then
                     LEM:RefreshFrameSettings(frame.AdditionalPower)
-                    -- Fix: Re-apply layout AFTER refresh
-                    if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
                 end
 
-                if ns.SetCastbarAttachment then
-                    local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
-                    if cbDB and not cbDB.detached then
-                        ns.SetCastbarAttachment(unit, true)
-                    end
-                end
+                local AL = ns.AttachmentLogic
+                if AL then AL:GlobalLayoutRefresh(unit) end
             end,
         },
         {
@@ -398,8 +321,9 @@ local function GetSettingsForAdditionalPower(unit)
             set = function(_, value)
                 GetDB(unit).additionalPowerX = value
                 UpdateFrameFromSettings(unit)
-                local UF = RoithiUI:GetModule("UnitFrames")
-                local frame = UF and UF.frames and UF.frames[unit]
+                local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                ---@diagnostic disable-next-line: undefined-field
+                local frame = UF and UF.units and UF.units[unit]
                 if frame and frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
@@ -416,8 +340,9 @@ local function GetSettingsForAdditionalPower(unit)
             set = function(_, value)
                 GetDB(unit).additionalPowerY = value
                 UpdateFrameFromSettings(unit)
-                local UF = RoithiUI:GetModule("UnitFrames")
-                local frame = UF and UF.frames and UF.frames[unit]
+                local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                ---@diagnostic disable-next-line: undefined-field
+                local frame = UF and UF.units and UF.units[unit]
                 if frame and frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
@@ -467,6 +392,8 @@ local function GetSettingsForMainFrame(unit, frame)
             set = function(_, value)
                 GetDB(unit).width = value
                 UpdateFrameFromSettings(unit)
+                local AL = ns.AttachmentLogic
+                if AL then AL:GlobalLayoutRefresh(unit) end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
         },
@@ -694,14 +621,20 @@ if LEM then
                 local db = GetDB(unit)
                 -- FIX: Always detach secure driver in Edit Mode to ensure we have manual control
                 -- BUT ONLY IF NOT IN COMBAT to avoid Taint/Block
-                if not InCombatLockdown() then
+                local canTouchSecure = not InCombatLockdown()
+                if canTouchSecure then
                     UnregisterUnitWatch(frame)
                 end
+
                 frame.isInEditMode = true
 
                 if db and (db.enabled ~= false) then
-                    frame:Show()
-                    frame:SetAlpha(1)
+                    -- If we are in combat and still have a secure watch, we CANNOT call Show/Hide
+                    -- But if we are in combat and somehow got here, we best skip Show too.
+                    if canTouchSecure then
+                        frame:Show()
+                        frame:SetAlpha(1)
+                    end
 
                     if frame.EditModeOverlay then frame.EditModeOverlay:Show() end
 
@@ -712,7 +645,9 @@ if LEM then
                     if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
                 else
                     -- Disabled: Force Hide
-                    frame:Hide()
+                    if canTouchSecure then
+                        frame:Hide()
+                    end
                     if frame.EditModeOverlay then frame.EditModeOverlay:Hide() end
                 end
             end

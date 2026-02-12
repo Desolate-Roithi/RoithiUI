@@ -19,6 +19,7 @@ Libs/LibRangeCheck-3.0/
 Libs/LibDualSpec-1.0/
 Libs/oUF/
 Libs/TaintLess/
+Libs/AceGUI-3.0-SharedMediaWidgets/
 
 # --- Packager Output ---
 .release/

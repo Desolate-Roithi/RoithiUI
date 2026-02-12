@@ -208,6 +208,7 @@ end
 -- ----------------------------------------------------------------------------
 ---@class Castbar : AceAddon, AceModule
 local Castbar = RoithiUI:NewModule("Castbar")
+Castbar.bars = ns.bars   -- Expose for AttachmentLogic
 local MidnightCastbarsDB -- Local reference to RoithiUIDB.Castbar
 
 function Castbar:OnInitialize()
@@ -342,112 +343,22 @@ function ns.SetCastbarAttachment(unit, attached)
     local db = RoithiUI.db.profile.Castbar[unit]
     if not db then return end
 
-    local UF = RoithiUI:GetModule("UnitFrames")
-    local uFrame = UF and UF.units and UF.units[unit]
+    local AL = ns.AttachmentLogic
+    if AL then
+        AL:ApplyLayout(unit, "Castbar")
 
-    -- 1. Full Reset (Extract frame from any current family connections)
-    bar:ClearAllPoints()
-    pcall(function() bar:SetParent(nil) end)
-    bar:SetParent(UIParent)
-
-    if attached and uFrame then
-        -- SMART ATTACHMENT LOGIC
-        -- Priority: AdditionalPower > ClassPower > Power > Frame
-        local anchor = uFrame
-
-        -- Default to Frame-wide flags if unit-specific missing (e.g. boss)
-        local ufDB = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
-        local powerDetached = ufDB and ufDB.powerDetached
-        local classPowerDetached = ufDB and ufDB.classPowerDetached
-        local additionalPowerDetached = ufDB and ufDB.additionalPowerDetached
-
-        if uFrame.Power and uFrame.Power:IsShown() and not powerDetached then
-            anchor = uFrame.Power
-        end
-
-        if uFrame.ClassPower and uFrame.ClassPower:IsShown() and not classPowerDetached then
-            anchor = uFrame.ClassPower
-        end
-
-        if uFrame.AdditionalPower and uFrame.AdditionalPower:IsShown() and not additionalPowerDetached then
-            anchor = uFrame.AdditionalPower
-        end
-
-        -- Final Guard against Circularity
-        if bar == anchor or bar == uFrame then
-            bar:SetParent(UIParent)
-            bar:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-            return
-        end
-
-        local up = uFrame:GetParent()
-        local udepth = 0
-        while up and udepth < 20 do
-            if up == bar then
-                bar:SetParent(UIParent)
-                bar:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-                return
+        -- Special horizontal offset for Castbar Icon if still relevant
+        if not db.detached and db.showIcon then
+            local point, relativeTo, relativePoint, x, y = bar:GetPoint()
+            if point then
+                local iconSize = (db.height or 20) * (db.iconScale or 1.0)
+                bar:SetPoint(point, relativeTo, relativePoint, x + (iconSize / 2), y - 5)
             end
-            up = up:GetParent()
-            udepth = udepth + 1
-        end
-
-        -- Recursion check with limit
-        local p = anchor:GetParent()
-        local depth = 0
-        while p and depth < 20 do
-            if p == bar then
-                bar:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-                return
-            end
-            p = p:GetParent()
-            depth = depth + 1
-        end
-
-        local offX = db.x or 0
-        local offY = (db.y or 0) - 5
-        if db.showIcon then
-            local iconSize = (db.height or 20) * (db.iconScale or 1.0)
-            offX = offX + (iconSize / 2)
-        end
-
-        -- 2. Attempt Attachment (Wrapped)
-        local ok, err = pcall(function()
-            bar:SetParent(uFrame)
-            bar:SetPoint("TOP", anchor, "BOTTOM", offX, offY)
-        end)
-
-        if not ok then
-            RoithiUI:Log(string.format(
-                "|cffff0000[SetCastbarAttachment] ATTACH FAILED for %s.|r Anchor: %s, Error: %s",
-                unit, anchor:GetName() or "nil", err))
-
-            -- Emergency Recovery (Atomic)
-            pcall(function()
-                bar:SetParent(UIParent)
-                bar:ClearAllPoints()
-                bar:SetPoint("CENTER", UIParent, "CENTER", 0, (unit == "player" and -150 or 0))
-            end)
         end
     else
-        -- DETACHED MODE: Match the DB exactly
-        local point = db.point or "CENTER"
-        local x = db.x or 0
-        local y = db.y or 0
-
+        -- Fallback fallback
         bar:ClearAllPoints()
         bar:SetParent(UIParent)
-
-        local ok, err = pcall(function()
-            bar:SetPoint(point, UIParent, point, x, y)
-        end)
-
-        if not ok then
-            RoithiUI:Log(string.format("|cffff0000[SetCastbarAttachment] DETACH FAILED for %s:|r %s", unit, err))
-            pcall(function()
-                bar:ClearAllPoints()
-                bar:SetPoint("CENTER", UIParent, "CENTER", 0, (unit == "player" and -150 or 0))
-            end)
-        end
+        bar:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     end
 end

@@ -117,9 +117,7 @@ function UF:CreatePowerBar(frame)
             -- If not detached, ignore movement and enforce attached layout
             if not db or not db.powerDetached then
                 -- Optional: Immediately snap back? Or just rely on UpdatePowerLayout
-                f:ClearAllPoints()
-                f:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 0, -1)
-                f:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, -1)
+                if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
                 return
             end
 
@@ -130,6 +128,9 @@ function UF:CreatePowerBar(frame)
             end
             f:ClearAllPoints()
             f:SetPoint(point, UIParent, point, x, y)
+
+            local AL = ns.AttachmentLogic
+            if AL then AL:GlobalLayoutRefresh(unit) end
         end
 
         LEM:AddFrame(power, OnPowerPosChanged, defaults)
@@ -145,7 +146,8 @@ function UF:CreatePowerBar(frame)
                 power:Show()
             else
                 power.isInEditMode = false
-                -- Do not show distinct edit overlay if attached (it moves with main frame)
+                -- Force layout update to ensure SetMovable(false) is applied
+                if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
             end
         end)
 
@@ -168,72 +170,23 @@ function UF:CreatePowerBar(frame)
 
     -- Layout Updater
     local function UpdatePowerLayout()
-        local unit = frame.unit
-        local db
-        local db
-        if RoithiUI.db.profile.UnitFrames then db = RoithiUI.db.profile.UnitFrames[unit] end
-
-        -- Special Handling for Boss Frames (Inheritance)
-        if string.match(unit, "^boss[2-5]$") then
-            local driverDB = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames["boss1"]
-            if driverDB then
-                local specificDB = db or {}
-                db = setmetatable({}, {
-                    __index = function(_, k)
-                        -- Inherit Power Settings
-                        if k == "powerHeight" or k == "powerEnabled" then
-                            return driverDB[k]
-                        end
-                        -- Force Detach OFF for passengers
-                        if k == "powerDetached" then
-                            return false
-                        end
-                        return specificDB[k]
-                    end
-                })
-            end
+        local AL = ns.AttachmentLogic
+        if AL then
+            AL:ApplyLayout(frame.unit, "Power")
         end
 
+        local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
         local height = db and db.powerHeight or 10
-        local detached = db and db.powerDetached
-        local enabled = db and (db.powerEnabled ~= false)
+        local enabled = db and db.powerEnabled ~= false
 
-        if not enabled then
-            power:Hide()
-            return
-        end
-        power:Show()
+        if not enabled then power:Hide() else power:Show() end
 
         -- Sync Edit Mode State from Parent Frame
         if frame.isInEditMode then
             power.isInEditMode = true
             power:SetAlpha(1)
         end
-
         power:SetHeight(height)
-        power:ClearAllPoints()
-
-        if detached then
-            -- Independent
-            power:SetParent(UIParent)
-            -- If we have saved pos, use it
-            local point = db and db.powerPoint or "CENTER"
-            local x = db and db.powerX or 0
-            local y = db and db.powerY or -50
-
-            power:SetPoint(point, UIParent, point, x, y)
-
-            -- Independent Width
-            local width = db and db.powerWidth or frame:GetWidth()
-            power:SetWidth(width)
-        else
-            -- Attached
-            power:SetParent(frame)
-            -- Reset position relative to frame
-            -- Typically bottom
-            power:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 0, -1)
-            power:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, -1)
-        end
     end
     frame.UpdatePowerLayout = UpdatePowerLayout
     UpdatePowerLayout() -- Initial
@@ -328,7 +281,7 @@ function UF:CreateAdditionalPower(frame)
     frame.AdditionalPower = power
 
     -- Edit Mode Registration
-    local LEM = LibStub("LibEditMode", true)
+    local LEM = LibStub("LibEditMode-Roithi", true)
     if LEM then
         frame.AdditionalPower.editModeName = (frame.editModeName or frame:GetName()) .. " Additional Power"
 
@@ -338,9 +291,18 @@ function UF:CreateAdditionalPower(frame)
         local function OnPosChanged(f, layoutName, point, x, y)
             local unit = frame.unit
             local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
+            local frameType = "AdditionalPower"
+
+            if RoithiUI.db.profile.General.debugMode then
+                RoithiUI:Log("AL Debug: OnPosChanged Triggered for AddPower")
+            end
 
             if not db or not db.additionalPowerDetached then
-                f:ClearAllPoints()
+                if frameType == "AdditionalPower" and RoithiUI.db.profile.General.debugMode then
+                    RoithiUI:Log("AL Debug: AddPower Attached -> Forcing UpdateLayout")
+                end
+                -- Force layout update to ensure SetMovable(false) is applied
+                if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
                 return
             end
 
@@ -351,6 +313,9 @@ function UF:CreateAdditionalPower(frame)
             end
             f:ClearAllPoints()
             f:SetPoint(point, UIParent, point, x, y)
+
+            local AL = ns.AttachmentLogic
+            if AL then AL:GlobalLayoutRefresh(unit) end
         end
 
         LEM:AddFrame(power, OnPosChanged, defaults)
@@ -364,6 +329,8 @@ function UF:CreateAdditionalPower(frame)
                 power:Show()
             else
                 power.isInEditMode = false
+                -- Force layout update to ensure SetMovable(false) is applied
+                if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
             end
         end)
 
@@ -377,72 +344,23 @@ function UF:CreateAdditionalPower(frame)
 
     -- Layout Updater
     local function UpdateLayout()
-        local unit = frame.unit
-        local db
-        if RoithiUI.db.profile.UnitFrames then db = RoithiUI.db.profile.UnitFrames[unit] end
-
-        local height = db and db.additionalPowerHeight or 10
-        local detached = db and db.additionalPowerDetached
-        local enabled = db and (db.additionalPowerEnabled ~= false)
-
-        if not enabled then
-            power:Hide()
-            return
+        local AL = ns.AttachmentLogic
+        if AL then
+            AL:ApplyLayout(frame.unit, "AdditionalPower")
         end
+
+        local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
+        local height = db and db.additionalPowerHeight or 10
+        local enabled = db and db.additionalPowerEnabled ~= false
+
+        if not enabled then power:Hide() else power:Show() end
 
         -- Sync Edit Mode State
         if frame.isInEditMode then
             power.isInEditMode = true
             power:SetAlpha(1)
         end
-
         power:SetHeight(height)
-        power:ClearAllPoints()
-
-        if detached then
-            power:SetParent(UIParent)
-            -- Default 0,0
-            local point = db and db.additionalPowerPoint or "CENTER"
-            local x = db and db.additionalPowerX or 0
-            local y = db and db.additionalPowerY or 0
-
-            power:SetPoint(point, UIParent, point, x, y)
-
-            -- Independent Width
-            local width = db and db.additionalPowerWidth or frame:GetWidth()
-            power:SetWidth(width)
-        else
-            power:SetParent(frame)
-            -- Stacking Logic: "Add is still at the unitframe"
-            -- We only anchor to Class/Power if they are ALSO at the unitframe.
-
-            local anchor = frame.Health
-            local offset = -1
-
-            local powerIsAtUF = not (db and db.powerDetached) and frame.Power:IsShown()
-            local classIsAtUF = not (db and db.classPowerDetached) and frame.ClassPower and frame.ClassPower:IsShown() and
-                powerIsAtUF
-
-            -- Note: ClassPower is only "At UF" if Power is also "At UF", because Class follows Power.
-            -- If Power is detached, Class follows it away, so Class is NOT at UF.
-
-            if classIsAtUF then
-                anchor = frame.ClassPower
-                offset = -4
-            elseif powerIsAtUF then
-                anchor = frame.Power
-                offset = -1
-            else
-                anchor = frame.Health
-                offset = -1
-            end
-
-            power:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, offset)
-            power:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, offset)
-
-            -- Force Frame Width when attached
-            power:SetWidth(frame:GetWidth())
-        end
     end
     frame.UpdateAdditionalPowerLayout = UpdateLayout
 

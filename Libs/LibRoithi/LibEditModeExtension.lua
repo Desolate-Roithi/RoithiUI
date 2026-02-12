@@ -53,15 +53,29 @@ if not lib.internal.IsHealed then
         -- Validation check: if internal.dialog is missing, the lib was likely wiped/reloaded dirty
         if not lib.internal.dialog then
             -- Trigger restoration of pools/dialog/widgets if they are missing
-            -- This is a simplified version of the healing logic mentioned in SESSIONS.ctx
             if _G.RoithiUI and _G.RoithiUI.Log then
                 _G.RoithiUI:Log("LibEditMode Corruption Detected! Healing...")
             else
                 print("|cffff0000[LibRoithi]|r LibEditMode Corruption Detected! Healing...")
             end
-            -- (In a real scenario, we'd reload the files here or re-run the creation functions)
         end
-        return oldAddFrame(self, frame, callback, default, name)
+
+        -- Wrap the callback to respect SetMovable(false)
+        -- If frame is locked (SetMovable(false)), we should NOT process the drag end.
+        local safeCallback = function(f, layoutName, point, x, y)
+            if not f:IsMovable() then
+                -- If the frame is locked, it shouldn't have been moved.
+                -- However, if LibEditMode forced it, we should revert or ignore.
+                -- Logging for debug:
+                if _G.RoithiUI and _G.RoithiUI.Log and _G.RoithiUI.db and _G.RoithiUI.db.profile.General.debugMode then
+                    _G.RoithiUI:Log("LEM Extension: Ignored Drag on Locked Frame: " .. (f:GetName() or "Anonymous"))
+                end
+                return
+            end
+            if callback then callback(f, layoutName, point, x, y) end
+        end
+
+        return oldAddFrame(self, frame, safeCallback, default, name)
     end
     lib.internal.IsHealed = true
 end
