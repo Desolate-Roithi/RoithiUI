@@ -202,7 +202,9 @@ TM.Methods = {
 
             if config.requireAura and not aura then return "" end
 
-            return aura and aura.applications or 0
+            local apps = aura and aura.applications or 0
+            if issecretvalue and issecretvalue(apps) then return "" end
+            return apps
         elseif config.mode == "POWER" then
             return UnitPower("player", config.type)
         end
@@ -270,7 +272,12 @@ TM.Methods = {
 
             if config.requireAura and not aura then return "" end
 
-            cur = aura and aura.applications or 0
+            local apps = aura and aura.applications or 0
+            if issecretvalue and issecretvalue(apps) then
+                cur = 0
+            else
+                cur = apps
+            end
             if aura and aura.maxStack and aura.maxStack > 0 then
                 max = aura.maxStack
                 if class == "SHAMAN" then max = 5 end

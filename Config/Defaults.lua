@@ -11,6 +11,16 @@ ns.Defaults = {
             Whitelist = {
             },
         },
+        CustomAuraFrames = {},
+        SmartFilters = {
+            showAll = false,
+            showCrowdControl = true,
+            showMajorDefensives = true,
+            showDispellable = true,
+            showRaidBuffs = true,
+            showImportant = true,
+            showBossDebuffs = true,
+        },
         Castbar = {
             boss1 = {
                 colors = {

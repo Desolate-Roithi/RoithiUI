@@ -19,9 +19,10 @@ ns.AttachmentLogic = AL
 -- Strictly followed.
 AL.BarHierarchies = {
     ["Power"] = { "UnitFrame" },
-    ["ClassPower"] = { "Power" },                                               -- Falls back to UnitFrame if Power detached
-    ["AdditionalPower"] = { "UnitFrame", { "Power", "ClassPower" } },           -- Group requires both Attached
-    ["Castbar"] = { "UnitFrame", { "Power", "ClassPower" }, "AdditionalPower" } -- Priority: Add -> Group -> UF
+    ["ClassPower"] = { "Power" },                                                -- Falls back to UnitFrame if Power detached
+    ["AdditionalPower"] = { "UnitFrame", { "Power", "ClassPower" } },            -- Group requires both Attached
+    ["Castbar"] = { "UnitFrame", { "Power", "ClassPower" }, "AdditionalPower" }, -- Priority: Add -> Group -> UF
+    ["Auras"] = { "UnitFrame" }                                                  -- Auras always attach to UnitFrame (Satellite)
 }
 
 -- Mapping of internal names to unit frame element keys
@@ -30,6 +31,7 @@ local ElementMap = {
     ["Power"] = "Power",
     ["ClassPower"] = "ClassPower",
     ["AdditionalPower"] = "AdditionalPower",
+    ["Auras"] = "RoithiAuras",
 }
 
 -- Mapping of internal names to DB keys
@@ -38,6 +40,7 @@ local DBKeyMap = {
     ["ClassPower"] = "classPower",
     ["AdditionalPower"] = "additionalPower",
     ["Castbar"] = "castbar",
+    ["Auras"] = "aura",
 }
 
 -- ----------------------------------------------------------------------------
@@ -48,6 +51,16 @@ local DBKeyMap = {
 function AL:GetElementDB(unit, frameType)
     if frameType == "Castbar" then
         return RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
+    elseif frameType:match("^CustomAura_") then
+        -- Keys are stored in Global CustomAuraFrames table, assumed keyed by name?
+        -- Actually CustomAuraFrames is a list or map?
+        -- User said "create custom aura frames... for each uf".
+        -- If we key by name globaly, we need to know which one applies to this unit.
+        -- But ApplyLayout is called with (unit, type).
+        -- The type "CustomAura_ID" implies specific frame.
+        -- We assume CustomAuraFrames[ID] exists.
+        local id = frameType:match("^CustomAura_(.+)")
+        return RoithiUI.db.profile.CustomAuraFrames and RoithiUI.db.profile.CustomAuraFrames[id]
     end
 
     local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
@@ -62,6 +75,8 @@ function AL:IsDetached(unit, frameType)
     if not db then return false end
 
     if frameType == "Castbar" then
+        return db.detached == true
+    elseif frameType:match("^CustomAura_") then
         return db.detached == true
     end
 
@@ -83,6 +98,10 @@ function AL:IsActive(unit, frameType)
         ---@diagnostic disable-next-line: undefined-field
         local bar = CB and CB.bars and CB.bars[unit]
         return bar and bar:IsShown()
+    elseif frameType:match("^CustomAura_") then
+        local id = frameType:match("^CustomAura_(.+)")
+        local element = frame.CustomAuras and frame.CustomAuras[id]
+        return element and element:IsShown()
     end
 
     local elementKey = ElementMap[frameType]
@@ -97,6 +116,9 @@ end
 -- Find the first active, attached parent in the hierarchy
 function AL:GetValidAnchor(unit, frameType)
     local hierarchy = self.BarHierarchies[frameType]
+    if not hierarchy and frameType:match("^CustomAura_") then
+        hierarchy = { "UnitFrame" } -- Custom Auras always attach to UnitFrame
+    end
     if not hierarchy then return nil end
 
     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
@@ -196,8 +218,14 @@ function AL:ApplyLayout(unit, frameType)
         ---@diagnostic disable-next-line: undefined-field
         local bars = CB and CB.bars
         frame = bars and bars[unit]
+    elseif frameType:match("^CustomAura_") then
+        local id = frameType:match("^CustomAura_(.+)")
+        frame = uFrame.CustomAuras and uFrame.CustomAuras[id]
     else
-        frame = uFrame[ElementMap[frameType]]
+        local mappedKey = ElementMap[frameType]
+        if mappedKey then
+            frame = uFrame[mappedKey]
+        end
     end
 
     if not frame then return end
@@ -239,6 +267,16 @@ function AL:ApplyLayout(unit, frameType)
             point = db.point or "CENTER"
             x, y = db.x or 0, db.y or 0
             width = db.width or 250
+        elseif frameType == "Auras" or frameType:match("^CustomAura_") then
+            -- Use specialized Screen Coordinates keys for Auras to preserve Satellite offsets
+            if frameType == "Auras" then
+                point = db.auraScreenPoint or "CENTER"
+                x, y = db.auraScreenX or 0, db.auraScreenY or 0
+            else
+                point = db.screenPoint or "CENTER"
+                x, y = db.screenX or 0, db.screenY or -50
+            end
+            width = db.auraWidth or 200 -- Managed by aura config usually
         else
             local prefix = DBKeyMap[frameType]
             point = db[prefix .. "Point"] or "CENTER"
@@ -248,24 +286,53 @@ function AL:ApplyLayout(unit, frameType)
 
         frame:SetParent(UIParent)
         frame:SetPoint(point, UIParent, point, x, y)
-        frame:SetWidth(width)
+        if frameType ~= "Auras" and not frameType:match("^CustomAura_") then frame:SetWidth(width) end -- Auras manage their own width/growth
     else
-        -- ATTACHED: Anchor to valid parent, match width
+        -- ATTACHED: Anchor to valid parent
         frame:SetMovable(false)
         local anchor = self:GetValidAnchor(unit, frameType)
         if anchor then
             frame:SetParent(anchor)
-            frame:SetPoint("TOP", anchor, "BOTTOM", 0, -1)
-            frame:SetWidth(anchor:GetWidth())
+            if frameType == "Auras" or frameType:match("^CustomAura_") then
+                -- SATELLITE MODE: Respect configured relative offsets
+                local p = "BOTTOM"
+                local x = 0
+                local y = 0
+                if frameType == "Auras" then
+                    p = db.auraAnchor or "BOTTOM"
+                    x = db.auraX or 0
+                    y = db.auraY or 0
+                else
+                    p = db.anchorPoint or "BOTTOM"
+                    x = db.xOffset or 0
+                    y = db.yOffset or 0
+                end
+                frame:ClearAllPoints()
+                frame:SetPoint(p, anchor, p, x, y)
+                -- Width is auto-calculated by icons usually
+            else
+                -- STACKED MODE (Bars)
+                frame:SetPoint("TOP", anchor, "BOTTOM", 0, -1)
+                frame:SetWidth(anchor:GetWidth())
+            end
         end
     end
 end
 
 -- Refresh the entire hierarchy for a unit
 function AL:GlobalLayoutRefresh(unit)
-    -- Refresh in dependency order: Power -> Class -> Add -> Cast
-    local refreshOrder = { "Power", "ClassPower", "AdditionalPower", "Castbar" }
+    -- Refresh in dependency order: Power -> Class -> Add -> Cast -> Auras
+    local refreshOrder = { "Power", "ClassPower", "AdditionalPower", "Castbar", "Auras" }
     for _, frameType in ipairs(refreshOrder) do
         self:ApplyLayout(unit, frameType)
+    end
+    -- Also try to refresh custom auras if any exist
+    local customDB = RoithiUI.db.profile.CustomAuraFrames
+    if customDB then
+        for id, conf in pairs(customDB) do
+            if conf.unit == unit then
+                self:ApplyLayout(unit, "CustomAura_" .. id)
+            end
+        end
     end
 end

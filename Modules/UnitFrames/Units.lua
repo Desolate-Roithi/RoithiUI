@@ -63,6 +63,7 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
             -- Trigger layout updates on sub-elements
             if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
             if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+            if frame.UpdateAuraLayout then frame.UpdateAuraLayout() end
         end)
 
         LEM:RegisterCallback('exit', function()
@@ -88,6 +89,7 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
             -- Refresh
             if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
             if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+            if frame.UpdateAuraLayout then frame.UpdateAuraLayout() end
         end)
     end
 
@@ -152,6 +154,7 @@ function UF:UpdateFrameFromSettings(unit)
     if self.UpdateTags then self:UpdateTags(frame) end
     if self.UpdateIndicators then self:UpdateIndicators(frame) end
     if self.UpdateAuras then self:UpdateAuras(frame) end
+    if self.UpdateAuraLayout then self.UpdateAuraLayout(frame) end -- Hook for initial layout
     if self.UpdateAdditionalPowerSettings then self:UpdateAdditionalPowerSettings(frame) end
 end
 

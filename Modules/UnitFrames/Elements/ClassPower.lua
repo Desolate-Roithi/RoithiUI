@@ -245,7 +245,12 @@ function UF:CreateClassPower(frame)
                 return
             end
 
-            curValue = aura and aura.applications or 0
+            local apps = aura and aura.applications or 0
+            if issecretvalue and issecretvalue(apps) then
+                curValue = 0
+            else
+                curValue = apps
+            end
 
             ---@diagnostic disable-next-line: undefined-field
             if aura and config.maxDisplay then
