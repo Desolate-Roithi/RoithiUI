@@ -28,3 +28,5 @@ changelog:
     # Changelog for @project-version@
     @debug@
     @commits-short@
+move-folders:
+  RoithiUI-Dev: RoithiUI
