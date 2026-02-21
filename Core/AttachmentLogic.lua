@@ -32,6 +32,7 @@ local ElementMap = {
     ["ClassPower"] = "ClassPower",
     ["AdditionalPower"] = "AdditionalPower",
     ["Auras"] = "RoithiAuras",
+    ["RoithiAuras_Debuffs"] = "RoithiAuras_Debuffs",
 }
 
 -- Mapping of internal names to DB keys
@@ -74,10 +75,17 @@ function AL:IsDetached(unit, frameType)
     local db = self:GetElementDB(unit, frameType)
     if not db then return false end
 
-    if frameType == "Castbar" then
+    if frameType == "Auras" then
+        if db.separateAuras then
+            return db.buffDetached == true
+        end
+        return db.auraDetached or false
+    elseif frameType == "RoithiAuras_Debuffs" then
+        return db.debuffDetached == true
+    elseif frameType == "Castbar" then
         return db.detached == true
     elseif frameType:match("^CustomAura_") then
-        return db.detached == true
+        return true -- Always detached as per refactor goal
     end
 
     local key = DBKeyMap[frameType] .. "Detached"
@@ -100,7 +108,7 @@ function AL:IsActive(unit, frameType)
         return bar and bar:IsShown()
     elseif frameType:match("^CustomAura_") then
         local id = frameType:match("^CustomAura_(.+)")
-        local element = frame.CustomAuras and frame.CustomAuras[id]
+        local element = RoithiUI.CustomAuras and RoithiUI.CustomAuras[id]
         return element and element:IsShown()
     end
 
@@ -116,7 +124,7 @@ end
 -- Find the first active, attached parent in the hierarchy
 function AL:GetValidAnchor(unit, frameType)
     local hierarchy = self.BarHierarchies[frameType]
-    if not hierarchy and frameType:match("^CustomAura_") then
+    if not hierarchy and (frameType:match("^CustomAura_") or frameType:match("^RoithiAuras_")) then
         hierarchy = { "UnitFrame" } -- Custom Auras always attach to UnitFrame
     end
     if not hierarchy then return nil end
@@ -220,7 +228,7 @@ function AL:ApplyLayout(unit, frameType)
         frame = bars and bars[unit]
     elseif frameType:match("^CustomAura_") then
         local id = frameType:match("^CustomAura_(.+)")
-        frame = uFrame.CustomAuras and uFrame.CustomAuras[id]
+        frame = RoithiUI.CustomAuras and RoithiUI.CustomAuras[id]
     else
         local mappedKey = ElementMap[frameType]
         if mappedKey then
@@ -245,11 +253,35 @@ function AL:ApplyLayout(unit, frameType)
         if p then
             if frameType == "Castbar" then
                 db.point, db.x, db.y = p, x, y
+            elseif frameType == "Auras" then
+                if db.separateAuras then
+                    db.buffAnchor = p
+                    db.buffXOffset = x
+                    db.buffYOffset = y
+                else
+                    db.auraAnchor = p
+                    db.auraX = x
+                    db.auraY = y
+                end
+            elseif frameType == "RoithiAuras_Debuffs" then
+                db.debuffAnchor = p
+                db.debuffXOffset = x
+                db.debuffYOffset = y
+            elseif frameType:match("^CustomAura_Debuffs_") then
+                db.debuffAnchor = p
+                db.debuffXOffset = x
+                db.debuffYOffset = y
+            elseif frameType:match("^CustomAura_") then
+                db.anchorPoint = p
+                db.xOffset = x
+                db.yOffset = y
             else
                 local prefix = DBKeyMap[frameType]
-                db[prefix .. "Point"] = p
-                db[prefix .. "X"] = x
-                db[prefix .. "Y"] = y
+                if prefix then
+                    db[prefix .. "Point"] = p
+                    db[prefix .. "X"] = x
+                    db[prefix .. "Y"] = y
+                end
             end
             if RoithiUI.db.profile.General.debugMode then
                 RoithiUI:Log(string.format("AL Debug: Transition to Attached -> Saved Manual Pos for %s", frameType))
@@ -267,14 +299,25 @@ function AL:ApplyLayout(unit, frameType)
             point = db.point or "CENTER"
             x, y = db.x or 0, db.y or 0
             width = db.width or 250
-        elseif frameType == "Auras" or frameType:match("^CustomAura_") then
+        elseif frameType == "Auras" or frameType:match("^CustomAura_") or frameType:match("^RoithiAuras_") then
             -- Use specialized Screen Coordinates keys for Auras to preserve Satellite offsets
             if frameType == "Auras" then
                 point = db.auraScreenPoint or "CENTER"
                 x, y = db.auraScreenX or 0, db.auraScreenY or 0
+            elseif frameType == "RoithiAuras_Debuffs" then
+                point = db.debuffScreenPoint or db.auraScreenPoint or "CENTER"
+                x, y = db.debuffScreenX or db.auraScreenX or 0, db.debuffScreenY or db.auraScreenY or -50
             else
-                point = db.screenPoint or "CENTER"
-                x, y = db.screenX or 0, db.screenY or -50
+                if frameType:match("^CustomAura_Debuffs_") then
+                    point = db.debuffScreenPoint or db.screenPoint or "CENTER"
+                    x, y = db.debuffScreenX or db.screenX or 0, db.debuffScreenY or db.screenY or -50
+                elseif frameType:match("^CustomAura_Buffs_") then
+                    point = db.buffScreenPoint or db.screenPoint or "CENTER"
+                    x, y = db.buffScreenX or db.screenX or 0, db.buffScreenY or db.screenY or -50
+                else
+                    point = db.screenPoint or "CENTER"
+                    x, y = db.screenX or 0, db.screenY or -50
+                end
             end
             width = db.auraWidth or 200 -- Managed by aura config usually
         else
@@ -293,15 +336,33 @@ function AL:ApplyLayout(unit, frameType)
         local anchor = self:GetValidAnchor(unit, frameType)
         if anchor then
             frame:SetParent(anchor)
-            if frameType == "Auras" or frameType:match("^CustomAura_") then
+            if frameType == "Auras" or frameType:match("^RoithiAuras_") or frameType:match("^CustomAura_") then
                 -- SATELLITE MODE: Respect configured relative offsets
                 local p = "BOTTOM"
                 local x = 0
                 local y = 0
                 if frameType == "Auras" then
-                    p = db.auraAnchor or "BOTTOM"
-                    x = db.auraX or 0
-                    y = db.auraY or 0
+                    if db.separateAuras then
+                        p = db.buffAnchor or "BOTTOM"
+                        x = db.buffXOffset or 0
+                        y = db.buffYOffset or 0
+                    else
+                        p = db.auraAnchor or "BOTTOM"
+                        x = db.auraX or 0
+                        y = db.auraY or 0
+                    end
+                elseif frameType == "RoithiAuras_Debuffs" then
+                    p = db.debuffAnchor or db.auraAnchor or "BOTTOM"
+                    x = db.debuffXOffset or db.auraX or 0
+                    y = db.debuffYOffset or db.auraY or 0
+                elseif frameType:match("^CustomAura_Debuffs_") then
+                    p = db.debuffAnchor or db.anchorPoint or "BOTTOM"
+                    x = db.debuffXOffset or db.xOffset or 0
+                    y = db.debuffYOffset or db.yOffset or 0
+                elseif frameType:match("^CustomAura_Buffs_") then
+                    p = db.buffAnchor or db.anchorPoint or "BOTTOM"
+                    x = db.buffXOffset or db.xOffset or 0
+                    y = db.buffYOffset or db.yOffset or 0
                 else
                     p = db.anchorPoint or "BOTTOM"
                     x = db.xOffset or 0

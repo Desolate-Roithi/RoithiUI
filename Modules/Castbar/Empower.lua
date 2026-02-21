@@ -312,7 +312,7 @@ function ns.OnEmpowerUpdate(bar)
             -- Fallback if mapped color missing or unexpected >4
             c = colors.empowerHold
         else
-            c = { 0, 0, 1, 1 }  -- Blue default
+            c = { 0, 0, 1, 1 } -- Blue default
         end
     else
         -- CHARGE PHASE (Filling Up)
@@ -321,7 +321,7 @@ function ns.OnEmpowerUpdate(bar)
         -- 2->3: emp2
         -- 3->4: emp3
         if currentStage == 1 then
-            c = { 0.5, 0.5, 0.5, 1 }  -- Grey
+            c = { 0.5, 0.5, 0.5, 1 } -- Grey
         elseif currentStage == 2 and colors.empower1 then
             c = colors.empower1
         elseif currentStage == 3 and colors.empower2 then

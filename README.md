@@ -1,10 +1,10 @@
 # RoithiUI
 
-**RoithiUI** is a modular, high-performance User Interface replacement for **World of Warcraft: Midnight (Patch 12.0)**. It is designed to provide a clean, modern aesthetic with pixel-perfect precision, built on a lightweight, module-first architecture that heavily leverages the native **WoW Edit Mode**.
+**RoithiUI** is a modular, User Interface replacement for **World of Warcraft: Midnight (Patch 12.0)**. It is designed to provide a clean, ElvUI-like lightweight, module-first UI that uses native **WoW Edit Mode**.
 
 ## Features
 
-- **Modular Core**: Functionality is split into independent modules (UnitFrames, Castbars, etc.) for optimal performance.
+- **Modular Core**: Functionality is split into independent modules (UnitFrames, Castbars, etc.)
 - **Edit Mode Integration**: All UI elements are fully integrated with Blizzard's "HUD Edit Mode". You can move, scale, and configure frames directly using native tools.
 - **Strict Attachment Logic**: Unit frame elements (Power, Class Power, Additional Power, Castbar) follow a strict hierarchy to ensure they snap together perfectly.
   - *Hierarchy*: UnitFrame -> Power -> ClassPower -> AdditionalPower -> Castbar.

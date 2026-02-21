@@ -1,12 +1,16 @@
-local addonName, ns = ...
+local _, ns = ...
 local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
 
 ---@class UF : AceModule, AceAddon
 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 local AL = ns.AttachmentLogic
+local issecretvalue = _G.issecretvalue or function(...)
+    local _ = { ... }
+    return false
+end
 
--- 12.0.1 Filter Constants (Fallback if AuraUtil not ready, though 12.0.1 should have them)
+-- 12.0.1 Filter Constants
 local FILTERS = {
     CC = "CROWD_CONTROL",
     DEFENSIVE = "BIG_DEFENSIVE",
@@ -44,16 +48,25 @@ end
 
 -- Helper to fetch DB for an element (Base or Custom)
 local function GetElementDB(frame, key)
-    if key == "RoithiAuras" then
+    if key:match("^RoithiAuras") then
         -- Standard Unit Frame DB
+        if not frame or not frame.unit then return {} end
         if string.match(frame.unit, "^boss[2-5]$") and RoithiUI.db.profile.UnitFrames["boss1"] then
-            -- Logic to inherit from Boss1 is complex in original, simplified here for access:
+            -- Logic to inherit from Boss1
             local db = RoithiUI.db.profile.UnitFrames[frame.unit] or {}
             local driverDB = RoithiUI.db.profile.UnitFrames["boss1"]
+            local keys = {
+                "aurasEnabled", "auraSize", "auraSpacing", "maxAuras", "Whitelist",
+                "Blacklist", "ShowOnlyPlayer", "auraAnchor", "auraX", "auraY",
+                "auraGrowDirection", "showBuffs", "showDebuffs", "auraDetached",
+                "auraScreenPoint", "auraScreenX", "auraScreenY", "smartFilterShowAll",
+                "smartFilterCC", "smartFilterDefensives", "smartFilterDispellable",
+                "smartFilterRaidBuffs", "smartFilterImportant", "smartFilterExternalDefensives"
+            }
             return setmetatable({}, {
                 __index = function(_, k)
-                    if k == "aurasEnabled" or k == "auraSize" or k == "auraSpacing" or k == "maxAuras" or k == "Whitelist" or k == "Blacklist" or k == "ShowOnlyPlayer" or k == "auraAnchor" or k == "auraX" or k == "auraY" or k == "auraGrowDirection" or k == "showBuffs" or k == "showDebuffs" or k == "auraDetached" or k == "auraScreenPoint" or k == "auraScreenX" or k == "auraScreenY" or k == "smartFilterShowAll" or k == "smartFilterCC" or k == "smartFilterDefensives" or k == "smartFilterDispellable" or k == "smartFilterRaidBuffs" or k == "smartFilterImportant" or k == "smartFilterExternalDefensives" then
-                        return driverDB[k]
+                    for _, inheritedKey in ipairs(keys) do
+                        if k == inheritedKey then return driverDB[k] end
                     end
                     return db[k]
                 end
@@ -62,19 +75,26 @@ local function GetElementDB(frame, key)
         return RoithiUI.db.profile.UnitFrames[frame.unit] or {}
     else
         -- Custom Aura DB
-        local id = key:match("^CustomAura_(.+)")
+        local id = key:match("^CustomAura_Buffs_(.+)")
+        if not id then id = key:match("^CustomAura_Debuffs_(.+)") end
+        if not id then id = key:match("^CustomAura_(.+)") end
         return RoithiUI.db.profile.CustomAuraFrames and RoithiUI.db.profile.CustomAuraFrames[id]
     end
 end
 
 -- Factory: Create or Get Aura Element
 local function GetOrCreateAuraElement(frame, key)
+    -- 'frame' can be a UnitFrame or a standalone container
     if frame[key] then return frame[key] end
 
-    local element = CreateFrame("Frame", nil, frame)
+    local parent = frame
+    if frame == RoithiUI then parent = UIParent end   -- Global standalone
+
+    local element = CreateFrame("Frame", key, parent) -- Named frame for AL/LEM
     -- Initial dummy size, updated by layout
     element:SetSize(20, 20)
     frame[key] = element
+    element.owner = frame -- Reference back for DB lookups
 
     -- Drag Support (Satellites/Detached) for ALL aura frames
     element:RegisterForDrag("LeftButton")
@@ -86,23 +106,28 @@ local function GetOrCreateAuraElement(frame, key)
         -- Save Screen Position if Movable (Detached)
         if self:IsMovable() then
             local p, _, _, x, y = self:GetPoint()
-            local db = GetElementDB(frame, key)
+            local db = GetElementDB(self.owner, key)
             if db then
                 if key == "RoithiAuras" then
                     db.auraScreenPoint = p
                     db.auraScreenX = x
                     db.auraScreenY = y
+                elseif key == "RoithiAuras_Debuffs" then
+                    db.debuffScreenPoint = p
+                    db.debuffScreenX = x
+                    db.debuffScreenY = y
                 else
                     db.screenPoint = p
                     db.screenX = x
                     db.screenY = y
                 end
             end
-            -- Re-calc layout (snap?)
-            -- AL:ApplyLayout(frame.unit, "Auras" or key) -- We need to know the AL type mapping
-            -- "RoithiAuras" -> "Auras". "CustomAura_X" -> "CustomAura_X".
+            -- Re-calc layout
             local alType = (key == "RoithiAuras") and "Auras" or key
-            AL:ApplyLayout(frame.unit, alType)
+            local unit = self.unit or (self.owner and self.owner.unit)
+            if unit then
+                AL:ApplyLayout(unit, alType)
+            end
         end
     end)
 
@@ -147,9 +172,18 @@ local function GetOrCreateAuraElement(frame, key)
 
         -- Tooltip Scripts
         icon:SetScript("OnEnter", function(self)
-            if not self.index or not self.filter then return end
+            if not self.auraInstanceID then return end
+            -- Resolve unit dynamically in case element or frame changes targets
+            local currentUnit = (element and element.unit) or (element.owner and element.owner.unit) or
+                (frame and frame.unit)
+            if not currentUnit then return end
+
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
-            GameTooltip:SetUnitAura(frame.unit, self.index, self.filter)
+            if self.isDebuff then
+                GameTooltip:SetUnitDebuffByAuraInstanceID(currentUnit, self.auraInstanceID, self.filter or "HARMFUL")
+            else
+                GameTooltip:SetUnitBuffByAuraInstanceID(currentUnit, self.auraInstanceID, self.filter or "HELPFUL")
+            end
             GameTooltip:Show()
         end)
         icon:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
@@ -158,27 +192,34 @@ local function GetOrCreateAuraElement(frame, key)
         return icon
     end
 
+    local function logAuraErr(msg, ...)
+        local args = { ... }
+        if RoithiUI.db.profile.General.debugMode then
+            RoithiUI:Log(string.format(msg, unpack(args)))
+        end
+    end
+
     -- Update Function for this specific element
     element.Update = function()
-        local unit = frame.unit
+        -- Use element's unit if standalone, otherwise frame's unit
+        local unit = element.unit or (frame and frame.unit)
         if not unit then return end
-        local db = GetElementDB(frame, key)
+
+        local db = GetElementDB(element.owner, key)
         if not db then
             element:Hide(); return
         end
 
         -- Enabled Check
         -- Base Auras use 'aurasEnabled', Custom use 'enabled'
-        local enabled = true
-        if key == "RoithiAuras" then
+        local enabled
+        if key:match("^RoithiAuras") then
             enabled = db.aurasEnabled ~= false
         else
             enabled = db.enabled == true
         end
 
-        if RoithiUI.db.profile.General.debugMode then
-            RoithiUI:Log(string.format("Auras Debug: %s Update on %s | Enabled: %s", key, unit, tostring(enabled)))
-        end
+        logAuraErr("Auras Debug: %s Update on %s | Enabled: %s", key, unit, tostring(enabled))
 
         if not enabled then
             element:Hide()
@@ -197,15 +238,35 @@ local function GetOrCreateAuraElement(frame, key)
             element:EnableMouse(false)
         end
 
+        local isSplitDebuff = key == "RoithiAuras_Debuffs"
+        local isSplitBuff = key == "RoithiAuras" and db.separateAuras
+
         -- Props
         local size = db.auraSize or 20
-        element:SetHeight(size)
-
-        -- Grow Params
         local growDir = db.auraGrowDirection or "RIGHT"
+        local spacing = db.auraSpacing or 4
+        local maxIcons = db.maxAuras or 8
+
         if not db.auraGrowDirection and db.growDirection then growDir = db.growDirection end
 
-        local spacing = db.auraSpacing or 4
+        -- Overrides if split
+        if isSplitDebuff then
+            size = db.debuffSize or db.auraSize or 20
+            growDir = db.debuffGrowDirection or db.auraGrowDirection or "RIGHT"
+            spacing = db.debuffSpacing or db.auraSpacing or 4
+            maxIcons = db.debuffMaxAuras or db.maxAuras or 8
+        elseif isSplitBuff then
+            size = db.buffSize or db.auraSize or 20
+            growDir = db.buffGrowDirection or db.auraGrowDirection or "RIGHT"
+            spacing = db.buffSpacing or db.auraSpacing or 4
+            maxIcons = db.buffMaxAuras or db.maxAuras or 8
+        end
+
+        if growDir == "CENTER_HORIZONTAL" then growDir = "RIGHT" end
+        if growDir == "CENTER_VERTICAL" then growDir = "DOWN" end
+
+        element:SetHeight(size)
+
         local anchor1, relPoint, xSpace, ySpace = "LEFT", "RIGHT", spacing, 0
         if growDir == "LEFT" then
             anchor1, relPoint, xSpace, ySpace = "RIGHT", "LEFT", -spacing, 0
@@ -218,9 +279,15 @@ local function GetOrCreateAuraElement(frame, key)
         local icons = element.icons
         local iconIndex = 1
         local seenAuras = {} -- Table to track unique auras by auraInstanceID to prevent duplicates
-        local maxIcons = db.maxAuras or 8
+
         local showDebuffs = db.showDebuffs ~= false
         local showBuffs = db.showBuffs ~= false
+
+        if isSplitDebuff then
+            showBuffs = false
+        elseif isSplitBuff then
+            showDebuffs = false
+        end
 
         -- White/Blacklist logic (Base only? Or Custom too?)
         -- Custom frames likely want strict filtering, maybe whitelist only?
@@ -231,6 +298,7 @@ local function GetOrCreateAuraElement(frame, key)
         local inCombat = InCombatLockdown and InCombatLockdown()
 
         -- 1. Debuffs
+        local debuffStartIndex = iconIndex
         if showDebuffs then
             local debuffQueries = GetSmartFilterQueries("HARMFUL", db)
             local sortRule = Enum.UnitAuraSortRule.Expiration or 3
@@ -238,7 +306,9 @@ local function GetOrCreateAuraElement(frame, key)
 
             if instanceIDs then
                 for _, auraInstanceID in ipairs(instanceIDs) do
-                    if iconIndex > maxIcons then break end
+                    local limitReached = db.separateAuras and ((iconIndex - debuffStartIndex) >= maxIcons) or
+                        (iconIndex > maxIcons)
+                    if limitReached then break end
 
                     local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraInstanceID)
                     if aura and not seenAuras[auraInstanceID] then
@@ -252,7 +322,7 @@ local function GetOrCreateAuraElement(frame, key)
 
                         if passesFilter then
                             local isSecretId = issecretvalue(aura.spellId)
-                            local isSecretSrc = issecretvalue(aura.sourceUnit)
+                            local _ = issecretvalue(aura.sourceUnit) -- Removed unused isSecretSrc
                             local skip = false
 
                             if not skip and db.hideTimeless then
@@ -264,7 +334,7 @@ local function GetOrCreateAuraElement(frame, key)
                                     if not inCombat and not isZeroSecret then
                                         if isZero then
                                             local cacheKey = not issecretvalue(aura.spellId) and aura.spellId or
-                                            (not issecretvalue(aura.icon) and aura.icon)
+                                                (not issecretvalue(aura.icon) and aura.icon)
                                             if cacheKey then
                                                 RoithiUI.TimelessAuraCache[cacheKey] = true
                                             end
@@ -272,7 +342,7 @@ local function GetOrCreateAuraElement(frame, key)
                                         end
                                     else
                                         local cacheKey = not issecretvalue(aura.spellId) and aura.spellId or
-                                        (not issecretvalue(aura.icon) and aura.icon)
+                                            (not issecretvalue(aura.icon) and aura.icon)
                                         if cacheKey and RoithiUI.TimelessAuraCache[cacheKey] then
                                             skip = true
                                         end
@@ -307,21 +377,19 @@ local function GetOrCreateAuraElement(frame, key)
                                 end
                                 icon.count:SetText(text)
 
-                                icon.index = auraInstanceID
+                                icon.auraInstanceID = auraInstanceID
+                                icon.isDebuff = true
                                 icon.filter = "HARMFUL"
 
                                 -- Color
-                                local color = { r = 1, g = 0, b = 0 }
-                                ---@diagnostic disable-next-line: undefined-global
                                 if _G.DebuffTypeColor and aura.dispelName then
-                                    ---@diagnostic disable-next-line: undefined-global
-                                    color = _G.DebuffTypeColor[aura.dispelName] or _G.DebuffTypeColor["none"]
+                                    local color = _G.DebuffTypeColor[aura.dispelName] or _G.DebuffTypeColor["none"]
+                                    if icon.SetBackdropBorderColor then
+                                        icon:SetBackdropBorderColor(color.r, color.g, color
+                                            .b)
+                                    end
+                                    icon.overlay:SetVertexColor(color.r, color.g, color.b)
                                 end
-                                if icon.SetBackdropBorderColor then
-                                    icon:SetBackdropBorderColor(color.r, color.g, color
-                                        .b)
-                                end
-                                icon.overlay:SetVertexColor(color.r, color.g, color.b)
                                 icon.overlay:Show()
 
                                 local durationObj = C_UnitAuras.GetAuraDuration(unit, aura.auraInstanceID)
@@ -358,11 +426,9 @@ local function GetOrCreateAuraElement(frame, key)
                                     icon.GlowFrame:Hide()
                                 end
 
-                                if RoithiUI.db.profile.General.debugMode then
-                                    RoithiUI:Log(string.format("Auras Debug: Created Debuff Icon %d for spellId: %s",
-                                        iconIndex,
-                                        tostring(aura.spellId)))
-                                end
+                                logAuraErr("Auras Debug: Created Debuff Icon %d for spellId: %s",
+                                    iconIndex,
+                                    tostring(aura.spellId))
 
                                 icon:Show()
                                 iconIndex = iconIndex + 1
@@ -375,6 +441,7 @@ local function GetOrCreateAuraElement(frame, key)
 
         -- 2. Buffs
         local isFirstBuffRendered = false
+        local buffStartIndex = iconIndex
         if showBuffs then
             local buffQueries = GetSmartFilterQueries("HELPFUL", db)
             local sortRule = Enum.UnitAuraSortRule.Expiration or 3
@@ -382,7 +449,9 @@ local function GetOrCreateAuraElement(frame, key)
 
             if instanceIDs then
                 for _, auraInstanceID in ipairs(instanceIDs) do
-                    if iconIndex > maxIcons then break end
+                    local limitReached = db.separateAuras and ((iconIndex - buffStartIndex) >= maxIcons) or
+                        (iconIndex > maxIcons)
+                    if limitReached then break end
 
                     local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraInstanceID)
                     if aura and not seenAuras[auraInstanceID] then
@@ -396,7 +465,7 @@ local function GetOrCreateAuraElement(frame, key)
 
                         if passesFilter then
                             local isSecretId = issecretvalue(aura.spellId)
-                            local isSecretSrc = issecretvalue(aura.sourceUnit)
+                            local _ = issecretvalue(aura.sourceUnit)
                             local skip = false
 
                             if not skip and db.hideTimeless then
@@ -459,7 +528,8 @@ local function GetOrCreateAuraElement(frame, key)
                                 end
                                 icon.count:SetText(text)
 
-                                icon.index = auraInstanceID
+                                icon.auraInstanceID = auraInstanceID
+                                icon.isDebuff = false
                                 icon.filter = "HELPFUL"
 
                                 if icon.SetBackdropBorderColor then icon:SetBackdropBorderColor(0, 0, 0) end
@@ -517,8 +587,7 @@ local function GetOrCreateAuraElement(frame, key)
 
         -- Edit Mode Mock
         if frame.forceShowEditMode or frame.forceShowTest then
-            -- (Implement simplified mock logic if desired, or skip for brevity to fit output)
-            -- Leaving empty for now to focus on core functionality stability
+            local _ = nil
         end
 
         -- Hide unused
@@ -526,30 +595,93 @@ local function GetOrCreateAuraElement(frame, key)
 
         -- Dynamic Element Sizing for Edit Mode Dragging
         local totalIcons = iconIndex - 1
-        if totalIcons > 0 then
+        local renderIcons = totalIcons
+
+        local rows = 1
+        if frame.isInEditMode then
+            renderIcons = maxIcons
+            if not isSplitDebuff and not isSplitBuff and db.separateAuras and
+                db.showBuffs ~= false and db.showDebuffs ~= false then
+                rows = 2
+            end
+        end
+
+        if renderIcons > 0 then
+            local primarySize = renderIcons * size +
+                (renderIcons - 1) * math.abs((growDir == "LEFT" or growDir == "RIGHT") and xSpace or ySpace)
+            local secondarySize = rows * size + (rows - 1) * 4 -- since offset is (size + 4) -> 2*size + 4
+
             if growDir == "LEFT" or growDir == "RIGHT" then
-                element:SetSize(totalIcons * size + (totalIcons - 1) * math.abs(xSpace), size)
+                element:SetSize(primarySize, secondarySize)
             else
-                element:SetSize(size, totalIcons * size + (totalIcons - 1) * math.abs(ySpace))
+                element:SetSize(secondarySize, primarySize)
             end
         else
-            -- If empty but in edit mode, give it a placeholder size
-            if frame.isInEditMode then
-                element:SetSize(size * 3, size)
-            else
-                element:SetSize(1, 1)
-            end
+            element:SetSize(1, 1)
         end
 
         if frame.isInEditMode then
             if not element.editModeTexture then
                 element.editModeTexture = element:CreateTexture(nil, "OVERLAY")
                 element.editModeTexture:SetAllPoints()
-                element.editModeTexture:SetColorTexture(0, 1, 0, 0.4)
+                element.editModeTexture:SetColorTexture(0, 0.8, 1, 0.3)
+
+                -- Create Top, Bottom, Left, Right borders
+                element.editModeTop = element:CreateTexture(nil, "OVERLAY")
+                element.editModeTop:SetPoint("TOPLEFT", element, "TOPLEFT", 0, 0)
+                element.editModeTop:SetPoint("TOPRIGHT", element, "TOPRIGHT", 0, 0)
+                element.editModeTop:SetHeight(1)
+                element.editModeTop:SetColorTexture(0, 0.8, 1, 1)
+
+                element.editModeBottom = element:CreateTexture(nil, "OVERLAY")
+                element.editModeBottom:SetPoint("BOTTOMLEFT", element, "BOTTOMLEFT", 0, 0)
+                element.editModeBottom:SetPoint("BOTTOMRIGHT", element, "BOTTOMRIGHT", 0, 0)
+                element.editModeBottom:SetHeight(1)
+                element.editModeBottom:SetColorTexture(0, 0.8, 1, 1)
+
+                element.editModeLeft = element:CreateTexture(nil, "OVERLAY")
+                element.editModeLeft:SetPoint("TOPLEFT", element, "TOPLEFT", 0, 0)
+                element.editModeLeft:SetPoint("BOTTOMLEFT", element, "BOTTOMLEFT", 0, 0)
+                element.editModeLeft:SetWidth(1)
+                element.editModeLeft:SetColorTexture(0, 0.8, 1, 1)
+
+                element.editModeRight = element:CreateTexture(nil, "OVERLAY")
+                element.editModeRight:SetPoint("TOPRIGHT", element, "TOPRIGHT", 0, 0)
+                element.editModeRight:SetPoint("BOTTOMRIGHT", element, "BOTTOMRIGHT", 0, 0)
+                element.editModeRight:SetWidth(1)
+                element.editModeRight:SetColorTexture(0, 0.8, 1, 1)
+
+                element.editModeText = element:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                element.editModeText:SetPoint("CENTER", element, "CENTER", 0, 0)
             end
+
+            local isCustom = key:match("^CustomAura")
+            local textStr = ""
+            local idLabel = key:match("^CustomAura_(.+)")
+            local _ = idLabel
+            local _ = isCustom
+
+            if isSplitBuff then
+                textStr = textStr .. "\n(Buffs)"
+            elseif isSplitDebuff then
+                textStr = textStr .. "\n(Debuffs)"
+            end
+            if element.editModeText then element.editModeText:SetText(textStr) end
             element.editModeTexture:Show()
+            element.editModeTop:Show()
+            element.editModeBottom:Show()
+            element.editModeLeft:Show()
+            element.editModeRight:Show()
+            if element.editModeText then element.editModeText:Show() end
         else
-            if element.editModeTexture then element.editModeTexture:Hide() end
+            if element.editModeTexture then
+                element.editModeTexture:Hide()
+                element.editModeTop:Hide()
+                element.editModeBottom:Hide()
+                element.editModeLeft:Hide()
+                element.editModeRight:Hide()
+                if element.editModeText then element.editModeText:Hide() end
+            end
         end
     end
 
@@ -576,9 +708,9 @@ function UF:CreateAuras(frame)
     GetOrCreateAuraElement(frame, "RoithiAuras")
 
     -- 2. Register Events (Shared)
-    frame:HookScript("OnEvent", function(self, event, arg1)
+    frame:HookScript("OnEvent", function(s, event, arg1)
         if event == "UNIT_AURA" then
-            if arg1 == self.unit then frame.UpdateAuras() end
+            if arg1 == s.unit then frame.UpdateAuras() end
         elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then
             frame.UpdateAuras()
         end
@@ -597,32 +729,182 @@ function UF:UpdateAuras(frame)
     end
 
     -- 1. Update Base
-    if frame.RoithiAuras then frame.RoithiAuras.Update() end
+    local baseDB = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
 
-    -- 2. Sync Custom Auras
+    local el = GetOrCreateAuraElement(frame, "RoithiAuras")
+    frame.RoithiAuras = el
+    el.Update()
+
+    if baseDB and baseDB.separateAuras then
+        local elDebuffs = GetOrCreateAuraElement(frame, "RoithiAuras_Debuffs")
+        frame.RoithiAuras_Debuffs = elDebuffs
+        elDebuffs.Update()
+    else
+        if frame.RoithiAuras_Debuffs then frame.RoithiAuras_Debuffs:Hide() end
+    end
+
+    -- 2. Sync Custom Auras (DEPRECATED - Moved to standalones)
+    -- We keep a minimal loop here to hide any old children if they exist
+    if frame.CustomAuras then
+        for _, element in pairs(frame.CustomAuras) do element:Hide() end
+    end
+end
+
+-- STANDALONE CUSTOM AURAS
+RoithiUI.CustomAuras = RoithiUI.CustomAuras or {}
+
+function UF:UpdateAllCustomAuras()
     local customDB = RoithiUI.db.profile.CustomAuraFrames
-    if customDB then
-        if not frame.CustomAuras then frame.CustomAuras = {} end
+    if not customDB then return end
 
-        for id, conf in pairs(customDB) do
-            -- Check if this custom aura applies to this unit
-            -- 'conf.unit' matches frame.unit?
-            -- Or if conf.unit is "all"?
-            if conf.unit == frame.unit then
-                local key = "CustomAura_" .. id
-                local el = GetOrCreateAuraElement(frame, key)
-                frame.CustomAuras[id] = el
-                el.Update()
+    local LEM = LibStub("LibEditMode-Roithi", true)
+
+    for id, conf in pairs(customDB) do
+        local key = "CustomAura_" .. id
+        local el = RoithiUI.CustomAuras[id]
+
+        if not el then
+            el = GetOrCreateAuraElement(RoithiUI, key)
+            RoithiUI.CustomAuras[id] = el
+
+            -- LIBEDITMODE REGISTRATION
+            if LEM then
+                local function OnPosChanged(_f, _, p, x, y)
+                    local db = RoithiUI.db.profile.CustomAuraFrames[id]
+                    if db then
+                        db.screenPoint, db.screenX, db.screenY = p, x, y
+                    end
+                end
+
+                local defaults = {
+                    p = "CENTER",
+                    x = 0,
+                    y = -50
+                }
+
+                LEM:AddFrame(el, OnPosChanged, defaults, "Custom Aura: " .. id)
+
+                -- ADD LEM SETTINGS
+                local auraSettings = {
+                    {
+                        kind = LEM.SettingType.Checkbox,
+                        name = "Enabled",
+                        get = function() return RoithiUI.db.profile.CustomAuraFrames[id].enabled ~= false end,
+                        set = function(v)
+                            RoithiUI.db.profile.CustomAuraFrames[id].enabled = v
+                            el.Update()
+                        end
+                    },
+                    {
+                        kind = LEM.SettingType.Slider,
+                        name = "Aura Size",
+                        minValue = 10,
+                        maxValue = 100,
+                        valueStep = 1,
+                        get = function() return RoithiUI.db.profile.CustomAuraFrames[id].auraSize or 30 end,
+                        set = function(v)
+                            RoithiUI.db.profile.CustomAuraFrames[id].auraSize = v
+                            el.Update()
+                        end
+                    },
+                    {
+                        kind = LEM.SettingType.Slider,
+                        name = "Max Auras",
+                        minValue = 1,
+                        maxValue = 40,
+                        valueStep = 1,
+                        get = function() return RoithiUI.db.profile.CustomAuraFrames[id].maxAuras or 4 end,
+                        set = function(v)
+                            RoithiUI.db.profile.CustomAuraFrames[id].maxAuras = v
+                            el.Update()
+                        end
+                    },
+                    {
+                        kind = LEM.SettingType.Slider,
+                        name = "Spacing",
+                        minValue = 0,
+                        maxValue = 40,
+                        valueStep = 1,
+                        get = function() return RoithiUI.db.profile.CustomAuraFrames[id].auraSpacing or 4 end,
+                        set = function(v)
+                            RoithiUI.db.profile.CustomAuraFrames[id].auraSpacing = v
+                            el.Update()
+                        end
+                    },
+                    {
+                        kind = LEM.SettingType.Slider,
+                        name = "X Offset (from Screen Center)",
+                        minValue = -2000,
+                        maxValue = 2000,
+                        valueStep = 1,
+                        get = function() return RoithiUI.db.profile.CustomAuraFrames[id].screenX or 0 end,
+                        set = function(v)
+                            RoithiUI.db.profile.CustomAuraFrames[id].screenX = v
+                            el.Update()
+                        end
+                    },
+                    {
+                        kind = LEM.SettingType.Slider,
+                        name = "Y Offset (from Screen Center)",
+                        minValue = -2000,
+                        maxValue = 2000,
+                        valueStep = 1,
+                        get = function() return RoithiUI.db.profile.CustomAuraFrames[id].screenY or -50 end,
+                        set = function(v)
+                            RoithiUI.db.profile.CustomAuraFrames[id].screenY = v
+                            el.Update()
+                        end
+                    }
+                }
+                LEM:AddFrameSettings(el, auraSettings)
+                LEM:AddFrameSettingsButtons(el, {
+                    {
+                        text = "Open Full Settings",
+                        click = function()
+                            local ACD = LibStub("AceConfigDialog-3.0", true)
+                            if ACD then
+                                ACD:Open("RoithiUI")
+                                ACD:SelectGroup("RoithiUI", "auras", "custom", id)
+                            end
+                        end
+                    }
+                })
             end
+
+            -- EVENT REGISTRATION
+            el:SetScript("OnEvent", function(s, event, unit)
+                if event == "UNIT_AURA" and unit == s.unit then
+                    s.Update()
+                elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then
+                    s.Update()
+                end
+            end)
+            el:RegisterEvent("PLAYER_TARGET_CHANGED")
+            el:RegisterEvent("PLAYER_FOCUS_CHANGED")
         end
 
-        -- Cleanup?
-        -- If an element exists in frame.CustomAuras but not in DB (deleted), hide it.
-        for id, el in pairs(frame.CustomAuras) do
-            if not customDB[id] or customDB[id].unit ~= frame.unit then
-                el:Hide()
-                -- frame.CustomAuras[id] = nil -- Safe to nil during pairs? No.
-            end
+        -- Update Internal Unit
+        el.unit = conf.unit or "player"
+        el:UnregisterEvent("UNIT_AURA")
+        el:RegisterUnitEvent("UNIT_AURA", el.unit)
+
+        el.Update()
+    end
+
+    -- Cleanup deleted ones
+    for id, el in pairs(RoithiUI.CustomAuras) do
+        if not customDB[id] then
+            el:Hide()
+            -- We don't necessarily destroy frames in Lua, but we hide them.
         end
     end
 end
+
+-- Initialize on Load
+local frame = CreateFrame("Frame")
+frame:RegisterEvent("PLAYER_LOGIN")
+frame:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_LOGIN" then
+        UF:UpdateAllCustomAuras()
+    end
+end)

@@ -643,6 +643,7 @@ if LEM then
                     -- Force Update Class/Additional Power too just in case
                     if frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
                     if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
+                    if UF.UpdateAuras then UF:UpdateAuras(frame) end
                 else
                     -- Disabled: Force Hide
                     if canTouchSecure then
@@ -661,6 +662,7 @@ if LEM then
             if not string.find(unit, "boss") then
                 frame.isInEditMode = false
                 if frame.EditModeOverlay then frame.EditModeOverlay:Hide() end
+                if UF.UpdateAuras then UF:UpdateAuras(frame) end
 
                 -- We don't Hide() unitframes on exit like Castbars; they might need to stay shown if they have a target.
                 -- UF:ToggleFrame handles normal visibility.
