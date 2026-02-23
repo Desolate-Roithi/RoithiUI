@@ -347,14 +347,8 @@ function ns.SetCastbarAttachment(unit, attached)
     if AL then
         AL:ApplyLayout(unit, "Castbar")
 
-        -- Special horizontal offset for Castbar Icon if still relevant
-        if not db.detached and db.showIcon then
-            local point, relativeTo, relativePoint, x, y = bar:GetPoint()
-            if point then
-                local iconSize = (db.height or 20) * (db.iconScale or 1.0)
-                bar:SetPoint(point, relativeTo, relativePoint, x + (iconSize / 2), y - 5)
-            end
-        end
+        -- Special horizontal offset for Castbar Icon removed to allow perfect centering with unit frames
+        -- The icon will now simply stick out to the left instead of pushing the bar's text off-center
     else
         -- Fallback fallback
         bar:ClearAllPoints()

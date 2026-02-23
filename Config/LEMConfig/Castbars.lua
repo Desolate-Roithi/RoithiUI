@@ -33,8 +33,6 @@ local function UpdateBar(unit)
 
         if uFrame then
             finalWidth = uFrame:GetWidth()
-
-            -- Subtract Icon Width if shown
             if db.showIcon then
                 finalWidth = finalWidth - iconSize
                 if finalWidth < 1 then finalWidth = 1 end
@@ -57,6 +55,7 @@ local function UpdateBar(unit)
     if db.showIcon then
         bar.Icon:Show()
         bar.Icon:SetSize(iconSize, iconSize)
+        if bar.isInEditMode then bar.Icon:SetTexture(136243) end
     else
         bar.Icon:Hide()
     end

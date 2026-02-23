@@ -375,6 +375,19 @@ function AL:ApplyLayout(unit, frameType)
                 -- STACKED MODE (Bars)
                 frame:SetPoint("TOP", anchor, "BOTTOM", 0, -1)
                 frame:SetWidth(anchor:GetWidth())
+
+                -- Dynamic Width & Offset deduction for Castbars (fixes 0-start icon alignment)
+                if frameType == "Castbar" then
+                    local cbDB = RoithiUI.db.profile.Castbar[unit]
+                    if cbDB and cbDB.showIcon and not cbDB.detached then
+                        local iconSize = (cbDB.height or 20) * (cbDB.iconScale or 1.0)
+                        local w = anchor:GetWidth() - iconSize
+                        if w < 1 then w = 1 end
+                        frame:SetWidth(w)
+                        -- Shift right by half the icon size so the icon's left edge perfectly aligns with the UI parent's left edge
+                        frame:SetPoint("TOP", anchor, "BOTTOM", iconSize / 2, -1)
+                    end
+                end
             end
         end
     end
