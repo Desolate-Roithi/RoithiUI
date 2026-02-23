@@ -29,7 +29,7 @@ A robust castbar module supporting all major units.
 
 ## Configuration
 
-RoithiUI uses a **"Zero-Config"** philosophy regarding defaults, but customization is fully supported via **Edit Mode**.
+Customization is fully supported via **Edit Mode**.
 
 ### How to Customize
 1.  **Enter Edit Mode**: Open the Game Menu -> Edit Mode (or right-click a unit frame).
@@ -49,7 +49,6 @@ If you encounter issues, you can enable **Debug Mode** to see detailed logs in t
 
 - `/rl` - Reload UI
 - `/rui` - Open Options Panel
-- `/mcb` - Shortcut to open Edit Mode (Legacy alias)
 
 ## Libraries
 

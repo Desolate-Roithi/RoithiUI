@@ -274,6 +274,17 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
     end
 
     LEM:AddFrameSettings(bar, GetSettings())
+    LEM:AddFrameSettingsButtons(bar, {
+        {
+            text = "Open Full Settings",
+            click = function()
+                if LibStub("AceConfigDialog-3.0") then
+                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "castbars", unit)
+                    LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                end
+            end
+        }
+    })
 end
 
 -- ----------------------------------------------------------------------------

@@ -81,11 +81,54 @@ function RoithiUI.Config.GetCustomTagsOptions()
             return RoithiUI.db.profile.UnitFrames[unit].tags
         end
 
+        local function CreateQuickLinks()
+            local args = {}
+            local order = 1
+            local ufUnit = (unit:match("^boss%d$")) and "boss" or unit
+            args.unitframes = {
+                type = "execute",
+                name = "> Unit Frames",
+                order = order,
+                func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", ufUnit) end,
+            }
+            order = order + 1
+            if not unit:match("^boss%d$") then
+                args.castbars = {
+                    type = "execute",
+                    name = "> Castbars",
+                    order = order,
+                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "castbars", unit) end,
+                }
+                order = order + 1
+            end
+            local isBoss = unit:match("^boss%d$")
+            args.auras = {
+                type = "execute",
+                name = "> Auras",
+                order = order,
+                func = function()
+                    if isBoss then
+                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", "bossFrames", unit)
+                    else
+                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", unit)
+                    end
+                end,
+            }
+            return {
+                type = "group",
+                name = "Quick Links",
+                inline = true,
+                order = 0.5,
+                args = args
+            }
+        end
+
         local unitGroup = {
             type = "group",
             name = label,
             order = i,
             args = {
+                quickLinks = CreateQuickLinks(),
                 addTag = {
                     type = "execute",
                     name = "Add New Tag",

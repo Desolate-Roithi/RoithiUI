@@ -65,10 +65,19 @@ local function GetElementDB(frame, key)
             }
             return setmetatable({}, {
                 __index = function(_, k)
+                    -- 1. Prioritize independent boss settings if explicitly set e.g. from Ace3
+                    if db[k] ~= nil then return db[k] end
+
+                    -- 2. Fallback to Boss 1 driver settings for layout synchronization
                     for _, inheritedKey in ipairs(keys) do
                         if k == inheritedKey then return driverDB[k] end
                     end
-                    return db[k]
+                    return nil
+                end,
+                __newindex = function(_, k, v)
+                    -- Always save to the specific unit's DB
+                    -- (e.g. when dragged to screen, it saves screen pos directly to bossX)
+                    db[k] = v
                 end
             })
         end
@@ -232,7 +241,7 @@ local function GetOrCreateAuraElement(frame, key)
         AL:ApplyLayout(unit, alType)
 
         -- Mouse Interact (Drag)
-        if frame.isInEditMode then
+        if frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest then
             element:EnableMouse(true)
         else
             element:EnableMouse(false)
@@ -586,8 +595,28 @@ local function GetOrCreateAuraElement(frame, key)
         end
 
         -- Edit Mode Mock
-        if frame.forceShowEditMode or frame.forceShowTest then
-            local _ = nil
+        if frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest then
+            local mockCount = math.min(maxIcons, 3)
+            for m = 1, mockCount do
+                local icon = icons[iconIndex] or CreateIcon(iconIndex)
+                icon:SetSize(size, size)
+                icon:ClearAllPoints()
+                if iconIndex == 1 then
+                    icon:SetPoint(anchor1, element, anchor1, 0, 0)
+                else
+                    -- Simple mock stacking, ignoring complex buff/debuff split logic for mock
+                    icon:SetPoint(anchor1, icons[iconIndex - 1], relPoint, xSpace, ySpace)
+                end
+
+                icon.icon:SetTexture(136069) -- e.g. a generic spell icon
+                icon.count:SetText("")
+                if icon.cd then icon.cd:Hide() end
+                if icon.GlowFrame then icon.GlowFrame:Hide() end
+                if icon.overlay then icon.overlay:Hide() end
+
+                icon:Show()
+                iconIndex = iconIndex + 1
+            end
         end
 
         -- Hide unused
@@ -598,7 +627,7 @@ local function GetOrCreateAuraElement(frame, key)
         local renderIcons = totalIcons
 
         local rows = 1
-        if frame.isInEditMode then
+        if frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest then
             renderIcons = maxIcons
             if not isSplitDebuff and not isSplitBuff and db.separateAuras and
                 db.showBuffs ~= false and db.showDebuffs ~= false then
@@ -620,7 +649,7 @@ local function GetOrCreateAuraElement(frame, key)
             element:SetSize(1, 1)
         end
 
-        if frame.isInEditMode then
+        if frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest then
             if not element.editModeTexture then
                 element.editModeTexture = element:CreateTexture(nil, "OVERLAY")
                 element.editModeTexture:SetAllPoints()

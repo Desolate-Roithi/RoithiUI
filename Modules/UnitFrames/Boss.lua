@@ -35,6 +35,12 @@ function UF:InitializeBossFrames()
     driver:SetMovable(true)
     driver:SetClampedToScreen(true)
 
+    -- 2. Create Passengers (Boss 2-5)
+    for i = 2, 5 do
+        local unit = "boss" .. i
+        self:CreateStandardLayout(unit, "Boss " .. i, true) -- Skip EditMode
+    end
+
     -- Edit Mode for Driver (Controls All)
     if LEM then
         driver.editModeName = "Boss Frames" -- Label as plural for the user
@@ -159,12 +165,6 @@ function UF:InitializeBossFrames()
                 if f and f.UpdateAuras then f.UpdateAuras() end
             end
         end)
-    end
-
-    -- 2. Create Passengers (Boss 2-5)
-    for i = 2, 5 do
-        local unit = "boss" .. i
-        self:CreateStandardLayout(unit, "Boss " .. i, true) -- Skip EditMode
     end
 
     self:UpdateBossAnchors()

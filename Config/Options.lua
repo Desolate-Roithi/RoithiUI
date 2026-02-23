@@ -578,11 +578,7 @@ local function GetOptions()
                 name = "Castbars",
                 order = 3,
                 args = {
-                    intro = {
-                        type = "description",
-                        name = "Castbar settings are currently managed via Edit Mode.",
-                        order = 1,
-                    },
+                    -- Populated below
                 },
             },
             auras = GetGlobalAuraOptions(),
@@ -598,6 +594,11 @@ local function GetOptions()
         { "focus",        "Focus" },
         { "focustarget",  "Focus Target" },
         { "pet",          "Pet" },
+        { "boss1",        "Boss 1" },
+        { "boss2",        "Boss 2" },
+        { "boss3",        "Boss 3" },
+        { "boss4",        "Boss 4" },
+        { "boss5",        "Boss 5" },
     }
 
     for i, u in ipairs(units) do
@@ -609,195 +610,270 @@ local function GetOptions()
             return RoithiUI.db.profile.UnitFrames[unit]
         end
 
-        options.args.unitframes.args[unit] = {
-            type = "group",
-            name = label,
-            order = 10 + i,
-            args = {
+        local function CreateQuickLinks(currentContext)
+            local args = {}
+            local order = 1
+            local ufUnit = (unit:match("^boss%d$")) and "boss" or unit
+            if currentContext ~= "unitframes" then
+                args.unitframes = {
+                    type = "execute",
+                    name = "> Unit Frames",
+                    order = order,
+                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", ufUnit) end,
+                }
+                order = order + 1
+            end
+            if currentContext ~= "castbars" and not unit:match("^boss%d$") then
+                args.castbars = {
+                    type = "execute",
+                    name = "> Castbars",
+                    order = order,
+                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "castbars", unit) end,
+                }
+                order = order + 1
+            end
+            if currentContext ~= "auras" then
+                local isBoss = unit:match("^boss%d$")
+                args.auras = {
+                    type = "execute",
+                    name = "> Auras",
+                    order = order,
+                    func = function()
+                        if isBoss then
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", "bossFrames", unit)
+                        else
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", unit)
+                        end
+                    end,
+                }
+                order = order + 1
+            end
+            if RoithiUI.Config.GetCustomTagsOptions and currentContext ~= "customtags" then
+                args.customtags = {
+                    type = "execute",
+                    name = "> Custom Tags",
+                    order = order,
+                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "customtags", unit) end,
+                }
+                order = order + 1
+            end
+            return {
+                type = "group",
+                name = "Quick Links",
+                inline = true,
+                order = 2,
+                args = args
+            }
+        end
 
+        if not unit:match("^boss%d$") then
+            options.args.unitframes.args[unit] = {
+                type = "group",
+                name = label,
+                order = 10 + i,
+                args = {
+                    enable = {
+                        type = "toggle",
+                        name = "Enable Unit Frame",
+                        order = 1,
+                        get = function()
+                            if not RoithiUI.db.profile.UnitFrames then return true end
+                            if not RoithiUI.db.profile.UnitFrames[unit] then return true end
+                            return RoithiUI.db.profile.UnitFrames[unit].enabled ~= false
+                        end,
+                        set = function(_, v)
+                            if not RoithiUI.db.profile.UnitFrames then RoithiUI.db.profile.UnitFrames = {} end
+                            if not RoithiUI.db.profile.UnitFrames[unit] then RoithiUI.db.profile.UnitFrames[unit] = {} end
+                            RoithiUI.db.profile.UnitFrames[unit].enabled = v
+                            local ufModule = RoithiUI:GetModule("UnitFrames")
+                            if ufModule then ufModule:ToggleFrame(unit, v) end
+                            if EditModeManagerFrame and EditModeManagerFrame:IsShown() and ns.UpdateBlizzardVisibility then
+                                ns.UpdateBlizzardVisibility()
+                            end
+                        end,
+                    },
+                    quickLinks = CreateQuickLinks("unitframes"),
 
-
-
-                -- Tab: Indicators
-                indicators = {
-                    type = "group",
-                    name = "Indicators",
-                    order = 2,
-                    inline = true,
-                    args = {
-                        testMode = {
-                            type = "toggle",
-                            name = "|cffffd100Test Mode|r",
-                            desc = "Force show all enabled indicators for easier configuration.",
-                            order = 0,
-                            get = function() return RoithiUI.db.profile.IndicatorTestMode end,
-                            set = function(_, v)
-                                RoithiUI.db.profile.IndicatorTestMode = v
-                                ns.RefreshUnitFrame(unit)
-                            end,
-                            width = "full",
-                        },
-                        selectIndicator = {
-                            type = "select",
-                            name = "Select Indicator",
-                            order = 1,
-                            values = function()
-                                local v = {
-                                    combat = "Combat",
-                                    leader = "Leader",
-                                    raidicon = "Raid Icon",
-                                    role = "Role",
-                                    readycheck = "Ready Check",
-                                    phase = "Phase",
-                                    resurrect = "Resurrect",
-                                    pvp = "PvP",
-                                    tankassist = "Main Tank / Assist",
-                                    resting = "Resting",
-                                }
-                                if unit == "target" or unit == "focus" then
-                                    v.quest = "Quest"
-                                end
-                                return v
-                            end,
-                            get = function() return RoithiUI.db.profile.tempIndicatorSelect end,
-                            set = function(_, v) RoithiUI.db.profile.tempIndicatorSelect = v end,
-                        },
-                        -- Details Group (Only shown if selection made)
-                        details = {
-                            type = "group",
-                            name = "Settings",
-                            order = 2,
-                            inline = true,
-                            hidden = function() return not RoithiUI.db.profile.tempIndicatorSelect end,
-                            args = {
-                                enabled = {
-                                    type = "toggle",
-                                    name = "Enable",
-                                    order = 1,
-                                    get = function()
-                                        local k = RoithiUI.db.profile.tempIndicatorSelect
-                                        local db = GetDB().indicators and GetDB().indicators[k]
-                                        return db and db.enabled
-                                    end,
-                                    set = function(_, v)
-                                        local k = RoithiUI.db.profile.tempIndicatorSelect
-                                        if not GetDB().indicators then GetDB().indicators = {} end
-                                        if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
-                                        GetDB().indicators[k].enabled = v
-                                        ns.RefreshUnitFrame(unit)
-                                    end,
-                                },
-                                size = {
-                                    type = "range",
-                                    name = "Size",
-                                    order = 2,
-                                    min = 8,
-                                    max = 64,
-                                    step = 1,
-                                    get = function()
-                                        local k = RoithiUI.db.profile.tempIndicatorSelect
-                                        local db = GetDB().indicators and GetDB().indicators[k]
-                                        return db and db.size or 20
-                                    end,
-                                    set = function(_, v)
-                                        local k = RoithiUI.db.profile.tempIndicatorSelect
-                                        if not GetDB().indicators then GetDB().indicators = {} end
-                                        if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
-                                        GetDB().indicators[k].size = v
-                                        ns.RefreshUnitFrame(unit)
-                                    end,
-                                },
-                                point = {
-                                    type = "select",
-                                    name = "Anchor Point",
-                                    order = 3,
-                                    values = {
-                                        ["CENTER"] = "Center",
-                                        ["TOP"] = "Top",
-                                        ["BOTTOM"] = "Bottom",
-                                        ["LEFT"] = "Left",
-                                        ["RIGHT"] = "Right",
-                                        ["TOPLEFT"] = "Top Left",
-                                        ["TOPRIGHT"] = "Top Right",
-                                        ["BOTTOMLEFT"] = "Bottom Left",
-                                        ["BOTTOMRIGHT"] = "Bottom Right"
+                    -- Tab: Indicators
+                    indicators = {
+                        type = "group",
+                        name = "Indicators",
+                        order = 2,
+                        inline = true,
+                        args = {
+                            testMode = {
+                                type = "toggle",
+                                name = "|cffffd100Test Mode|r",
+                                desc = "Force show all enabled indicators for easier configuration.",
+                                order = 0,
+                                get = function() return RoithiUI.db.profile.IndicatorTestMode end,
+                                set = function(_, v)
+                                    RoithiUI.db.profile.IndicatorTestMode = v
+                                    ns.RefreshUnitFrame(unit)
+                                end,
+                                width = "full",
+                            },
+                            selectIndicator = {
+                                type = "select",
+                                name = "Select Indicator",
+                                order = 1,
+                                values = function()
+                                    local v = {
+                                        combat = "Combat",
+                                        leader = "Leader",
+                                        raidicon = "Raid Icon",
+                                        role = "Role",
+                                        readycheck = "Ready Check",
+                                        phase = "Phase",
+                                        resurrect = "Resurrect",
+                                        pvp = "PvP",
+                                        tankassist = "Main Tank / Assist",
+                                        resting = "Resting",
+                                    }
+                                    if unit == "target" or unit == "focus" then
+                                        v.quest = "Quest"
+                                    end
+                                    return v
+                                end,
+                                get = function() return RoithiUI.db.profile.tempIndicatorSelect end,
+                                set = function(_, v) RoithiUI.db.profile.tempIndicatorSelect = v end,
+                            },
+                            -- Details Group (Only shown if selection made)
+                            details = {
+                                type = "group",
+                                name = "Settings",
+                                order = 2,
+                                inline = true,
+                                hidden = function() return not RoithiUI.db.profile.tempIndicatorSelect end,
+                                args = {
+                                    enabled = {
+                                        type = "toggle",
+                                        name = "Enable",
+                                        order = 1,
+                                        get = function()
+                                            local k = RoithiUI.db.profile.tempIndicatorSelect
+                                            local db = GetDB().indicators and GetDB().indicators[k]
+                                            return db and db.enabled
+                                        end,
+                                        set = function(_, v)
+                                            local k = RoithiUI.db.profile.tempIndicatorSelect
+                                            if not GetDB().indicators then GetDB().indicators = {} end
+                                            if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
+                                            GetDB().indicators[k].enabled = v
+                                            ns.RefreshUnitFrame(unit)
+                                        end,
                                     },
-                                    get = function()
-                                        local k = RoithiUI.db.profile.tempIndicatorSelect
-                                        local db = GetDB().indicators and GetDB().indicators[k]
-                                        return db and db.point or "CENTER"
-                                    end,
-                                    set = function(_, v)
-                                        local k = RoithiUI.db.profile.tempIndicatorSelect
-                                        if not GetDB().indicators then GetDB().indicators = {} end
-                                        if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
-                                        GetDB().indicators[k].point = v
-                                        ns.RefreshUnitFrame(unit)
-                                    end,
-                                },
-                                x = {
-                                    type = "range",
-                                    name = "X Offset",
-                                    order = 4,
-                                    min = -100,
-                                    max = 100,
-                                    step = 1,
-                                    get = function()
-                                        local k = RoithiUI.db.profile.tempIndicatorSelect
-                                        local db = GetDB().indicators and GetDB().indicators[k]
-                                        return db and db.x or 0
-                                    end,
-                                    set = function(_, v)
-                                        local k = RoithiUI.db.profile.tempIndicatorSelect
-                                        if not GetDB().indicators then GetDB().indicators = {} end
-                                        if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
-                                        GetDB().indicators[k].x = v
-                                        ns.RefreshUnitFrame(unit)
-                                    end,
-                                },
-                                y = {
-                                    type = "range",
-                                    name = "Y Offset",
-                                    order = 5,
-                                    min = -100,
-                                    max = 100,
-                                    step = 1,
-                                    get = function()
-                                        local k = RoithiUI.db.profile.tempIndicatorSelect
-                                        local db = GetDB().indicators and GetDB().indicators[k]
-                                        return db and db.y or 0
-                                    end,
-                                    set = function(_, v)
-                                        local k = RoithiUI.db.profile.tempIndicatorSelect
-                                        if not GetDB().indicators then GetDB().indicators = {} end
-                                        if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
-                                        GetDB().indicators[k].y = v
-                                        ns.RefreshUnitFrame(unit)
-                                    end,
+                                    size = {
+                                        type = "range",
+                                        name = "Size",
+                                        order = 2,
+                                        min = 8,
+                                        max = 64,
+                                        step = 1,
+                                        get = function()
+                                            local k = RoithiUI.db.profile.tempIndicatorSelect
+                                            local db = GetDB().indicators and GetDB().indicators[k]
+                                            return db and db.size or 20
+                                        end,
+                                        set = function(_, v)
+                                            local k = RoithiUI.db.profile.tempIndicatorSelect
+                                            if not GetDB().indicators then GetDB().indicators = {} end
+                                            if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
+                                            GetDB().indicators[k].size = v
+                                            ns.RefreshUnitFrame(unit)
+                                        end,
+                                    },
+                                    point = {
+                                        type = "select",
+                                        name = "Anchor Point",
+                                        order = 3,
+                                        values = {
+                                            ["CENTER"] = "Center",
+                                            ["TOP"] = "Top",
+                                            ["BOTTOM"] = "Bottom",
+                                            ["LEFT"] = "Left",
+                                            ["RIGHT"] = "Right",
+                                            ["TOPLEFT"] = "Top Left",
+                                            ["TOPRIGHT"] = "Top Right",
+                                            ["BOTTOMLEFT"] = "Bottom Left",
+                                            ["BOTTOMRIGHT"] = "Bottom Right"
+                                        },
+                                        get = function()
+                                            local k = RoithiUI.db.profile.tempIndicatorSelect
+                                            local db = GetDB().indicators and GetDB().indicators[k]
+                                            return db and db.point or "CENTER"
+                                        end,
+                                        set = function(_, v)
+                                            local k = RoithiUI.db.profile.tempIndicatorSelect
+                                            if not GetDB().indicators then GetDB().indicators = {} end
+                                            if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
+                                            GetDB().indicators[k].point = v
+                                            ns.RefreshUnitFrame(unit)
+                                        end,
+                                    },
+                                    x = {
+                                        type = "range",
+                                        name = "X Offset",
+                                        order = 4,
+                                        min = -100,
+                                        max = 100,
+                                        step = 1,
+                                        get = function()
+                                            local k = RoithiUI.db.profile.tempIndicatorSelect
+                                            local db = GetDB().indicators and GetDB().indicators[k]
+                                            return db and db.x or 0
+                                        end,
+                                        set = function(_, v)
+                                            local k = RoithiUI.db.profile.tempIndicatorSelect
+                                            if not GetDB().indicators then GetDB().indicators = {} end
+                                            if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
+                                            GetDB().indicators[k].x = v
+                                            ns.RefreshUnitFrame(unit)
+                                        end,
+                                    },
+                                    y = {
+                                        type = "range",
+                                        name = "Y Offset",
+                                        order = 5,
+                                        min = -100,
+                                        max = 100,
+                                        step = 1,
+                                        get = function()
+                                            local k = RoithiUI.db.profile.tempIndicatorSelect
+                                            local db = GetDB().indicators and GetDB().indicators[k]
+                                            return db and db.y or 0
+                                        end,
+                                        set = function(_, v)
+                                            local k = RoithiUI.db.profile.tempIndicatorSelect
+                                            if not GetDB().indicators then GetDB().indicators = {} end
+                                            if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
+                                            GetDB().indicators[k].y = v
+                                            ns.RefreshUnitFrame(unit)
+                                        end,
+                                    },
                                 },
                             },
                         },
                     },
                 },
-                -- Tab: Auras (Moved to Global)
-                auras = {
-                    type = "group",
-                    name = "Auras",
-                    order = 3,
-                    inline = true,
-                    args = {
-                        movedConfig = {
-                            type = "description",
-                            name = "Aura settings have been moved to the main 'Auras' tab -> 'Unit Aura Settings'.",
-                            order = 1,
-                        }
-                    }
-                },
-            },
-        }
+            }
+        end
 
         -- Populate the Global > Auras > Units table
-        options.args.auras.args.units.args[unit] = {
+        local targetArgs = options.args.auras.args.units.args
+        if unit:match("^boss%d$") then
+            if not targetArgs.bossFrames then
+                targetArgs.bossFrames = {
+                    type = "group",
+                    name = "Boss Frames",
+                    order = 30,
+                    args = {}
+                }
+            end
+            targetArgs = targetArgs.bossFrames.args
+        end
+
+        targetArgs[unit] = {
             type = "group",
             name = label,
             order = i,
@@ -811,6 +887,7 @@ local function GetOptions()
                         GetDB().aurasEnabled = v; ns.RefreshUnitFrame(unit)
                     end,
                 },
+                quickLinks = CreateQuickLinks("auras"),
 
                 size = {
                     type = "range",
@@ -1113,7 +1190,93 @@ local function GetOptions()
                 }
             }
         }
+
+        if not unit:match("^boss%d$") then
+            options.args.castbars.args[unit] = {
+                type = "group",
+                name = label,
+                order = 10 + i,
+                args = {
+                    enable = {
+                        type = "toggle",
+                        name = "Enable Castbar",
+                        order = 1,
+                        get = function()
+                            if not RoithiUI.db.profile.Castbar then return true end
+                            if not RoithiUI.db.profile.Castbar[unit] then return true end
+                            return RoithiUI.db.profile.Castbar[unit].enabled ~= false
+                        end,
+                        set = function(_, v)
+                            if not RoithiUI.db.profile.Castbar then RoithiUI.db.profile.Castbar = {} end
+                            if not RoithiUI.db.profile.Castbar[unit] then RoithiUI.db.profile.Castbar[unit] = {} end
+                            RoithiUI.db.profile.Castbar[unit].enabled = v
+                            if ns.UpdateCast and ns.bars and ns.bars[unit] then ns.UpdateCast(ns.bars[unit]) end
+                            if EditModeManagerFrame and EditModeManagerFrame:IsShown() and ns.UpdateBlizzardVisibility then
+                                ns.UpdateBlizzardVisibility()
+                            end
+                        end,
+                    },
+                    quickLinks = CreateQuickLinks("castbars"),
+                }
+            }
+        end
     end
+
+    -- Add Boss Frames settings to Unit Frames group
+    options.args.unitframes.args["boss"] = {
+        type = "group",
+        name = "Boss Frames",
+        order = 30,
+        args = {
+            enable = {
+                type = "toggle",
+                name = "Enable Boss Frames",
+                order = 1,
+                get = function()
+                    if not RoithiUI.db.profile.UnitFrames then return true end
+                    if not RoithiUI.db.profile.UnitFrames["boss1"] then return true end
+                    return RoithiUI.db.profile.UnitFrames["boss1"].enabled ~= false
+                end,
+                set = function(_, v)
+                    if not RoithiUI.db.profile.UnitFrames then RoithiUI.db.profile.UnitFrames = {} end
+                    local ufModule = RoithiUI:GetModule("UnitFrames")
+                    for i = 1, 5 do
+                        local bUnit = "boss" .. i
+                        if unpack and not RoithiUI.db.profile.UnitFrames[bUnit] then RoithiUI.db.profile.UnitFrames[bUnit] = {} end
+                        RoithiUI.db.profile.UnitFrames[bUnit].enabled = v
+                        if ufModule then ufModule:ToggleFrame(bUnit, v) end
+                    end
+                    if EditModeManagerFrame and EditModeManagerFrame:IsShown() and ns.UpdateBlizzardVisibility then
+                        ns
+                            .UpdateBlizzardVisibility()
+                    end
+                end,
+            },
+            quickLinks = {
+                type = "group",
+                name = "Quick Links",
+                inline = true,
+                order = 2,
+                args = {
+                    auras = {
+                        type = "execute",
+                        name = "> Auras",
+                        order = 1,
+                        func = function()
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units",
+                                "boss1")
+                        end,
+                    },
+                    customtags = {
+                        type = "execute",
+                        name = "> Custom Tags",
+                        order = 2,
+                        func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "customtags", "boss1") end,
+                    },
+                }
+            },
+        }
+    }
 
     return options
 end

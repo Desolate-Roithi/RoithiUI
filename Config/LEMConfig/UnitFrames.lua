@@ -515,13 +515,7 @@ local function GetSettingsForMainFrame(unit, frame)
         end
     end
 
-    -- Internal Settings Button
-    table.insert(settings, { kind = LEM.SettingType.Divider })
-    table.insert(settings, {
-        name = "Open Detailed Settings",
-        kind = LEM.SettingType.Button,
-        func = OpenSettings
-    })
+    -- Removed internal SettingType.Button in favor of AddFrameSettingsButtons
 
     return settings
 end
@@ -589,6 +583,17 @@ function ns.InitializeUnitFrameConfig()
                 -- Add Main Settings
                 local success, err = pcall(function()
                     LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
+                    LEM:AddFrameSettingsButtons(frame, {
+                        {
+                            text = "Open Full Settings",
+                            click = function()
+                                if LibStub("AceConfigDialog-3.0") then
+                                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", unit)
+                                    LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                                end
+                            end
+                        }
+                    })
                 end)
 
                 -- Register Specific Settings for Sub-Frames safely
