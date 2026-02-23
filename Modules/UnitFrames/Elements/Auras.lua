@@ -251,24 +251,24 @@ local function GetOrCreateAuraElement(frame, key)
         local isSplitBuff = key == "RoithiAuras" and db.separateAuras
 
         -- Props
-        local size = db.auraSize or 20
+        local size = tonumber(db.auraSize) or 20
         local growDir = db.auraGrowDirection or "RIGHT"
-        local spacing = db.auraSpacing or 4
-        local maxIcons = db.maxAuras or 8
+        local spacing = tonumber(db.auraSpacing) or 4
+        local maxIcons = tonumber(db.maxAuras) or 8
 
         if not db.auraGrowDirection and db.growDirection then growDir = db.growDirection end
 
         -- Overrides if split
         if isSplitDebuff then
-            size = db.debuffSize or db.auraSize or 20
+            size = tonumber(db.debuffSize) or tonumber(db.auraSize) or 20
             growDir = db.debuffGrowDirection or db.auraGrowDirection or "RIGHT"
-            spacing = db.debuffSpacing or db.auraSpacing or 4
-            maxIcons = db.debuffMaxAuras or db.maxAuras or 8
+            spacing = tonumber(db.debuffSpacing) or tonumber(db.auraSpacing) or 4
+            maxIcons = tonumber(db.debuffMaxAuras) or tonumber(db.maxAuras) or 8
         elseif isSplitBuff then
-            size = db.buffSize or db.auraSize or 20
+            size = tonumber(db.buffSize) or tonumber(db.auraSize) or 20
             growDir = db.buffGrowDirection or db.auraGrowDirection or "RIGHT"
-            spacing = db.buffSpacing or db.auraSpacing or 4
-            maxIcons = db.buffMaxAuras or db.maxAuras or 8
+            spacing = tonumber(db.buffSpacing) or tonumber(db.auraSpacing) or 4
+            maxIcons = tonumber(db.buffMaxAuras) or tonumber(db.maxAuras) or 8
         end
 
         local isCenterHoriz = (growDir == "CENTER_HORIZONTAL")
@@ -877,7 +877,7 @@ function UF:UpdateAllCustomAuras()
                         kind = LEM.SettingType.Checkbox,
                         name = "Enabled",
                         get = function() return RoithiUI.db.profile.CustomAuraFrames[id].enabled ~= false end,
-                        set = function(v)
+                        set = function(_, v)
                             RoithiUI.db.profile.CustomAuraFrames[id].enabled = v
                             el.Update()
                         end
@@ -889,8 +889,8 @@ function UF:UpdateAllCustomAuras()
                         maxValue = 100,
                         valueStep = 1,
                         get = function() return RoithiUI.db.profile.CustomAuraFrames[id].auraSize or 30 end,
-                        set = function(v)
-                            RoithiUI.db.profile.CustomAuraFrames[id].auraSize = v
+                        set = function(_, v)
+                            RoithiUI.db.profile.CustomAuraFrames[id].auraSize = tonumber(v) or 30
                             el.Update()
                         end
                     },
@@ -901,8 +901,8 @@ function UF:UpdateAllCustomAuras()
                         maxValue = 40,
                         valueStep = 1,
                         get = function() return RoithiUI.db.profile.CustomAuraFrames[id].maxAuras or 4 end,
-                        set = function(v)
-                            RoithiUI.db.profile.CustomAuraFrames[id].maxAuras = v
+                        set = function(_, v)
+                            RoithiUI.db.profile.CustomAuraFrames[id].maxAuras = tonumber(v) or 4
                             el.Update()
                         end
                     },
@@ -913,8 +913,8 @@ function UF:UpdateAllCustomAuras()
                         maxValue = 40,
                         valueStep = 1,
                         get = function() return RoithiUI.db.profile.CustomAuraFrames[id].auraSpacing or 4 end,
-                        set = function(v)
-                            RoithiUI.db.profile.CustomAuraFrames[id].auraSpacing = v
+                        set = function(_, v)
+                            RoithiUI.db.profile.CustomAuraFrames[id].auraSpacing = tonumber(v) or 4
                             el.Update()
                         end
                     },
@@ -925,8 +925,8 @@ function UF:UpdateAllCustomAuras()
                         maxValue = 2000,
                         valueStep = 1,
                         get = function() return RoithiUI.db.profile.CustomAuraFrames[id].screenX or 0 end,
-                        set = function(v)
-                            RoithiUI.db.profile.CustomAuraFrames[id].screenX = v
+                        set = function(_, v)
+                            RoithiUI.db.profile.CustomAuraFrames[id].screenX = tonumber(v) or 0
                             el.Update()
                         end
                     },
@@ -937,8 +937,8 @@ function UF:UpdateAllCustomAuras()
                         maxValue = 2000,
                         valueStep = 1,
                         get = function() return RoithiUI.db.profile.CustomAuraFrames[id].screenY or -50 end,
-                        set = function(v)
-                            RoithiUI.db.profile.CustomAuraFrames[id].screenY = v
+                        set = function(_, v)
+                            RoithiUI.db.profile.CustomAuraFrames[id].screenY = tonumber(v) or -50
                             el.Update()
                         end
                     }

@@ -423,6 +423,78 @@ local function GetGlobalAuraOptions()
 end
 
 local function GetOptions()
+    local profileOptions = LibStub("AceDBOptions-3.0"):GetOptionsTable(RoithiUI.db)
+    profileOptions.args.sharing = {
+        type = "group",
+        name = "Sharing",
+        order = 100,
+        args = {
+            intro = {
+                type = "description",
+                name = "Export or Import your RoithiUI profile settings as a compressed string.",
+                order = 1,
+            },
+            exportGroup = {
+                type = "group",
+                name = "Export",
+                order = 10,
+                inline = true,
+                args = {
+                    exportString = {
+                        type = "input",
+                        name = "Your Export String",
+                        desc = "Copy this string to share your profile with others.",
+                        order = 1,
+                        width = "full",
+                        multiline = 5,
+                        get = function()
+                            local PS = RoithiUI:GetModule("ProfileSharing")
+                            return PS and PS:ExportProfile() or ""
+                        end,
+                        set = function() end, -- Read-only
+                    },
+                },
+            },
+            importGroup = {
+                type = "group",
+                name = "Import",
+                order = 20,
+                inline = true,
+                args = {
+                    importString = {
+                        type = "input",
+                        name = "Paste Import String",
+                        desc = "Paste a RoithiUI profile string here and click Import.",
+                        order = 1,
+                        width = "full",
+                        multiline = 5,
+                        get = function() return RoithiUI.db.profile.tempImportString or "" end,
+                        set = function(_, v) RoithiUI.db.profile.tempImportString = v end,
+                    },
+                    importBtn = {
+                        type = "execute",
+                        name = "Import Profile",
+                        desc = "Applying an imported profile will overwrite your current settings and reload the UI.",
+                        order = 2,
+                        confirm = true,
+                        func = function()
+                            local PS = RoithiUI:GetModule("ProfileSharing")
+                            if PS then
+                                local success, msg = PS:ImportProfile(RoithiUI.db.profile.tempImportString)
+                                if success then
+                                    RoithiUI.db.profile.tempImportString = nil
+                                    ReloadUI()
+                                else
+                                    print("|cffff0000RoithiUI Import Error:|r " .. tostring(msg))
+                                end
+                            end
+                        end,
+                    },
+                },
+            },
+        },
+    }
+
     local options = {
         type = "group",
         name = "RoithiUI Settings",
@@ -582,7 +654,7 @@ local function GetOptions()
                 },
             },
             auras = GetGlobalAuraOptions(),
-            profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(RoithiUI.db),
+            profiles = profileOptions,
         },
     }
 

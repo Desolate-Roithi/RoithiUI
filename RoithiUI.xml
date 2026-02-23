@@ -38,6 +38,9 @@
     <Script file="Modules/UnitFrames/Boss.lua"/>
     <Script file="Modules/UnitFrames/Units.lua"/>
     
+    <!-- Profile Sharing -->
+    <Script file="Modules/ProfileSharing.lua"/>
+    
     <!-- Timers (Removed) -->
 
 
