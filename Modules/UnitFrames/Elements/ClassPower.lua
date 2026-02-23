@@ -162,7 +162,7 @@ function UF:CreateClassPower(frame)
                 point:SetValue(1)
                 point:SetAlpha(1)
                 point.Timer:SetText("")
-            else
+            elseif start and duration then
                 point:SetAlpha(1)
 
                 local current = GetTime() - start
@@ -176,6 +176,10 @@ function UF:CreateClassPower(frame)
                 else
                     point.Timer:SetText("")
                 end
+            else
+                point:SetMinMaxValues(0, 1)
+                point:SetValue(0)
+                point.Timer:SetText("")
             end
         end
     end
