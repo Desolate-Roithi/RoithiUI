@@ -271,8 +271,8 @@ local function GetOrCreateAuraElement(frame, key)
             maxIcons = db.buffMaxAuras or db.maxAuras or 8
         end
 
-        if growDir == "CENTER_HORIZONTAL" then growDir = "RIGHT" end
-        if growDir == "CENTER_VERTICAL" then growDir = "DOWN" end
+        local isCenterHoriz = (growDir == "CENTER_HORIZONTAL")
+        local isCenterVert = (growDir == "CENTER_VERTICAL")
 
         element:SetHeight(size)
 
@@ -281,8 +281,10 @@ local function GetOrCreateAuraElement(frame, key)
             anchor1, relPoint, xSpace, ySpace = "RIGHT", "LEFT", -spacing, 0
         elseif growDir == "UP" then
             anchor1, relPoint, xSpace, ySpace = "BOTTOM", "TOP", 0, spacing
-        elseif growDir == "DOWN" then
+        elseif growDir == "DOWN" or isCenterVert then
             anchor1, relPoint, xSpace, ySpace = "TOP", "BOTTOM", 0, -spacing
+        elseif isCenterHoriz then
+            anchor1, relPoint, xSpace, ySpace = "LEFT", "RIGHT", spacing, 0
         end
 
         local icons = element.icons
@@ -595,7 +597,7 @@ local function GetOrCreateAuraElement(frame, key)
         end
 
         -- Edit Mode Mock
-        if frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest then
+        if frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest or element.isInEditMode then
             local mockCount = math.min(maxIcons, 3)
             for m = 1, mockCount do
                 local icon = icons[iconIndex] or CreateIcon(iconIndex)
@@ -610,13 +612,39 @@ local function GetOrCreateAuraElement(frame, key)
 
                 icon.icon:SetTexture(136069) -- e.g. a generic spell icon
                 icon.count:SetText("")
-                if icon.cd then icon.cd:Hide() end
                 if icon.GlowFrame then icon.GlowFrame:Hide() end
                 if icon.overlay then icon.overlay:Hide() end
+
+                -- Animated Cooldown Swipe
+                if icon.cd then
+                    icon.cd:Show()
+                    local start, duration = icon.cd:GetCooldownTimes()
+                    start = start / 1000
+                    duration = duration / 1000
+                    local now = GetTime()
+
+                    -- Only set cooldown if it's inactive or finished
+                    if duration == 0 or (now >= start + duration) then
+                        -- 5 second mock cooldown, staggered by icon index
+                        icon.cd:SetCooldown(now - (m * 0.5), 5)
+                    end
+                end
 
                 icon:Show()
                 iconIndex = iconIndex + 1
             end
+
+            -- Keep the swiper looping while in mock mode, throttled to 2fps
+            if not element.mockTimer then element.mockTimer = 0 end
+            element:SetScript("OnUpdate", function(self, elapsed)
+                self.mockTimer = self.mockTimer + elapsed
+                if self.mockTimer > 0.5 then
+                    self.mockTimer = 0
+                    if self.Update then self.Update() end
+                end
+            end)
+        else
+            element:SetScript("OnUpdate", nil)
         end
 
         -- Hide unused
@@ -627,7 +655,7 @@ local function GetOrCreateAuraElement(frame, key)
         local renderIcons = totalIcons
 
         local rows = 1
-        if frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest then
+        if frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest or element.isInEditMode then
             renderIcons = maxIcons
             if not isSplitDebuff and not isSplitBuff and db.separateAuras and
                 db.showBuffs ~= false and db.showDebuffs ~= false then
@@ -636,20 +664,34 @@ local function GetOrCreateAuraElement(frame, key)
         end
 
         if renderIcons > 0 then
-            local primarySize = renderIcons * size +
-                (renderIcons - 1) * math.abs((growDir == "LEFT" or growDir == "RIGHT") and xSpace or ySpace)
+            local pSizeCount = (isCenterHoriz or isCenterVert) and maxIcons or renderIcons
+            local primarySize = pSizeCount * size +
+                (pSizeCount - 1) *
+                math.abs((growDir == "LEFT" or growDir == "RIGHT" or isCenterHoriz) and xSpace or ySpace)
             local secondarySize = rows * size + (rows - 1) * 4 -- since offset is (size + 4) -> 2*size + 4
 
-            if growDir == "LEFT" or growDir == "RIGHT" then
+            if growDir == "LEFT" or growDir == "RIGHT" or isCenterHoriz then
                 element:SetSize(primarySize, secondarySize)
             else
                 element:SetSize(secondarySize, primarySize)
+            end
+
+            if isCenterHoriz or isCenterVert then
+                local renderWidth = math.min(iconIndex - 1, maxIcons)
+                local activeSize = renderWidth * size + (renderWidth - 1) * math.abs(isCenterHoriz and xSpace or ySpace)
+                local icon = icons[1]
+                icon:ClearAllPoints()
+                if isCenterHoriz then
+                    icon:SetPoint("LEFT", element, "CENTER", -(activeSize / 2), 0)
+                else
+                    icon:SetPoint("TOP", element, "CENTER", 0, (activeSize / 2))
+                end
             end
         else
             element:SetSize(1, 1)
         end
 
-        if frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest then
+        if frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest or element.isInEditMode then
             if not element.editModeTexture then
                 element.editModeTexture = element:CreateTexture(nil, "OVERLAY")
                 element.editModeTexture:SetAllPoints()
@@ -787,6 +829,22 @@ function UF:UpdateAllCustomAuras()
     if not customDB then return end
 
     local LEM = LibStub("LibEditMode-Roithi", true)
+
+    if LEM and not self.customAurasLEMHooked then
+        self.customAurasLEMHooked = true
+        LEM:RegisterCallback('enter', function()
+            for _, el in pairs(RoithiUI.CustomAuras) do
+                el.isInEditMode = true
+                if el.Update then el.Update() end
+            end
+        end)
+        LEM:RegisterCallback('exit', function()
+            for _, el in pairs(RoithiUI.CustomAuras) do
+                el.isInEditMode = false
+                if el.Update then el.Update() end
+            end
+        end)
+    end
 
     for id, conf in pairs(customDB) do
         local key = "CustomAura_" .. id
