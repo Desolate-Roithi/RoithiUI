@@ -25,33 +25,20 @@ end
 
 function RoithiUI:OnInitialize()
     -- Initialize AceDB
-    -- "RoithiUIDB" is the SavedVariables table name in .toc (should be verified)
-    -- ns.Defaults is the default table
-    -- true (defaultProfile) -> "Default"
     self.db = LibStub("AceDB-3.0"):New("RoithiUIDB", ns.Defaults, true)
 
+    -- Register Profile Callbacks
+    self.db.RegisterCallback(self, "OnProfileChanged", "RefreshProfile")
+    self.db.RegisterCallback(self, "OnProfileCopied", "RefreshProfile")
+    self.db.RegisterCallback(self, "OnProfileReset", "RefreshProfile")
+
     -- DB Migration Logic: Legacy Manual -> AceDB Profile
-    -- Check if we have legacy root keys that match defaults structure, and no profiles
     if _G.RoithiUIDB and not _G.RoithiUIDB.profiles then
-        -- This is likely a legacy DB. Move known keys to current profile.
-        -- We can't move everything blindly because AceDB manages the table now.
-        -- But since we just initialized New(), AceDB might have already restructured if it was empty-ish,
-        -- or if it was existing, it might treat it as a profile if structured oddly?
-        -- Actually AceDB puts profiles in .profiles. If keys exist at root, they are ignored or overwritten unless upgraded.
-        -- Best effort: Manually move keys if they exist in the raw global but not in profile?
-        -- AceDB handles this if we use "namespaces" but for raw profile data it's tricky.
-
-        -- Creating a simple migration check:
-        -- Access raw DB not via self.db to avoid AceDB magic for a second
         local rawDB = _G.RoithiUIDB
-
-        -- If we detect a specific key like "EnabledModules" at root
         if rawDB.EnabledModules and not rawDB.profiles then
-            -- Copy to current profile
             for k, v in pairs(rawDB) do
                 if k ~= "profiles" and k ~= "profileKeys" then
                     self.db.profile[k] = v
-                    -- clear from root? safe to leave garbage or clean it up.
                     rawDB[k] = nil
                 end
             end
@@ -78,6 +65,29 @@ function RoithiUI:OnInitialize()
     -- Register Options
     if self.Config and self.Config.RegisterOptions then
         self.Config:RegisterOptions()
+    end
+end
+
+function RoithiUI:RefreshProfile()
+    if ns and ns.RefreshAllCastbars then ns.RefreshAllCastbars() end
+    
+    local UF = self:GetModule("UnitFrames")
+    if UF and UF.units then
+        for unit, _ in pairs(UF.units) do
+            if UF.ToggleFrame then
+                UF:ToggleFrame(unit, UF:IsUnitEnabled(unit))
+            end
+            if UF:IsUnitEnabled(unit) and UF.UpdateFrameFromSettings then
+                UF:UpdateFrameFromSettings(unit)
+            end
+        end
+    end
+    
+    -- Also close AceConfigDialog if it's open or refresh registry to match new DB
+    LibStub("AceConfigRegistry-3.0"):NotifyChange("RoithiUI_Profiles")
+    
+    if self.Config and self.Config.OptionsRefresh then
+        self.Config:OptionsRefresh()
     end
 end
 

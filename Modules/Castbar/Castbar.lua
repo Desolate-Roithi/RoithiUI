@@ -196,10 +196,27 @@ function ns.UpdateCast(bar)
     local c = colors[state] or colors.cast
 
     local safeNotInt = false
-    -- Safely check secret boolean
-    pcall(function() if notInterruptible then safeNotInt = true end end)
+    local isSecretNotInt = issecretvalue and issecretvalue(notInterruptible)
+    
+    -- Safely check basic boolean if not secret
+    if not isSecretNotInt then
+        pcall(function() if notInterruptible then safeNotInt = true end end)
+    end
 
-    if safeNotInt and colors.shield then
+    local evalColor = nil
+
+    if isSecretNotInt and colors.shield and C_CurveUtil and C_CurveUtil.EvaluateColorFromBoolean and CreateColor then
+        local trueColor = CreateColor(colors.shield[1], colors.shield[2], colors.shield[3], colors.shield[4] or 1)
+        local falseColor = CreateColor(c[1], c[2], c[3], c[4] or 1)
+        evalColor = C_CurveUtil.EvaluateColorFromBoolean(notInterruptible, trueColor, falseColor)
+        
+        -- Spark visibility based on secret
+        if bar.Spark and SetShownFromSecret then
+            -- We want spark to HIDE when true (shielded). SetShownFromSecret takes (frame, secret)
+            -- Sadly we can't do boolean NOT on a secret natively without another API. We'll just hide it if we suspect a shield.
+            -- Actually, let's leave Spark shown but maybe change its color or just keep it shown.
+        end
+    elseif safeNotInt and colors.shield then
         c = colors.shield
         if bar.Spark then bar.Spark:Hide() end
     else
@@ -246,7 +263,6 @@ function ns.UpdateCast(bar)
 
         -- Empower Setup
         local needSetup = true
-        -- Can we check equality of DurationObjects? assume yes or just always setup
         if bar.isEmpower then needSetup = false end
 
         if needSetup then
@@ -264,7 +280,12 @@ function ns.UpdateCast(bar)
         -- Standard
         if bar.isEmpower then ns.StopEmpower(bar) end
         bar:SetReverseFill(false)
-        bar:SetStatusBarColor(c[1], c[2], c[3], c[4])
+        if evalColor then
+            -- Note: SetStatusBarColor accepts ColorMixin objects in 10.0+ 
+            bar:SetStatusBarColor(evalColor:GetRGBA())
+        else
+            bar:SetStatusBarColor(c[1], c[2], c[3], c[4])
+        end
         if bar.Background then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
     end
 
