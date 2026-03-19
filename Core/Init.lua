@@ -24,6 +24,18 @@ end
 -- Existing modules use `RoithiUI:NewModule("UnitFrames")` which works with AceAddon.
 
 function RoithiUI:OnInitialize()
+    local isDev = string.match(addonName, "%-Dev$")
+    if isDev then
+        local prodName = string.gsub(addonName, "%-Dev$", "")
+        local state = C_AddOns.GetAddOnEnableState((UnitName("player") or "player"), prodName)
+        if state and state > 0 then
+            C_Timer.After(5, function()
+                print("|cffff0000["..addonName.."]|r |cff00ccffAborted:|r Production version ("..prodName..") is also loaded. Database untouched.")
+            end)
+            return -- Abort initialization completely
+        end
+    end
+
     -- Initialize AceDB
     self.db = LibStub("AceDB-3.0"):New("RoithiUIDB", ns.Defaults, true)
 

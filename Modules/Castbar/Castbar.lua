@@ -93,16 +93,20 @@ end
 -- ----------------------------------------------------------------------------
 local function FormatDuration(val)
     if not val then return "" end
-    -- Secret Safety: If issecretvalue(val), we can't do math.
-    -- We assume val might be a formatted string or we trust it works with standard formatters if whitelisted.
-    -- If it's a number:
+    -- Secret Safety: If issecretvalue(val), we can't do math, but string.format works natively.
+    if (issecretvalue and issecretvalue(val)) or (canaccessvalue and not canaccessvalue(val)) then
+        local success, str = pcall(string.format, "%.1f", val)
+        if success then return str end
+        return ""
+    end
+
     if type(val) == "number" then
         if val >= 60 then
             return string.format("%d:%02d", math.floor(val / 60), val % 60)
         end
         return string.format("%.1f", val)
     end
-    -- Fallback for secrets or handled types
+    -- Fallback
     return val
 end
 
@@ -255,6 +259,9 @@ function ns.UpdateCast(bar)
     -- Store for Latency/OnUpdate
     bar.durationObj = durationObj
 
+    -- Store state for OnUpdate logic evaluating native value
+    bar.castState = state
+
     -- ------------------------------------------------------------------------
     -- D. Mode Specific Logic
     -- ------------------------------------------------------------------------
@@ -336,12 +343,9 @@ function ns.UpdateCast(bar)
 
         if self.TimeFS and self.durationObj then
             local textVal = ""
-            -- Safe Check: If secret, we cannot read remaining duration for text.
-            if not self.durationObj:HasSecretValues() then
-                if self.durationObj.GetRemainingDuration then
-                    local rem = self.durationObj:GetRemainingDuration()
-                    textVal = FormatDuration(rem)
-                end
+            if self.durationObj.GetRemainingDuration then
+                local rem = self.durationObj:GetRemainingDuration()
+                textVal = FormatDuration(rem)
             end
             self.TimeFS:SetText(textVal)
         end
