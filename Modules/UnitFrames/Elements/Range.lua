@@ -3,6 +3,7 @@
 -- Replaces standard oUF Range (which uses UnitInRange) with LRC for better accuracy.
 
 local addonName, ns = ...
+if ns.skipLoad then return end
 local oUF = ns.oUF or _G.oUF
 local LRC = LibStub("LibRangeCheck-3.0", true)
 local UF = RoithiUI:GetModule("UnitFrames")

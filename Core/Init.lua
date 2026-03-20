@@ -1,5 +1,26 @@
 local addonName, ns = ...
 
+-- [1] CONFLICT DETECTION (Top Level)
+local isDev = string.match(addonName, "%-Dev$")
+local prodName = "RoithiUI"
+local otherName = isDev and prodName or "RoithiUI-Dev"
+
+if C_AddOns.IsAddOnLoaded(otherName) then
+    ns.skipLoad = true
+    return
+end
+
+if isDev then
+    local state = C_AddOns.GetAddOnEnableState((UnitName("player") or "player"), prodName)
+    if state and state > 0 then
+        ns.skipLoad = true
+        C_Timer.After(5, function()
+            print("|cffff0000[" .. addonName .. "]|r |cff00ccffAborted:|r Production version (" .. prodName .. ") is also enabled. Please disable one.")
+        end)
+        return
+    end
+end
+
 -- Initialize AceAddon
 -- We mixin AceConsole-3.0 here in anticipation of Commands.lua using it via the main object
 _G.RoithiUI = LibStub("AceAddon-3.0"):NewAddon(addonName, "AceConsole-3.0", "AceEvent-3.0")
@@ -24,17 +45,9 @@ end
 -- Existing modules use `RoithiUI:NewModule("UnitFrames")` which works with AceAddon.
 
 function RoithiUI:OnInitialize()
-    local isDev = string.match(addonName, "%-Dev$")
-    if isDev then
-        local prodName = string.gsub(addonName, "%-Dev$", "")
-        local state = C_AddOns.GetAddOnEnableState((UnitName("player") or "player"), prodName)
-        if state and state > 0 then
-            C_Timer.After(5, function()
-                print("|cffff0000["..addonName.."]|r |cff00ccffAborted:|r Production version ("..prodName..") is also loaded. Database untouched.")
-            end)
-            return -- Abort initialization completely
-        end
-    end
+    -- Global Initialized Flag (Last resort if somehow both start initializing)
+    if _G.RoithiUI_Initialized then return end
+    _G.RoithiUI_Initialized = true
 
     -- Initialize AceDB
     self.db = LibStub("AceDB-3.0"):New("RoithiUIDB", ns.Defaults, true)

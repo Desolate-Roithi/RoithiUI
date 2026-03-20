@@ -1,5 +1,6 @@
 ---@diagnostic disable: undefined-global
 local addonName, ns = ...
+if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
 local LSM = LibStub("LibSharedMedia-3.0")

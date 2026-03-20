@@ -1,4 +1,5 @@
 local addonName, ns = ...
+if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 ---@diagnostic disable-next-line: undefined-field

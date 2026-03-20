@@ -1,4 +1,5 @@
 local addonName, ns = ...
+if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 -- DB resolved in functions
 

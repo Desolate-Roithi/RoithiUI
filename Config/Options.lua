@@ -1,4 +1,5 @@
 local addonName, ns = ...
+if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local Config = RoithiUI.Config or {}
 RoithiUI.Config = Config
@@ -1360,7 +1361,13 @@ function Config:RegisterOptions()
 
     if AC and ACD then
         AC:RegisterOptionsTable("RoithiUI", GetOptions)
-        self.optionsFrame = ACD:AddToBlizOptions("RoithiUI", "RoithiUI")
+        if not self.optionsFrame then
+            -- AceConfigDialog's AddToBlizOptions can error if already registered in Blizzard Settings
+            local success, frame = pcall(ACD.AddToBlizOptions, ACD, "RoithiUI", "RoithiUI")
+            if success then
+                self.optionsFrame = frame
+            end
+        end
     else
         -- If AceConfig is missing, we just don't register this table.
         -- The standalone config (if loaded) or just the lack of options is better than a crash.

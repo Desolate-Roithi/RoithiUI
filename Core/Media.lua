@@ -2,6 +2,7 @@
 -- Centralizes SharedMedia registration and Theme definitions.
 
 local addonName, ns = ...
+if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local LSM = LibStub("LibSharedMedia-3.0")
 

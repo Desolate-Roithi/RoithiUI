@@ -1,4 +1,5 @@
 local addonName, ns = ...
+if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 ---@diagnostic disable-next-line: undefined-field
 local oUF = ns.oUF or _G.oUF

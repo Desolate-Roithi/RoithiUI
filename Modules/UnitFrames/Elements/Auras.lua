@@ -1,4 +1,5 @@
 local _, ns = ...
+if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
 
