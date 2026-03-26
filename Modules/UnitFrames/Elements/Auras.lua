@@ -620,6 +620,10 @@ local function GetOrCreateAuraElement(frame, key)
                 if icon.cd then
                     icon.cd:Show()
                     local start, duration = icon.cd:GetCooldownTimes()
+                    if issecretvalue(start) or issecretvalue(duration) then
+                        start, duration = 0, 0
+                    end
+
                     start = start / 1000
                     duration = duration / 1000
                     local now = GetTime()
