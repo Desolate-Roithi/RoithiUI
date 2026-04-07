@@ -25,32 +25,12 @@ local function Update(self, event)
     local inRange, checkedRange = false, nil
 
     if UnitIsConnected(unit) then
-        if LRC then
-            -- LibRangeCheck usage
-            local minRange, maxRange = LRC:GetRange(unit)
+        -- LibRangeCheck usage is temporarily disabled due to 12.0.1 taint within library.
+        -- Fallback to standard API.
+        inRange = UnitInRange(unit)
             
-            -- 12.0.1 Security: Check if range values are secret before comparison
-            if issecretvalue(minRange) or issecretvalue(maxRange) then
-                -- If range is secret, we cannot compare it safely in Lua logic.
-                -- Fallback to native UnitInRange which returns a secret boolean we can handle.
-                inRange, checkedRange = UnitInRange(unit)
-            elseif minRange and maxRange then
-                -- Check against 40y standard (most healers)
-                -- Or check if maxRange is within visible bounds
-                if maxRange <= 40 then
-                    inRange = true
-                end
-            elseif minRange then
-                -- sometimes only min is returned?
-                if minRange <= 40 then inRange = true end
-            end
-
-            -- Fallback or specific "Interact" checks if LRC fails or returns nil (e.g. self)
-            if UnitIsUnit(unit, "player") then inRange = true end
-        else
-            -- Fallback to standard API if LRC missing
-            inRange = UnitInRange(unit)
-        end
+        -- specific self check
+        if UnitIsUnit(unit, "player") then inRange = true end
     end
 
     -- 12.0.1 MIDNIGHT Fix: Use secret-safe evaluator for alpha updates
