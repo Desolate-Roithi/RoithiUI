@@ -30,7 +30,12 @@ local function Update(self, event)
         inRange = UnitInRange(unit)
             
         -- specific self check
-        if UnitIsUnit(unit, "player") then inRange = true end
+        local isSelf = UnitIsUnit(unit, "player")
+        if not issecretvalue(isSelf) then
+            if isSelf then inRange = true end
+        elseif unit == "player" then
+            inRange = true
+        end
     end
 
     -- 12.0.1 MIDNIGHT Fix: Use secret-safe evaluator for alpha updates
