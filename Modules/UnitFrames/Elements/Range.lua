@@ -46,7 +46,7 @@ local function Update(self, event)
             end
 
             -- Fallback or specific "Interact" checks if LRC fails or returns nil (e.g. self)
-            if not inRange and UnitIsUnit(unit, "player") then inRange = true end
+            if UnitIsUnit(unit, "player") then inRange = true end
         else
             -- Fallback to standard API if LRC missing
             inRange = UnitInRange(unit)
