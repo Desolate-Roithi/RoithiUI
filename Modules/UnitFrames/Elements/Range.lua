@@ -22,12 +22,22 @@ local function Update(self, event)
 
     if (element.PreUpdate) then element:PreUpdate(unit) end
 
-    local inRange, checkedRange = false, nil
+    local inRange = true
 
     if UnitIsConnected(unit) then
         -- LibRangeCheck usage is temporarily disabled due to 12.0.1 taint within library.
         -- Fallback to standard API.
-        inRange = UnitInRange(unit)
+        local rawInRange, rawCheckedRange = UnitInRange(unit)
+        
+        if not issecretvalue(rawCheckedRange) then
+            if rawCheckedRange == false or rawCheckedRange == nil then
+                inRange = true
+            else
+                inRange = rawInRange
+            end
+        else
+            inRange = rawInRange
+        end
             
         -- specific self check
         local isSelf = UnitIsUnit(unit, "player")
@@ -38,9 +48,13 @@ local function Update(self, event)
         end
     end
 
-    -- 12.0.1 MIDNIGHT Fix: Use secret-safe evaluator for alpha updates
-    -- attempt to perform boolean test on a secret boolean value (e.g. if inRange then) will fail.
-    local alphaValue = C_CurveUtil.EvaluateColorValueFromBoolean(inRange, element.insideAlpha, element.outsideAlpha)
+    local alphaValue
+    if not issecretvalue(inRange) then
+        alphaValue = (inRange == true) and element.insideAlpha or element.outsideAlpha
+    else
+        -- 12.0.1 MIDNIGHT Fix: Use secret-safe evaluator for alpha updates
+        alphaValue = C_CurveUtil.EvaluateColorValueFromBoolean(inRange, element.insideAlpha, element.outsideAlpha)
+    end
     self:SetAlpha(alphaValue)
 
     if (element.PostUpdate) then element:PostUpdate(unit, inRange) end
@@ -64,15 +78,12 @@ local function Enable(self)
         if not element.insideAlpha then element.insideAlpha = 1 end
         if not element.outsideAlpha then element.outsideAlpha = 0.55 end
 
-        -- Timer for range checking
-        -- oUF Range usually runs on OnUpdate. We can do the same.
-        self:HookScript("OnUpdate", function(_, elapsed)
-            element.timer = (element.timer or 0) + elapsed
-            if element.timer >= 0.2 then
-                Path(self, "OnUpdate")
-                element.timer = 0
-            end
-        end)
+        -- Use native events instead of fast OnUpdate polling to avoid secret bool flickering
+        if self.RegisterEvent then
+            self:RegisterEvent("UNIT_IN_RANGE_UPDATE", Path)
+            self:RegisterEvent("PLAYER_TARGET_CHANGED", Path, true)
+            self:RegisterEvent("GROUP_ROSTER_UPDATE", Path, true)
+        end
 
         return true
     end
@@ -81,6 +92,11 @@ end
 local function Disable(self)
     local element = self.RoithiRange
     if (element) then
+        if self.UnregisterEvent then
+            self:UnregisterEvent("UNIT_IN_RANGE_UPDATE", Path)
+            self:UnregisterEvent("PLAYER_TARGET_CHANGED", Path)
+            self:UnregisterEvent("GROUP_ROSTER_UPDATE", Path)
+        end
         self:SetAlpha(element.insideAlpha)
     end
 end
