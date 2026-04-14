@@ -1,6 +1,5 @@
-local addonName, ns = ...
+local _, ns = ...
 if ns.skipLoad then return end
-local RoithiUI = _G.RoithiUI
 
 -- ----------------------------------------------------------------------------
 -- Utils Module

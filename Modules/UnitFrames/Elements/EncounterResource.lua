@@ -157,9 +157,9 @@ function UF:CreateEncounterResource(frame)
     end
 
     -- Update Logic
-    local function Update(self)
+    local function Update(s)
         if not db.enabled then
-            self:Hide()
+            s:Hide()
             return
         end
 
@@ -178,32 +178,31 @@ function UF:CreateEncounterResource(frame)
             -- If info is nil, it might be a hidden bar?
             if not info then
                 -- Edit Mode Placeholder
-                if self.isInEditMode then
-                    self:SetMinMaxValues(0, 100)
-                    self:SetValue(100)
-                    self:Show()
-                    self.Text:SetText("Encounter Bar")
-                    self:SetStatusBarColor(1, 0, 1)
+                if s.isInEditMode then
+                    s:SetMinMaxValues(0, 100)
+                    s:SetValue(100)
+                    s:Show()
+                    s.Text:SetText("Encounter Bar")
+                    s:SetStatusBarColor(1, 0, 1)
                     return
                 end
-                self:Hide()
+                s:Hide()
                 return
             end
 
-            self:SetMinMaxValues(0, max)
-            self:SetValue(current)
+            s:SetMinMaxValues(0, max)
+            s:SetValue(current)
 
-            self:Show()
-            self:Show()
-            self.Text:SetText(LibRoithi.mixins:SafeFormat("%d / %d", current, max))
+            s:Show()
+            s.Text:SetText(LibRoithi.mixins:SafeFormat("%d / %d", current, max))
 
             -- Color
-            self:SetStatusBarColor(1, 0, 1) -- Default Pink/Purple
+            s:SetStatusBarColor(1, 0, 1) -- Default Pink/Purple
             if info.barColor then
-                self:SetStatusBarColor(info.barColor.r, info.barColor.g, info.barColor.b)
+                s:SetStatusBarColor(info.barColor.r, info.barColor.g, info.barColor.b)
             end
         else
-            self:Hide()
+            s:Hide()
         end
     end
 

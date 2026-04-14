@@ -7,9 +7,7 @@ local oUF = ns.oUF
 --   insideAlpha: 1.0 (Active)
 --   outsideAlpha: 0.4 (Inactive)
 
-local function Update(self, event)
-    local unit = self.unit
-
+local function Update(self, _)
     -- 1. Check Combat
     if UnitAffectingCombat("player") then
         self:SetAlpha(1)
@@ -30,20 +28,13 @@ local function Update(self, event)
 
     -- 4. Check Health < Max (Injured)
     -- Using Safe Health logic/APIs
-    -- 4. Check Health < Max (Injured)
-    -- Using Safe Health logic/APIs
     local cur = UnitHealth("player")
     local max = UnitHealthMax("player")
 
     -- Protected API check: Compare via pcall to avoid Secret crash
-    local isInjured = false
-    local success, result = pcall(function() return cur < max end)
-    if success then
-        isInjured = result
-    else
-        -- If comparison failed (secret), assume injured/active to avoid hiding important info
-        isInjured = true
-    end
+    local isInjured = true  -- Default: assume injured if comparison fails
+    local ok, result = pcall(function() return cur < max end)
+    if ok then isInjured = result end
 
     if isInjured then
         self:SetAlpha(1)

@@ -1,9 +1,7 @@
-local addonName, ns = ...
+local _, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
-local LEM = LibStub("LibEditMode-Roithi")
-local LSM = LibStub("LibSharedMedia-3.0")
 
 -- WoW APIs
 local _G = _G
@@ -308,24 +306,22 @@ TM.Methods = {
 
     -- Additional Power (Mana when in form)
     ["power.add.current"] = function(unit)
-        local pType = UnitPowerType(unit)
-        if pType == 0 then return "" end -- Primary is already Mana
+        if UnitPowerType(unit) == 0 then return "" end -- Primary is already Mana
 
+        local cur = UnitPower(unit, 0)
         local max = UnitPowerMax(unit, 0)
         -- Secret Safety
-        if issecretvalue and issecretvalue(max) then return UnitPower(unit, 0) end
+        if issecretvalue and (issecretvalue(cur) or issecretvalue(max)) then return cur end
         if not max or max == 0 then return "" end
 
-        return UnitPower(unit, 0)
+        return cur
     end,
 
     ["power.add.maximum"] = function(unit)
-        local pType = UnitPowerType(unit)
-        if pType == 0 then return "" end
+        if UnitPowerType(unit) == 0 then return "" end
 
         local max = UnitPowerMax(unit, 0)
-        -- Secret Safety: Secrets behave like numbers/strings but no comparison
-        -- We assume if it exists it's valid to show
+        -- Secret Safety
         if issecretvalue and issecretvalue(max) then return max end
         if not max or max == 0 then return "" end
 
@@ -333,8 +329,7 @@ TM.Methods = {
     end,
 
     ["power.add.percent"] = function(unit)
-        local pType = UnitPowerType(unit)
-        if pType == 0 then return "" end
+        if UnitPowerType(unit) == 0 then return "" end
 
         local cur = UnitPower(unit, 0)
         local max = UnitPowerMax(unit, 0)
@@ -356,8 +351,7 @@ TM.Methods = {
     end,
 
     ["power.add.missing"] = function(unit)
-        local pType = UnitPowerType(unit)
-        if pType == 0 then return "" end
+        if UnitPowerType(unit) == 0 then return "" end
 
         local cur = UnitPower(unit, 0)
         local max = UnitPowerMax(unit, 0)
@@ -441,7 +435,7 @@ function TM:GetSegments(formatString, unit)
 
     -- 1. Conditional Logic [type](format) for Power Type
     if formatString:find("%[") then
-        local pType, pToken = UnitPowerType(unit or "player")
+        local _, pToken = UnitPowerType(unit or "player")
         if pToken then
             for cond, content in formatString:gmatch("%[([^%]]+)%]%(([^%)]+)%)") do
                 if cond:upper() == pToken then
@@ -740,7 +734,6 @@ function UF:EnableTags(frame)
     if frame.unit then
         listener:RegisterEvent("UNIT_HEALTH")
         listener:RegisterEvent("UNIT_MAXHEALTH")
-        listener:RegisterEvent("UNIT_POWER_UPDATE")
         listener:RegisterEvent("UNIT_POWER_UPDATE")
         listener:RegisterEvent("UNIT_MAXPOWER")
         listener:RegisterEvent("UNIT_DISPLAYPOWER") -- For Additional Power toggling

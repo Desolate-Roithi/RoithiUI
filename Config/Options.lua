@@ -728,7 +728,6 @@ local function GetOptions()
                     order = order,
                     func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "customtags", unit) end,
                 }
-                order = order + 1
             end
             return {
                 type = "group",

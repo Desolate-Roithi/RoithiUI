@@ -5,7 +5,6 @@
 local addonName, ns = ...
 if ns.skipLoad then return end
 local oUF = ns.oUF or _G.oUF
-local LRC = LibStub("LibRangeCheck-3.0", true)
 local UF = RoithiUI:GetModule("UnitFrames")
 
 function UF:CreateRange(frame)
@@ -16,7 +15,7 @@ function UF:CreateRange(frame)
     frame.RoithiRange = element
 end
 
-local function Update(self, event)
+local function Update(self, _)
     local element = self.RoithiRange
     local unit = self.unit
 

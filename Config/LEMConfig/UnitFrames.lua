@@ -368,18 +368,7 @@ local function GetSettingsForAdditionalPower(unit)
 end
 
 
-
-
-
 local function GetSettingsForMainFrame(unit, frame)
-    local function OpenSettings()
-        -- Ensure AceConfig dialog is ready
-        if LibStub("AceConfigDialog-3.0") then
-            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", unit)
-            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
-        end
-    end
-
     local settings = {
         -- Enabled checkbox REMOVED as per user request (Use Dashboard)
         {
@@ -582,7 +571,7 @@ function ns.InitializeUnitFrameConfig()
                 LEM:AddFrame(frame, OnPositionChanged, defaults)
 
                 -- Add Main Settings
-                local success, err = pcall(function()
+                pcall(function()
                     LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
                     LEM:AddFrameSettingsButtons(frame, {
                         {

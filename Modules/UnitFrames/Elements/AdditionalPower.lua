@@ -28,7 +28,7 @@ function UF:CreateAdditionalPower(frame)
 
     frame.AdditionalPower = addPower
 
-    local function Update(self)
+    local function Update(_)
         -- Track previous state to trigger Castbar updates only on change
         local wasShown = addPower:IsShown()
 
@@ -178,7 +178,7 @@ function UF:CreateAdditionalPower(frame)
     end
 
     -- Hook updates
-    frame:HookScript("OnEvent", function(self, event)
+    frame:HookScript("OnEvent", function(f, event)
         if event == "UNIT_POWER_UPDATE" or event == "UNIT_DISPLAYPOWER" or event == "UPDATE_SHAPESHIFT_FORM" then
             C_Timer.After(0.1, function() frame.UpdateAdditionalPowerLayout() end)
         end

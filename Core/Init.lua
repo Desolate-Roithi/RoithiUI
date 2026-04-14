@@ -26,8 +26,6 @@ end
 _G.RoithiUI = LibStub("AceAddon-3.0"):NewAddon(addonName, "AceConsole-3.0", "AceEvent-3.0")
 local RoithiUI = _G.RoithiUI
 
--- Mixin LibRoithi helpers if desired, or access via LibStub("LibRoithi-1.0")
-local LibRoithi = LibStub("LibRoithi-1.0")
 
 -- Debug Flag
 RoithiUI.debug = false

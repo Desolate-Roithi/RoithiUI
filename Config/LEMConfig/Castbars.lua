@@ -300,10 +300,10 @@ function ns.InitializeCastbarConfig()
         local defaults = { point = db.point or "CENTER", x = db.x or 0, y = db.y or 0 }
 
         -- Position Callback
-        local function OnPositionChanged(bar, layoutName, point, x, y)
+        local function OnPositionChanged(movedBar, _, point, x, y)
             -- Only save position if detached.
-            local db = GetDB(unit)
-            if not db.detached then
+            local posDB = GetDB(unit)
+            if not posDB.detached then
                 -- SNAP BACK: If dragged while attached, force reset to attached position
                 UpdateBar(unit)
                 return
@@ -312,15 +312,15 @@ function ns.InitializeCastbarConfig()
             x = math.floor(x * 100 + 0.5) / 100
             y = math.floor(y * 100 + 0.5) / 100
 
-            db.point = point
-            db.x = x
-            db.y = y
+            posDB.point = point
+            posDB.x = x
+            posDB.y = y
 
-            bar:ClearAllPoints()
-            bar:SetPoint(point, UIParent, point, x, y)
+            movedBar:ClearAllPoints()
+            movedBar:SetPoint(point, UIParent, point, x, y)
 
             -- Refresh settings dialog if open
-            LEM:RefreshFrameSettings(bar)
+            LEM:RefreshFrameSettings(movedBar)
         end
 
         LEM:AddFrame(bar, OnPositionChanged, defaults)

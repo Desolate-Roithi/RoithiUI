@@ -67,7 +67,7 @@ function lib.mixins:SafeFormat(formatString, ...)
     for i = 1, #args do
         local val = args[i]
         -- 12.0.1: Secret values can be userdata OR numbers that fail arithmetic
-        local isSecret = (C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(val))
+        local isSecret = (issecretvalue and issecretvalue(val))
         if isSecret then
             return "..."
         end

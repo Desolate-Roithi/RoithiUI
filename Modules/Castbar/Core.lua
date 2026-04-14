@@ -271,7 +271,7 @@ function Castbar:OnEnable()
     local f = self.eventFrame
     -- Registered via self.eventFrame to avoid GC and allow external access/teardown
 
-    f:SetScript("OnEvent", function(self, event, ...)
+    f:SetScript("OnEvent", function(_, event, ...)
         if event == "PLAYER_TARGET_CHANGED" then
             ns.UpdateCast(ns.bars["target"])
             ns.UpdateCast(ns.bars["targettarget"])
@@ -300,6 +300,10 @@ function Castbar:OnEnable()
                     if not ns.bars[unit].isInterrupted and not ns.bars[unit].isInEditMode then
                         ns.bars[unit]:Hide(); ns.bars[unit]:SetScript("OnUpdate", nil)
                     end
+                elseif event == "UNIT_SPELLCAST_EMPOWER_STAGE" then
+                    if ns.OnEmpowerStage then
+                        ns.OnEmpowerStage(ns.bars[unit], ...)
+                    end
                 else
                     ns.UpdateCast(ns.bars[unit])
                 end
@@ -311,6 +315,7 @@ function Castbar:OnEnable()
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_UPDATE")
+    f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STAGE")
     f:RegisterEvent("UNIT_SPELLCAST_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
@@ -321,7 +326,7 @@ function Castbar:OnEnable()
 end
 
 -- Slash Command
-SLASH_MIDNIGHTCB1 = "/mcb"
+_G.SLASH_MIDNIGHTCB1 = "/mcb"
 SlashCmdList["MIDNIGHTCB"] = function(msg)
     if EditModeManagerFrame then
         if not EditModeManagerFrame:IsVisible() then

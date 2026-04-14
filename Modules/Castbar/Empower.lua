@@ -33,10 +33,7 @@ end
 -- Timeline Logic (Strict SSOT)
 -- ----------------------------------------------------------------------------
 local function BuildEmpowerTimeline(unit)
-    -- 1. Get Start Time (API) - Only for debug/logging
-    -- local name = UnitChannelInfo(unit) or UnitCastingInfo(unit)
-
-    -- 2. FETCH TOTAL DURATION (SSOT)
+    -- 1. FETCH TOTAL DURATION (SSOT)
     -- UnitEmpoweredChannelDuration(unit, true) -> DurationObject
     local totalObj = nil
     if UnitEmpoweredChannelDuration then
@@ -44,20 +41,39 @@ local function BuildEmpowerTimeline(unit)
     end
 
     local totalDuration = GetSecondsFromObject(totalObj)
+    local isSecretDuration = totalObj and totalObj.HasSecretValues and totalObj:HasSecretValues()
 
-    -- 3. FETCH STAGE DURATIONS (SSOT)
+    -- 2. FETCH STAGE DATA (SSOT)
     local stageObjs = nil
     if UnitEmpoweredStageDurations then
         stageObjs = UnitEmpoweredStageDurations(unit)
     end
 
+    -- 3. FETCH STAGE PERCENTAGES (12.0.1+ Native Layout Helper - Non-Secret)
+    local stagePcts = nil
+    if UnitEmpoweredStagePercentages then
+        stagePcts = UnitEmpoweredStagePercentages(unit)
+    end
+
     local stageEnds = {}
-    local accum = 0
     local totalStages = 0
 
-    if stageObjs then
+    if stagePcts and #stagePcts > 0 then
+        totalStages = #stagePcts
+        for i, pct in ipairs(stagePcts) do
+            -- Convert 0-1 ratio to 'virtual seconds' if duration is secret,
+            -- or absolute seconds if duration is known.
+            -- This ensures LayoutEmpower (which does absVal/total) always works.
+            if isSecretDuration then
+                stageEnds[i] = pct -- Store ratio directly
+            else
+                stageEnds[i] = pct * totalDuration -- Store absolute
+            end
+        end
+    elseif stageObjs then
+        -- Legacy/Fallback: Calculate from durations if percentages missing
         totalStages = #stageObjs
-
+        local accum = 0
         for i, obj in ipairs(stageObjs) do
             local dur = GetSecondsFromObject(obj)
             accum = accum + dur
@@ -65,13 +81,11 @@ local function BuildEmpowerTimeline(unit)
         end
     end
 
-    -- Strict Rule: Do not modify or guess.
-    -- If API returns 0 total, we return 0 total.
-
     return {
         stageEnds = stageEnds,
-        totalDuration = totalDuration,
+        totalDuration = isSecretDuration and 1 or totalDuration, -- If secret, 'total' is 1.0 (normalized)
         totalStages = totalStages,
+        isSecret = isSecretDuration
     }
 end
 
@@ -217,8 +231,19 @@ function ns.SetupEmpower(bar)
 
     bar.empowerTimeline = tl
     bar.isEmpower = true
+    bar.currentEmpowerStage = 0 -- Reset for player/event-driven logic
 
     LayoutEmpower(bar)
+end
+
+function ns.OnEmpowerStage(bar, _, stageIndex)
+    if not bar.isEmpower then return end
+    bar.currentEmpowerStage = stageIndex or 0
+
+    -- Trigger Tick Flash (One-shot)
+    if stageIndex and bar.StageTicks and bar.StageTicks[stageIndex] then
+        BlinkTick(bar, bar.StageTicks[stageIndex])
+    end
 end
 
 function ns.OnEmpowerUpdate(bar)
@@ -231,31 +256,53 @@ function ns.OnEmpowerUpdate(bar)
 
     local tl = bar.empowerTimeline
     local total = tl.totalDuration
-    local elapsed = 0
+    local progressRatio = 0
 
     -- Use Duration Object for Elapsed Time if available (Preferred)
     if bar.durationObj and bar.durationObj.GetElapsedDuration then
-        elapsed = bar.durationObj:GetElapsedDuration()
+        -- 12.0.1: If duration is secret, we must use a percentage-based approach or
+        -- rely on the fact that bar:GetValue() might return a normalized value.
+        -- HOWEVER, standard StatusBars in 12.0.1 handle secret casting via SetTimerDuration.
+        -- To trigger our ticks/colors, we need a ratio.
+
+        if tl.isSecret and bar.durationObj.GetProgress then
+            progressRatio = bar.durationObj:GetProgress()
+        else
+            local elapsed = bar.durationObj:GetElapsedDuration()
+            -- 12.0.1 MIDNIGHT Fix: Extra safety check for secret duration objects
+            if issecretvalue and issecretvalue(elapsed) then
+                if bar.durationObj.GetProgress then
+                    progressRatio = bar.durationObj:GetProgress()
+                else
+                    progressRatio = 0 -- Fallback to prevent crash
+                end
+            elseif total > 0 then
+                progressRatio = elapsed / total
+            end
+        end
     else
         -- Fallback
         if bar.GetValue then
-            elapsed = bar:GetValue()
+            local elapsed = bar:GetValue()
+            if total > 0 then progressRatio = elapsed / total end
         end
     end
 
     -- -----------------------------------------
     -- Visual Triggers (Ticks) & Color Logic
     -- -----------------------------------------
-    local progressRatio = 0
-    if total > 0 then progressRatio = elapsed / total end
-    if progressRatio > 1 then progressRatio = 1 end
+    local isRatioSecret = issecretvalue and issecretvalue(progressRatio)
 
-    -- Auto-Reset: If progress drops to near zero, assume new cast or restart.
-    if progressRatio < 0.05 then
-        if bar.empowerFlashed then
-            for k in pairs(bar.empowerFlashed) do bar.empowerFlashed[k] = nil end
-        else
-            bar.empowerFlashed = {}
+    if not isRatioSecret then
+        if progressRatio > 1 then progressRatio = 1 end
+
+        -- Auto-Reset: If progress drops to near zero, assume new cast or restart.
+        if progressRatio < 0.05 then
+            if bar.empowerFlashed then
+                for k in pairs(bar.empowerFlashed) do bar.empowerFlashed[k] = nil end
+            else
+                bar.empowerFlashed = {}
+            end
         end
     end
     if not bar.empowerFlashed then bar.empowerFlashed = {} end
@@ -263,27 +310,32 @@ function ns.OnEmpowerUpdate(bar)
     -- Determine Dynamic Stage (Color) & Trigger Ticks
     local currentStage = 1
 
-    for i, threshold in ipairs(tl.stageEnds) do
-        local targetRatio = threshold / total
+    if isRatioSecret then
+        -- 12.0.1 MIDNIGHT: Use the event-synced stage for secret casts
+        currentStage = (bar.currentEmpowerStage or 0) + 1
+    else
+        for i, threshold in ipairs(tl.stageEnds) do
+            local targetRatio = threshold / total
 
-        -- Check if we passed this stage
-        if progressRatio >= targetRatio then
-            -- We have completed stage 'i'. So we are at least in stage 'i+1'.
-            currentStage = i + 1
+            -- Check if we passed this stage
+            if progressRatio >= targetRatio then
+                -- We have completed stage 'i'. So we are at least in stage 'i+1'.
+                currentStage = i + 1
 
-            -- Trigger Tick Flash (One-shot)
-            if i < tl.totalStages then
-                if not bar.empowerFlashed[i] then
-                    if bar.StageTicks and bar.StageTicks[i] then
-                        BlinkTick(bar, bar.StageTicks[i])
+                -- Trigger Tick Flash (One-shot)
+                if i < tl.totalStages then
+                    if not bar.empowerFlashed[i] then
+                        if bar.StageTicks and bar.StageTicks[i] then
+                            BlinkTick(bar, bar.StageTicks[i])
+                        end
+                        bar.empowerFlashed[i] = true
                     end
-                    bar.empowerFlashed[i] = true
                 end
+            else
+                -- We are IN stage 'i'.
+                currentStage = i
+                break
             end
-        else
-            -- We are IN stage 'i'.
-            currentStage = i
-            break
         end
     end
 
@@ -297,17 +349,17 @@ function ns.OnEmpowerUpdate(bar)
 
     if currentStage > tl.totalStages then
         -- HOLD PHASE (Matches Final Charge Level)
-        local total = tl.totalStages
+        local stagesCount = tl.totalStages
 
         -- "stage 3 -> hold = empower3"
         -- "stage 4 -> hold = empower4"
-        if total == 3 and colors.empower3 then
+        if stagesCount == 3 and colors.empower3 then
             c = colors.empower3
-        elseif total == 4 and colors.empower4 then
+        elseif stagesCount == 4 and colors.empower4 then
             c = colors.empower4
-        elseif total == 2 and colors.empower2 then
+        elseif stagesCount == 2 and colors.empower2 then
             c = colors.empower2
-        elseif total == 1 and colors.empower1 then
+        elseif stagesCount == 1 and colors.empower1 then
             c = colors.empower1
         elseif colors.empowerHold then
             -- Fallback if mapped color missing or unexpected >4

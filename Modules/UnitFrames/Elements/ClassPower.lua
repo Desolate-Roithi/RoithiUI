@@ -3,7 +3,6 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
-local LSM = LibStub("LibSharedMedia-3.0")
 
 ---@class UF
 local UF = RoithiUI:GetModule("UnitFrames")
@@ -154,7 +153,7 @@ function UF:CreateClassPower(frame)
     end
 
     -- Runes OnUpdate Loop (Continuous Value Refill + Timer)
-    local function OnUpdateRunes(self, elapsed)
+    local function OnUpdateRunes(_, elapsed)
         for i = 1, 6 do
             local point = element.points[i]
             local start, duration, runeReady = GetRuneCooldown(i)
@@ -266,7 +265,9 @@ function UF:CreateClassPower(frame)
             local pMax = UnitPowerMax("player", config.type)
 
             -- Strict Visibility: If max power is 0 (e.g. Druid in Bear/Caster), HIDE.
-            if not pMax or pMax <= 0 then
+            -- 12.0.1: UnitPowerMax returns secret for player, so we skip numerical comparison if secret.
+            local isMaxSecret = issecretvalue and issecretvalue(pMax)
+            if not pMax or (not isMaxSecret and pMax <= 0) then
                 element:Hide()
                 element:SetScript("OnUpdate", nil)
                 return
@@ -298,13 +299,25 @@ function UF:CreateClassPower(frame)
             if hpMax and hpMax > 0 then max = hpMax end
 
             -- Dynamic Coloring
-            local pct = (curValue / max) * 100
-            if pct >= 60 then
-                color = { r = 1.0, g = 0.42, b = 0.42 } -- Red (Heavy)
-            elseif pct >= 30 then
-                color = { r = 1.0, g = 0.98, b = 0.72 } -- Yellow (Moderate)
+            local isSecret = type(issecretvalue) == "function" and issecretvalue(curValue)
+            if isSecret then
+                -- Secure Aura Fallback for Stagger Levels (Secret limits math operations)
+                if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(124273) then
+                    color = { r = 1.0, g = 0.42, b = 0.42 } -- Red (Heavy)
+                elseif C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(124274) then
+                    color = { r = 1.0, g = 0.98, b = 0.72 } -- Yellow (Moderate)
+                else
+                    color = { r = 0.52, g = 1.0, b = 0.52 } -- Green (Light/Default)
+                end
             else
-                color = { r = 0.52, g = 1.0, b = 0.52 } -- Green (Light)
+                local pct = max > 0 and ((curValue / max) * 100) or 0
+                if pct >= 60 then
+                    color = { r = 1.0, g = 0.42, b = 0.42 } -- Red (Heavy)
+                elseif pct >= 30 then
+                    color = { r = 1.0, g = 0.98, b = 0.72 } -- Yellow (Moderate)
+                else
+                    color = { r = 0.52, g = 1.0, b = 0.52 } -- Green (Light)
+                end
             end
 
             -- Stagger is always a single bar, ensure modifier doesn't break it (POINTS mode check below)
@@ -372,7 +385,7 @@ function UF:CreateClassPower(frame)
                     point:SetValue(curValue)
                     point.cooldown:Hide()
 
-                    if curValue >= barMax and config.overcapColor then
+                    if config.overcapColor and not (type(issecretvalue) == "function" and issecretvalue(curValue)) and curValue >= barMax then
                         point.OvercapBar:SetStatusBarColor(config.overcapColor.r, config.overcapColor.g,
                             config.overcapColor.b, 0.5)
                         point.OvercapBar:SetMinMaxValues(0, 1)
@@ -396,8 +409,8 @@ function UF:CreateClassPower(frame)
                         -- WRAPPING LOGIC (New)
                         -- Calculate if this specific point should wrap (turn red)
                         -- Normalize current value to logical units for wrapping calculation
-                        local mod = modifier or 1
-                        local logicalCur = curValue / mod
+                        local pointMod = modifier or 1
+                        local logicalCur = curValue / pointMod
                         local overcapCount = math.max(0, logicalCur - max)
 
                         point.OvercapBar:SetStatusBarColor(config.overcapColor.r, config.overcapColor.g,
@@ -419,7 +432,7 @@ function UF:CreateClassPower(frame)
         element:Show()
     end
 
-    frame:HookScript("OnEvent", function(self, event, unit)
+    frame:HookScript("OnEvent", function(f, event, unit)
         if (unit and unit ~= "player") then return end
         Update()
     end)
@@ -427,12 +440,13 @@ function UF:CreateClassPower(frame)
     frame:RegisterEvent("PLAYER_REGEN_ENABLED", Update, true)
     frame:RegisterEvent("PLAYER_ENTERING_WORLD", Update, true)
     frame:RegisterEvent("SPELLS_CHANGED", Update, true)
-    if class == "DRUID" then frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM", Update, true) end
-    if class == "DEATHKNIGHT" then frame:RegisterEvent("RUNE_POWER_UPDATE", Update, true) end
+    local _, pclass = UnitClass("player")
+    if pclass == "DRUID" then frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM", Update, true) end
+    if pclass == "DEATHKNIGHT" then frame:RegisterEvent("RUNE_POWER_UPDATE", Update, true) end
     frame:RegisterEvent("UNIT_POWER_UPDATE", Update)
     frame:RegisterEvent("UNIT_DISPLAYPOWER", Update)
-    if class == "SHAMAN" or class == "DEMONHUNTER" then frame:RegisterEvent("UNIT_AURA", Update) end
-    if class == "MONK" then
+    if pclass == "SHAMAN" or pclass == "DEMONHUNTER" then frame:RegisterEvent("UNIT_AURA", Update) end
+    if pclass == "MONK" then
         frame:RegisterEvent("UNIT_HEALTH", Update)
         frame:RegisterEvent("UNIT_MAXHEALTH", Update)
     end

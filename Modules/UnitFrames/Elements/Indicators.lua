@@ -4,11 +4,11 @@ local RoithiUI = _G.RoithiUI
 
 -- WoW APIs
 local _G = _G
-local type, pairs, type = type, pairs, type
+local type = type
 local UnitIsPVPFreeForAll, UnitIsPVP, UnitFactionGroup = UnitIsPVPFreeForAll, UnitIsPVP, UnitFactionGroup
 local UnitIsQuestBoss = UnitIsQuestBoss
 local UnitAffectingCombat, IsResting = UnitAffectingCombat, IsResting
-local UnitIsGroupLeader, UnitIsGroupAssistant = UnitIsGroupLeader, UnitIsGroupAssistant
+local UnitIsGroupLeader = UnitIsGroupLeader
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local GetRaidTargetIndex, SetRaidTargetIconTexture = GetRaidTargetIndex, SetRaidTargetIconTexture
 local GetReadyCheckStatus = GetReadyCheckStatus
@@ -313,22 +313,9 @@ function UF:CreateIndicators(frame)
     frame.UpdateIndicators = UpdateIndicators
 
     -- Event Hooks
-    frame:HookScript("OnEvent", function(self, event)
-        if event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" or event == "UNIT_FLAGS" then
-            UpdateIndicators()
-        elseif event == "PLAYER_UPDATE_RESTING" then
-            UpdateIndicators()
-        elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" then
-            UpdateIndicators()
-        elseif event == "RAID_TARGET_UPDATE" then
-            UpdateIndicators()
-        elseif event == "READY_CHECK" or event == "READY_CHECK_CONFIRM" or event == "READY_CHECK_FINISHED" then
-            UpdateIndicators()
-        elseif event == "UNIT_PHASE" or event == "UNIT_CONNECTION" then
-            UpdateIndicators()
-        elseif event == "INCOMING_RESURRECT_CHANGED" then
-            UpdateIndicators()
-        end
+    frame:HookScript("OnEvent", function(f, event)
+        -- All registered events here should trigger an indicator refresh
+        UpdateIndicators()
     end)
     frame:HookScript("OnShow", UpdateIndicators)
 
@@ -339,18 +326,26 @@ function UF:CreateIndicators(frame)
         frame:RegisterEvent("PLAYER_REGEN_DISABLED", UpdateIndicators, true)
         frame:RegisterEvent("PLAYER_REGEN_ENABLED", UpdateIndicators, true)
     end
+
+    -- Global Unit Transition Events
+    frame:RegisterEvent("PLAYER_TARGET_CHANGED", UpdateIndicators, true)
+    frame:RegisterEvent("PLAYER_FOCUS_CHANGED", UpdateIndicators, true)
+    frame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT", UpdateIndicators, true)
+
+    -- Global State Events
     frame:RegisterEvent("GROUP_ROSTER_UPDATE", UpdateIndicators, true)
     frame:RegisterEvent("RAID_TARGET_UPDATE", UpdateIndicators, true)
     frame:RegisterEvent("READY_CHECK", UpdateIndicators, true)
     frame:RegisterEvent("READY_CHECK_CONFIRM", UpdateIndicators, true)
     frame:RegisterEvent("READY_CHECK_FINISHED", UpdateIndicators, true)
 
-    -- oUF handles UnitEvents automatically if we use RegisterEvent with a handler
-    -- and the event is a unit event.
+    -- Unit Specific Events
     frame:RegisterEvent("UNIT_FLAGS", UpdateIndicators)
     frame:RegisterEvent("UNIT_PHASE", UpdateIndicators)
     frame:RegisterEvent("UNIT_CONNECTION", UpdateIndicators)
     frame:RegisterEvent("INCOMING_RESURRECT_CHANGED", UpdateIndicators)
+    frame:RegisterEvent("UNIT_TARGET", UpdateIndicators)
+    frame:RegisterEvent("UPDATE_MOUSEOVER_UNIT", UpdateIndicators, true)
 
     -- Initial
     UpdateIndicators()

@@ -250,7 +250,7 @@ function AL:ApplyLayout(unit, frameType)
     -- If we are switching to Attached (isDetached == false), but the frame is currently Detached (IsMovable == true),
     -- then the user just unchecked "Detached". We must save the current manual position before it gets wiped/snapped.
     if not isDetached and frame:IsMovable() then
-        local p, _, rp, x, y = frame:GetPoint()
+        local p, _, _, x, y = frame:GetPoint()
         if p then
             if frameType == "Castbar" then
                 db.point, db.x, db.y = p, x, y
@@ -339,38 +339,36 @@ function AL:ApplyLayout(unit, frameType)
             frame:SetParent(anchor)
             if frameType == "Auras" or frameType:match("^RoithiAuras_") or frameType:match("^CustomAura_") then
                 -- SATELLITE MODE: Respect configured relative offsets
-                local p = "BOTTOM"
-                local x = 0
-                local y = 0
+                local anchorPt, anchorX, anchorY
                 if frameType == "Auras" then
                     if db.separateAuras then
-                        p = db.buffAnchor or "BOTTOM"
-                        x = db.buffXOffset or 0
-                        y = db.buffYOffset or 0
+                        anchorPt = db.buffAnchor or "BOTTOM"
+                        anchorX = db.buffXOffset or 0
+                        anchorY = db.buffYOffset or 0
                     else
-                        p = db.auraAnchor or "BOTTOM"
-                        x = db.auraX or 0
-                        y = db.auraY or 0
+                        anchorPt = db.auraAnchor or "BOTTOM"
+                        anchorX = db.auraX or 0
+                        anchorY = db.auraY or 0
                     end
                 elseif frameType == "RoithiAuras_Debuffs" then
-                    p = db.debuffAnchor or db.auraAnchor or "BOTTOM"
-                    x = db.debuffXOffset or db.auraX or 0
-                    y = db.debuffYOffset or db.auraY or 0
+                    anchorPt = db.debuffAnchor or db.auraAnchor or "BOTTOM"
+                    anchorX = db.debuffXOffset or db.auraX or 0
+                    anchorY = db.debuffYOffset or db.auraY or 0
                 elseif frameType:match("^CustomAura_Debuffs_") then
-                    p = db.debuffAnchor or db.anchorPoint or "BOTTOM"
-                    x = db.debuffXOffset or db.xOffset or 0
-                    y = db.debuffYOffset or db.yOffset or 0
+                    anchorPt = db.debuffAnchor or db.anchorPoint or "BOTTOM"
+                    anchorX = db.debuffXOffset or db.xOffset or 0
+                    anchorY = db.debuffYOffset or db.yOffset or 0
                 elseif frameType:match("^CustomAura_Buffs_") then
-                    p = db.buffAnchor or db.anchorPoint or "BOTTOM"
-                    x = db.buffXOffset or db.xOffset or 0
-                    y = db.buffYOffset or db.yOffset or 0
+                    anchorPt = db.buffAnchor or db.anchorPoint or "BOTTOM"
+                    anchorX = db.buffXOffset or db.xOffset or 0
+                    anchorY = db.buffYOffset or db.yOffset or 0
                 else
-                    p = db.anchorPoint or "BOTTOM"
-                    x = db.xOffset or 0
-                    y = db.yOffset or 0
+                    anchorPt = db.anchorPoint or "BOTTOM"
+                    anchorX = db.xOffset or 0
+                    anchorY = db.yOffset or 0
                 end
                 frame:ClearAllPoints()
-                frame:SetPoint(p, anchor, p, x, y)
+                frame:SetPoint(anchorPt, anchor, anchorPt, anchorX, anchorY)
                 -- Width is auto-calculated by icons usually
             else
                 -- STACKED MODE (Bars)

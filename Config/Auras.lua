@@ -1,5 +1,4 @@
 local _, ns = ...
-local oUF = ns.oUF
 
 -- Defaults
 local Defaults = {

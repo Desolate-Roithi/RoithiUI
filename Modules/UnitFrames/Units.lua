@@ -18,8 +18,7 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
         frame.editModeName = name or unit
 
         -- Register for Layout Persistence
-        local defaults = { point = "CENTER", x = 0, y = 0 }
-        local function OnPosChanged(f, layoutName, point, x, y)
+        local function OnPosChanged(f, _, point, x, y)
             if not f.unit then return end
             -- Save to DB
             local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[f.unit]
@@ -29,10 +28,7 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
                 db.y = y
             end
         end -- Close OnPosChanged
-
-
-
-
+        LEM:AddFrame(frame, OnPosChanged, { point = "CENTER", x = 0, y = 0 })
 
         -- Selection Overlay
         local overlay = frame:CreateTexture(nil, "OVERLAY")
@@ -239,9 +235,9 @@ function UF:ToggleFrame(unit, enabled)
 
         -- Disable Blizzard Frame (Ensure it stays hidden)
         if self.DisableBlizzard then
-            local oUF = _G.oUF
-            if oUF and oUF.DisableBlizzard then
-                oUF:DisableBlizzard(unit)
+            local localOUF = _G.oUF
+            if localOUF and localOUF.DisableBlizzard then
+                localOUF:DisableBlizzard(unit)
             end
         end
     else

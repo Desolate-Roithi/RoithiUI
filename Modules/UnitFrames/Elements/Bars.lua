@@ -5,8 +5,8 @@ local LibRoithi = LibStub("LibRoithi-1.0")
 local LSM = LibStub("LibSharedMedia-3.0")
 
 ---@class UF : AceModule, AceAddon
----@class UF : AceModule, AceAddon
 local UF = RoithiUI:GetModule("UnitFrames")
+local issecretvalue = _G.issecretvalue
 
 -- Default Power Colors (Fallback)
 local DefaultPowerColors = {
@@ -34,48 +34,6 @@ DefaultPowerColors[1] = DefaultPowerColors["RAGE"]
 DefaultPowerColors[2] = DefaultPowerColors["FOCUS"]
 DefaultPowerColors[3] = DefaultPowerColors["ENERGY"]
 
-function UF:CreateHealthBar(frame)
-    local health = CreateFrame("StatusBar", nil, frame)
-    health:SetAllPoints(frame)
-    health:SetStatusBarTexture(LSM:Fetch("statusbar", "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
-    health:SetStatusBarColor(0.2, 0.8, 0.2) -- Default green
-
-    -- Backdrop for health
-    local bg = health:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetTexture(LSM:Fetch("statusbar", "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
-    bg:SetVertexColor(0.1, 0.1, 0.1)
-    health.bg = bg
-
-    frame.Health = health
-
-    -- Scripts
-    local function UpdateHealth(self)
-        local unit = frame.unit
-        local min, max = UnitHealth(unit), UnitHealthMax(unit)
-        self:SetMinMaxValues(0, max)
-        self:SetValue(min)
-    end
-    health:SetScript("OnEvent", UpdateHealth)
-    health:RegisterUnitEvent("UNIT_HEALTH", frame.unit)
-    health:RegisterUnitEvent("UNIT_MAXHEALTH", frame.unit)
-    -- Hook Show to force update
-    health:SetScript("OnShow", UpdateHealth)
-
-    -- Initial update
-    if UnitExists(frame.unit) then UpdateHealth(health) end
-
-    -- Target/Focus change updates
-    if frame.unit == "target" then
-        health:RegisterEvent("PLAYER_TARGET_CHANGED")
-    elseif frame.unit == "focus" then
-        health:RegisterEvent("PLAYER_FOCUS_CHANGED")
-
-        -- Fix: Register UNIT_TARGET for sub-units to ensure health updates immediately
-    elseif frame.unit == "targettarget" or frame.unit == "focustarget" or frame.unit == "pettarget" then
-        health:RegisterEvent("UNIT_TARGET")
-    end
-end
 
 function UF:CreatePowerBar(frame)
     local power = CreateFrame("StatusBar", frame:GetName() .. "_Power", frame)
@@ -193,11 +151,11 @@ function UF:CreatePowerBar(frame)
     UpdatePowerLayout() -- Initial
 
     -- Update Logic (Main Power)
-    local function UpdatePower(self)
+    local function UpdatePower(_)
         if power.isInEditMode then
-            self:SetMinMaxValues(0, 100)
-            self:SetValue(100)
-            self:SetStatusBarColor(0, 0, 1)
+            power:SetMinMaxValues(0, 100)
+            power:SetValue(100)
+            power:SetStatusBarColor(0, 0, 1)
             if power.Text then power.Text:Show() end
             return
         end
@@ -212,8 +170,8 @@ function UF:CreatePowerBar(frame)
 
         local cur = UnitPower(unit)
         local max = UnitPowerMax(unit)
-        self:SetMinMaxValues(0, max)
-        self:SetValue(cur)
+        power:SetMinMaxValues(0, max)
+        power:SetValue(cur)
 
         local pTypeIndex, pToken = UnitPowerType(unit)
 
@@ -224,7 +182,7 @@ function UF:CreatePowerBar(frame)
         end
 
         if info then
-            self:SetStatusBarColor(info.r, info.g, info.b)
+            power:SetStatusBarColor(info.r, info.g, info.b)
         else
             -- Debugging Color Failure
             local pName = UnitName(unit) or "?"
@@ -232,7 +190,7 @@ function UF:CreatePowerBar(frame)
                 pTypeIndex, pToken))
             if not DefaultPowerColors["RAGE"] then RoithiUI:Log("DefaultPowerColors[RAGE] is missing!") end
 
-            self:SetStatusBarColor(0, 0, 1) -- Fallback Blue
+            power:SetStatusBarColor(0, 0, 1) -- Fallback Blue
         end
     end
 
@@ -368,11 +326,11 @@ function UF:CreateAdditionalPower(frame)
     -- Default Power Colors (Fallback) Moved to File Scope
 
 
-    local function UpdatePower(self)
-        if power.isInEditMode then
-            self:SetMinMaxValues(0, 100)
-            self:SetValue(100)
-            self:SetStatusBarColor(0, 0, 1)
+    local function UpdatePower(bar)
+        if bar.isInEditMode then
+            bar:SetMinMaxValues(0, 100)
+            bar:SetValue(100)
+            bar:SetStatusBarColor(0, 0, 1)
             if power.Text then power.Text:Show() end
             return
         end
@@ -390,8 +348,13 @@ function UF:CreateAdditionalPower(frame)
         local show = false
         if pType ~= 0 then -- Not Mana
             local maxMana = UnitPowerMax(unit, 0)
-            if maxMana and maxMana > 0 then
-                show = true
+            -- 12.0.1 MIDNIGHT Fix: Guard comparison against secret unit power
+            if maxMana then
+                if issecretvalue and issecretvalue(maxMana) then
+                    show = true -- Assume valid if secret (conservative)
+                elseif maxMana > 0 then
+                    show = true
+                end
             end
         end
 
@@ -403,8 +366,8 @@ function UF:CreateAdditionalPower(frame)
 
         local cur = UnitPower(unit, 0) -- Always Mana (0)
         local max = UnitPowerMax(unit, 0)
-        self:SetMinMaxValues(0, max)
-        self:SetValue(cur)
+        power:SetMinMaxValues(0, max)
+        power:SetValue(cur)
 
         local pTypeIndex, pToken = UnitPowerType(unit)
 
@@ -415,9 +378,9 @@ function UF:CreateAdditionalPower(frame)
         end
 
         if info then
-            self:SetStatusBarColor(info.r, info.g, info.b)
+            power:SetStatusBarColor(info.r, info.g, info.b)
         else
-            self:SetStatusBarColor(0, 0, 1) -- Ultimate Fallback Blue
+            power:SetStatusBarColor(0, 0, 1) -- Ultimate Fallback Blue
         end
     end
 
@@ -483,8 +446,7 @@ function UF:CreateHealPrediction(frame)
 
                 -- 1. Get Values
                 local _, myIncomingHeal, otherIncomingHeal, _ = calculator:GetIncomingHeals()
-                local absorbAmount, isClamped = calculator:GetDamageAbsorbs()
-                absorbAmount = absorbAmount or 0
+                calculator:GetDamageAbsorbs()
 
                 -- Support Safe Rendering (Secret Values) using SetValue + Scaling
                 -- We want the bar to represent 0 -> 110% of Health
@@ -574,7 +536,6 @@ end
 
 function UF:UpdateHealthBarSettings(frame)
     if not frame.Health then return end
-    local db = RoithiUI.db.profile.UnitFrames[frame.unit]
     local texture = LSM:Fetch("statusbar", RoithiUI.db.profile.General.unitFrameBar or "Solid") or
         "Interface\\TargetingFrame\\UI-StatusBar"
 

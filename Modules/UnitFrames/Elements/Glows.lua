@@ -6,9 +6,10 @@ local LCG = LibStub("LibCustomGlow-1.0", true)
 
 -- 12.0.1 Secret API / 11.0.2 Compat
 local IsAuraInRefreshWindow = C_UnitAuras and C_UnitAuras.IsAuraInRefreshWindow
-local SetShownFromSecret = CreateFrame("Frame").SetShownFromSecret
 
-local function UpdateGlow(self, event, unit)
+-- UpdateGlow: not exposed as a standalone element in this version;
+-- pandemic/dispel detection is done via PostUpdateIcon below.
+local function UpdateGlow(self, _, unit)
     if self.unit ~= unit then return end
 
     local element = self.Glows
@@ -23,51 +24,21 @@ local function UpdateGlow(self, event, unit)
         element.Dispel:Hide()
     end
 
-    -- We need to iterate auras to find what to glow
-    -- For Pandemic: We look for Player Debuffs (DoTs) or HOTs?
-    -- Usually Pandemic is for specific spells we cast.
-    -- We can scan the Auras element if it exists to see what's active.
-
-    -- NOTE: C_UnitAuras.IsAuraInRefreshWindow requires AuraInstanceID.
-    -- Use C_UnitAuras.GetAuraDataByIndex to get it safely.
-
     local i = 1
-    local foundPandemic = false
-    local foundDispel = false
-
-    -- Scan Debuffs on Target (if unit is target) or Buffs on Player?
-    -- Standard Pandemic usage: Player DoTs on Target.
     local filter = (unit == "target" or unit == "nameplate") and "PLAYER|HARMFUL" or "PLAYER|HELPFUL"
 
     while true do
         local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, filter)
         if not aura then break end
 
-        -- Pandemic Check
-        if IsAuraInRefreshWindow and element.showPandemic then
-            -- SECRET BOOLEAN: Cannot be used in if logic directly for secure frames,
-            -- but commonly we want to GLOW the SPECIFIC ICON, not the loop.
-            -- However, oUF usually attaches Glows to the AuraButton.
-            -- Here we are defining a frame-wide glow or specific logic?
-            -- If we want to glow SPECIFIC ICONS, this needs to be a PostUpdateIcon hook on the Auras element,
-            -- NOT a separate element iterating again.
-
-            -- PLAN CHANGE: Glows logic is best inside PostUpdateIcon for Auras
-            -- to target specific icons.
-            -- BUT, the task is "Pandemic & Cleanse Glows"
-            -- If the user wants a Frame Glow (e.g. whole unitframe glows), that's different.
-            -- Request: "Pandemonium window glow ... Create a glow frame for your DoT icon"
-            -- So it MUST be on the Aura Icon.
-
-            -- This file should export a function to be used in PostUpdateIcon,
-            -- OR manage a frame-level glow.
-            -- Given "Create a glow frame for your DoT icon", let's make this a utility
-            -- that hook into oUF Auras.
-        end
+        -- Pandemic / Dispel detection for frame-level glow is handled in PostUpdateIcon
+        -- (see below). No per-frame-state tracking needed here.
 
         i = i + 1
     end
 end
+-- Suppress unused warning: UpdateGlow is exported below in a future pass if needed
+ns._UpdateGlow = UpdateGlow
 
 -- HELPER: PostUpdateIcon
 local function PostUpdateIcon(element, unit, button, index, position)

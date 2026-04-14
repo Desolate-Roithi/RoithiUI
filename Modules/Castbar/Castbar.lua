@@ -139,18 +139,17 @@ function ns.UpdateCast(bar)
     -- ------------------------------------------------------------------------
     -- A. Determine State & Fetch Duration Object
     -- ------------------------------------------------------------------------
-    local name, text, texture, eventType, notInterruptible, spellID
+    local name, text, texture, notInterruptible
     local durationObj
     local state = "cast" -- cast | channel | empowered
 
     -- 1. Check Channel / Empowered
-    local chName, chText, chTexture, _, _, _, chNotInt, chSpellID, isEmpowered, numEmpowerStages = UnitChannelInfo(unit)
+    local chName, chText, chTexture, _, _, _, chNotInt, _, isEmpowered, numEmpowerStages = UnitChannelInfo(unit)
 
     if chName then
         name = chName
         text = chText
         texture = chTexture
-        spellID = chSpellID
         notInterruptible = chNotInt
 
         -- Empowered Check
@@ -167,13 +166,12 @@ function ns.UpdateCast(bar)
         end
     else
         -- 2. Check Standard Cast
-        local cName, cText, cTexture, _, _, _, _, cNotInt, cSpellID = UnitCastingInfo(unit)
+        local cName, cText, cTexture, _, _, _, _, cNotInt, _ = UnitCastingInfo(unit)
         if cName then
             state = "cast"
             name = cName
             text = cText
             texture = cTexture
-            spellID = cSpellID
             notInterruptible = cNotInt
 
             if UnitCastingDuration then
@@ -216,11 +214,6 @@ function ns.UpdateCast(bar)
         evalColor = C_CurveUtil.EvaluateColorFromBoolean(notInterruptible, trueColor, falseColor)
         
         -- Spark visibility based on secret
-        if bar.Spark and SetShownFromSecret then
-            -- We want spark to HIDE when true (shielded). SetShownFromSecret takes (frame, secret)
-            -- Sadly we can't do boolean NOT on a secret natively without another API. We'll just hide it if we suspect a shield.
-            -- Actually, let's leave Spark shown but maybe change its color or just keep it shown.
-        end
     elseif safeNotInt and colors.shield then
         c = colors.shield
         if bar.Spark then bar.Spark:Hide() end
@@ -289,7 +282,7 @@ function ns.UpdateCast(bar)
         if bar.isEmpower then ns.StopEmpower(bar) end
         bar:SetReverseFill(false)
         if evalColor then
-            -- Note: SetStatusBarColor accepts ColorMixin objects in 10.0+ 
+            -- Note: SetStatusBarColor accepts ColorMixin objects in 10.0+
             bar:SetStatusBarColor(evalColor:GetRGBA())
         else
             bar:SetStatusBarColor(c[1], c[2], c[3], c[4])

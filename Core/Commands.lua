@@ -47,10 +47,7 @@ end
 function RoithiUI:ChatCommand(input)
     if not input or input:trim() == "" then
         -- Default: Open Options
-        if self.Config and self.Config.optionsFrame then
-            -- Logic to open options
-            -- (Placeholder if we had a direct function)
-        elseif Settings and Settings.OpenToCategory then
+        if Settings and Settings.OpenToCategory then
             Settings.OpenToCategory(addonName)
             ---@diagnostic disable-next-line: undefined-field
         elseif _G.InterfaceOptionsFrame_OpenToCategory then
