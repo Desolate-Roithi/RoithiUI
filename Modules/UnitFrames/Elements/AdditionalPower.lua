@@ -53,7 +53,8 @@ function UF:CreateAdditionalPower(frame)
                 -- Only show if primary resource is NOT Mana (pType ~= 0) AND we have Mana (max > 0)
                 if pType ~= 0 then
                     -- 12.0.1 Safety: Check for Secret
-                    local isSecret = C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(maxMana)
+                    local issecretvalue = _G.issecretvalue
+                    local isSecret = type(issecretvalue) == "function" and issecretvalue(maxMana)
                     local hasMana = isSecret or (maxMana and maxMana > 0)
 
                     if hasMana then

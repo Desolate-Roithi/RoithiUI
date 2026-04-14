@@ -9,6 +9,7 @@ local pcall, type, tonumber, tostring, ipairs, string = pcall, type, tonumber, t
 local UnitHealth, UnitHealthMax, UnitPower, UnitPowerMax = UnitHealth, UnitHealthMax, UnitPower, UnitPowerMax
 local UnitName, UnitClass, UnitRace, UnitLevel = UnitName, UnitClass, UnitRace, UnitLevel
 local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
+local UnitGetTotalHealAbsorbs = _G.UnitGetTotalHealAbsorbs
 local UnitIsConnected, UnitIsGhost, UnitIsDead = UnitIsConnected, UnitIsGhost, UnitIsDead
 local UnitClassification, UnitCreatureFamily, UnitCreatureType = UnitClassification, UnitCreatureFamily, UnitCreatureType
 local CreateFramePool, CreateFontStringPool = CreateFramePool, CreateFontStringPool
@@ -16,7 +17,6 @@ local strsplit = strsplit
 
 -- 12.0.1 Secret APIs (Localized if present)
 local issecretvalue = _G.issecretvalue
-local C_Secrets = _G.C_Secrets
 local C_UnitHealth = _G.C_UnitHealth
 ---@diagnostic disable-next-line: undefined-field
 local C_UnitPower = _G.C_UnitPower
@@ -85,11 +85,10 @@ TM.Methods = {
     ["health.current"] = function(unit) return UnitHealth(unit) end,
     ["health.maximum"] = function(unit) return UnitHealthMax(unit) end,
     ["health.missing"] = function(unit)
-        local isRestricted = C_Secrets and C_Secrets.ShouldUnitHealthMaxBeSecret(unit)
         local cur, max = UnitHealth(unit), UnitHealthMax(unit)
-        local isActuallySecret = issecretvalue and (issecretvalue(cur) or issecretvalue(max))
+        local isActuallySecret = type(issecretvalue) == "function" and (issecretvalue(cur) or issecretvalue(max))
 
-        if isRestricted or isActuallySecret then
+        if isActuallySecret then
             if UnitHealthDeficit then
                 return UnitHealthDeficit(unit)
             elseif UnitHealthMissing then
@@ -103,11 +102,10 @@ TM.Methods = {
         return ""
     end,
     ["health.percent"] = function(unit)
-        local isRestricted = C_Secrets and C_Secrets.ShouldUnitHealthMaxBeSecret(unit)
         local cur, max = UnitHealth(unit), UnitHealthMax(unit)
-        local isActuallySecret = issecretvalue and (issecretvalue(cur) or issecretvalue(max))
+        local isActuallySecret = type(issecretvalue) == "function" and (issecretvalue(cur) or issecretvalue(max))
 
-        if isRestricted or isActuallySecret then
+        if isActuallySecret then
             -- 12.0.1 Native Approach: Use UnitHealthPercent with Scaling Curve
             -- This returns a secret value already scaled to 0-100 for formatting.
             local curve = (CurveConstants and CurveConstants.ScaleTo100) or 0
@@ -134,11 +132,10 @@ TM.Methods = {
     ["power.current"] = function(unit) return UnitPower(unit) end,
     ["power.maximum"] = function(unit) return UnitPowerMax(unit) end,
     ["power.percent"] = function(unit)
-        local isRestricted = C_Secrets and C_Secrets.ShouldUnitPowerBeSecret(unit)
         local cur, max = UnitPower(unit), UnitPowerMax(unit)
-        local isActuallySecret = issecretvalue and (issecretvalue(cur) or issecretvalue(max))
+        local isActuallySecret = type(issecretvalue) == "function" and (issecretvalue(cur) or issecretvalue(max))
 
-        if isRestricted or isActuallySecret then
+        if isActuallySecret then
             -- 12.0.1 Power Approach
             local curve = (CurveConstants and CurveConstants.ScaleTo100) or 0
             local success, result = pcall(function()
@@ -160,11 +157,10 @@ TM.Methods = {
     end,
 
     ["power.missing"] = function(unit)
-        local isRestricted = C_Secrets and C_Secrets.ShouldUnitPowerBeSecret(unit)
         local cur, max = UnitPower(unit), UnitPowerMax(unit)
-        local isActuallySecret = issecretvalue and (issecretvalue(cur) or issecretvalue(max))
+        local isActuallySecret = type(issecretvalue) == "function" and (issecretvalue(cur) or issecretvalue(max))
 
-        if isRestricted or isActuallySecret then
+        if isActuallySecret then
             -- Note: No native UnitPowerMissing exists for secrets usually,
             -- but we can return the value to be abbreviated if it's a number-like secret.
             -- However, usually Power isn't "missing" in the same way health is.
@@ -401,7 +397,7 @@ TM.Methods = {
     ["healabsorb"] = function(unit)
         local healAbsorb = 0
         if UnitGetTotalHealAbsorbs then healAbsorb = UnitGetTotalHealAbsorbs(unit) or 0 end
-        if issecretvalue and issecretvalue(healAbsorb) then return healAbsorb end
+        if type(issecretvalue) == "function" and issecretvalue(healAbsorb) then return healAbsorb end
 
         local isPositive = false
         pcall(function() if healAbsorb > 0 then isPositive = true end end)

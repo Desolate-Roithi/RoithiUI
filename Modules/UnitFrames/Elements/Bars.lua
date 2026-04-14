@@ -439,6 +439,7 @@ function UF:CreateHealPrediction(frame)
     healAbsorb:SetStatusBarColor(0.5, 0.0, 0.0, 0.7)
     healAbsorb:SetFrameLevel(health:GetFrameLevel() + 11)
     healAbsorb:SetReverseFill(true)
+    healAbsorb:Hide()
 
     -- Using the Correct 12.0 API Usage
     ---@diagnostic disable-next-line: undefined-global

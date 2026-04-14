@@ -7,6 +7,9 @@ local LibRoithi = LibStub("LibRoithi-1.0")
 ---@class UF
 local UF = RoithiUI:GetModule("UnitFrames")
 
+-- 12.0.1 Secret APIs
+local issecretvalue = _G.issecretvalue
+
 -- Configuration for Class Power
 local ClassPowerConfig = {
     ["ROGUE"] = { mode = "POWER", type = Enum.PowerType.ComboPoints },
@@ -152,10 +155,10 @@ function UF:CreateClassPower(frame)
         end
     end
 
-    element:HookScript("OnSizeChanged", function(self)
-        if self.lastMax then
-            self.forceLayout = true
-            UpdateLayout(self.lastMax)
+    element:HookScript("OnSizeChanged", function(sf)
+        if sf.lastMax then
+            sf.forceLayout = true
+            UpdateLayout(sf.lastMax)
         end
     end)
 
@@ -163,7 +166,7 @@ function UF:CreateClassPower(frame)
     local RuneData = {}
     for i = 1, 6 do RuneData[i] = {} end
 
-    local function OnUpdateRunes(self, elapsed)
+    local function OnUpdateRunes(sf, elapsed)
         -- Gather rune data
         for i = 1, 6 do
             local start, duration, runeReady = GetRuneCooldown(i)
@@ -334,7 +337,8 @@ function UF:CreateClassPower(frame)
         elseif config.mode == "STAGGER" then
             curValue = UnitStagger("player") or 0
             local hpMax = UnitHealthMax("player")
-            if hpMax and hpMax > 0 then max = hpMax end
+            local isHpMaxSecret = type(issecretvalue) == "function" and issecretvalue(hpMax)
+            if hpMax and not isHpMaxSecret and hpMax > 0 then max = hpMax end
 
             -- Dynamic Coloring
             local isSecret = type(issecretvalue) == "function" and issecretvalue(curValue)

@@ -5,6 +5,8 @@ local Config = RoithiUI.Config or {}
 RoithiUI.Config = Config
 local LSM = LibStub("LibSharedMedia-3.0")
 local AL = ns.AttachmentLogic
+local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
+
 
 -- ----------------------------------------------------------------------------
 -- AceConfig Table Definition
@@ -22,14 +24,14 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
     return {
         group1_global = {
             type = "group",
-            name = "Global Visibility & Layout",
+            name = L["Global Visibility & Layout"],
             order = 1,
             inline = true,
             args = {
                 showBuffs = {
                     type = "toggle",
-                    name = "Show Buffs",
-                    desc = "Enable rendering of helpful auras.",
+                    name = L["Show Buffs"],
+                    desc  = L["Enable rendering of helpful auras."],
                     order = 1,
                     get = function() return GetDB().showBuffs ~= false end,
                     set = function(_, v)
@@ -38,8 +40,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
                 showDebuffs = {
                     type = "toggle",
-                    name = "Show Debuffs",
-                    desc = "Enable rendering of harmful auras.",
+                    name = L["Show Debuffs"],
+                    desc  = L["Enable rendering of harmful auras."],
                     order = 2,
                     get = function() return GetDB().showDebuffs ~= false end,
                     set = function(_, v)
@@ -48,8 +50,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
                 separateAuras = {
                     type = "toggle",
-                    name = "Separate Buffs & Debuffs",
-                    desc = "When checked, Buffs and Debuffs will anchor separately instead of flowing consecutively.",
+                    name = L["Separate Buffs & Debuffs"],
+                    desc  = L["When checked, Buffs and Debuffs will anchor separately instead of flowing consecutively."],
                     order = 3,
                     get = function() return GetDB().separateAuras end,
                     set = function(_, v)
@@ -61,14 +63,14 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
         },
         group2_base = {
             type = "group",
-            name = "Base Filters",
+            name = L["Base Filters"],
             order = 2,
             inline = true,
             args = {
                 showAllBuffs = {
                     type = "toggle",
-                    name = "All Buffs",
-                    desc = "Overrides Smart Filters to show every active Buff on the unit.",
+                    name = L["All Buffs"],
+                    desc  = L["Overrides Smart Filters to show every active Buff on the unit."],
                     order = 1,
                     get = function() return GetDB().showAllBuffs end,
                     set = function(_, v)
@@ -77,8 +79,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
                 showAllDebuffs = {
                     type = "toggle",
-                    name = "All Debuffs",
-                    desc = "Overrides Smart Filters to show every active Debuff on the unit.",
+                    name = L["All Debuffs"],
+                    desc  = L["Overrides Smart Filters to show every active Debuff on the unit."],
                     order = 2,
                     get = function() return GetDB().showAllDebuffs end,
                     set = function(_, v)
@@ -87,8 +89,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
                 hideTimeless = {
                     type = "toggle",
-                    name = "Hide Timeless Auras",
-                    desc = "Hides passive auras with no duration.",
+                    name = L["Hide Timeless Auras"],
+                    desc  = L["Hides passive auras with no duration."],
                     order = 3,
                     get = function() return GetDB().hideTimeless == true end,
                     set = function(_, v)
@@ -99,14 +101,14 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
         },
         group3_player = {
             type = "group",
-            name = "Player Auras",
+            name = L["Player Auras"],
             order = 3,
             inline = true,
             args = {
                 playerBuffs = {
                     type = "toggle",
-                    name = "My Buffs",
-                    desc = "Shows generic helpful auras cast by you.",
+                    name = L["My Buffs"],
+                    desc  = L["Shows generic helpful auras cast by you."],
                     order = 1,
                     get = function() return GetDB().playerBuffs ~= false end,
                     set = function(_, v)
@@ -115,8 +117,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
                 playerDebuffs = {
                     type = "toggle",
-                    name = "My Debuffs",
-                    desc = "Shows generic harmful auras (like DoTs) cast by you.",
+                    name = L["My Debuffs"],
+                    desc  = L["Shows generic harmful auras (like DoTs) cast by you."],
                     order = 2,
                     get = function() return GetDB().playerDebuffs ~= false end,
                     set = function(_, v)
@@ -125,8 +127,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
                 raidInCombat = {
                     type = "toggle",
-                    name = "My Raid HoTs/Buffs",
-                    desc = "Safely shows your HoTs while in combat (bypassing native combat hiding restrictions).",
+                    name = L["My Raid HoTs/Buffs"],
+                    desc  = L["Safely shows your HoTs while in combat (bypassing native combat hiding restrictions)."],
                     order = 3,
                     get = function() return GetDB().raidInCombat ~= false end,
                     set = function(_, v)
@@ -137,14 +139,14 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
         },
         group4_mechanics = {
             type = "group",
-            name = "Mechanics & Warnings",
+            name = L["Mechanics & Warnings"],
             order = 4,
             inline = true,
             args = {
                 importantBuffs = {
                     type = "toggle",
-                    name = "Important Buffs",
-                    desc = "Shows Buffs explicitly flagged by Blizzard developers as critical for the encounter.",
+                    name = L["Important Buffs"],
+                    desc  = L["Shows Buffs explicitly flagged by Blizzard developers as critical for the encounter."],
                     order = 1,
                     get = function() return GetDB().importantBuffs ~= false end,
                     set = function(_, v)
@@ -153,8 +155,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
                 importantDebuffs = {
                     type = "toggle",
-                    name = "Important Debuffs",
-                    desc = "Shows Debuffs explicitly flagged by Blizzard developers as critical for the encounter.",
+                    name = L["Important Debuffs"],
+                    desc  = L["Shows Debuffs explicitly flagged by Blizzard developers as critical for the encounter."],
                     order = 2,
                     get = function() return GetDB().importantDebuffs ~= false end,
                     set = function(_, v)
@@ -163,8 +165,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
                 cc = {
                     type = "toggle",
-                    name = "Crowd Control",
-                    desc = "Shows Debuffs that restrict character control (Stuns, Fears, Roots, etc).",
+                    name = L["Crowd Control"],
+                    desc  = L["Shows Debuffs that restrict character control (Stuns, Fears, Roots, etc)."],
                     order = 3,
                     get = function() return GetDB().cc ~= false end,
                     set = function(_, v)
@@ -173,8 +175,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
                 dispellable = {
                     type = "toggle",
-                    name = "Dispellable",
-                    desc = "Shows Debuffs that your current Class/Spec is physically capable of dispelling.",
+                    name = L["Dispellable"],
+                    desc  = L["Shows Debuffs that your current Class/Spec is physically capable of dispelling."],
                     order = 4,
                     get = function() return GetDB().dispellable ~= false end,
                     set = function(_, v)
@@ -185,14 +187,14 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
         },
         group5_defensives = {
             type = "group",
-            name = "Defensives",
+            name = L["Defensives"],
             order = 5,
             inline = true,
             args = {
                 majorDefensivesBuffs = {
                     type = "toggle",
-                    name = "Major Defensives (Tanks)",
-                    desc = "Shows major defensive cooldowns (Buffs) on the unit (e.g. Shield Wall, Barkskin).",
+                    name = L["Major Defensives (Tanks)"],
+                    desc  = L["Shows major defensive cooldowns (Buffs) on the unit (e.g. Shield Wall, Barkskin)."],
                     order = 1,
                     get = function() return GetDB().majorDefensivesBuffs ~= false end,
                     set = function(_, v)
@@ -201,8 +203,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
                 majorDefensivesDebuffs = {
                     type = "toggle",
-                    name = "Major Defensives (Debuffs)",
-                    desc = "Shows major defensive restrictions (Debuffs) on the unit (e.g. Forbearance, Weakened Soul).",
+                    name = L["Major Defensives (Debuffs)"],
+                    desc  = L["Shows major defensive restrictions (Debuffs) on the unit (e.g. Forbearance, Weakened Soul)."],
                     order = 2,
                     get = function() return GetDB().majorDefensivesDebuffs ~= false end,
                     set = function(_, v)
@@ -211,8 +213,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
                 externalDefensives = {
                     type = "toggle",
-                    name = "External Defensives",
-                    desc = "Shows major defensive buffs cast on the unit by OTHER players (e.g. Pain Suppression).",
+                    name = L["External Defensives"],
+                    desc  = L["Shows major defensive buffs cast on the unit by OTHER players (e.g. Pain Suppression)."],
                     order = 3,
                     get = function() return GetDB().externalDefensives ~= false end,
                     set = function(_, v)
@@ -227,23 +229,23 @@ end
 local function GetGlobalAuraOptions()
     local group = {
         type = "group",
-        name = "Auras",
+        name = L["Auras"],
         order = 4,
         args = {
             intro = {
                 type = "description",
-                name = "Manage Smart Filters (12.0.1) and Custom Aura Frames.",
+                name = L["Manage Smart Filters (12.0.1) and Custom Aura Frames."],
                 order = 0,
             },
             custom = {
                 type = "group",
-                name = "Custom Frames",
+                name = L["Custom Frames"],
                 order = 2,
                 args = {
                     addName = {
                         type = "input",
-                        name = "Create New Frame (ID)",
-                        desc = "Enter a unique name for the new custom aura frame and press Enter.",
+                        name = L["Create New Frame (ID)"],
+                        desc  = L["Enter a unique name for the new custom aura frame and press Enter."],
                         order = 1,
                         get = function() return "" end,
                         set = function(_, v)
@@ -277,7 +279,7 @@ local function GetGlobalAuraOptions()
             },
             units = {
                 type = "group",
-                name = "Unit Aura Settings",
+                name = L["Unit Aura Settings"],
                 order = 3,
                 args = {}
             }
@@ -307,7 +309,7 @@ local function GetGlobalAuraOptions()
                 args = {
                     delete = {
                         type = "execute",
-                        name = "Delete Frame",
+                        name = L["Delete Frame"],
                         order = 1,
                         confirm = true,
                         func = function()
@@ -317,7 +319,7 @@ local function GetGlobalAuraOptions()
                     },
                     unit = {
                         type = "select",
-                        name = "Request Buffs From Unit",
+                        name = L["Request Buffs From Unit"],
                         order = 2,
                         values = unitsList,
                         get = function() return GetDB().unit or "player" end,
@@ -327,7 +329,7 @@ local function GetGlobalAuraOptions()
                     },
                     enabled = {
                         type = "toggle",
-                        name = "Enable",
+                        name = L["Enable"],
                         order = 3,
                         get = function() return GetDB().enabled == true end,
                         set = function(_, v)
@@ -336,7 +338,7 @@ local function GetGlobalAuraOptions()
                     },
                     size = {
                         type = "range",
-                        name = "Aura Size",
+                        name = L["Aura Size"],
                         order = 4,
                         min = 10,
                         max = 100,
@@ -348,7 +350,7 @@ local function GetGlobalAuraOptions()
                     },
                     max = {
                         type = "range",
-                        name = "Max Auras",
+                        name = L["Max Auras"],
                         order = 5,
                         min = 1,
                         max = 40,
@@ -360,7 +362,7 @@ local function GetGlobalAuraOptions()
                     },
                     spacing = {
                         type = "range",
-                        name = "Spacing",
+                        name = L["Spacing"],
                         order = 6,
                         min = 0,
                         max = 40,
@@ -372,7 +374,7 @@ local function GetGlobalAuraOptions()
                     },
                     x = {
                         type = "range",
-                        name = "X Offset (from Screen Center)",
+                        name = L["X Offset (from Screen Center)"],
                         order = 7,
                         min = -2000,
                         max = 2000,
@@ -384,7 +386,7 @@ local function GetGlobalAuraOptions()
                     },
                     y = {
                         type = "range",
-                        name = "Y Offset (from Screen Center)",
+                        name = L["Y Offset (from Screen Center)"],
                         order = 8,
                         min = -2000,
                         max = 2000,
@@ -396,7 +398,7 @@ local function GetGlobalAuraOptions()
                     },
                     grow = {
                         type = "select",
-                        name = "Grow Direction",
+                        name = L["Grow Direction"],
                         order = 8,
                         values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["CENTER_VERTICAL"] = "Centered Vertical" },
                         get = function() return GetDB().auraGrowDirection or "RIGHT" end,
@@ -406,7 +408,7 @@ local function GetGlobalAuraOptions()
                     },
                     filtersGroup = {
                         type = "group",
-                        name = "Filters & Visibility",
+                        name = L["Filters & Visibility"],
                         order = 20,
                         args = GenerateAuraFilters(function()
                             local db = GetDB()
@@ -427,24 +429,24 @@ local function GetOptions()
     local profileOptions = LibStub("AceDBOptions-3.0"):GetOptionsTable(RoithiUI.db)
     profileOptions.args.sharing = {
         type = "group",
-        name = "Sharing",
+        name = L["Sharing"],
         order = 100,
         args = {
             intro = {
                 type = "description",
-                name = "Export or Import your RoithiUI profile settings as a compressed string.",
+                name = L["Export or Import your RoithiUI profile settings as a compressed string."],
                 order = 1,
             },
             exportGroup = {
                 type = "group",
-                name = "Export",
+                name = L["Export"],
                 order = 10,
                 inline = true,
                 args = {
                     exportString = {
                         type = "input",
-                        name = "Your Export String",
-                        desc = "Copy this string to share your profile with others.",
+                        name = L["Your Export String"],
+                        desc  = L["Copy this string to share your profile with others."],
                         order = 1,
                         width = "full",
                         multiline = 5,
@@ -458,14 +460,14 @@ local function GetOptions()
             },
             importGroup = {
                 type = "group",
-                name = "Import",
+                name = L["Import"],
                 order = 20,
                 inline = true,
                 args = {
                     importString = {
                         type = "input",
-                        name = "Paste Import String",
-                        desc = "Paste a RoithiUI profile string here and click Import.",
+                        name = L["Paste Import String"],
+                        desc  = L["Paste a RoithiUI profile string here and click Import."],
                         order = 1,
                         width = "full",
                         multiline = 5,
@@ -474,8 +476,8 @@ local function GetOptions()
                     },
                     importBtn = {
                         type = "execute",
-                        name = "Import Profile",
-                        desc = "Applying an imported profile will overwrite your current settings and reload the UI.",
+                        name = L["Import Profile"],
+                        desc  = L["Applying an imported profile will overwrite your current settings and reload the UI."],
                         order = 2,
                         confirm = true,
                         func = function()
@@ -498,34 +500,34 @@ local function GetOptions()
 
     local options = {
         type = "group",
-        name = "RoithiUI Settings",
+        name = L["RoithiUI Settings"],
         args = {
             general = {
                 type = "group",
-                name = "General",
+                name = L["General"],
                 order = 1,
                 args = {
                     -- Moved from General.lua or new items ca go here
                     intro = {
                         type = "description",
-                        name = "General settings for RoithiUI modules.",
+                        name = L["General settings for RoithiUI modules."],
                         order = 1,
                     },
                     media = {
                         type = "group",
-                        name = "Media",
+                        name = L["Media"],
                         order = 5,
                         inline = true,
                         args = {
                             ufHeader = {
                                 type = "header",
-                                name = "Unit Frames",
+                                name = L["Unit Frames"],
                                 order = 1,
                             },
                             ufFont = {
                                 type = "select",
                                 dialogControl = "LSM30_Font",
-                                name = "Font",
+                                name = L["Font"],
                                 order = 2,
                                 values = function() return GetLSMKeys("font") end,
                                 get = function() return RoithiUI.db.profile.General.unitFrameFont end,
@@ -537,7 +539,7 @@ local function GetOptions()
                             ufBar = {
                                 type = "select",
                                 dialogControl = "LSM30_Statusbar",
-                                name = "Status Bar",
+                                name = L["Status Bar"],
                                 order = 3,
                                 values = function() return GetLSMKeys("statusbar") end,
                                 get = function() return RoithiUI.db.profile.General.unitFrameBar end,
@@ -548,13 +550,13 @@ local function GetOptions()
                             },
                             cbHeader = {
                                 type = "header",
-                                name = "Castbars",
+                                name = L["Castbars"],
                                 order = 10,
                             },
                             cbFont = {
                                 type = "select",
                                 dialogControl = "LSM30_Font",
-                                name = "Font",
+                                name = L["Font"],
                                 order = 11,
                                 values = function() return GetLSMKeys("font") end,
                                 get = function() return RoithiUI.db.profile.General.castbarFont end,
@@ -567,7 +569,7 @@ local function GetOptions()
                             cbBar = {
                                 type = "select",
                                 dialogControl = "LSM30_Statusbar",
-                                name = "Status Bar",
+                                name = L["Status Bar"],
                                 order = 12,
                                 values = function() return GetLSMKeys("statusbar") end,
                                 get = function() return RoithiUI.db.profile.General.castbarBar end,
@@ -580,16 +582,16 @@ local function GetOptions()
                     },
                     reset = {
                         type = "execute",
-                        name = "Reset to Defaults",
-                        desc = "Reset all settings to default values and reload the UI. Cannot be undone.",
+                        name = L["Reset to Defaults"],
+                        desc  = L["Reset all settings to default values and reload the UI. Cannot be undone."],
                         order = 10,
                         func = function() RoithiUI:ResetSettings() end,
                         width = "full",
                     },
                     testBoss = {
                         type = "toggle",
-                        name = "Boss Frames Test Mode",
-                        desc = "Toggle dummy boss frames for positioning.",
+                        name = L["Boss Frames Test Mode"],
+                        desc  = L["Toggle dummy boss frames for positioning."],
                         order = 11,
                         get = function()
                             local UF = RoithiUI:GetModule("UnitFrames")
@@ -603,8 +605,8 @@ local function GetOptions()
                     },
                     utilityFrames = {
                         type = "toggle",
-                        name = "Encounter Resource Bar",
-                        desc = "Toggle the Encounter Resource Bar (e.g., Vigor).",
+                        name = L["Encounter Resource Bar"],
+                        desc  = L["Toggle the Encounter Resource Bar (e.g., Vigor)."],
                         order = 12,
                         get = function()
                             local db = RoithiUI.db.profile
@@ -623,8 +625,8 @@ local function GetOptions()
                     },
                     debugMode = {
                         type = "toggle",
-                        name = "|cffff0000Debug Mode|r",
-                        desc = "Enable debug logging to the chat window.",
+                        name = L["|cffff0000Debug Mode|r"],
+                        desc  = L["Enable debug logging to the chat window."],
                         order = 50,
                         get = function() return RoithiUI.db.profile.General.debugMode end,
                         set = function(_, v) RoithiUI.db.profile.General.debugMode = v end,
@@ -634,12 +636,12 @@ local function GetOptions()
             },
             unitframes = {
                 type = "group",
-                name = "Unit Frames",
+                name = L["Unit Frames"],
                 order = 2,
                 args = {
                     intro = {
                         type = "description",
-                        name = "Configure text, auras, and indicators for Unit Frames.",
+                        name = L["Configure text, auras, and indicators for Unit Frames."],
                         order = 1,
                     },
                     -- Units will be populated dynamically or defined below
@@ -648,7 +650,7 @@ local function GetOptions()
             customtags = RoithiUI.Config.GetCustomTagsOptions and RoithiUI.Config.GetCustomTagsOptions() or nil,
             castbars = {
                 type = "group",
-                name = "Castbars",
+                name = L["Castbars"],
                 order = 3,
                 args = {
                     -- Populated below
@@ -690,7 +692,7 @@ local function GetOptions()
             if currentContext ~= "unitframes" then
                 args.unitframes = {
                     type = "execute",
-                    name = "> Unit Frames",
+                    name = L["> Unit Frames"],
                     order = order,
                     func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", ufUnit) end,
                 }
@@ -699,7 +701,7 @@ local function GetOptions()
             if currentContext ~= "castbars" and not unit:match("^boss%d$") then
                 args.castbars = {
                     type = "execute",
-                    name = "> Castbars",
+                    name = L["> Castbars"],
                     order = order,
                     func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "castbars", unit) end,
                 }
@@ -709,7 +711,7 @@ local function GetOptions()
                 local isBoss = unit:match("^boss%d$")
                 args.auras = {
                     type = "execute",
-                    name = "> Auras",
+                    name = L["> Auras"],
                     order = order,
                     func = function()
                         if isBoss then
@@ -724,14 +726,14 @@ local function GetOptions()
             if RoithiUI.Config.GetCustomTagsOptions and currentContext ~= "customtags" then
                 args.customtags = {
                     type = "execute",
-                    name = "> Custom Tags",
+                    name = L["> Custom Tags"],
                     order = order,
                     func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "customtags", unit) end,
                 }
             end
             return {
                 type = "group",
-                name = "Quick Links",
+                name = L["Quick Links"],
                 inline = true,
                 order = 2,
                 args = args
@@ -746,7 +748,7 @@ local function GetOptions()
                 args = {
                     enable = {
                         type = "toggle",
-                        name = "Enable Unit Frame",
+                        name = L["Enable Unit Frame"],
                         order = 1,
                         get = function()
                             if not RoithiUI.db.profile.UnitFrames then return true end
@@ -769,14 +771,14 @@ local function GetOptions()
                     -- Tab: Indicators
                     indicators = {
                         type = "group",
-                        name = "Indicators",
+                        name = L["Indicators"],
                         order = 2,
                         inline = true,
                         args = {
                             testMode = {
                                 type = "toggle",
-                                name = "|cffffd100Test Mode|r",
-                                desc = "Force show all enabled indicators for easier configuration.",
+                                name = L["|cffffd100Test Mode|r"],
+                                desc  = L["Force show all enabled indicators for easier configuration."],
                                 order = 0,
                                 get = function() return RoithiUI.db.profile.IndicatorTestMode end,
                                 set = function(_, v)
@@ -787,7 +789,7 @@ local function GetOptions()
                             },
                             selectIndicator = {
                                 type = "select",
-                                name = "Select Indicator",
+                                name = L["Select Indicator"],
                                 order = 1,
                                 values = function()
                                     local v = {
@@ -813,14 +815,14 @@ local function GetOptions()
                             -- Details Group (Only shown if selection made)
                             details = {
                                 type = "group",
-                                name = "Settings",
+                                name = L["Settings"],
                                 order = 2,
                                 inline = true,
                                 hidden = function() return not RoithiUI.db.profile.tempIndicatorSelect end,
                                 args = {
                                     enabled = {
                                         type = "toggle",
-                                        name = "Enable",
+                                        name = L["Enable"],
                                         order = 1,
                                         get = function()
                                             local k = RoithiUI.db.profile.tempIndicatorSelect
@@ -837,7 +839,7 @@ local function GetOptions()
                                     },
                                     size = {
                                         type = "range",
-                                        name = "Size",
+                                        name = L["Size"],
                                         order = 2,
                                         min = 8,
                                         max = 64,
@@ -857,7 +859,7 @@ local function GetOptions()
                                     },
                                     point = {
                                         type = "select",
-                                        name = "Anchor Point",
+                                        name = L["Anchor Point"],
                                         order = 3,
                                         values = {
                                             ["CENTER"] = "Center",
@@ -885,7 +887,7 @@ local function GetOptions()
                                     },
                                     x = {
                                         type = "range",
-                                        name = "X Offset",
+                                        name = L["X Offset"],
                                         order = 4,
                                         min = -100,
                                         max = 100,
@@ -905,7 +907,7 @@ local function GetOptions()
                                     },
                                     y = {
                                         type = "range",
-                                        name = "Y Offset",
+                                        name = L["Y Offset"],
                                         order = 5,
                                         min = -100,
                                         max = 100,
@@ -937,7 +939,7 @@ local function GetOptions()
             if not targetArgs.bossFrames then
                 targetArgs.bossFrames = {
                     type = "group",
-                    name = "Boss Frames",
+                    name = L["Boss Frames"],
                     order = 30,
                     args = {}
                 }
@@ -952,7 +954,7 @@ local function GetOptions()
             args = {
                 enable = {
                     type = "toggle",
-                    name = "Enable",
+                    name = L["Enable"],
                     order = 1,
                     get = function() return GetDB().aurasEnabled ~= false end,
                     set = function(_, v)
@@ -963,7 +965,7 @@ local function GetOptions()
 
                 size = {
                     type = "range",
-                    name = "Size",
+                    name = L["Size"],
                     order = 3,
                     min = 10,
                     max = 100,
@@ -976,7 +978,7 @@ local function GetOptions()
                 },
                 spacing = {
                     type = "range",
-                    name = "Spacing",
+                    name = L["Spacing"],
                     order = 3.5,
                     min = 0,
                     max = 40,
@@ -989,7 +991,7 @@ local function GetOptions()
                 },
                 max = {
                     type = "range",
-                    name = "Max Auras",
+                    name = L["Max Auras"],
                     order = 4,
                     min = 1,
                     max = 40,
@@ -1002,7 +1004,7 @@ local function GetOptions()
                 },
                 anchor = {
                     type = "select",
-                    name = "Anchor Point",
+                    name = L["Anchor Point"],
                     order = 5,
                     values = { ["TOP"] = "Top", ["BOTTOM"] = "Bottom", ["LEFT"] = "Left", ["RIGHT"] = "Right", ["TOPLEFT"] = "Top Left", ["TOPRIGHT"] = "Top Right", ["BOTTOMLEFT"] = "Bottom Left", ["BOTTOMRIGHT"] = "Bottom Right", ["CENTER"] = "Center" },
                     get = function() return GetDB().auraAnchor or "BOTTOM" end,
@@ -1013,7 +1015,7 @@ local function GetOptions()
                 },
                 grow = {
                     type = "select",
-                    name = "Grow Direction",
+                    name = L["Grow Direction"],
                     order = 6,
                     values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_VERTICAL"] = "Centered Vertical" },
                     get = function() return GetDB().auraGrowDirection or "RIGHT" end,
@@ -1024,7 +1026,7 @@ local function GetOptions()
                 },
                 x = {
                     type = "range",
-                    name = "X Offset (Attached)",
+                    name = L["X Offset (Attached)"],
                     order = 7,
                     min = -1000,
                     max = 1000,
@@ -1037,7 +1039,7 @@ local function GetOptions()
                 },
                 y = {
                     type = "range",
-                    name = "Y Offset (Attached)",
+                    name = L["Y Offset (Attached)"],
                     order = 8,
                     min = -1000,
                     max = 1000,
@@ -1050,8 +1052,8 @@ local function GetOptions()
                 },
                 detached = {
                     type = "toggle",
-                    name = "Detach (Satellite Mode)",
-                    desc = "Detach aura frame to move it independently via Edit Mode.",
+                    name = L["Detach (Satellite Mode)"],
+                    desc  = L["Detach aura frame to move it independently via Edit Mode."],
                     order = 9,
                     get = function() return AL:IsDetached(unit, "Auras") end,
                     set = function(_, v)
@@ -1062,13 +1064,13 @@ local function GetOptions()
                 },
                 buffGroup = {
                     type = "group",
-                    name = "Buffs Bar Settings",
+                    name = L["Buffs Bar Settings"],
                     order = 9.1,
                     hidden = function() return not GetDB().separateAuras end,
                     args = {
                         size = {
                             type = "range",
-                            name = "Size",
+                            name = L["Size"],
                             order = 1,
                             min = 10,
                             max = 100,
@@ -1080,7 +1082,7 @@ local function GetOptions()
                         },
                         max = {
                             type = "range",
-                            name = "Max Auras",
+                            name = L["Max Auras"],
                             order = 2,
                             min = 1,
                             max = 40,
@@ -1092,7 +1094,7 @@ local function GetOptions()
                         },
                         spacing = {
                             type = "range",
-                            name = "Spacing",
+                            name = L["Spacing"],
                             order = 3,
                             min = 0,
                             max = 40,
@@ -1104,7 +1106,7 @@ local function GetOptions()
                         },
                         anchor = {
                             type = "select",
-                            name = "Anchor Point",
+                            name = L["Anchor Point"],
                             order = 4,
                             values = { ["TOP"] = "Top", ["BOTTOM"] = "Bottom", ["LEFT"] = "Left", ["RIGHT"] = "Right", ["TOPLEFT"] = "Top Left", ["TOPRIGHT"] = "Top Right", ["BOTTOMLEFT"] = "Bottom Left", ["BOTTOMRIGHT"] = "Bottom Right", ["CENTER"] = "Center" },
                             get = function() return GetDB().buffAnchor or GetDB().auraAnchor or "BOTTOM" end,
@@ -1114,7 +1116,7 @@ local function GetOptions()
                         },
                         grow = {
                             type = "select",
-                            name = "Grow Direction",
+                            name = L["Grow Direction"],
                             order = 5,
                             values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_VERTICAL"] = "Centered Vertical" },
                             get = function() return GetDB().buffGrowDirection or GetDB().auraGrowDirection or "RIGHT" end,
@@ -1124,7 +1126,7 @@ local function GetOptions()
                         },
                         detached = {
                             type = "toggle",
-                            name = "Detach (Move in Edit Mode)",
+                            name = L["Detach (Move in Edit Mode)"],
                             order = 6,
                             get = function() return GetDB().buffDetached == true end,
                             set = function(_, v)
@@ -1133,7 +1135,7 @@ local function GetOptions()
                         },
                         x = {
                             type = "range",
-                            name = "X Offset (Attached)",
+                            name = L["X Offset (Attached)"],
                             order = 7,
                             min = -1000,
                             max = 1000,
@@ -1145,7 +1147,7 @@ local function GetOptions()
                         },
                         y = {
                             type = "range",
-                            name = "Y Offset (Attached)",
+                            name = L["Y Offset (Attached)"],
                             order = 8,
                             min = -1000,
                             max = 1000,
@@ -1159,13 +1161,13 @@ local function GetOptions()
                 },
                 debuffGroup = {
                     type = "group",
-                    name = "Debuffs Bar Settings",
+                    name = L["Debuffs Bar Settings"],
                     order = 9.2,
                     hidden = function() return not GetDB().separateAuras end,
                     args = {
                         size = {
                             type = "range",
-                            name = "Size",
+                            name = L["Size"],
                             order = 1,
                             min = 10,
                             max = 100,
@@ -1177,7 +1179,7 @@ local function GetOptions()
                         },
                         max = {
                             type = "range",
-                            name = "Max Auras",
+                            name = L["Max Auras"],
                             order = 2,
                             min = 1,
                             max = 40,
@@ -1189,7 +1191,7 @@ local function GetOptions()
                         },
                         spacing = {
                             type = "range",
-                            name = "Spacing",
+                            name = L["Spacing"],
                             order = 3,
                             min = 0,
                             max = 40,
@@ -1201,7 +1203,7 @@ local function GetOptions()
                         },
                         anchor = {
                             type = "select",
-                            name = "Anchor Point",
+                            name = L["Anchor Point"],
                             order = 4,
                             values = { ["TOP"] = "Top", ["BOTTOM"] = "Bottom", ["LEFT"] = "Left", ["RIGHT"] = "Right", ["TOPLEFT"] = "Top Left", ["TOPRIGHT"] = "Top Right", ["BOTTOMLEFT"] = "Bottom Left", ["BOTTOMRIGHT"] = "Bottom Right", ["CENTER"] = "Center" },
                             get = function() return GetDB().debuffAnchor or GetDB().auraAnchor or "BOTTOM" end,
@@ -1211,7 +1213,7 @@ local function GetOptions()
                         },
                         grow = {
                             type = "select",
-                            name = "Grow Direction",
+                            name = L["Grow Direction"],
                             order = 5,
                             values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_VERTICAL"] = "Centered Vertical" },
                             get = function() return GetDB().debuffGrowDirection or GetDB().auraGrowDirection or "RIGHT" end,
@@ -1221,7 +1223,7 @@ local function GetOptions()
                         },
                         detached = {
                             type = "toggle",
-                            name = "Detach (Move in Edit Mode)",
+                            name = L["Detach (Move in Edit Mode)"],
                             order = 6,
                             get = function() return GetDB().debuffDetached == true end,
                             set = function(_, v)
@@ -1230,7 +1232,7 @@ local function GetOptions()
                         },
                         x = {
                             type = "range",
-                            name = "X Offset (Attached)",
+                            name = L["X Offset (Attached)"],
                             order = 7,
                             min = -1000,
                             max = 1000,
@@ -1242,7 +1244,7 @@ local function GetOptions()
                         },
                         y = {
                             type = "range",
-                            name = "Y Offset (Attached)",
+                            name = L["Y Offset (Attached)"],
                             order = 8,
                             min = -1000,
                             max = 1000,
@@ -1256,7 +1258,7 @@ local function GetOptions()
                 },
                 filtersAndVisibility = {
                     type = "group",
-                    name = "Filters & Layout",
+                    name = L["Filters & Layout"],
                     order = 10,
                     args = GenerateAuraFilters(GetDB, function() ns.RefreshUnitFrame(unit) end),
                 }
@@ -1271,7 +1273,7 @@ local function GetOptions()
                 args = {
                     enable = {
                         type = "toggle",
-                        name = "Enable Castbar",
+                        name = L["Enable Castbar"],
                         order = 1,
                         get = function()
                             if not RoithiUI.db.profile.Castbar then return true end
@@ -1297,12 +1299,12 @@ local function GetOptions()
     -- Add Boss Frames settings to Unit Frames group
     options.args.unitframes.args["boss"] = {
         type = "group",
-        name = "Boss Frames",
+        name = L["Boss Frames"],
         order = 30,
         args = {
             enable = {
                 type = "toggle",
-                name = "Enable Boss Frames",
+                name = L["Enable Boss Frames"],
                 order = 1,
                 get = function()
                     if not RoithiUI.db.profile.UnitFrames then return true end
@@ -1326,13 +1328,13 @@ local function GetOptions()
             },
             quickLinks = {
                 type = "group",
-                name = "Quick Links",
+                name = L["Quick Links"],
                 inline = true,
                 order = 2,
                 args = {
                     auras = {
                         type = "execute",
-                        name = "> Auras",
+                        name = L["> Auras"],
                         order = 1,
                         func = function()
                             LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units",
@@ -1341,7 +1343,7 @@ local function GetOptions()
                     },
                     customtags = {
                         type = "execute",
-                        name = "> Custom Tags",
+                        name = L["> Custom Tags"],
                         order = 2,
                         func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "customtags", "boss1") end,
                     },

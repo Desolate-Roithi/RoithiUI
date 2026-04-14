@@ -4,6 +4,7 @@
 
 
     <!-- Core -->
+    <Script file="Core/Locales.lua"/>
     <Script file="Core/Init.lua"/>
     <Script file="Core/Utils.lua"/>
     <Script file="Core/Commands.lua"/>
