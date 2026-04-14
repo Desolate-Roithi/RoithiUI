@@ -300,10 +300,6 @@ function Castbar:OnEnable()
                     if not ns.bars[unit].isInterrupted and not ns.bars[unit].isInEditMode then
                         ns.bars[unit]:Hide(); ns.bars[unit]:SetScript("OnUpdate", nil)
                     end
-                elseif event == "UNIT_SPELLCAST_EMPOWER_STAGE" then
-                    if ns.OnEmpowerStage then
-                        ns.OnEmpowerStage(ns.bars[unit], ...)
-                    end
                 else
                     ns.UpdateCast(ns.bars[unit])
                 end
@@ -315,7 +311,6 @@ function Castbar:OnEnable()
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_UPDATE")
-    f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STAGE")
     f:RegisterEvent("UNIT_SPELLCAST_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")

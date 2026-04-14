@@ -152,25 +152,63 @@ function UF:CreateClassPower(frame)
         end
     end
 
+    element:HookScript("OnSizeChanged", function(self)
+        if self.lastMax then
+            self.forceLayout = true
+            UpdateLayout(self.lastMax)
+        end
+    end)
+
     -- Runes OnUpdate Loop (Continuous Value Refill + Timer)
-    local function OnUpdateRunes(_, elapsed)
+    local RuneData = {}
+    for i = 1, 6 do RuneData[i] = {} end
+
+    local function OnUpdateRunes(self, elapsed)
+        -- Gather rune data
+        for i = 1, 6 do
+            local start, duration, runeReady = GetRuneCooldown(i)
+            RuneData[i].index = i
+            RuneData[i].start = start
+            RuneData[i].duration = duration
+            RuneData[i].ready = runeReady
+            if not runeReady and start and duration then
+                RuneData[i].remain = (start + duration) - GetTime()
+            else
+                RuneData[i].remain = 0
+            end
+        end
+
+        -- Sort: Ready ones left, cooling down sorted by remaining time
+        table.sort(RuneData, function(a, b)
+            if a.ready and not b.ready then return true end
+            if not a.ready and b.ready then return false end
+            if not a.ready and not b.ready then
+                if math.abs(a.remain - b.remain) > 0.01 then
+                    return a.remain < b.remain
+                end
+                return a.index < b.index
+            end
+            return a.index < b.index
+        end)
+
+        -- Apply to UI Points
         for i = 1, 6 do
             local point = element.points[i]
-            local start, duration, runeReady = GetRuneCooldown(i)
-            if runeReady then
+            local data = RuneData[i]
+            if data.ready then
                 point:SetMinMaxValues(0, 1)
                 point:SetValue(1)
                 point:SetAlpha(1)
                 point.Timer:SetText("")
-            elseif start and duration then
+            elseif data.start and data.duration then
                 point:SetAlpha(1)
 
-                local current = GetTime() - start
-                point:SetMinMaxValues(0, duration)
+                local current = GetTime() - data.start
+                point:SetMinMaxValues(0, data.duration)
                 point:SetValue(current)
 
                 -- Timer Logic
-                local remain = duration - current
+                local remain = data.duration - current
                 if remain > 0 then
                     point.Timer:SetText(string.format("%.1f", remain))
                 else

@@ -23,6 +23,7 @@ local C_UnitPower = _G.C_UnitPower
 local CurveConstants = _G.CurveConstants
 local UnitHealthPercent = _G.UnitHealthPercent
 local UnitPowerPercent = _G.UnitPowerPercent
+local SetShownFromSecret = _G.SetShownFromSecret
 
 
 ---@diagnostic disable-next-line: undefined-field
@@ -397,6 +398,18 @@ TM.Methods = {
         return absorb
     end,
 
+    ["healabsorb"] = function(unit)
+        local healAbsorb = 0
+        if UnitGetTotalHealAbsorbs then healAbsorb = UnitGetTotalHealAbsorbs(unit) or 0 end
+        if issecretvalue and issecretvalue(healAbsorb) then return healAbsorb end
+
+        local isPositive = false
+        pcall(function() if healAbsorb > 0 then isPositive = true end end)
+
+        if not isPositive then return "" end
+        return healAbsorb
+    end,
+
     -- Status & Classification
     ["status"] = function(unit)
         if not UnitIsConnected(unit) then return "Offline" end
@@ -521,10 +534,10 @@ function TM:GetSegments(formatString, unit)
 
                 if type(val) == "table" then
                     for _, subVal in ipairs(val) do
-                        table.insert(result, { text = subVal, isTag = true })
+                        table.insert(result, { text = subVal, isTag = true, tag = tagName })
                     end
                 else
-                    table.insert(result, { text = val, isTag = true })
+                    table.insert(result, { text = val, isTag = true, tag = tagName })
                 end
             else
                 RoithiUI:Log("|cffff0000[RoithiUI Tag Error]|r", tagName, val)
@@ -649,7 +662,24 @@ function UF:UpdateTagFrame(tagFrame)
         fs:SetText(segment.text)
 
         fs:ClearAllPoints()
-        fs:Show()
+        
+        -- 12.0.1 Secret Zero-Hiding for specific tags
+        if segment.isTag and (segment.tag == "absorb" or segment.tag == "healabsorb") then
+            if issecretvalue and issecretvalue(segment.text) then
+                if SetShownFromSecret then 
+                    SetShownFromSecret(fs, segment.text) 
+                else
+                    fs:Show() -- Fallback if SetShownFromSecret is unhooked.
+                end
+            elseif segment.text == 0 or segment.text == "0" or segment.text == "" then
+                fs:Hide()
+            else
+                fs:Show()
+            end
+        else
+            fs:Show()
+        end
+        
         fontStrings[i] = fs
     end
 
@@ -740,6 +770,7 @@ function UF:EnableTags(frame)
         listener:RegisterEvent("UNIT_NAME_UPDATE")
         listener:RegisterEvent("UNIT_LEVEL")
         listener:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
+        listener:RegisterEvent("UNIT_HEAL_ABSORB_AMOUNT_CHANGED")
         listener:RegisterEvent("UNIT_AURA") -- Added for ClassPower Aura tags
     end
 

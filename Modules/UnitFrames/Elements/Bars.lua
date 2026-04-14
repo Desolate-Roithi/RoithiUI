@@ -433,6 +433,13 @@ function UF:CreateHealPrediction(frame)
     overAbsorbGlow:Hide()
     absorb.overGlow = overAbsorbGlow
 
+    local healAbsorb = CreateFrame("StatusBar", nil, clipFrame)
+    healAbsorb:SetStatusBarTexture(texture)
+    -- Dark red for healing absorb
+    healAbsorb:SetStatusBarColor(0.5, 0.0, 0.0, 0.7)
+    healAbsorb:SetFrameLevel(health:GetFrameLevel() + 11)
+    healAbsorb:SetReverseFill(true)
+
     -- Using the Correct 12.0 API Usage
     ---@diagnostic disable-next-line: undefined-global
     if CreateUnitHealPredictionCalculator then
@@ -447,6 +454,7 @@ function UF:CreateHealPrediction(frame)
                 -- 1. Get Values
                 local _, myIncomingHeal, otherIncomingHeal, _ = calculator:GetIncomingHeals()
                 calculator:GetDamageAbsorbs()
+                local healAbsorbAmount = calculator:GetHealAbsorbs() or 0
 
                 -- Support Safe Rendering (Secret Values) using SetValue + Scaling
                 -- We want the bar to represent 0 -> 110% of Health
@@ -486,6 +494,19 @@ function UF:CreateHealPrediction(frame)
                     otherHeal:SetPoint("TOPLEFT", myHeal, "TOPLEFT", 0, 0)
                     otherHeal:SetPoint("BOTTOMLEFT", myHeal, "BOTTOMLEFT", 0, 0)
                 end
+
+                healAbsorb:SetWidth(width)
+                healAbsorb:SetMinMaxValues(0, maxHealthVal)
+                healAbsorb:SetValue(healAbsorbAmount)
+                healAbsorb:ClearAllPoints()
+                if healthTex then
+                    healAbsorb:SetPoint("TOPRIGHT", healthTex, "TOPRIGHT", 0, 0)
+                    healAbsorb:SetPoint("BOTTOMRIGHT", healthTex, "BOTTOMRIGHT", 0, 0)
+                else
+                    healAbsorb:SetPoint("TOPRIGHT", frame.Health, "TOPRIGHT", 0, 0)
+                    healAbsorb:SetPoint("BOTTOMRIGHT", frame.Health, "BOTTOMRIGHT", 0, 0)
+                end
+                healAbsorb:Show()
 
                 -- Absorb Logic (Restricted Environment Safe Mode)
                 -- 1. We cannot check if values are <= 0 or nil (Comparison Crash)

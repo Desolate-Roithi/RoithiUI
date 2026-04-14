@@ -313,15 +313,11 @@ local function GetOrCreateAuraElement(frame, key)
         local debuffStartIndex = iconIndex
         if showDebuffs then
             local debuffQueries = GetSmartFilterQueries("HARMFUL", db)
-            local sortRule = Enum.UnitAuraSortRule.Expiration or 3
-            local instanceIDs = C_UnitAuras.GetUnitAuraInstanceIDs(unit, "HARMFUL", 40, sortRule)
+            local instanceIDs = C_UnitAuras.GetUnitAuraInstanceIDs(unit, "HARMFUL", 40)
 
             if instanceIDs then
+                local validDebuffs = {}
                 for _, auraInstanceID in ipairs(instanceIDs) do
-                    local limitReached = db.separateAuras and ((iconIndex - debuffStartIndex) >= maxIcons) or
-                        (iconIndex > maxIcons)
-                    if limitReached then break end
-
                     local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraInstanceID)
                     if aura and not seenAuras[auraInstanceID] then
                         local passesFilter = false
@@ -334,7 +330,7 @@ local function GetOrCreateAuraElement(frame, key)
 
                         if passesFilter then
                             local isSecretId = issecretvalue(aura.spellId)
-                            local _ = issecretvalue(aura.sourceUnit) -- Removed unused isSecretSrc
+                            local _ = issecretvalue(aura.sourceUnit)
                             local skip = false
 
                             if not skip and db.hideTimeless then
@@ -370,83 +366,118 @@ local function GetOrCreateAuraElement(frame, key)
                             end
 
                             if not skip then
-                                seenAuras[aura.auraInstanceID] = true
-                                local icon = icons[iconIndex] or CreateIcon(iconIndex)
-                                icon:SetSize(size, size)
-                                icon:ClearAllPoints()
-                                -- Dynamic Grow
-                                if iconIndex == 1 then
-                                    icon:SetPoint(anchor1, element, anchor1, 0, 0)
-                                else
-                                    icon:SetPoint(anchor1, icons[iconIndex - 1], relPoint, xSpace, ySpace)
-                                end
-
-                                icon.icon:SetTexture(aura.icon)
-                                local count = aura.applications or 0
-                                local text = ""
-                                if not issecretvalue(count) then
-                                    text = (count > 1) and tostring(count) or ""
-                                end
-                                icon.count:SetText(text)
-
-                                icon.auraInstanceID = auraInstanceID
-                                icon.isDebuff = true
-                                icon.filter = "HARMFUL"
-
-                                -- Color
-                                if _G.DebuffTypeColor and aura.dispelName then
-                                    local color = _G.DebuffTypeColor[aura.dispelName] or _G.DebuffTypeColor["none"]
-                                    if icon.SetBackdropBorderColor then
-                                        icon:SetBackdropBorderColor(color.r, color.g, color
-                                            .b)
-                                    end
-                                    icon.overlay:SetVertexColor(color.r, color.g, color.b)
-                                end
-                                icon.overlay:Show()
-
                                 local durationObj = C_UnitAuras.GetAuraDuration(unit, aura.auraInstanceID)
+                                local remain = 0
+                                local isTimeless = true
                                 if durationObj then
                                     local isZero = durationObj:IsZero()
-                                    local shouldShow = false
-                                    if issecretvalue and issecretvalue(isZero) then
-                                        shouldShow = true
-                                    elseif not isZero then
-                                        shouldShow = true
+                                    if not (issecretvalue and issecretvalue(isZero)) and not isZero then
+                                        isTimeless = false
+                                        pcall(function() remain = durationObj:GetRemainingDuration() or 0 end)
+                                        if issecretvalue and issecretvalue(remain) then remain = 0 end
                                     end
-
-                                    if shouldShow then
-                                        if icon.cd.SetCooldownFromDurationObject then
-                                            icon.cd:SetCooldownFromDurationObject(durationObj)
-                                        end
-                                        icon.cd:Show()
-                                    else
-                                        icon.cd:Hide()
-                                    end
-                                else
-                                    icon.cd:Hide()
-                                end
-                                if C_UnitAuras.IsAuraInRefreshWindow then
-                                    local inWindow = C_UnitAuras.IsAuraInRefreshWindow(unit, aura.auraInstanceID)
-                                    if issecretvalue(inWindow) and icon.GlowFrame.SetShownFromSecret then
-                                        icon.GlowFrame:SetShownFromSecret(inWindow)
-                                    elseif inWindow and inWindow ~= false then
-                                        icon.GlowFrame:Show()
-                                    else
-                                        icon.GlowFrame:Hide()
-                                    end
-                                else
-                                    icon.GlowFrame:Hide()
                                 end
 
-                                logAuraErr("Auras Debug: Created Debuff Icon %d for spellId: %s",
-                                    iconIndex,
-                                    tostring(aura.spellId))
-
-                                icon:Show()
-                                iconIndex = iconIndex + 1
+                                table.insert(validDebuffs, {
+                                    auraInstanceID = auraInstanceID,
+                                    aura = aura,
+                                    durationObj = durationObj,
+                                    remain = remain,
+                                    isTimeless = isTimeless
+                                })
                             end
                         end
                     end
+                end
+
+                table.sort(validDebuffs, function(a, b)
+                    if a.isTimeless and not b.isTimeless then return false end
+                    if not a.isTimeless and b.isTimeless then return true end
+                    return a.remain < b.remain
+                end)
+
+                for _, data in ipairs(validDebuffs) do
+                    local limitReached = db.separateAuras and ((iconIndex - debuffStartIndex) >= maxIcons) or
+                        (iconIndex > maxIcons)
+                    if limitReached then break end
+
+                    local auraInstanceID = data.auraInstanceID
+                    local aura = data.aura
+                    local durationObj = data.durationObj
+
+                    seenAuras[auraInstanceID] = true
+                    local icon = icons[iconIndex] or CreateIcon(iconIndex)
+                    icon:SetSize(size, size)
+                    icon:ClearAllPoints()
+                    
+                    if iconIndex == 1 then
+                        icon:SetPoint(anchor1, element, anchor1, 0, 0)
+                    else
+                        icon:SetPoint(anchor1, icons[iconIndex - 1], relPoint, xSpace, ySpace)
+                    end
+
+                    icon.icon:SetTexture(aura.icon)
+                    local count = aura.applications or 0
+                    local text = ""
+                    if not issecretvalue(count) then
+                        text = (count > 1) and tostring(count) or ""
+                    end
+                    icon.count:SetText(text)
+
+                    icon.auraInstanceID = auraInstanceID
+                    icon.isDebuff = true
+                    icon.filter = "HARMFUL"
+
+                    -- Color
+                    if _G.DebuffTypeColor and aura.dispelName then
+                        local color = _G.DebuffTypeColor[aura.dispelName] or _G.DebuffTypeColor["none"]
+                        if icon.SetBackdropBorderColor then
+                            icon:SetBackdropBorderColor(color.r, color.g, color.b)
+                        end
+                        icon.overlay:SetVertexColor(color.r, color.g, color.b)
+                    end
+                    icon.overlay:Show()
+
+                    if durationObj then
+                        local isZero = durationObj:IsZero()
+                        local shouldShow = false
+                        if issecretvalue and issecretvalue(isZero) then
+                            shouldShow = true
+                        elseif not isZero then
+                            shouldShow = true
+                        end
+
+                        if shouldShow then
+                            if icon.cd.SetCooldownFromDurationObject then
+                                icon.cd:SetCooldownFromDurationObject(durationObj)
+                            end
+                            icon.cd:Show()
+                        else
+                            icon.cd:Hide()
+                        end
+                    else
+                        icon.cd:Hide()
+                    end
+
+                    if C_UnitAuras.IsAuraInRefreshWindow then
+                        local inWindow = C_UnitAuras.IsAuraInRefreshWindow(unit, auraInstanceID)
+                        if issecretvalue(inWindow) and icon.GlowFrame.SetShownFromSecret then
+                            icon.GlowFrame:SetShownFromSecret(inWindow)
+                        elseif inWindow and inWindow ~= false then
+                            icon.GlowFrame:Show()
+                        else
+                            icon.GlowFrame:Hide()
+                        end
+                    else
+                        icon.GlowFrame:Hide()
+                    end
+
+                    if RoithiUI.db.profile.General.debugMode then
+                        RoithiUI:Log(string.format("Auras Debug: Created Debuff Icon %d for spellId: %s", iconIndex, tostring(aura.spellId)))
+                    end
+
+                    icon:Show()
+                    iconIndex = iconIndex + 1
                 end
             end
         end
@@ -456,15 +487,11 @@ local function GetOrCreateAuraElement(frame, key)
         local buffStartIndex = iconIndex
         if showBuffs then
             local buffQueries = GetSmartFilterQueries("HELPFUL", db)
-            local sortRule = Enum.UnitAuraSortRule.Expiration or 3
-            local instanceIDs = C_UnitAuras.GetUnitAuraInstanceIDs(unit, "HELPFUL", 40, sortRule)
+            local instanceIDs = C_UnitAuras.GetUnitAuraInstanceIDs(unit, "HELPFUL", 40)
 
             if instanceIDs then
+                local validBuffs = {}
                 for _, auraInstanceID in ipairs(instanceIDs) do
-                    local limitReached = db.separateAuras and ((iconIndex - buffStartIndex) >= maxIcons) or
-                        (iconIndex > maxIcons)
-                    if limitReached then break end
-
                     local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraInstanceID)
                     if aura and not seenAuras[auraInstanceID] then
                         local passesFilter = false
@@ -513,86 +540,120 @@ local function GetOrCreateAuraElement(frame, key)
                             end
 
                             if not skip then
-                                seenAuras[aura.auraInstanceID] = true
-                                local icon = icons[iconIndex] or CreateIcon(iconIndex)
-                                icon:SetSize(size, size)
-                                icon:ClearAllPoints()
-                                if iconIndex == 1 then
-                                    icon:SetPoint(anchor1, element, anchor1, 0, 0)
-                                    isFirstBuffRendered = true
-                                elseif db.separateAuras and not isFirstBuffRendered then
-                                    isFirstBuffRendered = true
-                                    if growDir == "LEFT" or growDir == "RIGHT" then
-                                        icon:SetPoint(anchor1, element, anchor1, 0, -(size + 4))
-                                    else
-                                        icon:SetPoint(anchor1, element, anchor1, -(size + 4), 0)
-                                    end
-                                else
-                                    icon:SetPoint(anchor1, icons[iconIndex - 1], relPoint, xSpace, ySpace)
-                                    isFirstBuffRendered = true
-                                end
-
-                                icon.icon:SetTexture(aura.icon)
-                                local count = aura.applications or 0
-                                local text = ""
-                                if not issecretvalue(count) then
-                                    text = (count > 1) and tostring(count) or ""
-                                end
-                                icon.count:SetText(text)
-
-                                icon.auraInstanceID = auraInstanceID
-                                icon.isDebuff = false
-                                icon.filter = "HELPFUL"
-
-                                if icon.SetBackdropBorderColor then icon:SetBackdropBorderColor(0, 0, 0) end
-                                icon.overlay:Hide()
-
                                 local durationObj = C_UnitAuras.GetAuraDuration(unit, aura.auraInstanceID)
+                                local remain = 0
+                                local isTimeless = true
                                 if durationObj then
                                     local isZero = durationObj:IsZero()
-                                    local shouldShow = false
-                                    if issecretvalue and issecretvalue(isZero) then
-                                        shouldShow = true
-                                    elseif not isZero then
-                                        shouldShow = true
+                                    if not (issecretvalue and issecretvalue(isZero)) and not isZero then
+                                        isTimeless = false
+                                        pcall(function() remain = durationObj:GetRemainingDuration() or 0 end)
+                                        if issecretvalue and issecretvalue(remain) then remain = 0 end
                                     end
-
-                                    if shouldShow then
-                                        if icon.cd.SetCooldownFromDurationObject then
-                                            icon.cd:SetCooldownFromDurationObject(durationObj)
-                                        end
-                                        icon.cd:Show()
-                                    else
-                                        icon.cd:Hide()
-                                    end
-                                else
-                                    icon.cd:Hide()
                                 end
 
-                                if C_UnitAuras.IsAuraInRefreshWindow then
-                                    local inWindow = C_UnitAuras.IsAuraInRefreshWindow(unit, aura.auraInstanceID)
-                                    if issecretvalue(inWindow) and icon.GlowFrame.SetShownFromSecret then
-                                        icon.GlowFrame:SetShownFromSecret(inWindow)
-                                    elseif inWindow and inWindow ~= false then
-                                        icon.GlowFrame:Show()
-                                    else
-                                        icon.GlowFrame:Hide()
-                                    end
-                                else
-                                    icon.GlowFrame:Hide()
-                                end
-
-                                if RoithiUI.db.profile.General.debugMode then
-                                    RoithiUI:Log(string.format("Auras Debug: Created Buff Icon %d for spellId: %s",
-                                        iconIndex,
-                                        tostring(aura.spellId)))
-                                end
-
-                                icon:Show()
-                                iconIndex = iconIndex + 1
+                                table.insert(validBuffs, {
+                                    auraInstanceID = auraInstanceID,
+                                    aura = aura,
+                                    durationObj = durationObj,
+                                    remain = remain,
+                                    isTimeless = isTimeless
+                                })
                             end
                         end
                     end
+                end
+
+                table.sort(validBuffs, function(a, b)
+                    if a.isTimeless and not b.isTimeless then return false end
+                    if not a.isTimeless and b.isTimeless then return true end
+                    return a.remain < b.remain
+                end)
+
+                for _, data in ipairs(validBuffs) do
+                    local limitReached = db.separateAuras and ((iconIndex - buffStartIndex) >= maxIcons) or
+                        (iconIndex > maxIcons)
+                    if limitReached then break end
+
+                    local auraInstanceID = data.auraInstanceID
+                    local aura = data.aura
+                    local durationObj = data.durationObj
+
+                    seenAuras[auraInstanceID] = true
+                    local icon = icons[iconIndex] or CreateIcon(iconIndex)
+                    icon:SetSize(size, size)
+                    icon:ClearAllPoints()
+                    
+                    if iconIndex == 1 then
+                        icon:SetPoint(anchor1, element, anchor1, 0, 0)
+                        isFirstBuffRendered = true
+                    elseif db.separateAuras and not isFirstBuffRendered then
+                        isFirstBuffRendered = true
+                        if growDir == "LEFT" or growDir == "RIGHT" then
+                            icon:SetPoint(anchor1, element, anchor1, 0, -(size + 4))
+                        else
+                            icon:SetPoint(anchor1, element, anchor1, -(size + 4), 0)
+                        end
+                    else
+                        icon:SetPoint(anchor1, icons[iconIndex - 1], relPoint, xSpace, ySpace)
+                        isFirstBuffRendered = true
+                    end
+
+                    icon.icon:SetTexture(aura.icon)
+                    local count = aura.applications or 0
+                    local text = ""
+                    if not issecretvalue(count) then
+                        text = (count > 1) and tostring(count) or ""
+                    end
+                    icon.count:SetText(text)
+
+                    icon.auraInstanceID = auraInstanceID
+                    icon.isDebuff = false
+                    icon.filter = "HELPFUL"
+
+                    if icon.SetBackdropBorderColor then icon:SetBackdropBorderColor(0, 0, 0) end
+                    icon.overlay:Hide()
+
+                    if durationObj then
+                        local isZero = durationObj:IsZero()
+                        local shouldShow = false
+                        if issecretvalue and issecretvalue(isZero) then
+                            shouldShow = true
+                        elseif not isZero then
+                            shouldShow = true
+                        end
+
+                        if shouldShow then
+                            if icon.cd.SetCooldownFromDurationObject then
+                                icon.cd:SetCooldownFromDurationObject(durationObj)
+                            end
+                            icon.cd:Show()
+                        else
+                            icon.cd:Hide()
+                        end
+                    else
+                        icon.cd:Hide()
+                    end
+
+                    if C_UnitAuras.IsAuraInRefreshWindow then
+                        local inWindow = C_UnitAuras.IsAuraInRefreshWindow(unit, auraInstanceID)
+                        if issecretvalue(inWindow) and icon.GlowFrame.SetShownFromSecret then
+                            icon.GlowFrame:SetShownFromSecret(inWindow)
+                        elseif inWindow and inWindow ~= false then
+                            icon.GlowFrame:Show()
+                        else
+                            icon.GlowFrame:Hide()
+                        end
+                    else
+                        icon.GlowFrame:Hide()
+                    end
+
+                    if RoithiUI.db.profile.General.debugMode then
+                        RoithiUI:Log(string.format("Auras Debug: Created Buff Icon %d for spellId: %s", iconIndex, tostring(aura.spellId)))
+                    end
+
+                    icon:Show()
+                    iconIndex = iconIndex + 1
                 end
             end
         end

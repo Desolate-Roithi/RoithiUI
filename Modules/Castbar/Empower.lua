@@ -60,14 +60,19 @@ local function BuildEmpowerTimeline(unit)
 
     if stagePcts and #stagePcts > 0 then
         totalStages = #stagePcts
+        local accum = 0
         for i, pct in ipairs(stagePcts) do
-            -- Convert 0-1 ratio to 'virtual seconds' if duration is secret,
-            -- or absolute seconds if duration is known.
-            -- This ensures LayoutEmpower (which does absVal/total) always works.
+            -- Convert to 0-1 ratio safely in case the API provides 0-100 integers
+            if pct > 1.0 and totalStages > 1 then
+                pct = pct / 100.0
+            end
+            
             if isSecretDuration then
-                stageEnds[i] = pct -- Store ratio directly
+                accum = accum + pct
+                stageEnds[i] = accum
             else
-                stageEnds[i] = pct * totalDuration -- Store absolute
+                accum = accum + (pct * totalDuration)
+                stageEnds[i] = accum
             end
         end
     elseif stageObjs then
@@ -203,7 +208,9 @@ local function LayoutEmpower(bar)
             c = colors.empower4
         end
 
-        zone:SetColorTexture(c[1], c[2], c[3], c[4])
+        -- Mute the background alpha significantly to provide distinct visual contrast against the actual cast bar filling up
+        local a = c[4] or 1
+        zone:SetColorTexture(c[1], c[2], c[3], a * 0.35)
         zone:Show()
 
         -- 2. Draw Tick (Separator)

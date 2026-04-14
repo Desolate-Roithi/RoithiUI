@@ -41,6 +41,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     "  |cff00ff00@power.percent|r - Power percentage\n" ..
                     "  |cff00ff00@power.missing|r - Missing power\n" ..
                     "  |cff00ff00@absorb|r - Total absorbs\n" ..
+                    "  |cff00ff00@healabsorb|r - Healing absorbs (anti-heal)\n" ..
                     "  |cff00ff00@power.class|r - Class Power (Resources/Runes)\n" ..
                     "  |cff00ff00@power.class.max|r - Max Class Power\n" ..
                     "  |cff00ff00@power.class.percent|r - Class Power %\n" ..
