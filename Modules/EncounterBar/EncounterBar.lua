@@ -160,6 +160,7 @@ local function UpdateFromWidget(s, widgetInfo)
     end
 
     s.Text:SetText(info.barLabel or "")
+    s.hasWidgetID = widgetInfo.widgetID -- Track current source
     s:Show()
 end
 
@@ -175,7 +176,7 @@ local function Update(s)
 
     local barID = UnitPowerBarID("player")
 
-    if not barID then
+    if not barID or barID == 0 then
         s:Hide()
         return
     end
@@ -190,6 +191,10 @@ local function Update(s)
     end
 
     local info = GetUnitPowerBarInfo(barID) or GetUnitPowerBarInfo("player")
+    if not info or (not info.showBar and not s.isInEditMode) then
+        s:Hide()
+        return
+    end
 
     if not info and s.isInEditMode then
         s:SetMinMaxValues(0, 100)
@@ -247,9 +252,15 @@ local function Update(s)
         s:SetStatusBarColor(info.barColor.r, info.barColor.g, info.barColor.b)
     else
         -- Only set default color if we don't already have one from the UIWidget
-        if not s.hasWidgetColor then
-            s:SetStatusBarColor(0.2, 0.6, 1.0) -- Blue fallback instead of pink
+        -- AND the widget that set the color is still active
+        if not s.hasWidgetColor or (s.hasWidgetID == nil) then
+            s:SetStatusBarColor(0.2, 0.6, 1.0) -- Blue fallback
         end
+    end
+
+    -- Final Safety: If we have no data and no text, don't show an empty bar
+    if (not nameText or nameText == "") and currentStr == "" then
+        s:Hide()
     end
 end
 
@@ -265,6 +276,8 @@ local function OnEvent(s, event, arg1, arg2)
     -- UNIT_POWER_BAR_HIDE → immediate hide
     if event == "UNIT_POWER_BAR_HIDE" then
         if arg1 == nil or arg1 == "player" then
+            s.hasWidgetID = nil
+            s.hasWidgetColor = false
             s:Hide()
         end
         return
