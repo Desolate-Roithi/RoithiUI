@@ -2,9 +2,16 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.0)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v1.2.0  
-**Last Updated:** 2026-04-15  
+**Latest Version:** v1.3.0  
+**Last Updated:** 2026-04-22  
 **Compatibility:** WoW 12.0.1 (Midnight)
+
+## 🆕 Recent Updates (v1.3.0)
+
+* **Vehicle UI Stabilization**: Resolved persistent race conditions during vehicle entry/exit. Units now correctly display names, health, and power values immediately upon transition.
+* **Encounter Bar Module**: A new modular bar for world widgets (Oxygen, Scenario Progress, etc.). Fully integrated with **Edit Mode** for custom positioning and scaling.
+* **Scenario Blacklisting**: Intelligent automatic suppression of the UI in specific scenarios like *Prop Hunt*, *Hide and Seek*, and *Decor Duel* to keep the screen clutter-free.
+* **Secure Visibility Management**: Refactored Blizzard frame hiding logic to be more resilient against 12.0.1 "Secret" value taint.
 
 ## 🚀 Key Features
 
