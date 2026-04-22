@@ -146,6 +146,16 @@ local function UpdateFromWidget(s, widgetInfo)
     if not info or info.shownState == Enum.WidgetShownState.Hidden then
         -- Only hide the custom bar if the legacy PlayerPowerBarAlt path is also inactive
         if not UnitPowerBarID("player") then
+            s.hasWidgetID = nil
+            s:Hide()
+        end
+        return
+    end
+
+    -- Fix: Hide if the widget has no maximum value (e.g. Zone labels)
+    if not info.barMax or info.barMax <= 0 then
+        s.hasWidgetID = nil
+        if not UnitPowerBarID("player") then
             s:Hide()
         end
         return
@@ -279,7 +289,7 @@ local function Update(s)
     end
 
     -- Final Safety: If we have no data and no text, don't show an empty bar
-    if (not nameText or nameText == "") and currentStr == "" then
+    if (not nameText or nameText == "") and (not currentStr or currentStr == "") then
         s:Hide()
     end
 end
