@@ -131,6 +131,15 @@ local function UpdateFromWidget(s, widgetInfo)
         return
     end
 
+    -- Scenario Blacklist (Prop Hunt, etc.)
+    if C_Scenario.IsInScenario() then
+        local name = C_Scenario.GetInfo()
+        if name and (name:find("Prop Hunt") or name:find("Hide and Seek") or name:find("Decor Duel")) then
+            s:Hide()
+            return
+        end
+    end
+
     if not info and debugMode then
         RoithiUI:Log("RoithiUI DEBUG [UpdateFromWidget] VisualizationInfo returned nil for ID " .. tostring(widgetInfo.widgetID))
     end
@@ -169,6 +178,15 @@ local function Update(s)
     if not barID then
         s:Hide()
         return
+    end
+
+    -- Scenario Blacklist (Prop Hunt, etc.)
+    if C_Scenario.IsInScenario() then
+        local name = C_Scenario.GetInfo()
+        if name and (name:find("Prop Hunt") or name:find("Hide and Seek") or name:find("Decor Duel")) then
+            s:Hide()
+            return
+        end
     end
 
     local info = GetUnitPowerBarInfo(barID) or GetUnitPowerBarInfo("player")
@@ -270,7 +288,8 @@ local function OnEvent(s, event, arg1, arg2)
     -- arg1 is the widgetInfo table: { widgetSetID, widgetID, widgetType, unit }
     if event == "UPDATE_UI_WIDGET" then
         if debugMode then
-            RoithiUI:Log("RoithiUI DEBUG [OnEvent] UPDATE_UI_WIDGET fired, widgetID: " .. tostring(arg1 and arg1.widgetID))
+            RoithiUI:Log(string.format("RoithiUI DEBUG [OnEvent] UPDATE_UI_WIDGET fired | ID: %s | SetID: %s", 
+                tostring(arg1 and arg1.widgetID), tostring(arg1 and arg1.widgetSetID)))
         end
         UpdateFromWidget(s, arg1)
         return
