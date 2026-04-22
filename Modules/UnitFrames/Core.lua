@@ -23,7 +23,6 @@ local oUF = ns.oUF or _G.oUF
 ---@field CreateRange fun(self: UF, frame: table)
 ---@field CreateClassPower fun(self: UF, frame: table)
 ---@field CreateAdditionalPower fun(self: UF, frame: table)
----@field CreateEncounterResource fun(self: UF, frame: table)
 ---@field UpdateFrameFromSettings fun(self: UF, unit: string)
 ---@field ToggleFrame fun(self: UF, unit: string, enabled: boolean)
 ---@field InitializeUnits fun(self: UF)
@@ -42,6 +41,11 @@ local function Shared(self, unit)
     self:RegisterForClicks("AnyUp")
     self:SetAttribute("type1", "target")
     self:SetAttribute("type2", "togglemenu")
+
+    -- Enable vehicle switching for player/pet
+    if unit == "player" or unit == "pet" then
+        self:SetAttribute("toggleForVehicle", true)
+    end
 
     -- 2. Backdrop
     if not self.SetBackdrop then

@@ -49,8 +49,14 @@ local DBKeyMap = {
 -- 2. State Helpers
 -- ----------------------------------------------------------------------------
 
--- Helper to safe-get the DB for a specific element
+function AL:GetLookupUnit(unit)
+    if unit == "vehicle" then return "player" end
+    return unit
+end
+
+-- Get settings for a specific unit element
 function AL:GetElementDB(unit, frameType)
+    unit = self:GetLookupUnit(unit)
     if frameType == "Castbar" then
         return RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
     elseif frameType:match("^CustomAura_") then
@@ -98,8 +104,9 @@ function AL:IsActive(unit, frameType)
     if frameType == "UnitFrame" then return true end
 
     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+    local lookupUnit = self:GetLookupUnit(unit)
     ---@diagnostic disable-next-line: undefined-field
-    local frame = UF and UF.units and UF.units[unit]
+    local frame = UF and UF.units and UF.units[lookupUnit]
     if not frame then return false end
 
     if frameType == "Castbar" then
@@ -131,8 +138,9 @@ function AL:GetValidAnchor(unit, frameType)
     if not hierarchy then return nil end
 
     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+    local lookupUnit = self:GetLookupUnit(unit)
     ---@diagnostic disable-next-line: undefined-field
-    local uFrame = UF and UF.units and UF.units[unit]
+    local uFrame = UF and UF.units and UF.units[lookupUnit]
     if not uFrame then return nil end
 
     -- Iterate backwards (Highest Priority first)
@@ -218,8 +226,8 @@ end
 function AL:ApplyLayout(unit, frameType)
     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
     ---@diagnostic disable-next-line: undefined-field
-    local uFrame = UF and UF.units and UF.units[unit]
-    if not uFrame then return end
+    local lookupUnit = self:GetLookupUnit(unit)
+    local uFrame = UF and UF.units and UF.units[lookupUnit]
 
     local frame
     if frameType == "Castbar" then
@@ -231,6 +239,11 @@ function AL:ApplyLayout(unit, frameType)
         local id = frameType:match("^CustomAura_(.+)")
         frame = RoithiUI.CustomAuras and RoithiUI.CustomAuras[id]
     else
+        -- UnitFrame Satellite
+        if not uFrame then
+            -- Fallback for standalone/detached elements without a unit frame
+            return
+        end
         local mappedKey = ElementMap[frameType]
         if mappedKey then
             frame = uFrame[mappedKey]
@@ -241,6 +254,9 @@ function AL:ApplyLayout(unit, frameType)
 
     local db = self:GetElementDB(unit, frameType)
     local isDetached = self:IsDetached(unit, frameType)
+
+    -- Force detached if no unit frame exists to anchor to
+    if not uFrame then isDetached = true end
 
     if frameType == "AdditionalPower" and RoithiUI.db.profile.General.debugMode then
         RoithiUI:Log(string.format("AL Debug: ApplyLayout %s | Detached: %s", frameType, tostring(isDetached)))
@@ -334,7 +350,7 @@ function AL:ApplyLayout(unit, frameType)
     else
         -- ATTACHED: Anchor to valid parent
         frame:SetMovable(false)
-        local anchor = self:GetValidAnchor(unit, frameType)
+        local anchor = uFrame and self:GetValidAnchor(unit, frameType)
         if anchor then
             frame:SetParent(anchor)
             if frameType == "Auras" or frameType:match("^RoithiAuras_") or frameType:match("^CustomAura_") then

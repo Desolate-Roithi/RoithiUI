@@ -766,10 +766,14 @@ ns.Defaults = {
             TargetTargetFrame = true,
         },
         EncounterResource = {
-            enabled = true,
-            point = "TOP",
-            x = 0,
-            y = -100,
+            enabled  = true,
+            width    = 250,
+            height   = 20,
+            fontSize = 12,
+            texture  = "Solid",
+            point    = "TOP",
+            x        = 0,
+            y        = -100,
         },
         General = {
             Theme = "Class",

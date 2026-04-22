@@ -126,9 +126,9 @@ end
 -- 2. Update Logic
 -- ----------------------------------------------------------------------------
 
-function ns.UpdateCast(bar)
-    local unit = bar.unit
-    local db = RoithiUI.db.profile.Castbar[unit]
+function ns.UpdateCast(bar, unitOverride)
+    local unit = unitOverride or bar.unit
+    local db = RoithiUI.db.profile.Castbar[bar.unit] -- Always use the bar's own DB for sizing/config
     if not db or not db.enabled then
         bar:Hide(); bar:SetScript("OnUpdate", nil)
         return

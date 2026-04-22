@@ -90,6 +90,32 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
         end)
     end
 
+    -- Vehicle Refresh Hook for Player/Pet
+    if unit == "player" or unit == "pet" then
+        local function DelayedRefresh(event)
+            C_Timer.After(0.5, function()
+                -- Ensure frame.unit is in sync with the current secure unit
+                if frame.GetAttribute then
+                    local currentUnit = frame:GetAttribute("unit")
+                    if currentUnit and currentUnit ~= frame.unit then
+                        frame.unit = currentUnit
+                    end
+                end
+
+                if frame.UpdateAllElements then frame:UpdateAllElements(event) end
+                if frame.UpdateTags then frame:UpdateTags() end
+                if frame.UpdateAuras then frame:UpdateAuras() end
+            end)
+        end
+
+        frame:RegisterEvent("UNIT_ENTERED_VEHICLE", function(_, event) DelayedRefresh(event) end)
+        frame:RegisterEvent("UNIT_EXITED_VEHICLE", function(_, event) DelayedRefresh(event) end)
+        frame:RegisterEvent("UNIT_MODEL_CHANGED", function(_, event, arg1) if arg1 == unit then DelayedRefresh(event) end end)
+        frame:RegisterEvent("UNIT_PORTRAIT_UPDATE", function(_, event, arg1) if arg1 == unit then DelayedRefresh(event) end end)
+        frame:RegisterEvent("UNIT_POWER_BAR_SHOW", function(_, event) DelayedRefresh(event) end)
+        frame:RegisterEvent("UNIT_POWER_BAR_HIDE", function(_, event) DelayedRefresh(event) end)
+    end
+
     return frame
 end
 
@@ -288,7 +314,6 @@ function UF:CreateStandardLayout(unit, name, skipEditMode)
 
     self:CreateClassPower(frame)
     self:CreateAdditionalPower(frame)
-    self:CreateEncounterResource(frame)
     local TM = self.TagManager
     if TM then
         self:UpdateTags(frame) -- Build tags from DB

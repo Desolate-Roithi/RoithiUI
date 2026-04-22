@@ -50,6 +50,12 @@ function RoithiUI:OnInitialize()
     -- Initialize AceDB
     self.db = LibStub("AceDB-3.0"):New("RoithiUIDB", ns.Defaults, true)
 
+    -- Create a hidden parent for Blizzard frames
+    if not self.HiddenFrame then
+        self.HiddenFrame = CreateFrame("Frame")
+        self.HiddenFrame:Hide()
+    end
+
     -- Register Profile Callbacks
     self.db.RegisterCallback(self, "OnProfileChanged", "RefreshProfile")
     self.db.RegisterCallback(self, "OnProfileCopied", "RefreshProfile")

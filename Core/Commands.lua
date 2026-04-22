@@ -106,6 +106,9 @@ end
 
 function RoithiUI:ChatCommandDebug()
     self.debug = not self.debug
+    if self.db and self.db.profile and self.db.profile.General then
+        self.db.profile.General.debugMode = self.debug
+    end
     self:Print("Debug: " .. (self.debug and "|cff00ff00Enabled|r" or "|cffff0000Disabled|r"))
 end
 

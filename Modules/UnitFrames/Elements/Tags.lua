@@ -558,14 +558,20 @@ end
 -- ----------------------------------------------------------------------------
 function UF:CreateTags(frame)
     if not frame.Tags then frame.Tags = {} end
+    frame.UpdateTags = function() self:UpdateTags(frame) end
 end
 
 function UF:UpdateTags(frame)
     local unit = frame.unit
+    if unit == "player" and UnitHasVehicleUI("player") then
+        unit = "vehicle"
+    end
 
     -- Boss Inheritance: Boss 2-5 use Boss 1 settings
     local dbUnit = unit
-    if unit and unit:match("^boss[2-5]$") then
+    if unit == "vehicle" then
+        dbUnit = "player" -- Fallback to player settings for vehicle
+    elseif unit and unit:match("^boss[2-5]$") then
         dbUnit = "boss1"
     end
 
@@ -743,10 +749,14 @@ function UF:EnableTags(frame)
         -- Use UnitIsUnit to handle dynamic units (e.g., targettarget == player)
         local match = unit and frame.unit and (unit == frame.unit or UnitIsUnit(unit, frame.unit))
         if (issecretvalue and issecretvalue(match)) or match then
-            UpdateTags()
+            if event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
+                C_Timer.After(0.5, UpdateTags)
+            else
+                UpdateTags()
+            end
             -- Context Switch Events
-        elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then
-            UpdateTags()
+        elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" or event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
+            C_Timer.After(0.5, UpdateTags)
         elseif event == "UNIT_TARGET" then
             UpdateTags()
         end
@@ -768,6 +778,8 @@ function UF:EnableTags(frame)
         listener:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
         listener:RegisterEvent("UNIT_HEAL_ABSORB_AMOUNT_CHANGED")
         listener:RegisterEvent("UNIT_AURA") -- Added for ClassPower Aura tags
+        listener:RegisterEvent("UNIT_ENTERED_VEHICLE")
+        listener:RegisterEvent("UNIT_EXITED_VEHICLE")
     end
 
     -- Context events for target switching (Must be declared unitless)

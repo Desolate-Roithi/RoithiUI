@@ -38,7 +38,7 @@ local function Update(self, event, unit)
     elseif (element.colorDisconnected and not UnitIsConnected(unit)) then
         local t = element.colors.disconnected
         element:SetStatusBarColor(t.r, t.g, t.b)
-    elseif (element.colorClass and UnitIsPlayer(unit)) then
+    elseif (element.colorClass and UnitIsPlayer(unit) and not UnitHasVehicleUI(unit)) then
         local _, class = UnitClass(unit)
         local t = element.colors.class[class]
         if t then
@@ -46,7 +46,7 @@ local function Update(self, event, unit)
         else
             element:SetStatusBarColor(1, 1, 1)                          -- Fallback
         end
-    elseif (element.colorReaction and UnitIsPlayer(unit) == false) then -- check Reaction
+    elseif (element.colorReaction and (UnitIsPlayer(unit) == false or UnitHasVehicleUI(unit))) then -- check Reaction
         local reaction = UnitReaction(unit, "player")
         if reaction then
             local t = element.colors.reaction[reaction]

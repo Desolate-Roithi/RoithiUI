@@ -51,10 +51,12 @@ end
 local function GetElementDB(frame, key)
     if key:match("^RoithiAuras") then
         -- Standard Unit Frame DB
-        if not frame or not frame.unit then return {} end
-        if string.match(frame.unit, "^boss[2-5]$") and RoithiUI.db.profile.UnitFrames["boss1"] then
+        local dbUnit = frame.unit
+        if dbUnit == "vehicle" then dbUnit = "player" end
+
+        if string.match(dbUnit, "^boss[2-5]$") and RoithiUI.db.profile.UnitFrames["boss1"] then
             -- Logic to inherit from Boss1
-            local db = RoithiUI.db.profile.UnitFrames[frame.unit] or {}
+            local db = RoithiUI.db.profile.UnitFrames[dbUnit] or {}
             local driverDB = RoithiUI.db.profile.UnitFrames["boss1"]
             local keys = {
                 "aurasEnabled", "auraSize", "auraSpacing", "maxAuras", "Whitelist",
@@ -82,7 +84,7 @@ local function GetElementDB(frame, key)
                 end
             })
         end
-        return RoithiUI.db.profile.UnitFrames[frame.unit] or {}
+        return RoithiUI.db.profile.UnitFrames[dbUnit] or {}
     else
         -- Custom Aura DB
         local id = key:match("^CustomAura_Buffs_(.+)")
@@ -848,13 +850,15 @@ function UF:CreateAuras(frame)
     frame:HookScript("OnEvent", function(s, event, arg1)
         if event == "UNIT_AURA" then
             if arg1 == s.unit then frame.UpdateAuras() end
-        elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then
-            frame.UpdateAuras()
+        elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" or event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
+            C_Timer.After(0.5, frame.UpdateAuras)
         end
     end)
     frame:RegisterEvent("UNIT_AURA", frame.UpdateAuras)
     frame:RegisterEvent("PLAYER_TARGET_CHANGED", frame.UpdateAuras, true)
     frame:RegisterEvent("PLAYER_FOCUS_CHANGED", frame.UpdateAuras, true)
+    frame:RegisterEvent("UNIT_ENTERED_VEHICLE", frame.UpdateAuras)
+    frame:RegisterEvent("UNIT_EXITED_VEHICLE", frame.UpdateAuras)
 
     frame:HookScript("OnShow", frame.UpdateAuras)
 end
@@ -865,8 +869,15 @@ function UF:UpdateAuras(frame)
         return
     end
 
+    -- Force vehicle detection for player frame
+    if frame.unit == "player" and UnitHasVehicleUI("player") then
+        frame.unit = "vehicle"
+    end
+
     -- 1. Update Base
-    local baseDB = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
+    local dbUnit = frame.unit
+    if dbUnit == "vehicle" then dbUnit = "player" end
+    local baseDB = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[dbUnit]
 
     local el = GetOrCreateAuraElement(frame, "RoithiAuras")
     frame.RoithiAuras = el

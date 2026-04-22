@@ -17,6 +17,7 @@
     <Script file="Config/LEMConfig/UnitFrames.lua"/>
     <Script file="Config/LEMConfig/BossFrames.lua"/>
     <Script file="Config/LEMConfig/Castbars.lua"/>
+    <Script file="Config/LEMConfig/EncounterBar.lua"/>
     <Script file="Config/Options.lua"/>
 
 
@@ -35,12 +36,14 @@
     <Script file="Modules/UnitFrames/Elements/Fader.lua"/>
     <Script file="Modules/UnitFrames/Elements/ClassPower.lua"/>
     <Script file="Modules/UnitFrames/Elements/AdditionalPower.lua"/>
-    <Script file="Modules/UnitFrames/Elements/EncounterResource.lua"/>
     <Script file="Modules/UnitFrames/Boss.lua"/>
     <Script file="Modules/UnitFrames/Units.lua"/>
     
     <!-- Profile Sharing -->
     <Script file="Modules/ProfileSharing.lua"/>
+    
+    <!-- Encounter Bar -->
+    <Script file="Modules/EncounterBar/EncounterBar.lua"/>
     
     <!-- Timers (Removed) -->
 

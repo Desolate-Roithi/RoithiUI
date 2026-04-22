@@ -603,26 +603,7 @@ local function GetOptions()
                         end,
                         width = "full",
                     },
-                    utilityFrames = {
-                        type = "toggle",
-                        name = L["Encounter Resource Bar"],
-                        desc  = L["Toggle the Encounter Resource Bar (e.g., Vigor)."],
-                        order = 12,
-                        get = function()
-                            local db = RoithiUI.db.profile
-                            return db.EncounterResource and db.EncounterResource.enabled
-                        end,
-                        set = function(_, v)
-                            local db = RoithiUI.db.profile
-                            if not db.EncounterResource then db.EncounterResource = {} end
-                            db.EncounterResource.enabled = v
 
-                            -- Update Live
-                            local ufModule = RoithiUI:GetModule("UnitFrames")
-                            if ufModule and ufModule.ToggleEncounterResource then ufModule:ToggleEncounterResource(v) end
-                        end,
-                        width = "full",
-                    },
                     debugMode = {
                         type = "toggle",
                         name = L["|cffff0000Debug Mode|r"],
@@ -657,6 +638,117 @@ local function GetOptions()
                 },
             },
             auras = GetGlobalAuraOptions(),
+            encounterbar = {
+                type = "group",
+                name = L["Encounter Resource Bar"],
+                order = 5,
+                args = {
+                    intro = {
+                        type = "description",
+                        name = L["Configure the custom Encounter Resource Bar. Position it via LibEditMode (Edit Mode)."],
+                        order = 0,
+                    },
+                    enabled = {
+                        type = "toggle",
+                        name = L["Enable"],
+                        desc  = L["Show the custom encounter resource bar (hides the Blizzard default)."],
+                        order = 1,
+                        width = "full",
+                        get = function()
+                            local db = RoithiUI.db.profile.EncounterResource
+                            return db and db.enabled
+                        end,
+                        set = function(_, v)
+                            local db = RoithiUI.db.profile
+                            if not db.EncounterResource then db.EncounterResource = {} end
+                            db.EncounterResource.enabled = v
+                            local EB = RoithiUI:GetModule("EncounterBar")
+                            if EB and EB.Toggle then EB:Toggle(v) end
+                        end,
+                    },
+                    sizeGroup = {
+                        type = "group",
+                        name = L["Size"],
+                        order = 10,
+                        inline = true,
+                        args = {
+                            width = {
+                                type = "range",
+                                name = L["Width"],
+                                order = 1,
+                                min = 50, max = 700, step = 1,
+                                get = function() return (RoithiUI.db.profile.EncounterResource or {}).width or 250 end,
+                                set = function(_, v)
+                                    local db = RoithiUI.db.profile.EncounterResource
+                                    if db then db.width = v end
+                                    local bar = _G.RoithiEncounterResource
+                                    if bar then bar:SetWidth(v) end
+                                end,
+                            },
+                            height = {
+                                type = "range",
+                                name = L["Height"],
+                                order = 2,
+                                min = 4, max = 60, step = 1,
+                                get = function() return (RoithiUI.db.profile.EncounterResource or {}).height or 20 end,
+                                set = function(_, v)
+                                    local db = RoithiUI.db.profile.EncounterResource
+                                    if db then db.height = v end
+                                    local bar = _G.RoithiEncounterResource
+                                    if bar then bar:SetHeight(v) end
+                                end,
+                            },
+                        },
+                    },
+                    fontGroup = {
+                        type = "group",
+                        name = L["Text"],
+                        order = 20,
+                        inline = true,
+                        args = {
+                            fontSize = {
+                                type = "range",
+                                name = L["Font Size"],
+                                order = 1,
+                                min = 6, max = 24, step = 1,
+                                get = function() return (RoithiUI.db.profile.EncounterResource or {}).fontSize or 12 end,
+                                set = function(_, v)
+                                    local db = RoithiUI.db.profile.EncounterResource
+                                    if db then db.fontSize = v end
+                                    local bar = _G.RoithiEncounterResource
+                                    if bar and bar.Text then
+                                        local LibR = LibStub("LibRoithi-1.0")
+                                        if LibR then LibR.mixins:SetFont(bar.Text, "Friz Quadrata TT", v, "OUTLINE") end
+                                    end
+                                end,
+                            },
+                            texture = {
+                                type = "select",
+                                dialogControl = "LSM30_Statusbar",
+                                name = L["Bar Texture"],
+                                order = 2,
+                                values = function() return GetLSMKeys("statusbar") end,
+                                get = function() return (RoithiUI.db.profile.EncounterResource or {}).texture or "Solid" end,
+                                set = function(_, v)
+                                    local db = RoithiUI.db.profile.EncounterResource
+                                    if db then db.texture = v end
+                                    local bar = _G.RoithiEncounterResource
+                                    if bar then
+                                        bar:SetStatusBarTexture(
+                                            LSM:Fetch("statusbar", v) or "Interface\\TargetingFrame\\UI-StatusBar"
+                                        )
+                                    end
+                                end,
+                            },
+                        },
+                    },
+                    posNote = {
+                        type = "description",
+                        name = L["\n|cffffd100Tip:|r Use Edit Mode (default key: Alt+C) to drag and reposition the bar on screen."],
+                        order = 30,
+                    },
+                },
+            },
             profiles = profileOptions,
         },
     }

@@ -148,13 +148,7 @@ function ns.UpdateBlizzardVisibility()
             -- But standard code might SetAlpha(1).
             -- Let's try explicit Unregister if Safe, but user reported failure.
             -- We'll try SetParent(Hidden) approach if possible, but SetAlpha is safest for 12.0.1
-
-            -- Actually, if we just Unregister "OnEvent", that stops it?
-            -- Let's try Unregister for key events only, and Re-Register them.
-            -- Events: UNIT_SPELLCAST_START, STOP, CHANNEL_START, STOP, DELAYED, INTERRUPTED
-            -- But there are many.
-
-            -- COMPROMISE: We will just Hide it and Hook Show.
+            -- Restore to standard Hide approach
             if not frame.RoithiHooked then
                 hooksecurefunc(frame, "Show", function(self)
                     if self.shouldBeHiddenRoithi then
@@ -167,20 +161,8 @@ function ns.UpdateBlizzardVisibility()
             frame:Hide()
         else
             frame.shouldBeHiddenRoithi = false
-            -- If it was hidden, let it be shown by game engine when needed.
             frame:SetAlpha(1)
-            if frame.EnableMouse then frame:EnableMouse(true) end
-
-            -- FIX: Restoration if currently casting
-            -- We assume frame unit based on frame name or similar?
-            -- frame.unit usually exists on CastBars
-            local u = frame.unit or (frame.GetUnit and frame:GetUnit()) or "player"
-            -- PlayerCastingBarFrame doesn't have .unit usually? It watches 'player'.
-            if frame == PlayerCastingBarFrame or frame == PlayerFrame.Spellbar then u = "player" end
-
-            if u and (UnitCastingInfo(u) or UnitChannelInfo(u)) then
-                frame:Show()
-            end
+            frame:Show()
         end
     end
 
@@ -201,6 +183,11 @@ function ns.UpdateBlizzardVisibility()
     local playerBar = PlayerFrame.Spellbar or PlayerCastingBarFrame
     if playerBar then
         ToggleBlizzBar(playerBar, db.player and db.player.enabled)
+    end
+
+    -- Pet / Vehicle
+    if _G.PetCastingBarFrame then
+        ToggleBlizzBar(_G.PetCastingBarFrame, db.pet and db.pet.enabled)
     end
 end
 
@@ -293,15 +280,22 @@ function Castbar:OnEnable()
             ns.SetCastbarAttachment("pet", not isDetached)
         else
             local unit = ...
-            if ns.bars[unit] then
+            local targetBar = ns.bars[unit]
+            
+            -- Vehicle Aliasing: Map vehicle/pet casts to player bar if needed
+            if unit == "vehicle" then
+                targetBar = ns.bars["player"]
+            end
+
+            if targetBar then
                 if event == "UNIT_SPELLCAST_INTERRUPTED" then
-                    ns.HandleInterrupt(ns.bars[unit])
+                    ns.HandleInterrupt(targetBar)
                 elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
-                    if not ns.bars[unit].isInterrupted and not ns.bars[unit].isInEditMode then
-                        ns.bars[unit]:Hide(); ns.bars[unit]:SetScript("OnUpdate", nil)
+                    if not targetBar.isInterrupted and not targetBar.isInEditMode then
+                        targetBar:Hide(); targetBar:SetScript("OnUpdate", nil)
                     end
                 else
-                    ns.UpdateCast(ns.bars[unit])
+                    ns.UpdateCast(targetBar, unit)
                 end
             end
         end
