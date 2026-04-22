@@ -159,11 +159,11 @@ local function UpdateFromWidget(s, widgetInfo)
 
     -- Verify this widget belongs to the Unit Power Bar set
     -- This filters out Zone labels (Dragon Isles), Quest info, etc.
-    local powerBarSetID = C_UIWidgetManager.GetUnitPowerBarWidgetSetID()
-    if widgetInfo.widgetSetID ~= powerBarSetID and not s.isInEditMode then
-        -- Special exception for specific scenarios if they don't use the standard set
-        -- But for now, strict set matching is the cleanest fix.
-        return
+    if C_UIWidgetManager.GetUnitPowerBarWidgetSetID then
+        local powerBarSetID = C_UIWidgetManager.GetUnitPowerBarWidgetSetID()
+        if powerBarSetID and widgetInfo.widgetSetID ~= powerBarSetID and not s.isInEditMode then
+            return
+        end
     end
 
     -- Scenario Blacklist (Prop Hunt, etc.)
