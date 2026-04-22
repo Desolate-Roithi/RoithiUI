@@ -18,6 +18,9 @@ local BLACKLISTED_KEYWORDS = {
     ["Prop Hunt"] = true,
     ["Hide and Seek"] = true,
     ["Decor Duel"] = true,
+    ["Dragon Isles"] = true,
+    ["Dragonriding"] = true,
+    ["Vigor"] = true,
 }
 
 local function IsBarBlacklisted(text)
@@ -149,6 +152,15 @@ local function UpdateFromWidget(s, widgetInfo)
         return
     end
 
+    -- Verify this widget belongs to the Unit Power Bar set
+    -- This filters out Zone labels (Dragon Isles), Quest info, etc.
+    local powerBarSetID = C_UIWidgetManager.GetUnitPowerBarWidgetSetID()
+    if widgetInfo.widgetSetID ~= powerBarSetID and not s.isInEditMode then
+        -- Special exception for specific scenarios if they don't use the standard set
+        -- But for now, strict set matching is the cleanest fix.
+        return
+    end
+
     -- Scenario Blacklist (Prop Hunt, etc.)
     if C_Scenario.IsInScenario() then
         local name = C_Scenario.GetInfo()
@@ -246,6 +258,12 @@ local function Update(s)
         return
     end
 
+    -- STRICT REQUIREMENT: Hide if no name exists (background mechanics)
+    if (not nameText or nameText == "") and not s.isInEditMode then
+        s:Hide()
+        return
+    end
+
     if not info or (not info.showBar and not s.isInEditMode) then
         s:Hide()
         return
@@ -302,12 +320,11 @@ local function Update(s)
         s:Hide()
     end
 
-    -- Color: use bar-defined color, fall back to purple
+    -- Color: use bar-defined color, fall back to Deep Sky Blue
     if info and info.barColor then
         s:SetStatusBarColor(info.barColor.r, info.barColor.g, info.barColor.b)
     else
-        -- Only set default color if we don't already have one from the UIWidget
-        -- AND the widget that set the color is still active
+        -- If we don't have a widget color OR it's a legacy power bar, use blue
         if not s.hasWidgetColor or (s.hasWidgetID == nil) then
             s:SetStatusBarColor(0, 0.75, 1.0) -- 00BFFF Deep Sky Blue
         end
