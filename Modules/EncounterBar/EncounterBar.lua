@@ -11,6 +11,24 @@ local EB = RoithiUI:NewModule("EncounterBar", "AceEvent-3.0")
 local ALTERNATE_POWER_INDEX = 10
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Blacklists
+-- ─────────────────────────────────────────────────────────────────────────────
+local BLACKLISTED_KEYWORDS = {
+    ["Singularity Anchor"] = true,
+    ["Prop Hunt"] = true,
+    ["Hide and Seek"] = true,
+    ["Decor Duel"] = true,
+}
+
+local function IsBarBlacklisted(text)
+    if not text or text == "" then return false end
+    for keyword in pairs(BLACKLISTED_KEYWORDS) do
+        if text:find(keyword) then return true end
+    end
+    return false
+end
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Blizzard PlayerPowerBarAlt toggle helper
 -- Suppresses the native bar while our custom one is active.
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -169,7 +187,14 @@ local function UpdateFromWidget(s, widgetInfo)
         s.hasWidgetColor = true
     end
 
-    s.Text:SetText(info.barLabel or info.text or "")
+    local nameText = info.barLabel or info.text or ""
+    if IsBarBlacklisted(nameText) then
+        s.hasWidgetID = nil
+        s:Hide()
+        return
+    end
+
+    s.Text:SetText(nameText)
     s.hasWidgetID = widgetInfo.widgetID -- Track current source
     s:Show()
 end
@@ -211,16 +236,16 @@ local function Update(s)
         return
     end
 
-    -- Scenario Blacklist (Prop Hunt, etc.)
-    if C_Scenario.IsInScenario() then
-        local name = C_Scenario.GetInfo()
-        if name and (name:find("Prop Hunt") or name:find("Hide and Seek") or name:find("Decor Duel")) then
-            s:Hide()
-            return
-        end
+    local info = GetUnitPowerBarInfo(barID) or GetUnitPowerBarInfo("player")
+    local nameText = info and (info.name or info.barLabel) or ""
+
+    -- Unified Blacklist Check (Scenario Name & Bar Name)
+    local scenarioName = C_Scenario.IsInScenario() and C_Scenario.GetInfo() or ""
+    if IsBarBlacklisted(nameText) or IsBarBlacklisted(scenarioName) then
+        s:Hide()
+        return
     end
 
-    local info = GetUnitPowerBarInfo(barID) or GetUnitPowerBarInfo("player")
     if not info or (not info.showBar and not s.isInEditMode) then
         s:Hide()
         return
