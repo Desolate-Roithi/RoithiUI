@@ -8,11 +8,10 @@ externals:
   Libs/LibRangeCheck-3.0: https://github.com/WeakAuras/LibRangeCheck-3.0.git
   Libs/LibDualSpec-1.0: https://github.com/AdiAddons/LibDualSpec-1.0.git
   Libs/oUF: https://github.com/oUF-wow/oUF.git
-
   # WoWAce
-  Libs/CallbackHandler-1.0: https://repos.wowace.com/wow/callbackhandler/trunk/CallbackHandler-1.0
-  Libs/LibSharedMedia-3.0: https://repos.wowace.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0
-  Libs/AceGUI-3.0-SharedMediaWidgets: https://repos.wowace.com/wow/ace-gui-3-0-shared-media-widgets/trunk
+  Libs/CallbackHandler-1.0: https://repos.curseforge.com/wow/callbackhandler/trunk/CallbackHandler-1.0
+  Libs/LibSharedMedia-3.0: https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0
+  Libs/AceGUI-3.0-SharedMediaWidgets: https://repos.curseforge.com/wow/ace-gui-3-0-shared-media-widgets/trunk/AceGUI-3.0-SharedMediaWidgets
 
 ignore:
   - .gitignore
@@ -28,5 +27,6 @@ changelog:
     # Changelog for @project-version@
     @debug@
     @commits-short@
+
 move-folders:
   RoithiUI-Dev: RoithiUI
