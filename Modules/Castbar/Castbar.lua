@@ -195,7 +195,7 @@ function ns.UpdateCast(bar, unitOverride)
     -- ------------------------------------------------------------------------
     -- B. Visual Setup (Colors, Icon, Spark)
     -- ------------------------------------------------------------------------
-    local colors = RoithiUI.db.profile.Castbar[unit].colors
+    local colors = db.colors
     local c = colors[state] or colors.cast
 
     local safeNotInt = false

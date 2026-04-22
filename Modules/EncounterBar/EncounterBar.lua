@@ -159,7 +159,7 @@ local function UpdateFromWidget(s, widgetInfo)
         s.hasWidgetColor = true
     end
 
-    s.Text:SetText(info.barLabel or "")
+    s.Text:SetText(info.barLabel or info.text or "")
     s.hasWidgetID = widgetInfo.widgetID -- Track current source
     s:Show()
 end
@@ -174,6 +174,26 @@ local function Update(s)
         return
     end
 
+    -- 1. Check Widgets first (if we are tracking one)
+    if s.hasWidgetID then
+        local info = C_UIWidgetManager.GetStatusBarWidgetVisualizationInfo(s.hasWidgetID)
+        local isPower = false
+        if not info or info.shownState == Enum.WidgetShownState.Hidden then
+            info = C_UIWidgetManager.GetUnitPowerBarWidgetVisualizationInfo(s.hasWidgetID)
+            isPower = true
+        end
+
+        if not info or info.shownState == Enum.WidgetShownState.Hidden then
+            s.hasWidgetID = nil
+            s.hasWidgetColor = false
+        else
+            -- If the widget is still valid, let UpdateFromWidget handle it or just keep showing
+            -- We don't want to fall through to Power Bar logic if a widget is active
+            return 
+        end
+    end
+
+    -- 2. Check Alternate Power
     local barID = UnitPowerBarID("player")
 
     if not barID or barID == 0 then
@@ -254,7 +274,7 @@ local function Update(s)
         -- Only set default color if we don't already have one from the UIWidget
         -- AND the widget that set the color is still active
         if not s.hasWidgetColor or (s.hasWidgetID == nil) then
-            s:SetStatusBarColor(0.2, 0.6, 1.0) -- Blue fallback
+            s:SetStatusBarColor(0, 0.75, 1.0) -- 00BFFF Deep Sky Blue
         end
     end
 
