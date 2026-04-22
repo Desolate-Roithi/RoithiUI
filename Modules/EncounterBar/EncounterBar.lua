@@ -21,6 +21,7 @@ local BLACKLISTED_KEYWORDS = {
     ["Dragon Isles"] = true,
     ["Dragonriding"] = true,
     ["Vigor"] = true,
+    ["Runestone Charge"] = true,
 }
 
 local function IsBarBlacklisted(text)
@@ -109,6 +110,10 @@ function EB:Toggle(enabled)
         ToggleBlizzard(true)
         if encounterBar then
             encounterBar:RegisterEvent("PLAYER_ENTERING_WORLD")
+            encounterBar:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+            encounterBar:RegisterEvent("ZONE_CHANGED")
+            encounterBar:RegisterEvent("PLAYER_DEAD")
+            encounterBar:RegisterEvent("PLAYER_ALIVE")
             encounterBar:RegisterEvent("UPDATE_ALL_UI_WIDGETS")
             encounterBar:RegisterEvent("UPDATE_UI_WIDGET")
             encounterBar:RegisterUnitEvent("UNIT_POWER_BAR_SHOW", "player")
@@ -380,7 +385,9 @@ local function OnEvent(s, event, arg1, arg2)
         return
     end
 
-    if event == "UPDATE_ALL_UI_WIDGETS" or event == "PLAYER_ENTERING_WORLD" then
+    if event == "UPDATE_ALL_UI_WIDGETS" or event == "PLAYER_ENTERING_WORLD" or event:find("ZONE_CHANGED") or event:find("PLAYER_") then
+        s.hasWidgetID = nil
+        s.hasWidgetColor = false
         Update(s)
         -- Individual widget updates will fire UPDATE_UI_WIDGET separately
         return
