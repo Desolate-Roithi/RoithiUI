@@ -4,7 +4,7 @@ A modular UI replacement for **World of Warcraft: Midnight (12.0)**. Built on na
 
 **Latest Version:** v1.3.0  
 **Last Updated:** 2026-04-22  
-**Compatibility:** WoW 12.0.1 (Midnight)
+**Compatibility:** WoW 12.0.5 (Midnight)
 
 ## 🆕 Recent Updates (v1.3.0)
 
