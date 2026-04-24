@@ -742,6 +742,59 @@ local function GetOptions()
                             },
                         },
                     },
+                    whitelistGroup = {
+                        type = "group",
+                        name = L["Widget Whitelist"],
+                        order = 30,
+                        inline = true,
+                        args = {
+                            addID = {
+                                type = "input",
+                                name = L["Add Widget ID"],
+                                desc  = L["Enter a Widget ID to whitelist it."],
+                                order = 1,
+                                get = function() return "" end,
+                                set = function(_, v)
+                                    local id = tonumber(v)
+                                    if id then
+                                        local db = RoithiUI.db.profile.EncounterResource
+                                        if not db.whitelist then db.whitelist = {} end
+                                        db.whitelist[id] = true
+                                    end
+                                end,
+                            },
+                            removeID = {
+                                type = "multiselect",
+                                name = L["Whitelisted IDs"],
+                                desc  = L["Uncheck an ID to remove it from the whitelist."],
+                                order = 2,
+                                values = function()
+                                    local db = RoithiUI.db.profile.EncounterResource
+                                    local out = {}
+                                    if db and db.whitelist then
+                                        for id, _ in pairs(db.whitelist) do
+                                            out[id] = tostring(id)
+                                        end
+                                    end
+                                    return out
+                                end,
+                                get = function(_, key) return true end,
+                                set = function(_, key, value)
+                                    if not value then
+                                        local db = RoithiUI.db.profile.EncounterResource
+                                        if db and db.whitelist then
+                                            db.whitelist[key] = nil
+                                        end
+                                    end
+                                end,
+                                confirm = true,
+                                hidden = function()
+                                    local db = RoithiUI.db.profile.EncounterResource
+                                    return not db or not db.whitelist or next(db.whitelist) == nil
+                                end,
+                            },
+                        },
+                    },
                     posNote = {
                         type = "description",
                         name = L["\n|cffffd100Tip:|r Use Edit Mode (default key: Alt+C) to drag and reposition the bar on screen."],
