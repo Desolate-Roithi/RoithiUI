@@ -24,8 +24,8 @@ local WHITELISTED_IDS = {
     [4604] = true, -- Abyss Angling Oxygen Bar (Active)
 }
 
-local LOG_BLACKLIST = {
-    [7372] = true, -- Abyss Background Widget (Static)
+local WIDGET_BLACKLIST = {
+    [7372] = true, -- Hidden Encounter Timer / Abyss Background Widget
 }
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -139,6 +139,9 @@ end
 local function UpdateFromWidget(s, widgetInfo)
     if not widgetInfo then return end
 
+    -- Prevent blacklisted widgets from showing
+    if WIDGET_BLACKLIST[widgetInfo.widgetID] then return end
+
     -- Prioritization: If we are already tracking the active Oxygen bar (4604),
     -- don't let static background widgets (like 7372) overwrite it.
     if s.hasWidgetID == 4604 and widgetInfo.widgetID ~= 4604 then
@@ -206,7 +209,7 @@ local function UpdateFromWidget(s, widgetInfo)
     end
 
     -- Simplified Log Mode (only for bars)
-    if db and db.widgetLogMode and not LOG_BLACKLIST[widgetInfo.widgetID] then
+    if db and db.widgetLogMode and not WIDGET_BLACKLIST[widgetInfo.widgetID] then
         if info and (widgetInfo.widgetType == 2 or widgetInfo.widgetType == 24 or widgetInfo.widgetType == 23) then
             print(string.format("|cff00ccff[EB Log]|r ID: %d | Set: %d | Title: '%s' | Val: %s / %s (Min: %s)",
                 widgetInfo.widgetID, widgetInfo.widgetSetID or -1, nameText or "None", tostring(val), tostring(max),
