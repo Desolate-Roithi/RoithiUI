@@ -48,11 +48,14 @@ function RoithiUI:ChatCommand(input)
     if not input or input:trim() == "" then
         -- Default: Open Options
         if Settings and Settings.OpenToCategory then
-            Settings.OpenToCategory(addonName)
-            ---@diagnostic disable-next-line: undefined-field
+            local categoryID = RoithiUI.SettingsCategoryID or addonName
+            local ok = pcall(Settings.OpenToCategory, categoryID)
+            if not ok and _G.InterfaceOptionsFrame_OpenToCategory then
+                pcall(_G.InterfaceOptionsFrame_OpenToCategory, addonName)
+            end
         elseif _G.InterfaceOptionsFrame_OpenToCategory then
             ---@diagnostic disable-next-line: undefined-field
-            _G.InterfaceOptionsFrame_OpenToCategory(addonName)
+            pcall(_G.InterfaceOptionsFrame_OpenToCategory, addonName)
         else
             self:Print("Options available in Game Menu -> Options -> AddOns")
         end

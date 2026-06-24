@@ -1,4 +1,4 @@
-## Interface: 120005
+## Interface: 120007
 ## Title: RoithiUI
 ## Notes: Modular UI suite for Patch 12.0
 ## Author: Roithi

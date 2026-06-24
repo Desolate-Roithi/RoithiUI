@@ -5,7 +5,16 @@ ns.Defaults = {
     profile = {
         Auras = {
             Blacklist = {
-                [36032] = true,
+                [36032] = true,  -- Arcane Charges
+                [57724] = true,  -- Sated (Bloodlust)
+                [57723] = true,  -- Exhaustion (Heroism)
+                [80354] = true,  -- Temporal Displacement (Time Warp)
+                [95809] = true,  -- Insanity (Ancient Hysteria)
+                [264689] = true, -- Fatigued (Primal Rage)
+                [390435] = true, -- Allied Ether (Fury of the Aspects debuff)
+                [124275] = true, -- Light Stagger
+                [124274] = true, -- Moderate Stagger
+                [124273] = true, -- Heavy Stagger
             },
             ShowOnlyPlayer = false,
             UseLibCustomGlow = true,

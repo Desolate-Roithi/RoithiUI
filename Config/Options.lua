@@ -222,6 +222,160 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     end,
                 },
             },
+        },
+        group6_blacklist = {
+            type = "group",
+            name = L["Spell Blacklist"],
+            order = 6,
+            inline = true,
+            args = {
+                addSpell = {
+                    type = "input",
+                    name = L["Add Spell ID"],
+                    desc  = L["Enter a Spell ID to blacklist it (hide)."],
+                    order = 1,
+                    get = function() return "" end,
+                    set = function(_, v)
+                        local id = tonumber(v)
+                        if id then
+                            local db = GetDB()
+                            if not db.Blacklist then db.Blacklist = {} end
+                            db.Blacklist[id] = true
+                            RefreshFunc()
+                        end
+                    end,
+                },
+                removeSpell = {
+                    type = "multiselect",
+                    name = L["Blacklisted Spell IDs"],
+                    desc  = L["Uncheck a Spell ID to remove it from the blacklist."],
+                    order = 2,
+                    values = function()
+                        local db = GetDB()
+                        local out = {}
+
+                        -- 1. Default blacklist
+                        local defaultBlacklist = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Auras and RoithiUI.db.profile.Auras.Blacklist
+                        if defaultBlacklist then
+                            for id, active in pairs(defaultBlacklist) do
+                                if active then
+                                    out[id] = true
+                                end
+                            end
+                        end
+
+                        -- 2. Local overrides
+                        if db and db.Blacklist then
+                            for id, active in pairs(db.Blacklist) do
+                                if active then
+                                    out[id] = true
+                                elseif active == false then
+                                    out[id] = nil
+                                end
+                            end
+                        end
+
+                        -- 3. Resolve names
+                        local displayList = {}
+                        for id in pairs(out) do
+                            local success, name = pcall(function()
+                                return C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)
+                            end)
+                            if success and name and name ~= "" then
+                                displayList[id] = string.format("%s (%d)", name, id)
+                            else
+                                displayList[id] = tostring(id)
+                            end
+                        end
+                        return displayList
+                    end,
+                    get = function(_, key)
+                        local db = GetDB()
+                        local id = tonumber(key) or key
+                        if db and db.Blacklist and db.Blacklist[id] ~= nil then
+                            return db.Blacklist[id]
+                        end
+                        local defaultBlacklist = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Auras and RoithiUI.db.profile.Auras.Blacklist
+                        if defaultBlacklist and defaultBlacklist[id] ~= nil then
+                            return defaultBlacklist[id]
+                        end
+                        return false
+                    end,
+                    set = function(_, key, value)
+                        local db = GetDB()
+                        if db then
+                            local id = tonumber(key) or key
+                            if not db.Blacklist then db.Blacklist = {} end
+                            db.Blacklist[id] = value
+                            RefreshFunc()
+                        end
+                    end,
+                },
+            },
+        },
+        group7_whitelist = {
+            type = "group",
+            name = L["Spell Whitelist"],
+            order = 7,
+            inline = true,
+            args = {
+                addSpell = {
+                    type = "input",
+                    name = L["Add Spell ID"],
+                    desc  = L["Enter a Spell ID to whitelist it (always show)."],
+                    order = 1,
+                    get = function() return "" end,
+                    set = function(_, v)
+                        local id = tonumber(v)
+                        if id then
+                            local db = GetDB()
+                            if not db.Whitelist then db.Whitelist = {} end
+                            db.Whitelist[id] = true
+                            RefreshFunc()
+                        end
+                    end,
+                },
+                removeSpell = {
+                    type = "multiselect",
+                    name = L["Whitelisted Spell IDs"],
+                    desc  = L["Uncheck a Spell ID to remove it from the whitelist."],
+                    order = 2,
+                    values = function()
+                        local db = GetDB()
+                        local out = {}
+                        if db and db.Whitelist then
+                            for id, active in pairs(db.Whitelist) do
+                                if active then
+                                    local success, name = pcall(function()
+                                        return C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)
+                                    end)
+                                    if success and name and name ~= "" then
+                                        out[id] = string.format("%s (%d)", name, id)
+                                    else
+                                        out[id] = tostring(id)
+                                    end
+                                end
+                            end
+                        end
+                        return out
+                    end,
+                    get = function(_, key) return true end,
+                    set = function(_, key, value)
+                        if not value then
+                            local db = GetDB()
+                            if db and db.Whitelist then
+                                db.Whitelist[key] = nil
+                                RefreshFunc()
+                            end
+                        end
+                    end,
+                    confirm = true,
+                    hidden = function()
+                        local db = GetDB()
+                        return not db or not db.Whitelist or next(db.Whitelist) == nil
+                    end,
+                },
+            },
         }
     }
 end
@@ -269,6 +423,12 @@ local function GetGlobalAuraOptions()
                                         debuffAnchor = "BOTTOM",
                                         debuffGrowDirection = "RIGHT",
                                         debuffDetached = true,
+                                        stackFontSize = 10,
+                                        stackAnchor = "BOTTOMRIGHT",
+                                        stackX = 2,
+                                        stackY = -2,
+                                        hideBorder = true,
+                                        zoomPercent = 15,
                                     }
                                     ns.RefreshAllUnitFrames()
                                 end
@@ -307,104 +467,269 @@ local function GetGlobalAuraOptions()
                 name = id,
                 order = i,
                 args = {
-                    delete = {
-                        type = "execute",
-                        name = L["Delete Frame"],
+                    layoutGroup = {
+                        type = "group",
+                        name = L["General Layout Settings"],
                         order = 1,
-                        confirm = true,
-                        func = function()
-                            RoithiUI.db.profile.CustomAuraFrames[id] = nil
-                            ns.RefreshAllUnitFrames()
-                        end,
+                        inline = true,
+                        args = {
+                            enabled = {
+                                type = "toggle",
+                                name = L["Enable"],
+                                order = 1,
+                                get = function() return GetDB().enabled == true end,
+                                set = function(_, v)
+                                    GetDB().enabled = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            unit = {
+                                type = "select",
+                                name = L["Request Buffs From Unit"],
+                                order = 2,
+                                values = unitsList,
+                                get = function() return GetDB().unit or "player" end,
+                                set = function(_, v)
+                                    GetDB().unit = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            size = {
+                                type = "range",
+                                name = L["Aura Size"],
+                                order = 3,
+                                min = 10,
+                                max = 100,
+                                step = 1,
+                                get = function() return GetDB().auraSize or 30 end,
+                                set = function(_, v)
+                                    GetDB().auraSize = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            max = {
+                                type = "range",
+                                name = L["Max Auras"],
+                                order = 4,
+                                min = 1,
+                                max = 40,
+                                step = 1,
+                                get = function() return GetDB().maxAuras or 4 end,
+                                set = function(_, v)
+                                    GetDB().maxAuras = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            spacing = {
+                                type = "range",
+                                name = L["Spacing"],
+                                order = 5,
+                                min = 0,
+                                max = 40,
+                                step = 1,
+                                get = function() return GetDB().auraSpacing or 4 end,
+                                set = function(_, v)
+                                    GetDB().auraSpacing = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            grow = {
+                                type = "select",
+                                name = L["Grow Direction"],
+                                order = 6,
+                                values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["CENTER_VERTICAL"] = "Centered Vertical" },
+                                get = function() return GetDB().auraGrowDirection or "RIGHT" end,
+                                set = function(_, v)
+                                    GetDB().auraGrowDirection = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            hideBorder = {
+                                type = "toggle",
+                                name = L["Hide Border"],
+                                order = 7,
+                                get = function() return GetDB().hideBorder ~= false end,
+                                set = function(_, v)
+                                    GetDB().hideBorder = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            zoom = {
+                                type = "range",
+                                name = L["Icon Zoom (%)"],
+                                order = 8,
+                                min = 0,
+                                max = 50,
+                                step = 1,
+                                get = function() return GetDB().zoomPercent ~= nil and GetDB().zoomPercent or 15 end,
+                                set = function(_, v)
+                                    GetDB().zoomPercent = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            delete = {
+                                type = "execute",
+                                name = L["Delete Frame"],
+                                order = 9,
+                                confirm = true,
+                                func = function()
+                                    RoithiUI.db.profile.CustomAuraFrames[id] = nil
+                                    ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                        }
                     },
-                    unit = {
-                        type = "select",
-                        name = L["Request Buffs From Unit"],
+                    positionGroup = {
+                        type = "group",
+                        name = L["Screen Position Settings"],
                         order = 2,
-                        values = unitsList,
-                        get = function() return GetDB().unit or "player" end,
-                        set = function(_, v)
-                            GetDB().unit = v; ns.RefreshAllUnitFrames()
-                        end,
+                        inline = true,
+                        args = {
+                            x = {
+                                type = "range",
+                                name = L["X Offset (from Screen Center)"],
+                                order = 1,
+                                min = -2000,
+                                max = 2000,
+                                step = 1,
+                                get = function() return GetDB().screenX or 0 end,
+                                set = function(_, v)
+                                    GetDB().screenX = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            y = {
+                                type = "range",
+                                name = L["Y Offset (from Screen Center)"],
+                                order = 2,
+                                min = -2000,
+                                max = 2000,
+                                step = 1,
+                                get = function() return GetDB().screenY or -50 end,
+                                set = function(_, v)
+                                    GetDB().screenY = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                        }
                     },
-                    enabled = {
-                        type = "toggle",
-                        name = L["Enable"],
+                    timerGroup = {
+                        type = "group",
+                        name = L["Timer Text Settings"],
                         order = 3,
-                        get = function() return GetDB().enabled == true end,
-                        set = function(_, v)
-                            GetDB().enabled = v; ns.RefreshAllUnitFrames()
-                        end,
+                        inline = true,
+                        args = {
+                            timerFontSize = {
+                                type = "range",
+                                name = L["Timer Font Size"],
+                                order = 1,
+                                min = 6,
+                                max = 24,
+                                step = 1,
+                                get = function() return GetDB().timerFontSize or 10 end,
+                                set = function(_, v)
+                                    GetDB().timerFontSize = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            timerAnchor = {
+                                type = "select",
+                                name = L["Timer Anchor"],
+                                order = 2,
+                                values = {
+                                    ["TOPLEFT"] = "Top Left",
+                                    ["TOP"] = "Top",
+                                    ["TOPRIGHT"] = "Top Right",
+                                    ["LEFT"] = "Left",
+                                    ["CENTER"] = "Center",
+                                    ["RIGHT"] = "Right",
+                                    ["BOTTOMLEFT"] = "Bottom Left",
+                                    ["BOTTOM"] = "Bottom",
+                                    ["BOTTOMRIGHT"] = "Bottom Right"
+                                },
+                                get = function() return GetDB().timerAnchor or "CENTER" end,
+                                set = function(_, v)
+                                    GetDB().timerAnchor = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            timerX = {
+                                type = "range",
+                                name = L["Timer X Offset"],
+                                order = 3,
+                                min = -50,
+                                max = 50,
+                                step = 1,
+                                get = function() return GetDB().timerX or 0 end,
+                                set = function(_, v)
+                                    GetDB().timerX = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            timerY = {
+                                type = "range",
+                                name = L["Timer Y Offset"],
+                                order = 4,
+                                min = -50,
+                                max = 50,
+                                step = 1,
+                                get = function() return GetDB().timerY or 0 end,
+                                set = function(_, v)
+                                    GetDB().timerY = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                        }
                     },
-                    size = {
-                        type = "range",
-                        name = L["Aura Size"],
+                    stackGroup = {
+                        type = "group",
+                        name = L["Stack Count Settings"],
                         order = 4,
-                        min = 10,
-                        max = 100,
-                        step = 1,
-                        get = function() return GetDB().auraSize or 30 end,
-                        set = function(_, v)
-                            GetDB().auraSize = v; ns.RefreshAllUnitFrames()
-                        end,
-                    },
-                    max = {
-                        type = "range",
-                        name = L["Max Auras"],
-                        order = 5,
-                        min = 1,
-                        max = 40,
-                        step = 1,
-                        get = function() return GetDB().maxAuras or 4 end,
-                        set = function(_, v)
-                            GetDB().maxAuras = v; ns.RefreshAllUnitFrames()
-                        end,
-                    },
-                    spacing = {
-                        type = "range",
-                        name = L["Spacing"],
-                        order = 6,
-                        min = 0,
-                        max = 40,
-                        step = 1,
-                        get = function() return GetDB().auraSpacing or 4 end,
-                        set = function(_, v)
-                            GetDB().auraSpacing = v; ns.RefreshAllUnitFrames()
-                        end,
-                    },
-                    x = {
-                        type = "range",
-                        name = L["X Offset (from Screen Center)"],
-                        order = 7,
-                        min = -2000,
-                        max = 2000,
-                        step = 1,
-                        get = function() return GetDB().screenX or 0 end,
-                        set = function(_, v)
-                            GetDB().screenX = v; ns.RefreshAllUnitFrames()
-                        end,
-                    },
-                    y = {
-                        type = "range",
-                        name = L["Y Offset (from Screen Center)"],
-                        order = 8,
-                        min = -2000,
-                        max = 2000,
-                        step = 1,
-                        get = function() return GetDB().screenY or -50 end,
-                        set = function(_, v)
-                            GetDB().screenY = v; ns.RefreshAllUnitFrames()
-                        end,
-                    },
-                    grow = {
-                        type = "select",
-                        name = L["Grow Direction"],
-                        order = 8,
-                        values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["CENTER_VERTICAL"] = "Centered Vertical" },
-                        get = function() return GetDB().auraGrowDirection or "RIGHT" end,
-                        set = function(_, v)
-                            GetDB().auraGrowDirection = v; ns.RefreshAllUnitFrames()
-                        end,
+                        inline = true,
+                        args = {
+                            stackFontSize = {
+                                type = "range",
+                                name = L["Stack Font Size"],
+                                order = 1,
+                                min = 6,
+                                max = 24,
+                                step = 1,
+                                get = function() return GetDB().stackFontSize or 10 end,
+                                set = function(_, v)
+                                    GetDB().stackFontSize = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            stackAnchor = {
+                                type = "select",
+                                name = L["Stack Anchor"],
+                                order = 2,
+                                values = {
+                                    ["TOPLEFT"] = "Top Left",
+                                    ["TOP"] = "Top",
+                                    ["TOPRIGHT"] = "Top Right",
+                                    ["LEFT"] = "Left",
+                                    ["CENTER"] = "Center",
+                                    ["RIGHT"] = "Right",
+                                    ["BOTTOMLEFT"] = "Bottom Left",
+                                    ["BOTTOM"] = "Bottom",
+                                    ["BOTTOMRIGHT"] = "Bottom Right"
+                                },
+                                get = function() return GetDB().stackAnchor or "BOTTOMRIGHT" end,
+                                set = function(_, v)
+                                    GetDB().stackAnchor = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            stackX = {
+                                type = "range",
+                                name = L["Stack X Offset"],
+                                order = 3,
+                                min = -50,
+                                max = 50,
+                                step = 1,
+                                get = function() return GetDB().stackX or 2 end,
+                                set = function(_, v)
+                                    GetDB().stackX = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                            stackY = {
+                                type = "range",
+                                name = L["Stack Y Offset"],
+                                order = 4,
+                                min = -50,
+                                max = 50,
+                                step = 1,
+                                get = function() return GetDB().stackY or -2 end,
+                                set = function(_, v)
+                                    GetDB().stackY = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
+                        }
                     },
                     filtersGroup = {
                         type = "group",
@@ -1401,6 +1726,149 @@ local function GetOptions()
                         },
                     }
                 },
+                styling = {
+                    type = "group",
+                    name = L["Styling & Texts"],
+                    order = 9.5,
+                    inline = true,
+                    args = {
+                        hideBorder = {
+                            type = "toggle",
+                            name = L["Hide Border"],
+                            order = 1,
+                            get = function() return GetDB().hideBorder ~= false end,
+                            set = function(_, v)
+                                GetDB().hideBorder = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        zoom = {
+                            type = "range",
+                            name = L["Icon Zoom (%)"],
+                            order = 2,
+                            min = 0,
+                            max = 50,
+                            step = 1,
+                            get = function() return GetDB().zoomPercent ~= nil and GetDB().zoomPercent or 15 end,
+                            set = function(_, v)
+                                GetDB().zoomPercent = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        -- Timer Settings:
+                        timerFontSize = {
+                            type = "range",
+                            name = L["Timer Font Size"],
+                            order = 10,
+                            min = 6,
+                            max = 24,
+                            step = 1,
+                            get = function() return GetDB().timerFontSize or 10 end,
+                            set = function(_, v)
+                                GetDB().timerFontSize = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        timerAnchor = {
+                            type = "select",
+                            name = L["Timer Anchor"],
+                            order = 11,
+                            values = {
+                                ["TOPLEFT"] = "Top Left",
+                                ["TOP"] = "Top",
+                                ["TOPRIGHT"] = "Top Right",
+                                ["LEFT"] = "Left",
+                                ["CENTER"] = "Center",
+                                ["RIGHT"] = "Right",
+                                ["BOTTOMLEFT"] = "Bottom Left",
+                                ["BOTTOM"] = "Bottom",
+                                ["BOTTOMRIGHT"] = "Bottom Right"
+                            },
+                            get = function() return GetDB().timerAnchor or "CENTER" end,
+                            set = function(_, v)
+                                GetDB().timerAnchor = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        timerX = {
+                            type = "range",
+                            name = L["Timer X Offset"],
+                            order = 12,
+                            min = -50,
+                            max = 50,
+                            step = 1,
+                            get = function() return GetDB().timerX or 0 end,
+                            set = function(_, v)
+                                GetDB().timerX = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        timerY = {
+                            type = "range",
+                            name = L["Timer Y Offset"],
+                            order = 13,
+                            min = -50,
+                            max = 50,
+                            step = 1,
+                            get = function() return GetDB().timerY or 0 end,
+                            set = function(_, v)
+                                GetDB().timerY = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        -- Stack Settings:
+                        stackFontSize = {
+                            type = "range",
+                            name = L["Stack Font Size"],
+                            order = 20,
+                            min = 6,
+                            max = 24,
+                            step = 1,
+                            get = function() return GetDB().stackFontSize or 10 end,
+                            set = function(_, v)
+                                GetDB().stackFontSize = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        stackAnchor = {
+                            type = "select",
+                            name = L["Stack Anchor"],
+                            order = 21,
+                            values = {
+                                ["TOPLEFT"] = "Top Left",
+                                ["TOP"] = "Top",
+                                ["TOPRIGHT"] = "Top Right",
+                                ["LEFT"] = "Left",
+                                ["CENTER"] = "Center",
+                                ["RIGHT"] = "Right",
+                                ["BOTTOMLEFT"] = "Bottom Left",
+                                ["BOTTOM"] = "Bottom",
+                                ["BOTTOMRIGHT"] = "Bottom Right"
+                            },
+                            get = function() return GetDB().stackAnchor or "BOTTOMRIGHT" end,
+                            set = function(_, v)
+                                GetDB().stackAnchor = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        stackX = {
+                            type = "range",
+                            name = L["Stack X Offset"],
+                            order = 22,
+                            min = -50,
+                            max = 50,
+                            step = 1,
+                            get = function() return GetDB().stackX or 2 end,
+                            set = function(_, v)
+                                GetDB().stackX = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        stackY = {
+                            type = "range",
+                            name = L["Stack Y Offset"],
+                            order = 23,
+                            min = -50,
+                            max = 50,
+                            step = 1,
+                            get = function() return GetDB().stackY or -2 end,
+                            set = function(_, v)
+                                GetDB().stackY = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                    }
+                },
                 filtersAndVisibility = {
                     type = "group",
                     name = L["Filters & Layout"],
@@ -1509,9 +1977,10 @@ function Config:RegisterOptions()
         AC:RegisterOptionsTable("RoithiUI", GetOptions)
         if not self.optionsFrame then
             -- AceConfigDialog's AddToBlizOptions can error if already registered in Blizzard Settings
-            local success, frame = pcall(ACD.AddToBlizOptions, ACD, "RoithiUI", "RoithiUI")
+            local success, frame, categoryID = pcall(ACD.AddToBlizOptions, ACD, "RoithiUI", "RoithiUI")
             if success then
                 self.optionsFrame = frame
+                RoithiUI.SettingsCategoryID = categoryID
             end
         end
     else

@@ -11,6 +11,129 @@ local issecretvalue = _G.issecretvalue or function(...)
     return false
 end
 
+local function StyleIcon(icon, db, aura, isDebuff, size)
+    if not db then return end
+    if not size then
+        size = isDebuff and (tonumber(db.debuffSize) or tonumber(db.auraSize) or 20)
+                      or (tonumber(db.buffSize) or tonumber(db.auraSize) or 20)
+    end
+    icon:SetSize(size, size)
+
+    -- Icon texture & zoom
+    icon.icon:SetTexture(aura.icon)
+    local zoomPercent = db.zoomPercent ~= nil and db.zoomPercent or 15
+    local offset = zoomPercent / 100
+    icon.icon:SetTexCoord(offset, 1 - offset, offset, 1 - offset)
+
+    -- Stack counts
+    local count = aura.applications or 0
+    local text = ""
+    if not issecretvalue(count) then
+        text = (count > 1) and tostring(count) or ""
+    end
+    icon.count:SetText(text)
+
+    local stackFontSize = db.stackFontSize or 10
+    local stackAnchor = db.stackAnchor or "BOTTOMRIGHT"
+    local stackX = db.stackX or 2
+    local stackY = db.stackY or -2
+    icon.count:ClearAllPoints()
+    icon.count:SetPoint(stackAnchor, icon, stackAnchor, stackX, stackY)
+    local fontName = RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT"
+    LibRoithi.mixins:SetFont(icon.count, fontName, stackFontSize, "OUTLINE")
+
+    icon.auraInstanceID = aura.auraInstanceID
+    icon.isDebuff = isDebuff
+    icon.filter = isDebuff and "HARMFUL" or "HELPFUL"
+
+    -- Borders / overlay colors
+    if db.hideBorder == true then
+        if icon.SetBackdropBorderColor then
+            icon:SetBackdropBorderColor(0, 0, 0, 0)
+        end
+        if icon.overlay then
+            icon.overlay:Hide()
+        end
+    else
+        if isDebuff then
+            if _G.DebuffTypeColor and aura.dispelName then
+                local color = _G.DebuffTypeColor[aura.dispelName] or _G.DebuffTypeColor["none"]
+                if icon.SetBackdropBorderColor then
+                    icon:SetBackdropBorderColor(color.r, color.g, color.b, 1)
+                end
+                if icon.overlay then
+                    icon.overlay:SetVertexColor(color.r, color.g, color.b)
+                    icon.overlay:Show()
+                end
+            else
+                if icon.SetBackdropBorderColor then
+                    icon:SetBackdropBorderColor(0, 0, 0, 1)
+                end
+                if icon.overlay then
+                    icon.overlay:Hide()
+                end
+            end
+        else
+            if icon.SetBackdropBorderColor then
+                icon:SetBackdropBorderColor(0, 0, 0, 1)
+            end
+            if icon.overlay then
+                icon.overlay:Hide()
+            end
+        end
+    end
+
+    -- Timer / Cooldown settings
+    local timerFontSize = db.timerFontSize or 10
+    local timerAnchor = db.timerAnchor or "CENTER"
+    local timerX = db.timerX or 0
+    local timerY = db.timerY or 0
+    
+    for i = 1, icon.cd:GetNumRegions() do
+        local child = select(i, icon.cd:GetRegions())
+        if child and child.IsObjectType and child:IsObjectType("FontString") then
+            child:ClearAllPoints()
+            child:SetPoint(timerAnchor, icon.cd, timerAnchor, timerX, timerY)
+            LibRoithi.mixins:SetFont(child, fontName, timerFontSize, "OUTLINE")
+            break
+        end
+    end
+end
+
+local function IsBlacklisted(aura, db, inCombat, element)
+    RoithiUI.AuraInstanceIDToSpellID = RoithiUI.AuraInstanceIDToSpellID or {}
+    RoithiUI.AuraInstanceIDToIcon = RoithiUI.AuraInstanceIDToIcon or {}
+    local spellId = not issecretvalue(aura.spellId) and aura.spellId or RoithiUI.AuraInstanceIDToSpellID[aura.auraInstanceID]
+    local icon = not issecretvalue(aura.icon) and aura.icon or RoithiUI.AuraInstanceIDToIcon[aura.auraInstanceID]
+
+    local isSecretSpell = not spellId
+    local isSecretIcon = not icon
+
+    if inCombat and isSecretSpell then
+        if not isSecretIcon and element.BlacklistCache and element.BlacklistCache[icon] ~= nil then
+            return element.BlacklistCache[icon]
+        end
+        return false
+    end
+
+    if spellId then
+        local blacklisted = false
+        if db.Blacklist and db.Blacklist[spellId] ~= nil then
+            blacklisted = db.Blacklist[spellId]
+        elseif RoithiUI.db.profile.Auras and RoithiUI.db.profile.Auras.Blacklist and RoithiUI.db.profile.Auras.Blacklist[spellId] ~= nil then
+            blacklisted = RoithiUI.db.profile.Auras.Blacklist[spellId]
+        end
+
+        if icon then
+            element.BlacklistCache = element.BlacklistCache or {}
+            element.BlacklistCache[icon] = blacklisted
+        end
+        return blacklisted
+    end
+
+    return false
+end
+
 -- 12.0.1 Filter Constants
 local FILTERS = {
     CC = "CROWD_CONTROL",
@@ -315,13 +438,23 @@ local function GetOrCreateAuraElement(frame, key)
         local debuffStartIndex = iconIndex
         if showDebuffs then
             local debuffQueries = GetSmartFilterQueries("HARMFUL", db)
-            local instanceIDs = C_UnitAuras.GetUnitAuraInstanceIDs(unit, "HARMFUL", 40)
+            local sortRule = (Enum and Enum.UnitAuraSortRule and Enum.UnitAuraSortRule.Expiration) or 3
+            local instanceIDs = C_UnitAuras.GetUnitAuraInstanceIDs(unit, "HARMFUL", 40, sortRule)
 
             if instanceIDs then
                 local validDebuffs = {}
                 for _, auraInstanceID in ipairs(instanceIDs) do
                     local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraInstanceID)
                     if aura and not seenAuras[auraInstanceID] then
+                        RoithiUI.AuraInstanceIDToSpellID = RoithiUI.AuraInstanceIDToSpellID or {}
+                        RoithiUI.AuraInstanceIDToIcon = RoithiUI.AuraInstanceIDToIcon or {}
+                        if not issecretvalue(aura.spellId) and aura.spellId then
+                            RoithiUI.AuraInstanceIDToSpellID[aura.auraInstanceID] = aura.spellId
+                        end
+                        if not issecretvalue(aura.icon) and aura.icon then
+                            RoithiUI.AuraInstanceIDToIcon[aura.auraInstanceID] = aura.icon
+                        end
+
                         local passesFilter = false
                         for _, q in ipairs(debuffQueries) do
                             if not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, auraInstanceID, q) then
@@ -336,32 +469,33 @@ local function GetOrCreateAuraElement(frame, key)
                             local skip = false
 
                             if not skip and db.hideTimeless then
-                                local durationObj = C_UnitAuras.GetAuraDuration(unit, aura.auraInstanceID)
-                                if durationObj then
-                                    local isZero = durationObj:IsZero()
-                                    local isZeroSecret = issecretvalue and issecretvalue(isZero)
+                                local spellId = not issecretvalue(aura.spellId) and aura.spellId or (RoithiUI.AuraInstanceIDToSpellID and RoithiUI.AuraInstanceIDToSpellID[aura.auraInstanceID])
+                                local icon = not issecretvalue(aura.icon) and aura.icon or (RoithiUI.AuraInstanceIDToIcon and RoithiUI.AuraInstanceIDToIcon[aura.auraInstanceID])
+                                local cacheKey = spellId or icon
+                                if cacheKey and RoithiUI.TimelessAuraCache[cacheKey] then
+                                    skip = true
+                                else
+                                    local durationObj = C_UnitAuras.GetAuraDuration(unit, aura.auraInstanceID)
+                                    local isZero = false
+                                    if not durationObj then
+                                        isZero = true
+                                    elseif not issecretvalue(durationObj) then
+                                        local zero = durationObj:IsZero()
+                                        if not issecretvalue(zero) and zero then
+                                            isZero = true
+                                        end
+                                    end
 
-                                    if not inCombat and not isZeroSecret then
-                                        if isZero then
-                                            local cacheKey = not issecretvalue(aura.spellId) and aura.spellId or
-                                                (not issecretvalue(aura.icon) and aura.icon)
-                                            if cacheKey then
-                                                RoithiUI.TimelessAuraCache[cacheKey] = true
-                                            end
-                                            skip = true
-                                        end
-                                    else
-                                        local cacheKey = not issecretvalue(aura.spellId) and aura.spellId or
-                                            (not issecretvalue(aura.icon) and aura.icon)
-                                        if cacheKey and RoithiUI.TimelessAuraCache[cacheKey] then
-                                            skip = true
-                                        end
+                                    if isZero then
+                                        if spellId and not issecretvalue(spellId) then RoithiUI.TimelessAuraCache[spellId] = true end
+                                        if icon and not issecretvalue(icon) then RoithiUI.TimelessAuraCache[icon] = true end
+                                        skip = true
                                     end
                                 end
                             end
 
-                            if not skip and db.Blacklist then
-                                if not isSecretId and db.Blacklist[aura.spellId] then skip = true end
+                            if not skip then
+                                if IsBlacklisted(aura, db, inCombat, element) then skip = true end
                             end
                             if not skip and isWhiteListActive then
                                 if not isSecretId and not db.Whitelist[aura.spellId] then skip = true end
@@ -369,14 +503,15 @@ local function GetOrCreateAuraElement(frame, key)
 
                             if not skip then
                                 local durationObj = C_UnitAuras.GetAuraDuration(unit, aura.auraInstanceID)
-                                local remain = 0
                                 local isTimeless = true
                                 if durationObj then
-                                    local isZero = durationObj:IsZero()
-                                    if not (issecretvalue and issecretvalue(isZero)) and not isZero then
+                                    if issecretvalue(durationObj) then
                                         isTimeless = false
-                                        pcall(function() remain = durationObj:GetRemainingDuration() or 0 end)
-                                        if issecretvalue and issecretvalue(remain) then remain = 0 end
+                                    else
+                                        local isZero = durationObj:IsZero()
+                                        if not issecretvalue(isZero) and not isZero then
+                                            isTimeless = false
+                                        end
                                     end
                                 end
 
@@ -384,7 +519,6 @@ local function GetOrCreateAuraElement(frame, key)
                                     auraInstanceID = auraInstanceID,
                                     aura = aura,
                                     durationObj = durationObj,
-                                    remain = remain,
                                     isTimeless = isTimeless
                                 })
                             end
@@ -392,11 +526,23 @@ local function GetOrCreateAuraElement(frame, key)
                     end
                 end
 
-                table.sort(validDebuffs, function(a, b)
-                    if a.isTimeless and not b.isTimeless then return false end
-                    if not a.isTimeless and b.isTimeless then return true end
-                    return a.remain < b.remain
-                end)
+                -- Partition: timed first (engine expiration order), timeless at the end.
+                -- We do NOT compare durationObj values directly; LuaDurationObject has no __lt metamethod.
+                -- The engine already returns instanceIDs in Expiration order via Enum.UnitAuraSortRule.Expiration,
+                -- so insertion order within each bucket is already correct.
+                local timedDebuffs = {}
+                local timelessDebuffs = {}
+                for _, d in ipairs(validDebuffs) do
+                    if d.isTimeless then
+                        table.insert(timelessDebuffs, d)
+                    else
+                        table.insert(timedDebuffs, d)
+                    end
+                end
+                for _, d in ipairs(timelessDebuffs) do
+                    table.insert(timedDebuffs, d)
+                end
+                validDebuffs = timedDebuffs
 
                 for _, data in ipairs(validDebuffs) do
                     local limitReached = db.separateAuras and ((iconIndex - debuffStartIndex) >= maxIcons) or
@@ -409,7 +555,6 @@ local function GetOrCreateAuraElement(frame, key)
 
                     seenAuras[auraInstanceID] = true
                     local icon = icons[iconIndex] or CreateIcon(iconIndex)
-                    icon:SetSize(size, size)
                     icon:ClearAllPoints()
                     
                     if iconIndex == 1 then
@@ -418,38 +563,23 @@ local function GetOrCreateAuraElement(frame, key)
                         icon:SetPoint(anchor1, icons[iconIndex - 1], relPoint, xSpace, ySpace)
                     end
 
-                    icon.icon:SetTexture(aura.icon)
-                    local count = aura.applications or 0
-                    local text = ""
-                    if not issecretvalue(count) then
-                        text = (count > 1) and tostring(count) or ""
-                    end
-                    icon.count:SetText(text)
-
-                    icon.auraInstanceID = auraInstanceID
-                    icon.isDebuff = true
-                    icon.filter = "HARMFUL"
-
-                    -- Color
-                    if _G.DebuffTypeColor and aura.dispelName then
-                        local color = _G.DebuffTypeColor[aura.dispelName] or _G.DebuffTypeColor["none"]
-                        if icon.SetBackdropBorderColor then
-                            icon:SetBackdropBorderColor(color.r, color.g, color.b)
-                        end
-                        icon.overlay:SetVertexColor(color.r, color.g, color.b)
-                    end
-                    icon.overlay:Show()
+                    StyleIcon(icon, db, aura, true, size)
 
                     if durationObj then
-                        local isZero = durationObj:IsZero()
                         local shouldShow = false
-                        if issecretvalue and issecretvalue(isZero) then
+                        if issecretvalue(durationObj) then
                             shouldShow = true
-                        elseif not isZero then
-                            shouldShow = true
+                        else
+                            local isZero = durationObj:IsZero()
+                            if issecretvalue and issecretvalue(isZero) then
+                                shouldShow = true
+                            elseif not isZero then
+                                shouldShow = true
+                            end
                         end
 
                         if shouldShow then
+                            icon.cd:Hide()
                             if icon.cd.SetCooldownFromDurationObject then
                                 icon.cd:SetCooldownFromDurationObject(durationObj)
                             end
@@ -489,13 +619,23 @@ local function GetOrCreateAuraElement(frame, key)
         local buffStartIndex = iconIndex
         if showBuffs then
             local buffQueries = GetSmartFilterQueries("HELPFUL", db)
-            local instanceIDs = C_UnitAuras.GetUnitAuraInstanceIDs(unit, "HELPFUL", 40)
+            local sortRule = (Enum and Enum.UnitAuraSortRule and Enum.UnitAuraSortRule.Expiration) or 3
+            local instanceIDs = C_UnitAuras.GetUnitAuraInstanceIDs(unit, "HELPFUL", 40, sortRule)
 
             if instanceIDs then
                 local validBuffs = {}
                 for _, auraInstanceID in ipairs(instanceIDs) do
                     local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraInstanceID)
                     if aura and not seenAuras[auraInstanceID] then
+                        RoithiUI.AuraInstanceIDToSpellID = RoithiUI.AuraInstanceIDToSpellID or {}
+                        RoithiUI.AuraInstanceIDToIcon = RoithiUI.AuraInstanceIDToIcon or {}
+                        if not issecretvalue(aura.spellId) and aura.spellId then
+                            RoithiUI.AuraInstanceIDToSpellID[aura.auraInstanceID] = aura.spellId
+                        end
+                        if not issecretvalue(aura.icon) and aura.icon then
+                            RoithiUI.AuraInstanceIDToIcon[aura.auraInstanceID] = aura.icon
+                        end
+
                         local passesFilter = false
                         for _, q in ipairs(buffQueries) do
                             if not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, auraInstanceID, q) then
@@ -510,32 +650,33 @@ local function GetOrCreateAuraElement(frame, key)
                             local skip = false
 
                             if not skip and db.hideTimeless then
-                                local durationObj = C_UnitAuras.GetAuraDuration(unit, aura.auraInstanceID)
-                                if durationObj then
-                                    local isZero = durationObj:IsZero()
-                                    local isZeroSecret = issecretvalue and issecretvalue(isZero)
+                                local spellId = not issecretvalue(aura.spellId) and aura.spellId or (RoithiUI.AuraInstanceIDToSpellID and RoithiUI.AuraInstanceIDToSpellID[aura.auraInstanceID])
+                                local icon = not issecretvalue(aura.icon) and aura.icon or (RoithiUI.AuraInstanceIDToIcon and RoithiUI.AuraInstanceIDToIcon[aura.auraInstanceID])
+                                local cacheKey = spellId or icon
+                                if cacheKey and RoithiUI.TimelessAuraCache[cacheKey] then
+                                    skip = true
+                                else
+                                    local durationObj = C_UnitAuras.GetAuraDuration(unit, aura.auraInstanceID)
+                                    local isZero = false
+                                    if not durationObj then
+                                        isZero = true
+                                    elseif not issecretvalue(durationObj) then
+                                        local zero = durationObj:IsZero()
+                                        if not issecretvalue(zero) and zero then
+                                            isZero = true
+                                        end
+                                    end
 
-                                    if not inCombat and not isZeroSecret then
-                                        if isZero then
-                                            local cacheKey = not issecretvalue(aura.spellId) and aura.spellId or
-                                                (not issecretvalue(aura.icon) and aura.icon)
-                                            if cacheKey then
-                                                RoithiUI.TimelessAuraCache[cacheKey] = true
-                                            end
-                                            skip = true
-                                        end
-                                    else
-                                        local cacheKey = not issecretvalue(aura.spellId) and aura.spellId or
-                                            (not issecretvalue(aura.icon) and aura.icon)
-                                        if cacheKey and RoithiUI.TimelessAuraCache[cacheKey] then
-                                            skip = true
-                                        end
+                                    if isZero then
+                                        if spellId and not issecretvalue(spellId) then RoithiUI.TimelessAuraCache[spellId] = true end
+                                        if icon and not issecretvalue(icon) then RoithiUI.TimelessAuraCache[icon] = true end
+                                        skip = true
                                     end
                                 end
                             end
 
-                            if not skip and db.Blacklist then
-                                if not isSecretId and db.Blacklist[aura.spellId] then skip = true end
+                            if not skip then
+                                if IsBlacklisted(aura, db, inCombat, element) then skip = true end
                             end
                             if not skip and isWhiteListActive then
                                 if not isSecretId and not db.Whitelist[aura.spellId] then skip = true end
@@ -543,14 +684,15 @@ local function GetOrCreateAuraElement(frame, key)
 
                             if not skip then
                                 local durationObj = C_UnitAuras.GetAuraDuration(unit, aura.auraInstanceID)
-                                local remain = 0
                                 local isTimeless = true
                                 if durationObj then
-                                    local isZero = durationObj:IsZero()
-                                    if not (issecretvalue and issecretvalue(isZero)) and not isZero then
+                                    if issecretvalue(durationObj) then
                                         isTimeless = false
-                                        pcall(function() remain = durationObj:GetRemainingDuration() or 0 end)
-                                        if issecretvalue and issecretvalue(remain) then remain = 0 end
+                                    else
+                                        local isZero = durationObj:IsZero()
+                                        if not issecretvalue(isZero) and not isZero then
+                                            isTimeless = false
+                                        end
                                     end
                                 end
 
@@ -558,7 +700,6 @@ local function GetOrCreateAuraElement(frame, key)
                                     auraInstanceID = auraInstanceID,
                                     aura = aura,
                                     durationObj = durationObj,
-                                    remain = remain,
                                     isTimeless = isTimeless
                                 })
                             end
@@ -566,11 +707,21 @@ local function GetOrCreateAuraElement(frame, key)
                     end
                 end
 
-                table.sort(validBuffs, function(a, b)
-                    if a.isTimeless and not b.isTimeless then return false end
-                    if not a.isTimeless and b.isTimeless then return true end
-                    return a.remain < b.remain
-                end)
+                -- Partition: timed first (engine expiration order), timeless at the end.
+                -- Same rationale as validDebuffs above: no __lt on LuaDurationObject.
+                local timedBuffs = {}
+                local timelessBuffs = {}
+                for _, d in ipairs(validBuffs) do
+                    if d.isTimeless then
+                        table.insert(timelessBuffs, d)
+                    else
+                        table.insert(timedBuffs, d)
+                    end
+                end
+                for _, d in ipairs(timelessBuffs) do
+                    table.insert(timedBuffs, d)
+                end
+                validBuffs = timedBuffs
 
                 for _, data in ipairs(validBuffs) do
                     local limitReached = db.separateAuras and ((iconIndex - buffStartIndex) >= maxIcons) or
@@ -583,7 +734,6 @@ local function GetOrCreateAuraElement(frame, key)
 
                     seenAuras[auraInstanceID] = true
                     local icon = icons[iconIndex] or CreateIcon(iconIndex)
-                    icon:SetSize(size, size)
                     icon:ClearAllPoints()
                     
                     if iconIndex == 1 then
@@ -591,41 +741,34 @@ local function GetOrCreateAuraElement(frame, key)
                         isFirstBuffRendered = true
                     elseif db.separateAuras and not isFirstBuffRendered then
                         isFirstBuffRendered = true
+                        local buffSize = tonumber(db.buffSize) or tonumber(db.auraSize) or 20
                         if growDir == "LEFT" or growDir == "RIGHT" then
-                            icon:SetPoint(anchor1, element, anchor1, 0, -(size + 4))
+                            icon:SetPoint(anchor1, element, anchor1, 0, -(buffSize + 4))
                         else
-                            icon:SetPoint(anchor1, element, anchor1, -(size + 4), 0)
+                            icon:SetPoint(anchor1, element, anchor1, -(buffSize + 4), 0)
                         end
                     else
                         icon:SetPoint(anchor1, icons[iconIndex - 1], relPoint, xSpace, ySpace)
                         isFirstBuffRendered = true
                     end
 
-                    icon.icon:SetTexture(aura.icon)
-                    local count = aura.applications or 0
-                    local text = ""
-                    if not issecretvalue(count) then
-                        text = (count > 1) and tostring(count) or ""
-                    end
-                    icon.count:SetText(text)
-
-                    icon.auraInstanceID = auraInstanceID
-                    icon.isDebuff = false
-                    icon.filter = "HELPFUL"
-
-                    if icon.SetBackdropBorderColor then icon:SetBackdropBorderColor(0, 0, 0) end
-                    icon.overlay:Hide()
+                    StyleIcon(icon, db, aura, false, size)
 
                     if durationObj then
-                        local isZero = durationObj:IsZero()
                         local shouldShow = false
-                        if issecretvalue and issecretvalue(isZero) then
+                        if issecretvalue(durationObj) then
                             shouldShow = true
-                        elseif not isZero then
-                            shouldShow = true
+                        else
+                            local isZero = durationObj:IsZero()
+                            if issecretvalue and issecretvalue(isZero) then
+                                shouldShow = true
+                            elseif not isZero then
+                                shouldShow = true
+                            end
                         end
 
                         if shouldShow then
+                            icon.cd:Hide()
                             if icon.cd.SetCooldownFromDurationObject then
                                 icon.cd:SetCooldownFromDurationObject(durationObj)
                             end
@@ -723,7 +866,8 @@ local function GetOrCreateAuraElement(frame, key)
         local renderIcons = totalIcons
 
         local rows = 1
-        if frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest or element.isInEditMode then
+        local isCustom = not not key:match("^CustomAura")
+        if isCustom or frame.isInEditMode or frame.forceShowEditMode or frame.forceShowTest or element.isInEditMode then
             renderIcons = maxIcons
             if not isSplitDebuff and not isSplitBuff and db.separateAuras and
                 db.showBuffs ~= false and db.showDebuffs ~= false then
@@ -744,7 +888,7 @@ local function GetOrCreateAuraElement(frame, key)
                 element:SetSize(secondarySize, primarySize)
             end
 
-            if isCenterHoriz or isCenterVert then
+            if (isCenterHoriz or isCenterVert) and icons[1] then
                 local renderWidth = math.min(iconIndex - 1, maxIcons)
                 local activeSize = renderWidth * size + (renderWidth - 1) * math.abs(isCenterHoriz and xSpace or ySpace)
                 local icon = icons[1]
@@ -794,11 +938,9 @@ local function GetOrCreateAuraElement(frame, key)
                 element.editModeText:SetPoint("CENTER", element, "CENTER", 0, 0)
             end
 
-            local isCustom = key:match("^CustomAura")
             local textStr = ""
             local idLabel = key:match("^CustomAura_(.+)")
             local _ = idLabel
-            local _ = isCustom
 
             if isSplitBuff then
                 textStr = textStr .. "\n(Buffs)"
@@ -849,12 +991,14 @@ function UF:CreateAuras(frame)
     -- 2. Register Events (Shared)
     frame:HookScript("OnEvent", function(s, event, arg1)
         if event == "UNIT_AURA" then
-            if arg1 == s.unit then frame.UpdateAuras() end
+            if arg1 and s.unit and UnitIsUnit(arg1, s.unit) then frame.UpdateAuras() end
         elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" or event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
             C_Timer.After(0.5, frame.UpdateAuras)
         end
     end)
-    frame:RegisterEvent("UNIT_AURA", frame.UpdateAuras)
+    if frame.RegisterEvent then
+        frame:RegisterEvent("UNIT_AURA", frame.UpdateAuras)
+    end
     frame:RegisterEvent("PLAYER_TARGET_CHANGED", frame.UpdateAuras, true)
     frame:RegisterEvent("PLAYER_FOCUS_CHANGED", frame.UpdateAuras, true)
     frame:RegisterEvent("UNIT_ENTERED_VEHICLE", frame.UpdateAuras)
@@ -872,6 +1016,12 @@ function UF:UpdateAuras(frame)
     -- Force vehicle detection for player frame
     if frame.unit == "player" and UnitHasVehicleUI("player") then
         frame.unit = "vehicle"
+    end
+
+    -- Re-register UNIT_AURA specifically for the current unit using oUF
+    if frame.UpdateAuras and frame.UnregisterEvent and frame.RegisterEvent then
+        frame:UnregisterEvent("UNIT_AURA", frame.UpdateAuras)
+        frame:RegisterEvent("UNIT_AURA", frame.UpdateAuras)
     end
 
     -- 1. Update Base
@@ -1037,7 +1187,7 @@ function UF:UpdateAllCustomAuras()
 
             -- EVENT REGISTRATION
             el:SetScript("OnEvent", function(s, event, unit)
-                if event == "UNIT_AURA" and unit == s.unit then
+                if event == "UNIT_AURA" and unit and s.unit and UnitIsUnit(unit, s.unit) then
                     s.Update()
                 elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then
                     s.Update()
@@ -1049,8 +1199,14 @@ function UF:UpdateAllCustomAuras()
 
         -- Update Internal Unit
         el.unit = conf.unit or "player"
-        el:UnregisterEvent("UNIT_AURA")
-        el:RegisterUnitEvent("UNIT_AURA", el.unit)
+        if el.UnregisterEvent then
+            el:UnregisterEvent("UNIT_AURA")
+        end
+        if el.RegisterUnitEvent and el.unit then
+            el:RegisterUnitEvent("UNIT_AURA", el.unit)
+        elseif el.RegisterEvent then
+            el:RegisterEvent("UNIT_AURA")
+        end
 
         el.Update()
     end

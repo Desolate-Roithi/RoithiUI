@@ -221,7 +221,7 @@ function ns.UpdateCast(bar, unitOverride)
         if bar.Spark then bar.Spark:Show() end
     end
 
-    if RoithiUI.db.profile.Castbar[unit].showIcon then
+    if db.showIcon then
         bar.Icon:Show(); bar.Icon:SetTexture(texture)
     else
         bar.Icon:Hide()
