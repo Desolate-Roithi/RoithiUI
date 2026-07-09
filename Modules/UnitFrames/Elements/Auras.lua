@@ -11,7 +11,7 @@ local issecretvalue = _G.issecretvalue or function(...)
     return false
 end
 
-local function StyleIcon(icon, db, aura, isDebuff, size)
+local function StyleIcon(icon, db, aura, isDebuff, size, unit)
     if not db then return end
     if not size then
         size = isDebuff and (tonumber(db.debuffSize) or tonumber(db.auraSize) or 20)
@@ -26,12 +26,34 @@ local function StyleIcon(icon, db, aura, isDebuff, size)
     icon.icon:SetTexCoord(offset, 1 - offset, offset, 1 - offset)
 
     -- Stack counts
+    local minCount, maxCount = 2, 999
     local count = aura.applications or 0
-    local text = ""
-    if not issecretvalue(count) then
-        text = (count > 1) and tostring(count) or ""
+    if issecretvalue(count) then
+        if C_UnitAuras.GetAuraApplicationDisplayCount and unit and aura.auraInstanceID then
+            local countText = C_UnitAuras.GetAuraApplicationDisplayCount(unit, aura.auraInstanceID, minCount, maxCount)
+            icon.count:SetText(countText)
+            if _G.SetShownFromSecret then
+                _G.SetShownFromSecret(icon.count, countText)
+            else
+                icon.count:Show()
+            end
+        else
+            icon.count:SetText(count)
+            if _G.SetShownFromSecret then
+                _G.SetShownFromSecret(icon.count, count)
+            else
+                icon.count:Show()
+            end
+        end
+    else
+        local hideCount = not count or (count < minCount or count > maxCount)
+        icon.count:SetText(hideCount and "" or tostring(count))
+        if hideCount then
+            icon.count:Hide()
+        else
+            icon.count:Show()
+        end
     end
-    icon.count:SetText(text)
 
     local stackFontSize = db.stackFontSize or 10
     local stackAnchor = db.stackAnchor or "BOTTOMRIGHT"
@@ -563,7 +585,7 @@ local function GetOrCreateAuraElement(frame, key)
                         icon:SetPoint(anchor1, icons[iconIndex - 1], relPoint, xSpace, ySpace)
                     end
 
-                    StyleIcon(icon, db, aura, true, size)
+                    StyleIcon(icon, db, aura, true, size, unit)
 
                     if durationObj then
                         local shouldShow = false
@@ -752,7 +774,7 @@ local function GetOrCreateAuraElement(frame, key)
                         isFirstBuffRendered = true
                     end
 
-                    StyleIcon(icon, db, aura, false, size)
+                    StyleIcon(icon, db, aura, false, size, unit)
 
                     if durationObj then
                         local shouldShow = false
