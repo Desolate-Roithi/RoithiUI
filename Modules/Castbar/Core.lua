@@ -132,37 +132,35 @@ function ns.UpdateBlizzardVisibility()
     local db = RoithiUI.db.profile.Castbar
     if not db then return end
 
+    local castbarModule = RoithiUI:GetModule("Castbar")
+    local moduleEnabled = not castbarModule or not castbarModule.IsEnabled or castbarModule:IsEnabled() ~= false
+
+    local castbarOriginalParents = {}
+
     -- Helper to hide/show
     local function ToggleBlizzBar(frame, shouldHide)
         if not frame then return end
 
-        if shouldHide then
-            -- Hide visually but keep events running to avoid Taint/Restoration issues
-            -- (UnregisterAllEvents is too destructive and hard to reverse correctly)
-            frame:SetAlpha(0)
-            if frame.EnableMouse then frame:EnableMouse(false) end
-            frame:Hide()
+        if not moduleEnabled then
+            shouldHide = false
+        end
 
-            -- Hook OnShow to force hide?
-            -- No, SetAlpha(0) allows standard code to run without visible artifacts.
-            -- But standard code might SetAlpha(1).
-            -- Let's try explicit Unregister if Safe, but user reported failure.
-            -- We'll try SetParent(Hidden) approach if possible, but SetAlpha is safest for 12.0.1
-            -- Restore to standard Hide approach
-            if not frame.RoithiHooked then
-                hooksecurefunc(frame, "Show", function(self)
-                    if self.shouldBeHiddenRoithi then
-                        self:Hide()
-                    end
-                end)
-                frame.RoithiHooked = true
-            end
-            frame.shouldBeHiddenRoithi = true
-            frame:Hide()
+        if frame.SetAndUpdateShowCastbar then
+            frame:SetAndUpdateShowCastbar(not shouldHide)
         else
-            frame.shouldBeHiddenRoithi = false
-            frame:SetAlpha(1)
-            frame:Show()
+            if shouldHide then
+                if not castbarOriginalParents[frame] then
+                    castbarOriginalParents[frame] = (frame.GetParent and frame:GetParent()) or UIParent
+                end
+                if frame.SetParent then
+                    frame:SetParent(RoithiUI.HiddenFrame)
+                end
+                frame:Hide()
+            else
+                if castbarOriginalParents[frame] and frame.SetParent then
+                    frame:SetParent(castbarOriginalParents[frame])
+                end
+            end
         end
     end
 
@@ -249,58 +247,64 @@ end
 function Castbar:OnEnable()
     MidnightCastbarsDB = RoithiUI.db.profile.Castbar -- Ensure defined
 
+    if not self.initialized then
+        ns.InitializeBars()          -- Defined in Castbar.lua
+        ns.InitializeCastbarConfig() -- Defined in Config/Castbars.lua
+        self.initialized = true
+    end
+
     ns.UpdateBlizzardVisibility()
-    ns.InitializeBars()          -- Defined in Castbar.lua
-    ns.InitializeCastbarConfig() -- Defined in Config/Castbars.lua
 
     -- Register Cast Events
-    self.eventFrame = CreateFrame("Frame")
-    local f = self.eventFrame
-    -- Registered via self.eventFrame to avoid GC and allow external access/teardown
+    if not self.eventFrame then
+        self.eventFrame = CreateFrame("Frame")
+        local f = self.eventFrame
 
-    f:SetScript("OnEvent", function(_, event, ...)
-        if event == "PLAYER_TARGET_CHANGED" then
-            ns.UpdateCast(ns.bars["target"])
-            ns.UpdateCast(ns.bars["targettarget"])
-        elseif event == "PLAYER_FOCUS_CHANGED" then
-            ns.UpdateCast(ns.bars["focus"])
-            ns.UpdateCast(ns.bars["focustarget"])
-        elseif event == "UNIT_TARGET" then
-            local unit = ...
-            if unit == "target" then
+        f:SetScript("OnEvent", function(_, event, ...)
+            if event == "PLAYER_TARGET_CHANGED" then
+                ns.UpdateCast(ns.bars["target"])
                 ns.UpdateCast(ns.bars["targettarget"])
-            elseif unit == "focus" then
+            elseif event == "PLAYER_FOCUS_CHANGED" then
+                ns.UpdateCast(ns.bars["focus"])
                 ns.UpdateCast(ns.bars["focustarget"])
-            end
-        elseif event == "UNIT_PET" then
-            ns.UpdateCast(ns.bars["pet"])
-            -- Sync attachment on pet change
-            local cbDB = RoithiUI.db.profile.Castbar["pet"]
-            local isDetached = cbDB and cbDB.detached
-            ns.SetCastbarAttachment("pet", not isDetached)
-        else
-            local unit = ...
-            local targetBar = ns.bars[unit]
-            
-            -- Vehicle Aliasing: Map vehicle/pet casts to player bar if needed
-            if unit == "vehicle" then
-                targetBar = ns.bars["player"]
-            end
+            elseif event == "UNIT_TARGET" then
+                local unit = ...
+                if unit == "target" then
+                    ns.UpdateCast(ns.bars["targettarget"])
+                elseif unit == "focus" then
+                    ns.UpdateCast(ns.bars["focustarget"])
+                end
+            elseif event == "UNIT_PET" then
+                ns.UpdateCast(ns.bars["pet"])
+                -- Sync attachment on pet change
+                local cbDB = RoithiUI.db.profile.Castbar["pet"]
+                local isDetached = cbDB and cbDB.detached
+                ns.SetCastbarAttachment("pet", not isDetached)
+            else
+                local unit = ...
+                local targetBar = ns.bars[unit]
 
-            if targetBar then
-                if event == "UNIT_SPELLCAST_INTERRUPTED" then
-                    ns.HandleInterrupt(targetBar)
-                elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
-                    if not targetBar.isInterrupted and not targetBar.isInEditMode then
-                        targetBar:Hide(); targetBar:SetScript("OnUpdate", nil)
+                -- Vehicle Aliasing: Map vehicle/pet casts to player bar if needed
+                if unit == "vehicle" then
+                    targetBar = ns.bars["player"]
+                end
+
+                if targetBar then
+                    if event == "UNIT_SPELLCAST_INTERRUPTED" then
+                        ns.HandleInterrupt(targetBar)
+                    elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
+                        if not targetBar.isInterrupted and not targetBar.isInEditMode then
+                            targetBar:Hide(); targetBar:SetScript("OnUpdate", nil)
+                        end
+                    else
+                        ns.UpdateCast(targetBar, unit)
                     end
-                else
-                    ns.UpdateCast(targetBar, unit)
                 end
             end
-        end
-    end)
+        end)
+    end
 
+    local f = self.eventFrame
     f:RegisterEvent("UNIT_SPELLCAST_START")
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
@@ -311,7 +315,17 @@ function Castbar:OnEnable()
     f:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
     f:RegisterEvent("PLAYER_TARGET_CHANGED")
     f:RegisterEvent("PLAYER_FOCUS_CHANGED")
-    -- Events are registered above
+end
+
+function Castbar:OnDisable()
+    if self.eventFrame then
+        self.eventFrame:UnregisterAllEvents()
+    end
+    for _, bar in pairs(ns.bars) do
+        bar:Hide()
+        bar:SetScript("OnUpdate", nil)
+    end
+    ns.UpdateBlizzardVisibility()
 end
 
 -- Slash Command

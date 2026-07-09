@@ -28,54 +28,137 @@ local WIDGET_BLACKLIST = {
     [7372] = true, -- Hidden Encounter Timer / Abyss Background Widget
 }
 
--- ─────────────────────────────────────────────────────────────────────────────
--- Blizzard PlayerPowerBarAlt toggle helper
--- Suppresses the native bar while our custom one is active.
--- ─────────────────────────────────────────────────────────────────────────────
+local altPowerOriginalParent = nil
+
+local function ShouldSuppressWidget(widgetID)
+    local db = RoithiUI.db.profile.EncounterResource
+    if not db or not db.enabled then return false end
+
+    local isBlacklisted = WIDGET_BLACKLIST[widgetID]
+    if isBlacklisted then return false end
+
+    local eb = _G.RoithiEncounterResource
+    if IsEncounterInProgress() or (eb and eb.isInEditMode) then
+        return true
+    end
+
+    local info = C_UIWidgetManager.GetUnitPowerBarWidgetVisualizationInfo(widgetID)
+        or C_UIWidgetManager.GetStatusBarWidgetVisualizationInfo(widgetID)
+        or C_UIWidgetManager.GetFillUpFramesWidgetVisualizationInfo(widgetID)
+
+    if info then
+        local nameText = info.barLabel or info.text or ""
+        local isWhitelisted = WHITELISTED_IDS[widgetID] or (db.whitelist and db.whitelist[widgetID])
+        local isTitleWhitelisted = WHITELISTED_TITLES[nameText]
+        if isWhitelisted or isTitleWhitelisted then
+            return true
+        end
+    end
+
+    return false
+end
+
 local function ToggleBlizzard(enableCustom)
-    if not PlayerPowerBarAlt then return end
+    local altPower = _G.PlayerPowerBarAlt
+    local widgetContainer = _G.UIWidgetPowerBarContainerFrame
+    local hiddenFrame = RoithiUI.HiddenFrame
 
     if enableCustom then
-        PlayerPowerBarAlt:UnregisterEvent("UNIT_POWER_BAR_SHOW")
-        PlayerPowerBarAlt:Hide()
-
-        -- Prevent OnUpdate crash by removing the script entirely
-        if not PlayerPowerBarAlt.RoithiOriginalOnUpdate then
-            PlayerPowerBarAlt.RoithiOriginalOnUpdate = PlayerPowerBarAlt:GetScript("OnUpdate")
+        -- 1. Suppress Alt Power Bar
+        if altPower then
+            if not altPowerOriginalParent then
+                altPowerOriginalParent = (altPower.GetParent and altPower:GetParent()) or _G.EncounterBar or UIParent
+            end
+            if altPower.UnregisterAllEvents then
+                altPower:UnregisterAllEvents()
+            end
+            altPower:Hide()
+            if hiddenFrame then
+                altPower:SetParent(hiddenFrame)
+            end
         end
-        PlayerPowerBarAlt:SetScript("OnUpdate", nil)
 
-        -- Prevent re-showing via hook
-        if not PlayerPowerBarAlt.RoithiHookedShow then
-            hooksecurefunc(PlayerPowerBarAlt, "Show", function(self)
-                if RoithiUI.db.profile.EncounterResource and RoithiUI.db.profile.EncounterResource.enabled then
-                    self:Hide()
+        -- 2. Hook and Suppress specific whitelisted widgets in the UI Widget Power Bar Container
+        if widgetContainer then
+            if not widgetContainer.RoithiOriginalLayoutFunc then
+                widgetContainer.RoithiOriginalLayoutFunc = widgetContainer.layoutFunc or _G.DefaultWidgetLayout or function() end
+                widgetContainer.layoutFunc = function(self, sortedWidgets)
+                    local db = RoithiUI.db.profile.EncounterResource
+                    if db and db.enabled then
+                        local filteredWidgets = {}
+                        for _, widgetFrame in ipairs(sortedWidgets) do
+                            local widgetID = widgetFrame.widgetID
+                            if widgetID and ShouldSuppressWidget(widgetID) then
+                                widgetFrame:Hide()
+                                if hiddenFrame then
+                                    widgetFrame:SetParent(hiddenFrame)
+                                end
+                            else
+                                if widgetFrame:GetParent() == hiddenFrame then
+                                    widgetFrame:SetParent(widgetContainer)
+                                end
+                                table.insert(filteredWidgets, widgetFrame)
+                            end
+                        end
+                        self.RoithiOriginalLayoutFunc(self, filteredWidgets)
+                    else
+                        self.RoithiOriginalLayoutFunc(self, sortedWidgets)
+                    end
                 end
-            end)
-            PlayerPowerBarAlt.RoithiHookedShow = true
+            end
+            -- Force widget container to update layout so it applies our filter immediately
+            if widgetContainer.UpdateWidgetLayout then
+                widgetContainer:UpdateWidgetLayout()
+            end
         end
-
-        -- Suppression removed to fix missing overlays in Hide and Seek mode
     else
-        -- Restore Blizzard bar
-        if PlayerPowerBarAlt.RoithiOriginalOnUpdate then
-            PlayerPowerBarAlt:SetScript("OnUpdate", PlayerPowerBarAlt.RoithiOriginalOnUpdate)
-            PlayerPowerBarAlt.RoithiOriginalOnUpdate = nil
+        -- 1. Restore Alt Power Bar
+        if altPower then
+            altPower.barInfo = altPower.barInfo or {} -- Prevent OnUpdate crashes due to nil barInfo
+            if altPowerOriginalParent then
+                altPower:SetParent(altPowerOriginalParent)
+            end
+            altPower:RegisterEvent("UNIT_POWER_BAR_SHOW")
+            altPower:RegisterEvent("UNIT_POWER_BAR_HIDE")
+            altPower:RegisterEvent("PLAYER_ENTERING_WORLD")
+            
+            -- Force Blizzard init so it rebuilds its state
+            local onEvent = altPower:GetScript("OnEvent")
+            if onEvent then
+                pcall(onEvent, altPower, "PLAYER_ENTERING_WORLD")
+                local barID = _G.UnitPowerBarID and _G.UnitPowerBarID("player")
+                if barID and barID ~= 0 then
+                    pcall(onEvent, altPower, "UNIT_POWER_BAR_SHOW", "player")
+                end
+            end
+            local barID = _G.UnitPowerBarID and _G.UnitPowerBarID("player")
+            if barID and barID ~= 0 then
+                altPower:Show()
+            else
+                altPower:Hide()
+            end
         end
 
-        PlayerPowerBarAlt:RegisterEvent("UNIT_POWER_BAR_SHOW")
-        if UnitPowerBarID("player") then
-            -- FIX: Force initialization so 'barInfo' exists before OnUpdate runs
-            local onEvent = PlayerPowerBarAlt:GetScript("OnEvent")
-            if onEvent then
-                onEvent(PlayerPowerBarAlt, "UNIT_POWER_BAR_SHOW", "player")
+        -- 2. Restore UI Widget Power Bar Container and its child widgets
+        if widgetContainer then
+            -- Restore any child widgets that were parented to HiddenFrame
+            if widgetContainer.widgetFrames then
+                for _, widgetFrame in pairs(widgetContainer.widgetFrames) do
+                    if widgetFrame:GetParent() == hiddenFrame then
+                        widgetFrame:SetParent(widgetContainer)
+                    end
+                end
             end
-            if PlayerPowerBarAlt.barInfo then
-                PlayerPowerBarAlt:Show()
+
+            -- Restore original layout function
+            if widgetContainer.RoithiOriginalLayoutFunc then
+                widgetContainer.layoutFunc = widgetContainer.RoithiOriginalLayoutFunc
+                widgetContainer.RoithiOriginalLayoutFunc = nil
             end
-        end
-        if UIWidgetPowerBarContainerFrame then
-            UIWidgetPowerBarContainerFrame:Show()
+
+            if widgetContainer.UpdateWidgetLayout then
+                widgetContainer:UpdateWidgetLayout()
+            end
         end
     end
 end
@@ -287,6 +370,43 @@ local function Update(s)
     end
 
     -- 1. Check Widgets first (if we are tracking one)
+    if not s.hasWidgetID then
+        local setID = C_UIWidgetManager.GetPowerBarWidgetSetID and C_UIWidgetManager.GetPowerBarWidgetSetID()
+        if setID then
+            local widgets = C_UIWidgetManager.GetAllWidgetsBySetID(setID)
+            if widgets then
+                for _, widgetInfo in ipairs(widgets) do
+                    local info = C_UIWidgetManager.GetUnitPowerBarWidgetVisualizationInfo(widgetInfo.widgetID)
+                        or C_UIWidgetManager.GetStatusBarWidgetVisualizationInfo(widgetInfo.widgetID)
+                        or C_UIWidgetManager.GetFillUpFramesWidgetVisualizationInfo(widgetInfo.widgetID)
+                    
+                    if info and info.shownState ~= Enum.WidgetShownState.Hidden then
+                        local nameText = info.barLabel or info.text or ""
+                        local isWhitelisted = WHITELISTED_IDS[widgetInfo.widgetID] or (db and db.whitelist and db.whitelist[widgetInfo.widgetID])
+                        local isTitleWhitelisted = WHITELISTED_TITLES[nameText]
+                        local isBlacklisted = WIDGET_BLACKLIST[widgetInfo.widgetID]
+
+                        local shouldShow = false
+                        if not isBlacklisted then
+                            if IsEncounterInProgress() or s.isInEditMode then
+                                shouldShow = true
+                            elseif isWhitelisted or isTitleWhitelisted then
+                                shouldShow = true
+                            end
+                        end
+
+                        if shouldShow then
+                            s.hasWidgetID = widgetInfo.widgetID
+                            s.hasWidgetType = widgetInfo.widgetType
+                            UpdateFromWidget(s, widgetInfo)
+                            return
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     if s.hasWidgetID then
         local info
         if s.hasWidgetType == Enum.UIWidgetVisualizationType.UnitPowerBar then
@@ -560,6 +680,10 @@ end
 function EB:OnEnable()
     local db = RoithiUI.db.profile.EncounterResource
     self:Toggle(db.enabled)
+end
+
+function EB:OnDisable()
+    self:Toggle(false)
 end
 
 function EB:ChatCommand(input)

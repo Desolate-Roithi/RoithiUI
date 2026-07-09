@@ -761,6 +761,8 @@ ns.Defaults = {
         },
 
         EnabledModules = {
+            UnitFrames = true,
+            Castbar = true,
             EncounterBar = true,
             FocusCastbar = true,
             FocusFrame = true,

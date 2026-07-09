@@ -95,6 +95,14 @@ function RoithiUI:OnInitialize()
     if self.Config and self.Config.RegisterOptions then
         self.Config:RegisterOptions()
     end
+
+    -- Disable modules that are configured as disabled
+    for name, module in self:IterateModules() do
+        local isEnabled = self.db.profile.EnabledModules and self.db.profile.EnabledModules[name]
+        if isEnabled == false then
+            module:Disable()
+        end
+    end
 end
 
 function RoithiUI:RefreshProfile()

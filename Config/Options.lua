@@ -7,6 +7,23 @@ local LSM = LibStub("LibSharedMedia-3.0")
 local AL = ns.AttachmentLogic
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
 
+local function RequestReload()
+    if not StaticPopupDialogs["ROITHIUI_RELOAD"] then
+        StaticPopupDialogs["ROITHIUI_RELOAD"] = {
+            text = L["Changing these settings requires a UI Reload. Reload now?"],
+            button1 = L["Reload"],
+            button2 = L["Cancel"],
+            OnAccept = function()
+                ReloadUI()
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+        }
+    end
+    StaticPopup_Show("ROITHIUI_RELOAD")
+end
+
 
 -- ----------------------------------------------------------------------------
 -- AceConfig Table Definition
@@ -29,32 +46,33 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
             inline = true,
             args = {
                 showBuffs = {
-                    type = "toggle",
-                    name = L["Show Buffs"],
+                    type  = "toggle",
+                    name  = L["Show Buffs"],
                     desc  = L["Enable rendering of helpful auras."],
                     order = 1,
-                    get = function() return GetDB().showBuffs ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().showBuffs ~= false end,
+                    set   = function(_, v)
                         GetDB().showBuffs = v; RefreshFunc()
                     end,
                 },
                 showDebuffs = {
-                    type = "toggle",
-                    name = L["Show Debuffs"],
+                    type  = "toggle",
+                    name  = L["Show Debuffs"],
                     desc  = L["Enable rendering of harmful auras."],
                     order = 2,
-                    get = function() return GetDB().showDebuffs ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().showDebuffs ~= false end,
+                    set   = function(_, v)
                         GetDB().showDebuffs = v; RefreshFunc()
                     end,
                 },
                 separateAuras = {
-                    type = "toggle",
-                    name = L["Separate Buffs & Debuffs"],
-                    desc  = L["When checked, Buffs and Debuffs will anchor separately instead of flowing consecutively."],
-                    order = 3,
-                    get = function() return GetDB().separateAuras end,
-                    set = function(_, v)
+                    type   = "toggle",
+                    name   = L["Separate Buffs & Debuffs"],
+                    desc   = L
+                    ["When checked, Buffs and Debuffs will anchor separately instead of flowing consecutively."],
+                    order  = 3,
+                    get    = function() return GetDB().separateAuras end,
+                    set    = function(_, v)
                         GetDB().separateAuras = v; RefreshFunc()
                     end,
                     hidden = function() return GetDB().isStandaloneCustom end,
@@ -68,32 +86,32 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
             inline = true,
             args = {
                 showAllBuffs = {
-                    type = "toggle",
-                    name = L["All Buffs"],
+                    type  = "toggle",
+                    name  = L["All Buffs"],
                     desc  = L["Overrides Smart Filters to show every active Buff on the unit."],
                     order = 1,
-                    get = function() return GetDB().showAllBuffs end,
-                    set = function(_, v)
+                    get   = function() return GetDB().showAllBuffs end,
+                    set   = function(_, v)
                         GetDB().showAllBuffs = v; RefreshFunc()
                     end,
                 },
                 showAllDebuffs = {
-                    type = "toggle",
-                    name = L["All Debuffs"],
+                    type  = "toggle",
+                    name  = L["All Debuffs"],
                     desc  = L["Overrides Smart Filters to show every active Debuff on the unit."],
                     order = 2,
-                    get = function() return GetDB().showAllDebuffs end,
-                    set = function(_, v)
+                    get   = function() return GetDB().showAllDebuffs end,
+                    set   = function(_, v)
                         GetDB().showAllDebuffs = v; RefreshFunc()
                     end,
                 },
                 hideTimeless = {
-                    type = "toggle",
-                    name = L["Hide Timeless Auras"],
+                    type  = "toggle",
+                    name  = L["Hide Timeless Auras"],
                     desc  = L["Hides passive auras with no duration."],
                     order = 3,
-                    get = function() return GetDB().hideTimeless == true end,
-                    set = function(_, v)
+                    get   = function() return GetDB().hideTimeless == true end,
+                    set   = function(_, v)
                         GetDB().hideTimeless = v; RefreshFunc()
                     end,
                 },
@@ -106,32 +124,32 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
             inline = true,
             args = {
                 playerBuffs = {
-                    type = "toggle",
-                    name = L["My Buffs"],
+                    type  = "toggle",
+                    name  = L["My Buffs"],
                     desc  = L["Shows generic helpful auras cast by you."],
                     order = 1,
-                    get = function() return GetDB().playerBuffs ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().playerBuffs ~= false end,
+                    set   = function(_, v)
                         GetDB().playerBuffs = v; RefreshFunc()
                     end,
                 },
                 playerDebuffs = {
-                    type = "toggle",
-                    name = L["My Debuffs"],
+                    type  = "toggle",
+                    name  = L["My Debuffs"],
                     desc  = L["Shows generic harmful auras (like DoTs) cast by you."],
                     order = 2,
-                    get = function() return GetDB().playerDebuffs ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().playerDebuffs ~= false end,
+                    set   = function(_, v)
                         GetDB().playerDebuffs = v; RefreshFunc()
                     end,
                 },
                 raidInCombat = {
-                    type = "toggle",
-                    name = L["My Raid HoTs/Buffs"],
+                    type  = "toggle",
+                    name  = L["My Raid HoTs/Buffs"],
                     desc  = L["Safely shows your HoTs while in combat (bypassing native combat hiding restrictions)."],
                     order = 3,
-                    get = function() return GetDB().raidInCombat ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().raidInCombat ~= false end,
+                    set   = function(_, v)
                         GetDB().raidInCombat = v; RefreshFunc()
                     end,
                 },
@@ -144,42 +162,42 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
             inline = true,
             args = {
                 importantBuffs = {
-                    type = "toggle",
-                    name = L["Important Buffs"],
+                    type  = "toggle",
+                    name  = L["Important Buffs"],
                     desc  = L["Shows Buffs explicitly flagged by Blizzard developers as critical for the encounter."],
                     order = 1,
-                    get = function() return GetDB().importantBuffs ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().importantBuffs ~= false end,
+                    set   = function(_, v)
                         GetDB().importantBuffs = v; RefreshFunc()
                     end,
                 },
                 importantDebuffs = {
-                    type = "toggle",
-                    name = L["Important Debuffs"],
+                    type  = "toggle",
+                    name  = L["Important Debuffs"],
                     desc  = L["Shows Debuffs explicitly flagged by Blizzard developers as critical for the encounter."],
                     order = 2,
-                    get = function() return GetDB().importantDebuffs ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().importantDebuffs ~= false end,
+                    set   = function(_, v)
                         GetDB().importantDebuffs = v; RefreshFunc()
                     end,
                 },
                 cc = {
-                    type = "toggle",
-                    name = L["Crowd Control"],
+                    type  = "toggle",
+                    name  = L["Crowd Control"],
                     desc  = L["Shows Debuffs that restrict character control (Stuns, Fears, Roots, etc)."],
                     order = 3,
-                    get = function() return GetDB().cc ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().cc ~= false end,
+                    set   = function(_, v)
                         GetDB().cc = v; RefreshFunc()
                     end,
                 },
                 dispellable = {
-                    type = "toggle",
-                    name = L["Dispellable"],
+                    type  = "toggle",
+                    name  = L["Dispellable"],
                     desc  = L["Shows Debuffs that your current Class/Spec is physically capable of dispelling."],
                     order = 4,
-                    get = function() return GetDB().dispellable ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().dispellable ~= false end,
+                    set   = function(_, v)
                         GetDB().dispellable = v; RefreshFunc()
                     end,
                 },
@@ -192,32 +210,33 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
             inline = true,
             args = {
                 majorDefensivesBuffs = {
-                    type = "toggle",
-                    name = L["Major Defensives (Tanks)"],
+                    type  = "toggle",
+                    name  = L["Major Defensives (Tanks)"],
                     desc  = L["Shows major defensive cooldowns (Buffs) on the unit (e.g. Shield Wall, Barkskin)."],
                     order = 1,
-                    get = function() return GetDB().majorDefensivesBuffs ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().majorDefensivesBuffs ~= false end,
+                    set   = function(_, v)
                         GetDB().majorDefensivesBuffs = v; RefreshFunc()
                     end,
                 },
                 majorDefensivesDebuffs = {
-                    type = "toggle",
-                    name = L["Major Defensives (Debuffs)"],
-                    desc  = L["Shows major defensive restrictions (Debuffs) on the unit (e.g. Forbearance, Weakened Soul)."],
+                    type  = "toggle",
+                    name  = L["Major Defensives (Debuffs)"],
+                    desc  = L
+                    ["Shows major defensive restrictions (Debuffs) on the unit (e.g. Forbearance, Weakened Soul)."],
                     order = 2,
-                    get = function() return GetDB().majorDefensivesDebuffs ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().majorDefensivesDebuffs ~= false end,
+                    set   = function(_, v)
                         GetDB().majorDefensivesDebuffs = v; RefreshFunc()
                     end,
                 },
                 externalDefensives = {
-                    type = "toggle",
-                    name = L["External Defensives"],
+                    type  = "toggle",
+                    name  = L["External Defensives"],
                     desc  = L["Shows major defensive buffs cast on the unit by OTHER players (e.g. Pain Suppression)."],
                     order = 3,
-                    get = function() return GetDB().externalDefensives ~= false end,
-                    set = function(_, v)
+                    get   = function() return GetDB().externalDefensives ~= false end,
+                    set   = function(_, v)
                         GetDB().externalDefensives = v; RefreshFunc()
                     end,
                 },
@@ -230,12 +249,12 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
             inline = true,
             args = {
                 addSpell = {
-                    type = "input",
-                    name = L["Add Spell ID"],
+                    type  = "input",
+                    name  = L["Add Spell ID"],
                     desc  = L["Enter a Spell ID to blacklist it (hide)."],
                     order = 1,
-                    get = function() return "" end,
-                    set = function(_, v)
+                    get   = function() return "" end,
+                    set   = function(_, v)
                         local id = tonumber(v)
                         if id then
                             local db = GetDB()
@@ -246,16 +265,17 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     end,
                 },
                 removeSpell = {
-                    type = "multiselect",
-                    name = L["Blacklisted Spell IDs"],
-                    desc  = L["Uncheck a Spell ID to remove it from the blacklist."],
-                    order = 2,
+                    type   = "multiselect",
+                    name   = L["Blacklisted Spell IDs"],
+                    desc   = L["Uncheck a Spell ID to remove it from the blacklist."],
+                    order  = 2,
                     values = function()
                         local db = GetDB()
                         local out = {}
 
                         -- 1. Default blacklist
-                        local defaultBlacklist = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Auras and RoithiUI.db.profile.Auras.Blacklist
+                        local defaultBlacklist = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Auras and
+                        RoithiUI.db.profile.Auras.Blacklist
                         if defaultBlacklist then
                             for id, active in pairs(defaultBlacklist) do
                                 if active then
@@ -289,19 +309,20 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                         end
                         return displayList
                     end,
-                    get = function(_, key)
+                    get    = function(_, key)
                         local db = GetDB()
                         local id = tonumber(key) or key
                         if db and db.Blacklist and db.Blacklist[id] ~= nil then
                             return db.Blacklist[id]
                         end
-                        local defaultBlacklist = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Auras and RoithiUI.db.profile.Auras.Blacklist
+                        local defaultBlacklist = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Auras and
+                        RoithiUI.db.profile.Auras.Blacklist
                         if defaultBlacklist and defaultBlacklist[id] ~= nil then
                             return defaultBlacklist[id]
                         end
                         return false
                     end,
-                    set = function(_, key, value)
+                    set    = function(_, key, value)
                         local db = GetDB()
                         if db then
                             local id = tonumber(key) or key
@@ -320,12 +341,12 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
             inline = true,
             args = {
                 addSpell = {
-                    type = "input",
-                    name = L["Add Spell ID"],
+                    type  = "input",
+                    name  = L["Add Spell ID"],
                     desc  = L["Enter a Spell ID to whitelist it (always show)."],
                     order = 1,
-                    get = function() return "" end,
-                    set = function(_, v)
+                    get   = function() return "" end,
+                    set   = function(_, v)
                         local id = tonumber(v)
                         if id then
                             local db = GetDB()
@@ -336,11 +357,11 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     end,
                 },
                 removeSpell = {
-                    type = "multiselect",
-                    name = L["Whitelisted Spell IDs"],
-                    desc  = L["Uncheck a Spell ID to remove it from the whitelist."],
-                    order = 2,
-                    values = function()
+                    type    = "multiselect",
+                    name    = L["Whitelisted Spell IDs"],
+                    desc    = L["Uncheck a Spell ID to remove it from the whitelist."],
+                    order   = 2,
+                    values  = function()
                         local db = GetDB()
                         local out = {}
                         if db and db.Whitelist then
@@ -359,8 +380,8 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                         end
                         return out
                     end,
-                    get = function(_, key) return true end,
-                    set = function(_, key, value)
+                    get     = function(_, key) return true end,
+                    set     = function(_, key, value)
                         if not value then
                             local db = GetDB()
                             if db and db.Whitelist then
@@ -370,7 +391,7 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                         end
                     end,
                     confirm = true,
-                    hidden = function()
+                    hidden  = function()
                         local db = GetDB()
                         return not db or not db.Whitelist or next(db.Whitelist) == nil
                     end,
@@ -397,12 +418,12 @@ local function GetGlobalAuraOptions()
                 order = 2,
                 args = {
                     addName = {
-                        type = "input",
-                        name = L["Create New Frame (ID)"],
+                        type  = "input",
+                        name  = L["Create New Frame (ID)"],
                         desc  = L["Enter a unique name for the new custom aura frame and press Enter."],
                         order = 1,
-                        get = function() return "" end,
-                        set = function(_, v)
+                        get   = function() return "" end,
+                        set   = function(_, v)
                             if v and v:match("%S") then
                                 v = v:gsub("%s+", "")
                                 RoithiUI.db.profile.CustomAuraFrames = RoithiUI.db.profile.CustomAuraFrames or {}
@@ -769,17 +790,17 @@ local function GetOptions()
                 inline = true,
                 args = {
                     exportString = {
-                        type = "input",
-                        name = L["Your Export String"],
-                        desc  = L["Copy this string to share your profile with others."],
-                        order = 1,
-                        width = "full",
+                        type      = "input",
+                        name      = L["Your Export String"],
+                        desc      = L["Copy this string to share your profile with others."],
+                        order     = 1,
+                        width     = "full",
                         multiline = 5,
-                        get = function()
+                        get       = function()
                             local PS = RoithiUI:GetModule("ProfileSharing")
                             return PS and PS:ExportProfile() or ""
                         end,
-                        set = function() end, -- Read-only
+                        set       = function() end, -- Read-only
                     },
                 },
             },
@@ -790,22 +811,23 @@ local function GetOptions()
                 inline = true,
                 args = {
                     importString = {
-                        type = "input",
-                        name = L["Paste Import String"],
-                        desc  = L["Paste a RoithiUI profile string here and click Import."],
-                        order = 1,
-                        width = "full",
+                        type      = "input",
+                        name      = L["Paste Import String"],
+                        desc      = L["Paste a RoithiUI profile string here and click Import."],
+                        order     = 1,
+                        width     = "full",
                         multiline = 5,
-                        get = function() return RoithiUI.db.profile.tempImportString or "" end,
-                        set = function(_, v) RoithiUI.db.profile.tempImportString = v end,
+                        get       = function() return RoithiUI.db.profile.tempImportString or "" end,
+                        set       = function(_, v) RoithiUI.db.profile.tempImportString = v end,
                     },
                     importBtn = {
-                        type = "execute",
-                        name = L["Import Profile"],
-                        desc  = L["Applying an imported profile will overwrite your current settings and reload the UI."],
-                        order = 2,
+                        type    = "execute",
+                        name    = L["Import Profile"],
+                        desc    = L
+                        ["Applying an imported profile will overwrite your current settings and reload the UI."],
+                        order   = 2,
                         confirm = true,
-                        func = function()
+                        func    = function()
                             local PS = RoithiUI:GetModule("ProfileSharing")
                             if PS then
                                 local success, msg = PS:ImportProfile(RoithiUI.db.profile.tempImportString)
@@ -827,6 +849,58 @@ local function GetOptions()
         type = "group",
         name = L["RoithiUI Settings"],
         args = {
+            modules = {
+                type = "group",
+                name = L["Modules"],
+                order = 2,
+                args = {
+                    intro = {
+                        type = "description",
+                        name = L
+                        ["Enable or disable RoithiUI modules. Disabling a module restores the default Blizzard UI."],
+                        order = 1,
+                    },
+                    unitframes = {
+                        type = "toggle",
+                        name = L["Unit Frames"],
+                        desc = L["Enables RoithiUI custom player, target, focus, pet, and boss frames."],
+                        order = 10,
+                        get = function()
+                            return RoithiUI.db.profile.EnabledModules.UnitFrames ~= false
+                        end,
+                        set = function(_, v)
+                            RoithiUI.db.profile.EnabledModules.UnitFrames = v
+                            RequestReload()
+                        end,
+                    },
+                    castbar = {
+                        type = "toggle",
+                        name = L["Castbars"],
+                        desc = L["Enables RoithiUI custom castbars for player, target, focus, pet, and bosses."],
+                        order = 20,
+                        get = function()
+                            return RoithiUI.db.profile.EnabledModules.Castbar ~= false
+                        end,
+                        set = function(_, v)
+                            RoithiUI.db.profile.EnabledModules.Castbar = v
+                            RequestReload()
+                        end,
+                    },
+                    encounterbar = {
+                        type = "toggle",
+                        name = L["Encounter Bar (Alt Power)"],
+                        desc = L["Enables RoithiUI custom alternative power bar and encounter power widgets."],
+                        order = 30,
+                        get = function()
+                            return RoithiUI.db.profile.EnabledModules.EncounterBar ~= false
+                        end,
+                        set = function(_, v)
+                            RoithiUI.db.profile.EnabledModules.EncounterBar = v
+                            RequestReload()
+                        end,
+                    },
+                }
+            },
             general = {
                 type = "group",
                 name = L["General"],
@@ -906,23 +980,23 @@ local function GetOptions()
                         },
                     },
                     reset = {
-                        type = "execute",
-                        name = L["Reset to Defaults"],
+                        type  = "execute",
+                        name  = L["Reset to Defaults"],
                         desc  = L["Reset all settings to default values and reload the UI. Cannot be undone."],
                         order = 10,
-                        func = function() RoithiUI:ResetSettings() end,
+                        func  = function() RoithiUI:ResetSettings() end,
                         width = "full",
                     },
                     testBoss = {
-                        type = "toggle",
-                        name = L["Boss Frames Test Mode"],
+                        type  = "toggle",
+                        name  = L["Boss Frames Test Mode"],
                         desc  = L["Toggle dummy boss frames for positioning."],
                         order = 11,
-                        get = function()
+                        get   = function()
                             local UF = RoithiUI:GetModule("UnitFrames")
                             return UF and UF.BossTestMode
                         end,
-                        set = function(_, v)
+                        set   = function(_, v)
                             local UF = RoithiUI:GetModule("UnitFrames")
                             if UF and UF.ToggleBossTestMode then UF:ToggleBossTestMode() end
                         end,
@@ -930,12 +1004,12 @@ local function GetOptions()
                     },
 
                     debugMode = {
-                        type = "toggle",
-                        name = L["|cffff0000Debug Mode|r"],
+                        type  = "toggle",
+                        name  = L["|cffff0000Debug Mode|r"],
                         desc  = L["Enable debug logging to the chat window."],
                         order = 50,
-                        get = function() return RoithiUI.db.profile.General.debugMode end,
-                        set = function(_, v) RoithiUI.db.profile.General.debugMode = v end,
+                        get   = function() return RoithiUI.db.profile.General.debugMode end,
+                        set   = function(_, v) RoithiUI.db.profile.General.debugMode = v end,
                         width = "full",
                     },
                 },
@@ -970,20 +1044,21 @@ local function GetOptions()
                 args = {
                     intro = {
                         type = "description",
-                        name = L["Configure the custom Encounter Resource Bar. Position it via LibEditMode (Edit Mode)."],
+                        name = L
+                        ["Configure the custom Encounter Resource Bar. Position it via LibEditMode (Edit Mode)."],
                         order = 0,
                     },
                     enabled = {
-                        type = "toggle",
-                        name = L["Enable"],
+                        type  = "toggle",
+                        name  = L["Enable"],
                         desc  = L["Show the custom encounter resource bar (hides the Blizzard default)."],
                         order = 1,
                         width = "full",
-                        get = function()
+                        get   = function()
                             local db = RoithiUI.db.profile.EncounterResource
                             return db and db.enabled
                         end,
-                        set = function(_, v)
+                        set   = function(_, v)
                             local db = RoithiUI.db.profile
                             if not db.EncounterResource then db.EncounterResource = {} end
                             db.EncounterResource.enabled = v
@@ -1001,7 +1076,9 @@ local function GetOptions()
                                 type = "range",
                                 name = L["Width"],
                                 order = 1,
-                                min = 50, max = 700, step = 1,
+                                min = 50,
+                                max = 700,
+                                step = 1,
                                 get = function() return (RoithiUI.db.profile.EncounterResource or {}).width or 250 end,
                                 set = function(_, v)
                                     local db = RoithiUI.db.profile.EncounterResource
@@ -1014,7 +1091,9 @@ local function GetOptions()
                                 type = "range",
                                 name = L["Height"],
                                 order = 2,
-                                min = 4, max = 60, step = 1,
+                                min = 4,
+                                max = 60,
+                                step = 1,
                                 get = function() return (RoithiUI.db.profile.EncounterResource or {}).height or 20 end,
                                 set = function(_, v)
                                     local db = RoithiUI.db.profile.EncounterResource
@@ -1035,7 +1114,9 @@ local function GetOptions()
                                 type = "range",
                                 name = L["Font Size"],
                                 order = 1,
-                                min = 6, max = 24, step = 1,
+                                min = 6,
+                                max = 24,
+                                step = 1,
                                 get = function() return (RoithiUI.db.profile.EncounterResource or {}).fontSize or 12 end,
                                 set = function(_, v)
                                     local db = RoithiUI.db.profile.EncounterResource
@@ -1074,12 +1155,12 @@ local function GetOptions()
                         inline = true,
                         args = {
                             addID = {
-                                type = "input",
-                                name = L["Add Widget ID"],
+                                type  = "input",
+                                name  = L["Add Widget ID"],
                                 desc  = L["Enter a Widget ID to whitelist it."],
                                 order = 1,
-                                get = function() return "" end,
-                                set = function(_, v)
+                                get   = function() return "" end,
+                                set   = function(_, v)
                                     local id = tonumber(v)
                                     if id then
                                         local db = RoithiUI.db.profile.EncounterResource
@@ -1089,11 +1170,11 @@ local function GetOptions()
                                 end,
                             },
                             removeID = {
-                                type = "multiselect",
-                                name = L["Whitelisted IDs"],
-                                desc  = L["Uncheck an ID to remove it from the whitelist."],
-                                order = 2,
-                                values = function()
+                                type    = "multiselect",
+                                name    = L["Whitelisted IDs"],
+                                desc    = L["Uncheck an ID to remove it from the whitelist."],
+                                order   = 2,
+                                values  = function()
                                     local db = RoithiUI.db.profile.EncounterResource
                                     local out = {}
                                     if db and db.whitelist then
@@ -1103,8 +1184,8 @@ local function GetOptions()
                                     end
                                     return out
                                 end,
-                                get = function(_, key) return true end,
-                                set = function(_, key, value)
+                                get     = function(_, key) return true end,
+                                set     = function(_, key, value)
                                     if not value then
                                         local db = RoithiUI.db.profile.EncounterResource
                                         if db and db.whitelist then
@@ -1113,7 +1194,7 @@ local function GetOptions()
                                     end
                                 end,
                                 confirm = true,
-                                hidden = function()
+                                hidden  = function()
                                     local db = RoithiUI.db.profile.EncounterResource
                                     return not db or not db.whitelist or next(db.whitelist) == nil
                                 end,
@@ -1122,7 +1203,8 @@ local function GetOptions()
                     },
                     posNote = {
                         type = "description",
-                        name = L["\n|cffffd100Tip:|r Use Edit Mode (default key: Alt+C) to drag and reposition the bar on screen."],
+                        name = L
+                        ["\n|cffffd100Tip:|r Use Edit Mode (default key: Alt+C) to drag and reposition the bar on screen."],
                         order = 30,
                     },
                 },
@@ -1229,11 +1311,7 @@ local function GetOptions()
                             if not RoithiUI.db.profile.UnitFrames then RoithiUI.db.profile.UnitFrames = {} end
                             if not RoithiUI.db.profile.UnitFrames[unit] then RoithiUI.db.profile.UnitFrames[unit] = {} end
                             RoithiUI.db.profile.UnitFrames[unit].enabled = v
-                            local ufModule = RoithiUI:GetModule("UnitFrames")
-                            if ufModule then ufModule:ToggleFrame(unit, v) end
-                            if EditModeManagerFrame and EditModeManagerFrame:IsShown() and ns.UpdateBlizzardVisibility then
-                                ns.UpdateBlizzardVisibility()
-                            end
+                            RequestReload()
                         end,
                     },
                     quickLinks = CreateQuickLinks("unitframes"),
@@ -1246,12 +1324,12 @@ local function GetOptions()
                         inline = true,
                         args = {
                             testMode = {
-                                type = "toggle",
-                                name = L["|cffffd100Test Mode|r"],
+                                type  = "toggle",
+                                name  = L["|cffffd100Test Mode|r"],
                                 desc  = L["Force show all enabled indicators for easier configuration."],
                                 order = 0,
-                                get = function() return RoithiUI.db.profile.IndicatorTestMode end,
-                                set = function(_, v)
+                                get   = function() return RoithiUI.db.profile.IndicatorTestMode end,
+                                set   = function(_, v)
                                     RoithiUI.db.profile.IndicatorTestMode = v
                                     ns.RefreshUnitFrame(unit)
                                 end,
@@ -1521,12 +1599,12 @@ local function GetOptions()
                     hidden = function() return GetDB().separateAuras end,
                 },
                 detached = {
-                    type = "toggle",
-                    name = L["Detach (Satellite Mode)"],
-                    desc  = L["Detach aura frame to move it independently via Edit Mode."],
-                    order = 9,
-                    get = function() return AL:IsDetached(unit, "Auras") end,
-                    set = function(_, v)
+                    type   = "toggle",
+                    name   = L["Detach (Satellite Mode)"],
+                    desc   = L["Detach aura frame to move it independently via Edit Mode."],
+                    order  = 9,
+                    get    = function() return AL:IsDetached(unit, "Auras") end,
+                    set    = function(_, v)
                         GetDB().auraDetached = v
                         ns.RefreshUnitFrame(unit)
                     end,
@@ -1926,17 +2004,12 @@ local function GetOptions()
                 end,
                 set = function(_, v)
                     if not RoithiUI.db.profile.UnitFrames then RoithiUI.db.profile.UnitFrames = {} end
-                    local ufModule = RoithiUI:GetModule("UnitFrames")
                     for i = 1, 5 do
                         local bUnit = "boss" .. i
-                        if unpack and not RoithiUI.db.profile.UnitFrames[bUnit] then RoithiUI.db.profile.UnitFrames[bUnit] = {} end
+                        if not RoithiUI.db.profile.UnitFrames[bUnit] then RoithiUI.db.profile.UnitFrames[bUnit] = {} end
                         RoithiUI.db.profile.UnitFrames[bUnit].enabled = v
-                        if ufModule then ufModule:ToggleFrame(bUnit, v) end
                     end
-                    if EditModeManagerFrame and EditModeManagerFrame:IsShown() and ns.UpdateBlizzardVisibility then
-                        ns
-                            .UpdateBlizzardVisibility()
-                    end
+                    RequestReload()
                 end,
             },
             quickLinks = {
