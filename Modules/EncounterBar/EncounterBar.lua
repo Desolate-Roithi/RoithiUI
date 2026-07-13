@@ -571,10 +571,8 @@ function EB:OnInitialize()
     encounterBar.Update = function(barSelf) Update(barSelf) end
     encounterBar:SetScript("OnEvent", OnEvent)
 
-    -- Register with LibEditMode (LEMConfig/EncounterBar.lua handles callbacks)
-    if ns.InitEncounterBarLEM then
-        ns.InitEncounterBarLEM()
-    end
+    -- Register with LibEditMode
+    self:InitLEM()
 end
 
 function EB:OnEnable()
@@ -599,4 +597,264 @@ function EB:ChatCommand(input)
     else
         RoithiUI:Print("Usage: /reb [debug | widgets]")
     end
+end
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Module Metadata & Options Registry
+-- ─────────────────────────────────────────────────────────────────────────────
+local localeLib = LibStub("AceLocale-3.0", true)
+local L = localeLib and localeLib:GetLocale("RoithiUI", true) or setmetatable({}, { __index = function(_, k) return k end })
+
+EB.dbKey = "EncounterResource"
+EB.displayName = L["Encounter Bar (Alt Power)"]
+EB.description = L["Enables RoithiUI custom alternative power bar and encounter power widgets."]
+EB.order = 30
+
+EB.defaultSettings = {
+    enabled  = true,
+    width    = 250,
+    height   = 20,
+    fontSize = 12,
+    texture  = "Solid",
+    point    = "TOP",
+    x        = 0,
+    y        = -100,
+}
+
+local function GetDB()
+    return RoithiUI.db.profile.EncounterResource
+end
+
+local function GetBar()
+    return _G.RoithiEncounterResource
+end
+
+local function ApplyBarToDB()
+    local db = GetDB()
+    local bar = GetBar()
+    if not bar or not db then return end
+    bar:SetSize(db.width or 250, db.height or 20)
+    bar:SetStatusBarTexture(LSM:Fetch("statusbar", db.texture or "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
+    LibRoithi.mixins:SetFont(bar.Text, "Friz Quadrata TT", db.fontSize or 12, "OUTLINE")
+    bar:ClearAllPoints()
+    bar:SetPoint(db.point or "TOP", UIParent, db.point or "TOP", db.x or 0, db.y or 0)
+end
+
+local settingsSchema = {
+    {
+        key = "enabled",
+        name = L["Enable"],
+        type = "toggle",
+        default = true,
+        showIn = "options",
+        set = function(_, v)
+            local db = GetDB()
+            if db then db.enabled = v end
+            EB:Toggle(v)
+        end,
+    },
+    {
+        key = "width",
+        name = L["Width"],
+        type = "range",
+        default = 250,
+        min = 50,
+        max = 700,
+        step = 1,
+        showIn = "both",
+    },
+    {
+        key = "height",
+        name = L["Height"],
+        type = "range",
+        default = 20,
+        min = 4,
+        max = 60,
+        step = 1,
+        showIn = "both",
+    },
+    {
+        key = "fontSize",
+        name = L["Font Size"],
+        type = "range",
+        default = 12,
+        min = 6,
+        max = 24,
+        step = 1,
+        showIn = "both",
+    },
+    {
+        key = "texture",
+        name = L["Bar Texture"],
+        type = "select",
+        default = "Solid",
+        values = function()
+            local list = LSM:List("statusbar")
+            local out = {}
+            for _, name in ipairs(list) do
+                out[name] = name
+            end
+            return out
+        end,
+        showIn = "options",
+    },
+    {
+        key = "x",
+        name = L["X Position"],
+        type = "range",
+        default = 0,
+        min = -2500,
+        max = 2500,
+        step = 1,
+        showIn = "both",
+    },
+    {
+        key = "y",
+        name = L["Y Position"],
+        type = "range",
+        default = -100,
+        min = -1500,
+        max = 1500,
+        step = 1,
+        showIn = "both",
+    },
+}
+
+local extraOptions = {
+    intro = {
+        type = "description",
+        name = L["Configure the custom Encounter Resource Bar. Position it via LibEditMode (Edit Mode)."],
+        order = 0,
+    },
+    whitelistGroup = {
+        type = "group",
+        name = L["Widget Whitelist"],
+        order = 30,
+        inline = true,
+        args = {
+            addID = {
+                type  = "input",
+                name  = L["Add Widget ID"],
+                desc  = L["Enter a Widget ID to whitelist it."],
+                order = 1,
+                get   = function() return "" end,
+                set   = function(_, v)
+                    local id = tonumber(v)
+                    if id then
+                        local db = GetDB()
+                        if not db.whitelist then db.whitelist = {} end
+                        db.whitelist[id] = true
+                    end
+                end,
+            },
+            removeID = {
+                type    = "multiselect",
+                name    = L["Whitelisted IDs"],
+                desc    = L["Uncheck an ID to remove it from the whitelist."],
+                order   = 2,
+                values  = function()
+                    local db = GetDB()
+                    local out = {}
+                    if db and db.whitelist then
+                        for id, _ in pairs(db.whitelist) do
+                            out[id] = tostring(id)
+                        end
+                    end
+                    return out
+                end,
+                get     = function(_, key) return true end,
+                set     = function(_, key, value)
+                    if not value then
+                        local db = GetDB()
+                        if db and db.whitelist then
+                            db.whitelist[key] = nil
+                        end
+                    end
+                end,
+                confirm = true,
+                hidden  = function()
+                    local db = GetDB()
+                    return not db or not db.whitelist or next(db.whitelist) == nil
+                end,
+            },
+        },
+    },
+    posNote = {
+        type = "description",
+        name = L["\n|cffffd100Tip:|r Use Edit Mode (default key: Alt+C) to drag and reposition the bar on screen."],
+        order = 40,
+    },
+}
+
+function EB:GetOptions()
+    return {
+        type = "group",
+        name = L["Encounter Resource Bar"],
+        order = 5,
+        hidden = function()
+            local db = RoithiUI.db.profile
+            return not db.EnabledModules or db.EnabledModules.EncounterBar == false
+        end,
+        args = RoithiUI.OptionGenerator:GenerateAceConfig(settingsSchema, GetDB, ApplyBarToDB, extraOptions)
+    }
+end
+
+function EB:InitLEM()
+    local bar = GetBar()
+    if not bar then return end
+
+    bar.editModeName = "Encounter Resource Bar"
+
+    local db = GetDB()
+    local defaults = { point = db.point or "TOP", x = db.x or 0, y = db.y or 0 }
+
+    local LEM = LibStub("LibEditMode-Roithi", true)
+    if not LEM then return end
+
+    local function OnPositionChanged(f, _, point, x, y)
+        local posDB = GetDB()
+        posDB.point = point
+        posDB.x = math.floor(x * 100 + 0.5) / 100
+        posDB.y = math.floor(y * 100 + 0.5) / 100
+        f:ClearAllPoints()
+        f:SetPoint(point, UIParent, point, posDB.x, posDB.y)
+        LEM:RefreshFrameSettings(f)
+    end
+
+    LEM:AddFrame(bar, OnPositionChanged, defaults)
+
+    local settings = RoithiUI.OptionGenerator:GenerateLEMConfig(settingsSchema, GetDB, ApplyBarToDB, LEM)
+    LEM:AddFrameSettings(bar, settings)
+
+    LEM:AddFrameSettingsButtons(bar, {
+        {
+            text = "Open Full Settings",
+            click = function()
+                if LibStub("AceConfigDialog-3.0") then
+                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "encounterbar")
+                    LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                end
+            end,
+        }
+    })
+
+    -- Register callbacks
+    LEM:RegisterCallback("enter", function()
+        bar.isInEditMode = true
+        bar:SetMinMaxValues(0, 100)
+        bar:SetValue(75)
+        bar:SetStatusBarColor(0.2, 0.8, 1.0)
+        bar.Text:SetText("ENCOUNTER BAR")
+        bar:Show()
+        LEM:RefreshFrameSettings(bar)
+    end)
+
+    LEM:RegisterCallback("exit", function()
+        bar.isInEditMode = false
+        if bar.Update then
+            bar:Update()
+        else
+            bar:Hide()
+        end
+    end)
 end

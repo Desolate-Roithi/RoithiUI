@@ -48,6 +48,9 @@ function RoithiUI:OnInitialize()
     _G.RoithiUI_Initialized = true
 
     -- Initialize AceDB
+    if self.ModuleManager and self.ModuleManager.CompileDefaults then
+        self.ModuleManager:CompileDefaults(ns.Defaults)
+    end
     self.db = LibStub("AceDB-3.0"):New("RoithiUIDB", ns.Defaults, true)
 
     -- Create a hidden parent for Blizzard frames
@@ -97,11 +100,8 @@ function RoithiUI:OnInitialize()
     end
 
     -- Disable modules that are configured as disabled
-    for name, module in self:IterateModules() do
-        local isEnabled = self.db.profile.EnabledModules and self.db.profile.EnabledModules[name]
-        if isEnabled == false then
-            module:Disable()
-        end
+    if self.ModuleManager and self.ModuleManager.EnableModules then
+        self.ModuleManager:EnableModules()
     end
 end
 
@@ -137,11 +137,7 @@ function RoithiUI:OnEnable()
     -- If we want to support the "Enable/Disable" toggles from RoithiUIDB.EnabledModules,
     -- we might need to iterate modules here and Disable them if the DB says so.
 
-    for name, module in self:IterateModules() do
-        local isEnabled = self.db.profile.EnabledModules and self.db.profile.EnabledModules[name]
-        -- Handle explicit disable
-        if isEnabled == false then
-            module:Disable()
-        end
+    if self.ModuleManager and self.ModuleManager.EnableModules then
+        self.ModuleManager:EnableModules()
     end
 end

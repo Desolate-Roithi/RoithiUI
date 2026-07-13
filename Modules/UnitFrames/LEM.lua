@@ -26,7 +26,6 @@ local function UpdateFrameFromSettings(unit)
     end
 end
 
-
 -- ----------------------------------------------------------------------------
 -- 2. Granular Settings Generators
 -- ----------------------------------------------------------------------------
@@ -367,10 +366,8 @@ local function GetSettingsForAdditionalPower(unit)
     }
 end
 
-
 local function GetSettingsForMainFrame(unit, frame)
     local settings = {
-        -- Enabled checkbox REMOVED as per user request (Use Dashboard)
         {
             name = "Width",
             kind = LEM.SettingType.Slider,
@@ -430,7 +427,6 @@ local function GetSettingsForMainFrame(unit, frame)
             formatter = function(v) return string.format("%.1f", v) end,
         },
 
-
         -- Primary Power Settings (Shared Control)
         { kind = LEM.SettingType.Divider },
         {
@@ -439,13 +435,11 @@ local function GetSettingsForMainFrame(unit, frame)
             get = function() return GetDB(unit).powerSectionExpanded end,
             set = function(_, value)
                 GetDB(unit).powerSectionExpanded = value
-                -- Refresh only the current frame settings to toggle visibility of items
                 LEM:RefreshFrameSettings(frame)
             end,
         },
     }
 
-    -- Insert Power Settings (Always, with dynamic visibility)
     local pSettings = GetSettingsForPower(unit)
     for _, s in ipairs(pSettings) do
         local originalHidden = s.hidden
@@ -505,12 +499,8 @@ local function GetSettingsForMainFrame(unit, frame)
         end
     end
 
-    -- Removed internal SettingType.Button in favor of AddFrameSettingsButtons
-
     return settings
 end
-
-
 
 -- ----------------------------------------------------------------------------
 -- 3. Position Callback
@@ -525,7 +515,6 @@ local function OnPositionChanged(frame, layoutName, point, x, y)
     db.x = x
     db.y = y
 
-    -- Verify frame is actually valid before modifying
     if frame then
         frame:ClearAllPoints()
         frame:SetPoint(point, UIParent, point, x, y)
@@ -549,10 +538,8 @@ function ns.InitializeUnitFrameConfig()
 
             -- EditMode Registration using LibEditMode
             if LEM then
-                -- We Must Assign a Unique Name for Drag/Drop to work correctly
                 frame.editModeName = "Roithi " .. unit:gsub("^%l", string.upper)
 
-                -- Ensure Frame is Movable for LibEditMode to handle it
                 frame:SetMovable(true)
                 frame:SetClampedToScreen(true)
 
@@ -562,15 +549,12 @@ function ns.InitializeUnitFrameConfig()
                     y = db.y or 0
                 }
 
-                -- Ensure DB has defaults
                 if not db.point then db.point = defaults.point end
                 if not db.x then db.x = defaults.x end
                 if not db.y then db.y = defaults.y end
 
-                -- Add Frame FIRST, then Settings
                 LEM:AddFrame(frame, OnPositionChanged, defaults)
 
-                -- Add Main Settings
                 pcall(function()
                     LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
                     LEM:AddFrameSettingsButtons(frame, {
@@ -586,7 +570,6 @@ function ns.InitializeUnitFrameConfig()
                     })
                 end)
 
-                -- Register Specific Settings for Sub-Frames safely
                 if frame.Power then
                     pcall(function() LEM:AddFrameSettings(frame.Power, GetSettingsForPower(unit)) end)
                 end
@@ -611,11 +594,8 @@ if LEM then
         local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
         if not UF or not UF.units then return end
         for unit, frame in pairs(UF.units) do
-            -- Skip boss frames here too if BossFrames.lua handles them (it does)
             if not string.find(unit, "boss") then
                 local db = GetDB(unit)
-                -- FIX: Always detach secure driver in Edit Mode to ensure we have manual control
-                -- BUT ONLY IF NOT IN COMBAT to avoid Taint/Block
                 local canTouchSecure = not InCombatLockdown()
                 if canTouchSecure then
                     UnregisterUnitWatch(frame)
@@ -624,8 +604,6 @@ if LEM then
                 frame.isInEditMode = true
 
                 if db and (db.enabled ~= false) then
-                    -- If we are in combat and still have a secure watch, we CANNOT call Show/Hide
-                    -- But if we are in combat and somehow got here, we best skip Show too.
                     if canTouchSecure then
                         frame:Show()
                         frame:SetAlpha(1)
@@ -633,14 +611,11 @@ if LEM then
 
                     if frame.EditModeOverlay then frame.EditModeOverlay:Show() end
 
-                    -- Force Update Power Layout to ensure visibility in Edit Mode (Requested Feature)
                     if frame.UpdatePowerLayout then frame.UpdatePowerLayout() end
-                    -- Force Update Class/Additional Power too just in case
                     if frame.UpdateClassPowerLayout then frame.UpdateClassPowerLayout() end
                     if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
                     if UF.UpdateAuras then UF:UpdateAuras(frame) end
                 else
-                    -- Disabled: Force Hide
                     if canTouchSecure then
                         frame:Hide()
                     end
@@ -659,13 +634,11 @@ if LEM then
                 if frame.EditModeOverlay then frame.EditModeOverlay:Hide() end
                 if UF.UpdateAuras then UF:UpdateAuras(frame) end
 
-                -- We don't Hide() unitframes on exit like Castbars; they might need to stay shown if they have a target.
-                -- UF:ToggleFrame handles normal visibility.
                 UF:ToggleFrame(unit, UF:IsUnitEnabled(unit))
                 if not InCombatLockdown() then
-                    RegisterUnitWatch(frame) -- Re-register secure driver
+                    RegisterUnitWatch(frame)
                 end
             end
         end
-    end)
+end)
 end

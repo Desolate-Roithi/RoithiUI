@@ -198,6 +198,16 @@ end
 ---@class Castbar : AceAddon, AceModule
 local Castbar = RoithiUI:NewModule("Castbar")
 Castbar.bars = ns.bars   -- Expose for AttachmentLogic
+
+Castbar.displayName = "Castbars"
+Castbar.description = "Enables RoithiUI custom castbars for player, target, focus, pet, and bosses."
+Castbar.order = 20
+Castbar.defaultSettings = ns.DEFAULTS
+Castbar.dbKey = "Castbar"
+
+function Castbar:GetOptions()
+    return RoithiUI.Config:GetCastbarsOptions()
+end
 local MidnightCastbarsDB -- Local reference to RoithiUIDB.Castbar
 
 function Castbar:OnInitialize()

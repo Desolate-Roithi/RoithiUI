@@ -30,6 +30,16 @@ local oUF = ns.oUF or _G.oUF
 ---@field frames table<string, table>
 local UF = RoithiUI:NewModule("UnitFrames")
 
+UF.displayName = "Unit Frames"
+UF.description = "Enables RoithiUI custom player, target, focus, pet, and boss frames."
+UF.order = 10
+UF.defaultSettings = ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.UnitFrames
+UF.dbKey = "UnitFrames"
+
+function UF:GetOptions()
+    return RoithiUI.Config:GetUnitFramesOptions()
+end
+
 -- ----------------------------------------------------------------------------
 -- Style Function
 -- ----------------------------------------------------------------------------

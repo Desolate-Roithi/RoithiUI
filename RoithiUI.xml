@@ -6,21 +6,17 @@
     <!-- Core -->
     <Script file="Core/Locales.lua"/>
     <Script file="Core/Init.lua"/>
+    <Script file="Core/ModuleManager.lua"/>
+    <Script file="Core/OptionGenerator.lua"/>
     <Script file="Core/Utils.lua"/>
     <Script file="Core/Commands.lua"/>
     <Script file="Core/Media.lua"/>
     <Script file="Core/AttachmentLogic.lua"/>
+    <Script file="Core/ProfileSharing.lua"/>
+    
     <Script file="Config/Defaults.lua"/>
     <Script file="Config/Dashboard.lua"/>
-    <Script file="Config/CustomTags.lua"/>
-
-    <Script file="Config/LEMConfig/UnitFrames.lua"/>
-    <Script file="Config/LEMConfig/BossFrames.lua"/>
-    <Script file="Config/LEMConfig/Castbars.lua"/>
-    <Script file="Config/LEMConfig/EncounterBar.lua"/>
     <Script file="Config/Options.lua"/>
-
-
 
     <!-- Modules -->
     <!-- UnitFrames -->
@@ -38,23 +34,16 @@
     <Script file="Modules/UnitFrames/Elements/AdditionalPower.lua"/>
     <Script file="Modules/UnitFrames/Boss.lua"/>
     <Script file="Modules/UnitFrames/Units.lua"/>
-    
-    <!-- Profile Sharing -->
-    <Script file="Modules/ProfileSharing.lua"/>
+    <Script file="Modules/UnitFrames/CustomTags.lua"/>
+    <Script file="Modules/UnitFrames/LEM.lua"/>
+    <Script file="Modules/UnitFrames/BossLEM.lua"/>
     
     <!-- Encounter Bar -->
     <Script file="Modules/EncounterBar/EncounterBar.lua"/>
     
-    <!-- Timers (Removed) -->
-
-
-    
-    <!-- Castbar Integration (Loaded here or by Core if it was pure Lua, but XML loading implies direct file reference) -->
-    <!-- User asked for integration of existing Castbar. We'll add the likely entry point. -->
+    <!-- Castbar Integration -->
     <Script file="Modules/Castbar/Core.lua"/>
     <Script file="Modules/Castbar/Empower.lua"/>
     <Script file="Modules/Castbar/Castbar.lua"/>
-    
-    <!-- Manual Tests (Safe to load, requires /rs on to activate) -->
-    <!-- <Script file="Tests/Manual/SimulateSecrets.lua"/> -->
+    <Script file="Modules/Castbar/LEM.lua"/>
 </Ui>

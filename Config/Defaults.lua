@@ -776,16 +776,6 @@ ns.Defaults = {
             TargetTargetCastbar = true,
             TargetTargetFrame = true,
         },
-        EncounterResource = {
-            enabled  = true,
-            width    = 250,
-            height   = 20,
-            fontSize = 12,
-            texture  = "Solid",
-            point    = "TOP",
-            x        = 0,
-            y        = -100,
-        },
         General = {
             Theme = "Class",
             castbarBar = "Solid",

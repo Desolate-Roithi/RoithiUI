@@ -770,6 +770,29 @@ local function GetGlobalAuraOptions()
 
     return group
 end
+local unitframesOptions = {
+    type = "group",
+    name = L["Unit Frames"],
+    order = 2,
+    args = {
+        intro = {
+            type = "description",
+            name = L["Configure text, auras, and indicators for Unit Frames."],
+            order = 1,
+        },
+    },
+}
+
+local castbarsOptions = {
+    type = "group",
+    name = L["Castbars"],
+    order = 3,
+    hidden = function()
+        local db = RoithiUI.db.profile
+        return not db.EnabledModules or db.EnabledModules.Castbar == false
+    end,
+    args = {},
+}
 
 local function GetOptions()
     local profileOptions = LibStub("AceDBOptions-3.0"):GetOptionsTable(RoithiUI.db)
@@ -857,48 +880,8 @@ local function GetOptions()
                 args = {
                     intro = {
                         type = "description",
-                        name = L
-                        ["Enable or disable RoithiUI modules. Disabling a module restores the default Blizzard UI."],
+                        name = L["Enable or disable RoithiUI modules. Disabling a module restores the default Blizzard UI."],
                         order = 1,
-                    },
-                    unitframes = {
-                        type = "toggle",
-                        name = L["Unit Frames"],
-                        desc = L["Enables RoithiUI custom player, target, focus, pet, and boss frames."],
-                        order = 10,
-                        get = function()
-                            return RoithiUI.db.profile.EnabledModules.UnitFrames ~= false
-                        end,
-                        set = function(_, v)
-                            RoithiUI.db.profile.EnabledModules.UnitFrames = v
-                            RequestReload()
-                        end,
-                    },
-                    castbar = {
-                        type = "toggle",
-                        name = L["Castbars"],
-                        desc = L["Enables RoithiUI custom castbars for player, target, focus, pet, and bosses."],
-                        order = 20,
-                        get = function()
-                            return RoithiUI.db.profile.EnabledModules.Castbar ~= false
-                        end,
-                        set = function(_, v)
-                            RoithiUI.db.profile.EnabledModules.Castbar = v
-                            RequestReload()
-                        end,
-                    },
-                    encounterbar = {
-                        type = "toggle",
-                        name = L["Encounter Bar (Alt Power)"],
-                        desc = L["Enables RoithiUI custom alternative power bar and encounter power widgets."],
-                        order = 30,
-                        get = function()
-                            return RoithiUI.db.profile.EnabledModules.EncounterBar ~= false
-                        end,
-                        set = function(_, v)
-                            RoithiUI.db.profile.EnabledModules.EncounterBar = v
-                            RequestReload()
-                        end,
                     },
                 }
             },
@@ -1015,217 +998,41 @@ local function GetOptions()
                     },
                 },
             },
-            unitframes = {
-                type = "group",
-                name = L["Unit Frames"],
-                order = 2,
-                args = {
-                    intro = {
-                        type = "description",
-                        name = L["Configure text, auras, and indicators for Unit Frames."],
-                        order = 1,
-                    },
-                    -- Units will be populated dynamically or defined below
-                },
-            },
             customtags = (function()
                 local opt = RoithiUI.Config.GetCustomTagsOptions and RoithiUI.Config.GetCustomTagsOptions()
                 if opt then opt.order = 6 end
                 return opt
             end)(),
-            castbars = {
-                type = "group",
-                name = L["Castbars"],
-                order = 3,
-                hidden = function()
-                    local db = RoithiUI.db.profile
-                    return not db.EnabledModules or db.EnabledModules.Castbar == false
-                end,
-                args = {
-                    -- Populated below
-                },
-            },
             auras = GetGlobalAuraOptions(),
-            encounterbar = {
-                type = "group",
-                name = L["Encounter Resource Bar"],
-                order = 5,
-                hidden = function()
-                    local db = RoithiUI.db.profile
-                    return not db.EnabledModules or db.EnabledModules.EncounterBar == false
-                end,
-                args = {
-                    intro = {
-                        type = "description",
-                        name = L
-                        ["Configure the custom Encounter Resource Bar. Position it via LibEditMode (Edit Mode)."],
-                        order = 0,
-                    },
-                    enabled = {
-                        type  = "toggle",
-                        name  = L["Enable"],
-                        desc  = L["Show the custom encounter resource bar (hides the Blizzard default)."],
-                        order = 1,
-                        width = "full",
-                        get   = function()
-                            local db = RoithiUI.db.profile.EncounterResource
-                            return db and db.enabled
-                        end,
-                        set   = function(_, v)
-                            local db = RoithiUI.db.profile
-                            if not db.EncounterResource then db.EncounterResource = {} end
-                            db.EncounterResource.enabled = v
-                            local EB = RoithiUI:GetModule("EncounterBar")
-                            if EB and EB.Toggle then EB:Toggle(v) end
-                        end,
-                    },
-                    sizeGroup = {
-                        type = "group",
-                        name = L["Size"],
-                        order = 10,
-                        inline = true,
-                        args = {
-                            width = {
-                                type = "range",
-                                name = L["Width"],
-                                order = 1,
-                                min = 50,
-                                max = 700,
-                                step = 1,
-                                get = function() return (RoithiUI.db.profile.EncounterResource or {}).width or 250 end,
-                                set = function(_, v)
-                                    local db = RoithiUI.db.profile.EncounterResource
-                                    if db then db.width = v end
-                                    local bar = _G.RoithiEncounterResource
-                                    if bar then bar:SetWidth(v) end
-                                end,
-                            },
-                            height = {
-                                type = "range",
-                                name = L["Height"],
-                                order = 2,
-                                min = 4,
-                                max = 60,
-                                step = 1,
-                                get = function() return (RoithiUI.db.profile.EncounterResource or {}).height or 20 end,
-                                set = function(_, v)
-                                    local db = RoithiUI.db.profile.EncounterResource
-                                    if db then db.height = v end
-                                    local bar = _G.RoithiEncounterResource
-                                    if bar then bar:SetHeight(v) end
-                                end,
-                            },
-                        },
-                    },
-                    fontGroup = {
-                        type = "group",
-                        name = L["Text"],
-                        order = 20,
-                        inline = true,
-                        args = {
-                            fontSize = {
-                                type = "range",
-                                name = L["Font Size"],
-                                order = 1,
-                                min = 6,
-                                max = 24,
-                                step = 1,
-                                get = function() return (RoithiUI.db.profile.EncounterResource or {}).fontSize or 12 end,
-                                set = function(_, v)
-                                    local db = RoithiUI.db.profile.EncounterResource
-                                    if db then db.fontSize = v end
-                                    local bar = _G.RoithiEncounterResource
-                                    if bar and bar.Text then
-                                        local LibR = LibStub("LibRoithi-1.0")
-                                        if LibR then LibR.mixins:SetFont(bar.Text, "Friz Quadrata TT", v, "OUTLINE") end
-                                    end
-                                end,
-                            },
-                            texture = {
-                                type = "select",
-                                dialogControl = "LSM30_Statusbar",
-                                name = L["Bar Texture"],
-                                order = 2,
-                                values = function() return GetLSMKeys("statusbar") end,
-                                get = function() return (RoithiUI.db.profile.EncounterResource or {}).texture or "Solid" end,
-                                set = function(_, v)
-                                    local db = RoithiUI.db.profile.EncounterResource
-                                    if db then db.texture = v end
-                                    local bar = _G.RoithiEncounterResource
-                                    if bar then
-                                        bar:SetStatusBarTexture(
-                                            LSM:Fetch("statusbar", v) or "Interface\\TargetingFrame\\UI-StatusBar"
-                                        )
-                                    end
-                                end,
-                            },
-                        },
-                    },
-                    whitelistGroup = {
-                        type = "group",
-                        name = L["Widget Whitelist"],
-                        order = 30,
-                        inline = true,
-                        args = {
-                            addID = {
-                                type  = "input",
-                                name  = L["Add Widget ID"],
-                                desc  = L["Enter a Widget ID to whitelist it."],
-                                order = 1,
-                                get   = function() return "" end,
-                                set   = function(_, v)
-                                    local id = tonumber(v)
-                                    if id then
-                                        local db = RoithiUI.db.profile.EncounterResource
-                                        if not db.whitelist then db.whitelist = {} end
-                                        db.whitelist[id] = true
-                                    end
-                                end,
-                            },
-                            removeID = {
-                                type    = "multiselect",
-                                name    = L["Whitelisted IDs"],
-                                desc    = L["Uncheck an ID to remove it from the whitelist."],
-                                order   = 2,
-                                values  = function()
-                                    local db = RoithiUI.db.profile.EncounterResource
-                                    local out = {}
-                                    if db and db.whitelist then
-                                        for id, _ in pairs(db.whitelist) do
-                                            out[id] = tostring(id)
-                                        end
-                                    end
-                                    return out
-                                end,
-                                get     = function(_, key) return true end,
-                                set     = function(_, key, value)
-                                    if not value then
-                                        local db = RoithiUI.db.profile.EncounterResource
-                                        if db and db.whitelist then
-                                            db.whitelist[key] = nil
-                                        end
-                                    end
-                                end,
-                                confirm = true,
-                                hidden  = function()
-                                    local db = RoithiUI.db.profile.EncounterResource
-                                    return not db or not db.whitelist or next(db.whitelist) == nil
-                                end,
-                            },
-                        },
-                    },
-                    posNote = {
-                        type = "description",
-                        name = L
-                        ["\n|cffffd100Tip:|r Use Edit Mode (default key: Alt+C) to drag and reposition the bar on screen."],
-                        order = 30,
-                    },
-                },
-            },
-
             profiles = profileOptions,
         },
     }
+
+    -- Populate dynamic modules list and options
+    for name, module in RoithiUI:IterateModules() do
+        if name ~= "ProfileSharing" then
+            local key = string.lower(name)
+            options.args.modules.args[key] = {
+                type = "toggle",
+                name = module.displayName or name,
+                desc = module.description or string.format(L["Enables the custom RoithiUI %s module."], name),
+                order = module.order or 10,
+                get = function()
+                    return RoithiUI.db.profile.EnabledModules[name] ~= false
+                end,
+                set = function(_, v)
+                    RoithiUI.db.profile.EnabledModules[name] = v
+                    RequestReload()
+                end,
+            }
+
+            if module.GetOptions then
+                local optKey = key
+                if optKey == "castbar" then optKey = "castbars" end
+                options.args[optKey] = module:GetOptions()
+            end
+        end
+    end
 
     -- Populate Unit Frame Options
     local units = {
@@ -1307,7 +1114,7 @@ local function GetOptions()
         end
 
         if not unit:match("^boss%d$") then
-            options.args.unitframes.args[unit] = {
+            unitframesOptions.args[unit] = {
                 type = "group",
                 name = label,
                 order = 10 + i,
@@ -1971,7 +1778,7 @@ local function GetOptions()
         }
 
         if not unit:match("^boss%d$") then
-            options.args.castbars.args[unit] = {
+            castbarsOptions.args[unit] = {
                 type = "group",
                 name = label,
                 order = 10 + i,
@@ -2002,7 +1809,7 @@ local function GetOptions()
     end
 
     -- Add Boss Frames settings to Unit Frames group
-    options.args.unitframes.args["boss"] = {
+    unitframesOptions.args["boss"] = {
         type = "group",
         name = L["Boss Frames"],
         order = 30,
@@ -2095,4 +1902,12 @@ function ns.RefreshAllUnitFrames()
     if UF and UF.UpdateAllCustomAuras then
         UF:UpdateAllCustomAuras()
     end
+end
+
+function Config:GetUnitFramesOptions()
+    return unitframesOptions
+end
+
+function Config:GetCastbarsOptions()
+    return castbarsOptions
 end

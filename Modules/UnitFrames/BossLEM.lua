@@ -5,8 +5,7 @@ local LEM = LibStub("LibEditMode-Roithi", true)
 
 if not LEM then return end
 
--- Helper to update frames
-local function UpdateFrame(unit)
+local function UpdateBossFrame(unit)
     local UF = RoithiUI:GetModule("UnitFrames")
     if UF and UF.UpdateFrameFromSettings then
         UF:UpdateFrameFromSettings(unit)
@@ -14,40 +13,33 @@ local function UpdateFrame(unit)
 end
 
 function ns.ApplyLEMBossConfiguration(frame, unit)
-    -- This function handles Boss Frames specifically
-    -- We target "boss1" DB for shared settings (Width/Height/Spacing/etc)
-
-    local function GetDB()
+    local function GetBossDB()
         if not RoithiUI.db.profile.UnitFrames["boss1"] then RoithiUI.db.profile.UnitFrames["boss1"] = {} end
         return RoithiUI.db.profile.UnitFrames["boss1"]
     end
 
-    local function OpenSettings()
+    local function OpenBossSettings()
         if LibStub("AceConfigDialog-3.0") then
             LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", "boss1")
             LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
         end
     end
 
-    -- Dynamic Settings Generator
     local function GetBossSettings()
         local settings = {}
 
-        -- ====================================================================
-        -- 1. Size & Spacing
-        -- ====================================================================
         table.insert(settings, {
             kind = LEM.SettingType.CollapsibleHeader,
             name = "Size & Spacing",
-            get = function() return GetDB().sizeSectionExpanded end,
+            get = function() return GetBossDB().sizeSectionExpanded end,
             set = function(_, v)
-                GetDB().sizeSectionExpanded = v
+                GetBossDB().sizeSectionExpanded = v
                 LEM:AddFrameSettings(frame, GetBossSettings())
                 LEM:RefreshFrameSettings(frame)
             end,
         })
 
-        if GetDB().sizeSectionExpanded then
+        if GetBossDB().sizeSectionExpanded then
             local sizeSettings = {
                 {
                     name = "Width",
@@ -56,10 +48,10 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = 50,
                     maxValue = 400,
                     valueStep = 1,
-                    get = function() return GetDB().width or 200 end,
+                    get = function() return GetBossDB().width or 200 end,
                     set = function(_, value)
-                        GetDB().width = value
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().width = value
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                     formatter = function(v) return string.format("%.1f", v) end,
                 },
@@ -70,10 +62,10 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = 20,
                     maxValue = 150,
                     valueStep = 1,
-                    get = function() return GetDB().height or 50 end,
+                    get = function() return GetBossDB().height or 50 end,
                     set = function(_, value)
-                        GetDB().height = value
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().height = value
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                     formatter = function(v) return string.format("%.1f", v) end,
                 },
@@ -84,10 +76,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = -2500,
                     maxValue = 2500,
                     valueStep = 1,
-                    get = function() return GetDB().x end,
+                    get = function() return GetBossDB().x end,
                     set = function(_, value)
-                        GetDB().x = value
-                        -- Update Anchor (Mainly moves Boss1, others follow)
+                        GetBossDB().x = value
                         local UF = RoithiUI:GetModule("UnitFrames")
                         if UF and UF.UpdateBossAnchors then UF:UpdateBossAnchors() end
                     end,
@@ -100,9 +91,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = -1500,
                     maxValue = 1500,
                     valueStep = 1,
-                    get = function() return GetDB().y end,
+                    get = function() return GetBossDB().y end,
                     set = function(_, value)
-                        GetDB().y = value
+                        GetBossDB().y = value
                         local UF = RoithiUI:GetModule("UnitFrames")
                         if UF and UF.UpdateBossAnchors then UF:UpdateBossAnchors() end
                     end,
@@ -111,9 +102,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                 {
                     kind = LEM.SettingType.Slider,
                     name = "Spacing",
-                    get = function() return GetDB().spacing or 30 end,
+                    get = function() return GetBossDB().spacing or 30 end,
                     set = function(_, v)
-                        GetDB().spacing = v
+                        GetBossDB().spacing = v
                         local UF = RoithiUI:GetModule("UnitFrames")
                         if UF and UF.UpdateBossAnchors then
                             UF:UpdateBossAnchors()
@@ -129,38 +120,35 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
 
         table.insert(settings, { kind = LEM.SettingType.Divider })
 
-        -- ====================================================================
-        -- 2. Power
-        -- ====================================================================
         table.insert(settings, {
             kind = LEM.SettingType.CollapsibleHeader,
             name = "Power",
-            get = function() return GetDB().powerSectionExpanded end,
+            get = function() return GetBossDB().powerSectionExpanded end,
             set = function(_, v)
-                GetDB().powerSectionExpanded = v
+                GetBossDB().powerSectionExpanded = v
                 LEM:AddFrameSettings(frame, GetBossSettings())
                 LEM:RefreshFrameSettings(frame)
             end,
         })
 
-        if GetDB().powerSectionExpanded then
+        if GetBossDB().powerSectionExpanded then
             local powerSettings = {
                 {
                     name = "Enable Power",
                     kind = LEM.SettingType.Checkbox,
-                    get = function() return GetDB().powerEnabled ~= false end,
+                    get = function() return GetBossDB().powerEnabled ~= false end,
                     set = function(_, v)
-                        GetDB().powerEnabled = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().powerEnabled = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                 },
                 {
                     name = "Power Height",
                     kind = LEM.SettingType.Slider,
-                    get = function() return GetDB().powerHeight or 10 end,
+                    get = function() return GetBossDB().powerHeight or 10 end,
                     set = function(_, v)
-                        GetDB().powerHeight = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().powerHeight = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                     minValue = 1,
                     maxValue = 50,
@@ -169,13 +157,13 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                 {
                     name = "Detached",
                     kind = LEM.SettingType.Checkbox,
-                    get = function() return GetDB().powerDetached end,
+                    get = function() return GetBossDB().powerDetached end,
                     set = function(_, value)
-                        GetDB().powerDetached = value
-                        if value == true and not GetDB().powerWidth then
-                            GetDB().powerWidth = 180
+                        GetBossDB().powerDetached = value
+                        if value == true and not GetBossDB().powerWidth then
+                            GetBossDB().powerWidth = 180
                         end
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                         LEM:AddFrameSettings(frame, GetBossSettings())
                         LEM:RefreshFrameSettings(frame)
                     end,
@@ -183,14 +171,14 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
             }
             for _, s in ipairs(powerSettings) do table.insert(settings, s) end
 
-            if GetDB().powerDetached then
+            if GetBossDB().powerDetached then
                 table.insert(settings, {
                     name = "Power Width",
                     kind = LEM.SettingType.Slider,
-                    get = function() return GetDB().powerWidth or 180 end,
+                    get = function() return GetBossDB().powerWidth or 180 end,
                     set = function(_, v)
-                        GetDB().powerWidth = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().powerWidth = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                     minValue = 50,
                     maxValue = 400,
@@ -201,65 +189,62 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
 
         table.insert(settings, { kind = LEM.SettingType.Divider })
 
-        -- ====================================================================
-        -- 3. Auras
-        -- ====================================================================
         table.insert(settings, {
             kind = LEM.SettingType.CollapsibleHeader,
             name = "Auras",
-            get = function() return GetDB().aurasSectionExpanded end,
+            get = function() return GetBossDB().aurasSectionExpanded end,
             set = function(_, v)
-                GetDB().aurasSectionExpanded = v
+                GetBossDB().aurasSectionExpanded = v
                 LEM:AddFrameSettings(frame, GetBossSettings())
                 LEM:RefreshFrameSettings(frame)
             end,
         })
 
-        if GetDB().aurasSectionExpanded then
+        if GetBossDB().aurasSectionExpanded then
             local auraSettings = {
                 {
                     kind = LEM.SettingType.Checkbox,
                     name = "Enable Auras",
-                    get = function() return GetDB().aurasEnabled ~= false end,
+                    get = function() return GetBossDB().aurasEnabled ~= false end,
                     set = function(_, v)
-                        GetDB().aurasEnabled = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().aurasEnabled = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                 },
                 {
                     kind = LEM.SettingType.Checkbox,
                     name = "Show Buffs",
-                    get = function() return GetDB().showBuffs ~= false end,
+                    get = function() return GetBossDB().showBuffs ~= false end,
                     set = function(_, v)
-                        GetDB().showBuffs = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().showBuffs = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                 },
                 {
                     kind = LEM.SettingType.Checkbox,
                     name = "Show Debuffs",
-                    get = function() return GetDB().showDebuffs ~= false end,
+                    get = function() return GetBossDB().showDebuffs ~= false end,
                     set = function(_, v)
-                        GetDB().showDebuffs = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().showDebuffs = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                 },
                 {
                     kind = LEM.SettingType.Checkbox,
                     name = "Show Only My Auras",
-                    get = function() return GetDB().ShowOnlyPlayer end,
+                    get = function() return GetBossDB().ShowOnlyPlayer end,
                     set = function(_, v)
-                        GetDB().ShowOnlyPlayer = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().ShowOnlyPlayer = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                 },
                 {
                     kind = LEM.SettingType.Slider,
                     name = "Aura Size",
-                    get = function() return GetDB().auraSize or 20 end,
+                    get = function() return GetBossDB().auraSize or 20 end,
                     set = function(_, v)
-                        GetDB().auraSize = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().auraSize = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                     minValue = 10,
                     maxValue = 40,
@@ -268,10 +253,10 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                 {
                     kind = LEM.SettingType.Slider,
                     name = "Max Auras",
-                    get = function() return GetDB().maxAuras or 4 end,
+                    get = function() return GetBossDB().maxAuras or 4 end,
                     set = function(_, v)
-                        GetDB().maxAuras = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().maxAuras = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                     minValue = 1,
                     maxValue = 20,
@@ -286,10 +271,10 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                         { text = "Left",   value = "LEFT" },
                         { text = "Right",  value = "RIGHT" },
                     },
-                    get = function() return GetDB().auraAnchor or "BOTTOM" end,
+                    get = function() return GetBossDB().auraAnchor or "BOTTOM" end,
                     set = function(_, v)
-                        GetDB().auraAnchor = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().auraAnchor = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                 },
                 {
@@ -299,10 +284,10 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                         { text = "Left to Right", value = "RIGHT" },
                         { text = "Right to Left", value = "LEFT" },
                     },
-                    get = function() return GetDB().auraGrowDirection or "RIGHT" end,
+                    get = function() return GetBossDB().auraGrowDirection or "RIGHT" end,
                     set = function(_, v)
-                        GetDB().auraGrowDirection = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().auraGrowDirection = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                 },
                 {
@@ -312,10 +297,10 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = -100,
                     maxValue = 100,
                     valueStep = 1,
-                    get = function() return GetDB().auraX or 0 end,
+                    get = function() return GetBossDB().auraX or 0 end,
                     set = function(_, v)
-                        GetDB().auraX = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().auraX = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                     formatter = function(v) return string.format("%.0f", v) end,
                 },
@@ -326,10 +311,10 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = -100,
                     maxValue = 100,
                     valueStep = 1,
-                    get = function() return GetDB().auraY or 4 end,
+                    get = function() return GetBossDB().auraY or 4 end,
                     set = function(_, v)
-                        GetDB().auraY = v
-                        for i = 1, 5 do UpdateFrame("boss" .. i) end
+                        GetBossDB().auraY = v
+                        for i = 1, 5 do UpdateBossFrame("boss" .. i) end
                     end,
                     formatter = function(v) return string.format("%.0f", v) end,
                 },
@@ -345,7 +330,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
     local buttons = {
         {
             name = "Open Settings",
-            click = OpenSettings
+            click = OpenBossSettings
         }
     }
     LEM:AddFrameSettingsButtons(frame, buttons)

@@ -69,9 +69,6 @@ local function CustomFilter(element, unit, data)
         return false
     end
 
-    -- 4. Infinite Duration Hide? (Optional, configurable later)
-    -- if data.duration == 0 then return false end
-
     -- 5. Standard Pass
     return true
 end
