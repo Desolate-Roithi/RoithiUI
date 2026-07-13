@@ -51,12 +51,14 @@ function Config:CreateDashboard()
         end
     end)
 
-    -- Anchor to EditMode
     if EditModeManagerFrame then
         f:SetPoint("TOPLEFT", EditModeManagerFrame, "TOPRIGHT", 2, 0)
-        hooksecurefunc(EditModeManagerFrame, "Show", function() f:Show() end)
-        hooksecurefunc(EditModeManagerFrame, "Hide", function() f:Hide() end)
-        if not EditModeManagerFrame:IsShown() then f:Hide() end
+        local LEM = LibStub("LibEditMode-Roithi", true)
+        if LEM then
+            LEM:RegisterCallback('enter', function() f:Show() end)
+            LEM:RegisterCallback('exit', function() f:Hide() end)
+            if not LEM.isEditing then f:Hide() end
+        end
     end
 
     self.dashboard = f

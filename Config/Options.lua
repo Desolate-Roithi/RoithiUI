@@ -773,6 +773,7 @@ end
 
 local function GetOptions()
     local profileOptions = LibStub("AceDBOptions-3.0"):GetOptionsTable(RoithiUI.db)
+    profileOptions.order = 8
     profileOptions.args.sharing = {
         type = "group",
         name = L["Sharing"],
@@ -1027,11 +1028,19 @@ local function GetOptions()
                     -- Units will be populated dynamically or defined below
                 },
             },
-            customtags = RoithiUI.Config.GetCustomTagsOptions and RoithiUI.Config.GetCustomTagsOptions() or nil,
+            customtags = (function()
+                local opt = RoithiUI.Config.GetCustomTagsOptions and RoithiUI.Config.GetCustomTagsOptions()
+                if opt then opt.order = 6 end
+                return opt
+            end)(),
             castbars = {
                 type = "group",
                 name = L["Castbars"],
                 order = 3,
+                hidden = function()
+                    local db = RoithiUI.db.profile
+                    return not db.EnabledModules or db.EnabledModules.Castbar == false
+                end,
                 args = {
                     -- Populated below
                 },
@@ -1041,6 +1050,10 @@ local function GetOptions()
                 type = "group",
                 name = L["Encounter Resource Bar"],
                 order = 5,
+                hidden = function()
+                    local db = RoithiUI.db.profile
+                    return not db.EnabledModules or db.EnabledModules.EncounterBar == false
+                end,
                 args = {
                     intro = {
                         type = "description",
@@ -1209,6 +1222,7 @@ local function GetOptions()
                     },
                 },
             },
+
             profiles = profileOptions,
         },
     }

@@ -5,7 +5,9 @@
     
     <!-- Utilities -->
     <Include file="LibSharedMedia-3.0/lib.xml"/>
+    <Script file="LibRoithi/LibEditModePreload.lua"/>
     <Include file="LibEditMode/embed.xml"/>
+    <Script file="LibRoithi/LibEditModePostload.lua"/>
     <Script file="LibDeflate/LibDeflate.lua"/>
     <Script file="LibRangeCheck-3.0/LibRangeCheck-3.0/LibRangeCheck-3.0.lua"/>
 

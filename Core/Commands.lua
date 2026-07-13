@@ -128,3 +128,17 @@ end)
 -- Legacy had /rd separately.
 RoithiUI:RegisterChatCommand("rd", "ChatCommandDebug")
 RoithiUI:RegisterChatCommand("roithidebug", "ChatCommandDebug")
+
+StaticPopupDialogs["ROITHI_RELOAD"] = {
+    text = "Changing module settings requires a UI reload. Reload now?",
+    button1 = "Yes",
+    button2 = "No",
+    OnAccept = function()
+        ReloadUI()
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+

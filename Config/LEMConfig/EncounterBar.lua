@@ -35,21 +35,6 @@ end
 local function GetSettings()
     return {
         {
-            name = "Enabled",
-            kind = LEM.SettingType.Checkbox,
-            default = true,
-            get = function() return GetDB().enabled end,
-            set = function(_, value)
-                local EB = RoithiUI:GetModule("EncounterBar")
-                if EB and EB.Toggle then
-                    EB:Toggle(value)
-                end
-            end,
-        },
-        {
-            kind = LEM.SettingType.Divider,
-        },
-        {
             name = "Width",
             kind = LEM.SettingType.Slider,
             default = 250,

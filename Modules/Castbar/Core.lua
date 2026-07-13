@@ -125,17 +125,17 @@ end
 
 
 
+
+
 -- ----------------------------------------------------------------------------
 -- 2. Taint-Safe Blizzard Frame Hiding
 -- ----------------------------------------------------------------------------
 function ns.UpdateBlizzardVisibility()
-    local db = RoithiUI.db.profile.Castbar
+    local db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar
     if not db then return end
 
     local castbarModule = RoithiUI:GetModule("Castbar")
     local moduleEnabled = not castbarModule or not castbarModule.IsEnabled or castbarModule:IsEnabled() ~= false
-
-    local castbarOriginalParents = {}
 
     -- Helper to hide/show
     local function ToggleBlizzBar(frame, shouldHide)
@@ -145,40 +145,43 @@ function ns.UpdateBlizzardVisibility()
             shouldHide = false
         end
 
-        if frame.SetAndUpdateShowCastbar then
-            frame:SetAndUpdateShowCastbar(not shouldHide)
-        else
-            if shouldHide then
-                if not castbarOriginalParents[frame] then
-                    castbarOriginalParents[frame] = (frame.GetParent and frame:GetParent()) or UIParent
-                end
-                if frame.SetParent then
-                    frame:SetParent(RoithiUI.HiddenFrame)
-                end
-                frame:Hide()
-            else
-                if castbarOriginalParents[frame] and frame.SetParent then
-                    frame:SetParent(castbarOriginalParents[frame])
-                end
+        if shouldHide then
+            frame:SetAlpha(0)
+            if frame.EnableMouse then frame:EnableMouse(false) end
+            frame:Hide()
+
+            if not frame.RoithiHooked then
+                hooksecurefunc(frame, "Show", function(self)
+                    if self.shouldBeHiddenRoithi then
+                        self:Hide()
+                    end
+                end)
+                frame.RoithiHooked = true
             end
+            frame.shouldBeHiddenRoithi = true
+            frame:Hide()
+        else
+            frame.shouldBeHiddenRoithi = false
+            frame:SetAlpha(1)
+            if frame.EnableMouse then frame:EnableMouse(true) end
+            frame:Show()
         end
     end
 
     -- Target
-    -- Check both legacy global and new key
-    local targetBar = TargetFrame.spellbar or TargetFrameSpellBar
+    local targetBar = TargetFrame and (TargetFrame.spellbar or TargetFrameSpellBar)
     if targetBar then
         ToggleBlizzBar(targetBar, db.target and db.target.enabled)
     end
 
     -- Focus
-    local focusBar = FocusFrame.spellbar or FocusFrameSpellBar
+    local focusBar = FocusFrame and (FocusFrame.spellbar or FocusFrameSpellBar)
     if focusBar then
         ToggleBlizzBar(focusBar, db.focus and db.focus.enabled)
     end
 
     -- Player
-    local playerBar = PlayerFrame.Spellbar or PlayerCastingBarFrame
+    local playerBar = PlayerFrame and (PlayerFrame.Spellbar or PlayerCastingBarFrame)
     if playerBar then
         ToggleBlizzBar(playerBar, db.player and db.player.enabled)
     end
@@ -198,6 +201,14 @@ Castbar.bars = ns.bars   -- Expose for AttachmentLogic
 local MidnightCastbarsDB -- Local reference to RoithiUIDB.Castbar
 
 function Castbar:OnInitialize()
+    -- Check if module is disabled
+    local profile = RoithiUI.db.profile
+    if profile.EnabledModules and profile.EnabledModules.Castbar == false then
+        ns.UpdateBlizzardVisibility()
+        self:Disable()
+        return
+    end
+
     -- Initialize DB reference
     -- RoithiUI.db should handle defaults via AceDB.
     -- But we might need to verify if "Castbar" key exists if usage was unstructured before.
