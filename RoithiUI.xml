@@ -41,6 +41,10 @@
     <!-- Encounter Bar -->
     <Script file="Modules/EncounterBar/EncounterBar.lua"/>
     
+    <!-- Minimap -->
+    <Script file="Modules/Minimap/Minimap.lua"/>
+    <Script file="Modules/Minimap/AddonBar.lua"/>
+    
     <!-- Castbar Integration -->
     <Script file="Modules/Castbar/Core.lua"/>
     <Script file="Modules/Castbar/Empower.lua"/>
