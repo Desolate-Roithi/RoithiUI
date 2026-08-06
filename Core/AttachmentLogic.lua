@@ -2,6 +2,20 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 
+local function SafeVal(val, default)
+    if val == nil then return default end
+    if type(val) == "table" and val.val ~= nil then val = val.val end
+    if _G.issecretvalue and _G.issecretvalue(val) then return default end
+    if default == 0 then
+        local num = tonumber(val)
+        return num or 0
+    elseif type(default) == "string" then
+        if type(val) == "string" and val ~= "" then return val end
+        return default
+    end
+    return val ~= nil and val or default
+end
+
 ---@class AttachmentLogic
 local AL = {}
 ns.AttachmentLogic = AL
@@ -23,7 +37,10 @@ AL.BarHierarchies = {
     ["ClassPower"] = { "Power" },                                                -- Falls back to UnitFrame if Power detached
     ["AdditionalPower"] = { "UnitFrame", { "Power", "ClassPower" } },            -- Group requires both Attached
     ["Castbar"] = { "UnitFrame", { "Power", "ClassPower" }, "AdditionalPower" }, -- Priority: Add -> Group -> UF
-    ["Auras"] = { "UnitFrame" }                                                  -- Auras always attach to UnitFrame (Satellite)
+    ["Auras"] = { "UnitFrame" },                                                  -- Auras always attach to UnitFrame (Satellite)
+    ["Buffs"] = { "UnitFrame" },
+    ["Debuffs"] = { "UnitFrame" },
+    ["Combined"] = { "UnitFrame" },
 }
 
 -- Mapping of internal names to unit frame element keys
@@ -34,6 +51,9 @@ local ElementMap = {
     ["AdditionalPower"] = "AdditionalPower",
     ["Auras"] = "RoithiAuras",
     ["RoithiAuras_Debuffs"] = "RoithiAuras_Debuffs",
+    ["Buffs"] = "RoithiAuraContainer_Buffs",
+    ["Debuffs"] = "RoithiAuraContainer_Debuffs",
+    ["Combined"] = "RoithiAuraContainer_Combined",
 }
 
 -- Mapping of internal names to DB keys
@@ -43,11 +63,23 @@ local DBKeyMap = {
     ["AdditionalPower"] = "additionalPower",
     ["Castbar"] = "castbar",
     ["Auras"] = "aura",
+    ["Buffs"] = "aura",
+    ["Debuffs"] = "aura",
+    ["Combined"] = "aura",
 }
 
 -- ----------------------------------------------------------------------------
 -- 2. State Helpers
 -- ----------------------------------------------------------------------------
+
+local function IsFrameMovable(frame)
+    if not frame or not frame.IsMovable then return false end
+    local mov = frame:IsMovable()
+    if issecretvalue and issecretvalue(mov) then
+        return true
+    end
+    return mov == true
+end
 
 function AL:GetLookupUnit(unit)
     if unit == "vehicle" then return "player" end
@@ -258,14 +290,10 @@ function AL:ApplyLayout(unit, frameType)
     -- Force detached if no unit frame exists to anchor to
     if not uFrame then isDetached = true end
 
-    if frameType == "AdditionalPower" and RoithiUI.db.profile.General.debugMode then
-        RoithiUI:Log(string.format("AL Debug: ApplyLayout %s | Detached: %s", frameType, tostring(isDetached)))
-    end
-
     -- Save-on-Transition Logic:
     -- If we are switching to Attached (isDetached == false), but the frame is currently Detached (IsMovable == true),
     -- then the user just unchecked "Detached". We must save the current manual position before it gets wiped/snapped.
-    if not isDetached and frame:IsMovable() then
+    if not isDetached and IsFrameMovable(frame) then
         local p, _, _, x, y = frame:GetPoint()
         if p then
             if frameType == "Castbar" then
@@ -316,12 +344,15 @@ function AL:ApplyLayout(unit, frameType)
             point = db.point or "CENTER"
             x, y = db.x or 0, db.y or 0
             width = db.width or 250
-        elseif frameType == "Auras" or frameType:match("^CustomAura_") or frameType:match("^RoithiAuras_") then
+        elseif frameType == "Auras" or frameType == "Buffs" or frameType == "Debuffs" or frameType == "Combined" or frameType:match("^CustomAura_") or frameType:match("^RoithiAuras_") then
             -- Use specialized Screen Coordinates keys for Auras to preserve Satellite offsets
-            if frameType == "Auras" then
+            if frameType == "Auras" or frameType == "Combined" then
                 point = db.auraScreenPoint or "CENTER"
                 x, y = db.auraScreenX or 0, db.auraScreenY or 0
-            elseif frameType == "RoithiAuras_Debuffs" then
+            elseif frameType == "Buffs" then
+                point = db.buffScreenPoint or db.auraScreenPoint or "CENTER"
+                x, y = db.buffScreenX or db.auraScreenX or 0, db.buffScreenY or db.auraScreenY or 0
+            elseif frameType == "Debuffs" or frameType == "RoithiAuras_Debuffs" then
                 point = db.debuffScreenPoint or db.auraScreenPoint or "CENTER"
                 x, y = db.debuffScreenX or db.auraScreenX or 0, db.debuffScreenY or db.auraScreenY or -50
             else
@@ -383,6 +414,9 @@ function AL:ApplyLayout(unit, frameType)
                     anchorX = db.xOffset or 0
                     anchorY = db.yOffset or 0
                 end
+                anchorPt = SafeVal(anchorPt, "BOTTOM")
+                anchorX = SafeVal(anchorX, 0)
+                anchorY = SafeVal(anchorY, 0)
                 frame:ClearAllPoints()
                 frame:SetPoint(anchorPt, anchor, anchorPt, anchorX, anchorY)
                 -- Width is auto-calculated by icons usually

@@ -128,3 +128,8 @@ end)
 -- Legacy had /rd separately.
 RoithiUI:RegisterChatCommand("rd", "ChatCommandDebug")
 RoithiUI:RegisterChatCommand("roithidebug", "ChatCommandDebug")
+RoithiUI:RegisterChatCommand("rad", function()
+    RoithiUI.AuraDebug = not RoithiUI.AuraDebug
+    local stateStr = RoithiUI.AuraDebug and "|cff00ff00ENABLED|r" or "|cffff0000DISABLED|r"
+    print("|cff00ffff[RAD - Roithi Aura Debugger 12.1.0]|r Debug logging is now " .. stateStr)
+end)

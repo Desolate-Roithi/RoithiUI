@@ -30,7 +30,14 @@
     <Script file="Modules/UnitFrames/Elements/Text.lua"/>
     <Script file="Modules/UnitFrames/Elements/Tags.lua"/>
     <Script file="Modules/UnitFrames/Elements/Indicators.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Auras.lua"/>
+    <!-- Auras 12.1.0 Modular Sub-Files -->
+    <Script file="Modules/UnitFrames/Elements/Auras/Init.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Auras/Helpers.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Auras/Formatting.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Auras/Movers.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Auras/Containers.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Auras/CustomAuras.lua"/>
+    <Script file="Modules/UnitFrames/Elements/Auras/Auras.lua"/>
     <Script file="Modules/UnitFrames/Elements/Range.lua"/>
     <Script file="Modules/UnitFrames/Elements/HealthPrediction.lua"/>
     <Script file="Modules/UnitFrames/Elements/Fader.lua"/>

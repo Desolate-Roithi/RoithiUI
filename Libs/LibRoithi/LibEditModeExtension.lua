@@ -63,10 +63,18 @@ if not lib.internal.IsHealed then
         -- Wrap the callback to respect SetMovable(false)
         -- If frame is locked (SetMovable(false)), we should NOT process the drag end.
         local safeCallback = function(f, layoutName, point, x, y)
-            if not f:IsMovable() then
-                -- If the frame is locked, it shouldn't have been moved.
-                -- However, if LibEditMode forced it, we should revert or ignore.
-                -- Logging for debug:
+            local movableVal = true
+            local ok, res = pcall(function() return f:IsMovable() end)
+            if ok then
+                local isSec = (issecretvalue and issecretvalue(res))
+                           or (C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(res))
+                           or (type(res) == "userdata")
+                if not isSec then
+                    movableVal = (res == true)
+                end
+            end
+
+            if not movableVal then
                 if _G.RoithiUI and _G.RoithiUI.Log and _G.RoithiUI.db and _G.RoithiUI.db.profile.General.debugMode then
                     _G.RoithiUI:Log("LEM Extension: Ignored Drag on Locked Frame: " .. (f:GetName() or "Anonymous"))
                 end

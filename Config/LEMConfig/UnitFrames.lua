@@ -10,6 +10,18 @@ local function GetDB(unit)
     return RoithiUI.db.profile.UnitFrames[unit]
 end
 
+local function SafeNum(val, default)
+    if val == nil then return default or 0 end
+    if (issecretvalue and issecretvalue(val)) or (C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(val)) or type(val) == "userdata" then
+        local str = tostring(val)
+        local num = tonumber(str)
+        if num then return num end
+        return default or 0
+    end
+    local num = tonumber(val)
+    return num or default or 0
+end
+
 -- ============================================================================
 -- THE RIGHT-CLICK MENUS
 -- This file controls the settings available when right-clicking a frame in Edit Mode.
@@ -367,6 +379,304 @@ local function GetSettingsForAdditionalPower(unit)
     }
 end
 
+local function GetSettingsForAuras(unit, suffix)
+    local isBuffs = (suffix == "Buffs")
+    local isDebuffs = (suffix == "Debuffs")
+    local isCombined = (suffix == "Combined")
+    local keyPrefix = isBuffs and "buff" or (isDebuffs and "debuff" or "aura")
+
+    local function isDetached()
+        local db = GetDB(unit)
+        return db[keyPrefix .. "Detached"] == true
+    end
+
+    local function UpdateAuras()
+        local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+        local frame = UF and UF.units and UF.units[unit]
+        if UF and UF.UpdateAuras and frame then
+            UF:UpdateAuras(frame)
+        end
+        local AL = ns.AttachmentLogic
+        if AL then AL:GlobalLayoutRefresh(unit) end
+    end
+
+    local function RefreshLEM()
+        local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+        if UF and UF.AuraMovers then
+            local moverKey = "RoithiAuraContainer_" .. unit .. "_" .. suffix .. "_Mover"
+            local mover = UF.AuraMovers[moverKey]
+            if mover then
+                LEM:RefreshFrameSettings(mover)
+            end
+        end
+    end
+
+    return {
+        -- 1. Detach on top
+        {
+            name = "Detach",
+            kind = LEM.SettingType.Checkbox,
+            default = false,
+            get = function() return isDetached() end,
+            set = function(_, value)
+                GetDB(unit)[keyPrefix .. "Detached"] = value
+                UpdateFrameFromSettings(unit)
+                UpdateAuras()
+                RefreshLEM()
+            end,
+        },
+        -- 2. Size
+        {
+            name = "Size",
+            kind = LEM.SettingType.Slider,
+            default = 28,
+            minValue = 12,
+            maxValue = 64,
+            valueStep = 1,
+            get = function() return SafeNum(GetDB(unit)[keyPrefix .. "Size"] or GetDB(unit).auraSize, 28) end,
+            set = function(_, value)
+                GetDB(unit)[keyPrefix .. "Size"] = value
+                UpdateFrameFromSettings(unit)
+                UpdateAuras()
+            end,
+        },
+        -- 3. Grow Direction
+        {
+            name = "Grow Direction",
+            kind = LEM.SettingType.Dropdown,
+            values = {
+                { text = "Right then Down",                 value = "RIGHT_DOWN" },
+                { text = "Right then Up",                   value = "RIGHT_UP" },
+                { text = "Left then Down",                  value = "LEFT_DOWN" },
+                { text = "Left then Up",                    value = "LEFT_UP" },
+                { text = "Down then Right",                 value = "DOWN_RIGHT" },
+                { text = "Down then Left",                  value = "DOWN_LEFT" },
+                { text = "Up then Right",                   value = "UP_RIGHT" },
+                { text = "Up then Left",                    value = "UP_LEFT" },
+                { text = "Centered Horizontal",             value = "CENTER_HORIZONTAL" },
+                -- { text = "Centered Horizontal (Grow Down)", value = "CENTER_HORIZONTAL_DOWN" },
+                -- { text = "Centered Horizontal (Grow Up)",   value = "CENTER_HORIZONTAL_UP" },
+                { text = "Centered Vertical",               value = "CENTER_VERTICAL" },
+                -- { text = "Centered Vertical (Grow Right)",  value = "CENTER_VERTICAL_RIGHT" },
+                -- { text = "Centered Vertical (Grow Left)",   value = "CENTER_VERTICAL_LEFT" },
+            },
+            get = function()
+                return GetDB(unit)[keyPrefix .. "GrowDirection"] or GetDB(unit).auraGrowDirection or "RIGHT_DOWN"
+            end,
+            set = function(_, value)
+                GetDB(unit)[keyPrefix .. "GrowDirection"] = value
+                UpdateFrameFromSettings(unit)
+                UpdateAuras()
+            end,
+        },
+        -- 4.1. If detached
+        {
+            name = "X Offset (Detached)",
+            kind = LEM.SettingType.Slider,
+            default = 0,
+            minValue = -2500,
+            maxValue = 2500,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.1f", v) end,
+            get = function() return SafeNum(GetDB(unit)[keyPrefix .. "ScreenX"], 0) end,
+            set = function(_, value)
+                GetDB(unit)[keyPrefix .. "ScreenX"] = value
+                UpdateFrameFromSettings(unit)
+                UpdateAuras()
+            end,
+            hidden = function() return not isDetached() end,
+        },
+        {
+            name = "Y Offset (Detached)",
+            kind = LEM.SettingType.Slider,
+            default = 0,
+            minValue = -1500,
+            maxValue = 1500,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.1f", v) end,
+            get = function() return SafeNum(GetDB(unit)[keyPrefix .. "ScreenY"], 0) end,
+            set = function(_, value)
+                GetDB(unit)[keyPrefix .. "ScreenY"] = value
+                UpdateFrameFromSettings(unit)
+                UpdateAuras()
+            end,
+            hidden = function() return not isDetached() end,
+        },
+        -- 4.2. If attached
+        {
+            name = "Anchor Point",
+            kind = LEM.SettingType.Dropdown,
+            values = {
+                { text = "Top Left",     value = "TOPLEFT" },
+                { text = "Left",         value = "LEFT" },
+                { text = "Bottom Left",  value = "BOTTOMLEFT" },
+                { text = "Top",          value = "TOP" },
+                { text = "Center",       value = "CENTER" },
+                { text = "Bottom",       value = "BOTTOM" },
+                { text = "Top Right",    value = "TOPRIGHT" },
+                { text = "Right",        value = "RIGHT" },
+                { text = "Bottom Right", value = "BOTTOMRIGHT" },
+            },
+            get = function()
+                local defaultAnchor = (unit == "target" and "TOPLEFT" or "BOTTOMLEFT")
+                return GetDB(unit)[keyPrefix .. "Anchor"] or GetDB(unit).auraAnchor or defaultAnchor
+            end,
+            set = function(_, value)
+                GetDB(unit)[keyPrefix .. "Anchor"] = value
+                UpdateFrameFromSettings(unit)
+                UpdateAuras()
+            end,
+            hidden = function() return isDetached() end,
+        },
+        {
+            name = "X Offset (Attached)",
+            kind = LEM.SettingType.Slider,
+            default = 0,
+            minValue = -1000,
+            maxValue = 1000,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.1f", v) end,
+            get = function() return SafeNum(GetDB(unit)[keyPrefix .. "XOffset"] or GetDB(unit).auraX, 0) end,
+            set = function(_, value)
+                GetDB(unit)[keyPrefix .. "XOffset"] = value
+                if isCombined then GetDB(unit).auraX = value end
+                UpdateFrameFromSettings(unit)
+                UpdateAuras()
+            end,
+            hidden = function() return isDetached() end,
+        },
+        {
+            name = "Y Offset (Attached)",
+            kind = LEM.SettingType.Slider,
+            default = 0,
+            minValue = -1000,
+            maxValue = 1000,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.1f", v) end,
+            get = function()
+                local defaultY = (unit == "target" and (isBuffs and -45 or -10) or 10)
+                return SafeNum(GetDB(unit)[keyPrefix .. "YOffset"] or GetDB(unit).auraY, defaultY)
+            end,
+            set = function(_, value)
+                GetDB(unit)[keyPrefix .. "YOffset"] = value
+                if isCombined then GetDB(unit).auraY = value end
+                UpdateFrameFromSettings(unit)
+                UpdateAuras()
+            end,
+            hidden = function() return isDetached() end,
+        },
+    }
+end
+ns.GetSettingsForAuras = GetSettingsForAuras
+
+local function GetSettingsForCustomAura(id)
+    local function GetCustomDB()
+        return RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.CustomAuraFrames and RoithiUI.db.profile.CustomAuraFrames[id] or {}
+    end
+
+    local function UpdateCustomAuras()
+        local UF = RoithiUI:GetModule("UnitFrames")
+        if UF and UF.UpdateCustomAura then
+            UF:UpdateCustomAura(id)
+        end
+    end
+
+    return {
+        -- 1. Request Buffs From Unit
+        {
+            name = "Unit Target",
+            kind = LEM.SettingType.Dropdown,
+            values = {
+                { text = "Player",           value = "player" },
+                { text = "Target",           value = "target" },
+                { text = "Focus",            value = "focus" },
+                { text = "Pet",              value = "pet" },
+                { text = "Target of Target", value = "targettarget" },
+                { text = "Focus Target",     value = "focustarget" },
+            },
+            get = function() return GetCustomDB().unit or "player" end,
+            set = function(_, value)
+                GetCustomDB().unit = value
+                UpdateCustomAuras()
+            end,
+        },
+        -- 2. Size
+        {
+            name = "Size",
+            kind = LEM.SettingType.Slider,
+            default = 30,
+            minValue = 10,
+            maxValue = 100,
+            valueStep = 1,
+            get = function() return SafeNum(GetCustomDB().auraSize, 30) end,
+            set = function(_, value)
+                GetCustomDB().auraSize = value
+                UpdateCustomAuras()
+            end,
+        },
+        -- 3. Grow Direction
+        {
+            name = "Grow Direction",
+            kind = LEM.SettingType.Dropdown,
+            values = {
+                { text = "Right then Down",                 value = "RIGHT_DOWN" },
+                { text = "Right then Up",                   value = "RIGHT_UP" },
+                { text = "Left then Down",                  value = "LEFT_DOWN" },
+                { text = "Left then Up",                    value = "LEFT_UP" },
+                { text = "Down then Right",                 value = "DOWN_RIGHT" },
+                { text = "Down then Left",                  value = "DOWN_LEFT" },
+                { text = "Up then Right",                   value = "UP_RIGHT" },
+                { text = "Up then Left",                    value = "UP_LEFT" },
+                { text = "Centered Horizontal",             value = "CENTER_HORIZONTAL" },
+                -- { text = "Centered Horizontal (Grow Down)", value = "CENTER_HORIZONTAL_DOWN" },
+                -- { text = "Centered Horizontal (Grow Up)",   value = "CENTER_HORIZONTAL_UP" },
+                { text = "Centered Vertical",               value = "CENTER_VERTICAL" },
+                -- { text = "Centered Vertical (Grow Right)",  value = "CENTER_VERTICAL_RIGHT" },
+                -- { text = "Centered Vertical (Grow Left)",   value = "CENTER_VERTICAL_LEFT" },
+            },
+            get = function() return GetCustomDB().auraGrowDirection or "RIGHT_DOWN" end,
+            set = function(_, value)
+                GetCustomDB().auraGrowDirection = value
+                UpdateCustomAuras()
+            end,
+        },
+        -- 4. X Position
+        {
+            name = "X Position",
+            kind = LEM.SettingType.Slider,
+            default = 0,
+            minValue = -2500,
+            maxValue = 2500,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.1f", v) end,
+            get = function() return SafeNum(GetCustomDB().screenX or GetCustomDB().auraScreenX, 0) end,
+            set = function(_, value)
+                GetCustomDB().screenX = value
+                GetCustomDB().auraScreenX = value
+                UpdateCustomAuras()
+            end,
+        },
+        -- 5. Y Position
+        {
+            name = "Y Position",
+            kind = LEM.SettingType.Slider,
+            default = 0,
+            minValue = -1500,
+            maxValue = 1500,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.1f", v) end,
+            get = function() return SafeNum(GetCustomDB().screenY or GetCustomDB().auraScreenY, 0) end,
+            set = function(_, value)
+                GetCustomDB().screenY = value
+                GetCustomDB().auraScreenY = value
+                UpdateCustomAuras()
+            end,
+        },
+    }
+end
+ns.GetSettingsForCustomAura = GetSettingsForCustomAura
+
+
 
 local function GetSettingsForMainFrame(unit, frame)
     local settings = {
@@ -595,6 +905,18 @@ function ns.InitializeUnitFrameConfig()
                 end
                 if frame.AdditionalPower then
                     pcall(function() LEM:AddFrameSettings(frame.AdditionalPower, GetSettingsForAdditionalPower(unit)) end)
+                end
+                local buffContainer = frame.RoithiAuraContainer_Buffs
+                if buffContainer and buffContainer.AuraMover then
+                    pcall(function() LEM:AddFrameSettings(buffContainer.AuraMover, GetSettingsForAuras(unit, "Buffs")) end)
+                end
+                local debuffContainer = frame.RoithiAuraContainer_Debuffs
+                if debuffContainer and debuffContainer.AuraMover then
+                    pcall(function() LEM:AddFrameSettings(debuffContainer.AuraMover, GetSettingsForAuras(unit, "Debuffs")) end)
+                end
+                local combinedContainer = frame.RoithiAuraContainer_Combined
+                if combinedContainer and combinedContainer.AuraMover then
+                    pcall(function() LEM:AddFrameSettings(combinedContainer.AuraMover, GetSettingsForAuras(unit, "Combined")) end)
                 end
             end
 

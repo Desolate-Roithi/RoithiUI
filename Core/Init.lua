@@ -91,6 +91,150 @@ function RoithiUI:OnInitialize()
 
     -- AceAddon calls OnInitialize on modules automatically.
 
+    -- Protect LibEditMode selection labels against WoW 12.0.7 / 12.1.0 secret IsTruncated taint errors
+    local LEM = LibStub("LibEditMode-Roithi", true)
+    if LEM and LEM.AddFrame and not LEM.roithiFontSecured then
+        LEM.roithiFontSecured = true
+        local origAddFrame = LEM.AddFrame
+        LEM.AddFrame = function(selfObj, frameObj, callbackObj, defaultObj, nameObj)
+            origAddFrame(selfObj, frameObj, callbackObj, defaultObj, nameObj)
+            local selection = selfObj.frameSelections and selfObj.frameSelections[frameObj]
+            if selection then
+                local labels = { selection.Label, selection.HorizontalLabel, selection.VerticalLabel }
+                for _, lbl in ipairs(labels) do
+                    if lbl and lbl.ApplyFontObjects then
+                        lbl.ApplyFontObjects = function(fontString)
+                            if not fontString.fontObjectsToTry then return end
+                            for _, fontObj in ipairs(fontString.fontObjectsToTry) do
+                                fontString:SetFontObject(fontObj)
+                                local ok, isTrunc = pcall(function() return fontString:IsTruncated() end)
+                                local isSec = (issecretvalue and issecretvalue(isTrunc))
+                                           or (C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(isTrunc))
+                                           or (type(isTrunc) == "userdata")
+
+                                if not ok or isSec then
+                                    break
+                                else
+                                    if not isTrunc then
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                -- 2. Protect against GameTooltip:SetOwner UntrustedLayoutScriptExecution taint lock in 12.1.0
+                selection.CheckShowInstructionalTooltip = function(sel)
+                    if not sel:IsSelected() then
+                        local ok = pcall(function()
+                            local tooltip = _G.GetAppropriateTooltip and _G.GetAppropriateTooltip() or _G.GameTooltip
+                            tooltip:SetOwner(sel, "ANCHOR_CURSOR")
+                            if sel.system and sel.system.GetSystemName then
+                                tooltip:SetText(sel.system:GetSystemName())
+                            end
+                            tooltip:Show()
+                        end)
+                        if not ok then
+                            pcall(function() _G.GameTooltip:Hide() end)
+                        end
+                    else
+                        pcall(function()
+                            local tooltip = _G.GetAppropriateTooltip and _G.GetAppropriateTooltip() or _G.GameTooltip
+                            tooltip:Hide()
+                        end)
+                    end
+                end
+
+                selection.HideInstructionalTooltip = function(sel)
+                    pcall(function()
+                        local tooltip = _G.GetAppropriateTooltip and _G.GetAppropriateTooltip() or _G.GameTooltip
+                        tooltip:Hide()
+                    end)
+                end
+            end
+
+            -- 3. Protect frameObj:GetPoint against 12.1.0 Secret userdata returns
+            if frameObj and frameObj.GetPoint and not frameObj.roithiGetPointSecured then
+                frameObj.roithiGetPointSecured = true
+                local origGetPoint = frameObj.GetPoint
+                frameObj.GetPoint = function(s, idx)
+                    local p, relTo, relP, x, y = origGetPoint(s, idx or 1)
+                    local isSec = (issecretvalue and (issecretvalue(p) or issecretvalue(x) or issecretvalue(y)))
+                               or (C_Secrets and C_Secrets.IsSecret and (C_Secrets.IsSecret(p) or C_Secrets.IsSecret(x) or C_Secrets.IsSecret(y)))
+                               or (type(p) == "userdata" or type(x) == "userdata" or type(y) == "userdata")
+
+                    if isSec then
+                        local dbP = s.roithiSavedPoint or (defaultObj and defaultObj.point) or "CENTER"
+                        local dbRelP = s.roithiSavedRelPoint or dbP
+                        local dbX = s.roithiSavedX or (defaultObj and defaultObj.x) or 0
+                        local dbY = s.roithiSavedY or (defaultObj and defaultObj.y) or 0
+                        return dbP, _G.UIParent, dbRelP, dbX, dbY
+                    end
+
+                    return p, relTo, relP, x, y
+                end
+            end
+
+            -- 4. Protect frameObj geometry methods against 12.1.0 Secret userdata returns
+            if frameObj and not frameObj.roithiBoundsSecured then
+                frameObj.roithiBoundsSecured = true
+
+                local methods = { "GetLeft", "GetTop", "GetRight", "GetBottom", "GetCenter", "GetRect" }
+                for _, method in ipairs(methods) do
+                    if type(frameObj[method]) == "function" then
+                        local origMethod = frameObj[method]
+                        frameObj[method] = function(s, ...)
+                            local results = { origMethod(s, ...) }
+                            local isSec = false
+                            for _, v in ipairs(results) do
+                                if (issecretvalue and issecretvalue(v))
+                                or (C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(v))
+                                or (type(v) == "userdata") then
+                                    isSec = true
+                                    break
+                                end
+                            end
+
+                            if isSec then
+                                local sw, sh = _G.UIParent:GetSize()
+                                local rawFw = (type(s.GetWidth) == "function" and s:GetWidth())
+                                local rawFh = (type(s.GetHeight) == "function" and s:GetHeight())
+
+                                local isFwSec = (issecretvalue and issecretvalue(rawFw))
+                                             or (C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(rawFw))
+                                             or (type(rawFw) == "userdata") or not rawFw
+
+                                local isFhSec = (issecretvalue and issecretvalue(rawFh))
+                                             or (C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(rawFh))
+                                             or (type(rawFh) == "userdata") or not rawFh
+
+                                local fw = not isFwSec and rawFw or (s.roithiCalcWidth or 100)
+                                local fh = not isFhSec and rawFh or (s.roithiCalcHeight or 30)
+
+                                local x = s.roithiSavedX or 0
+                                local y = s.roithiSavedY or 0
+
+                                local left = (sw / 2) + x - (fw / 2)
+                                local right = left + fw
+                                local bottom = (sh / 2) + y - (fh / 2)
+                                local top = bottom + fh
+
+                                if method == "GetLeft" then return left end
+                                if method == "GetTop" then return top end
+                                if method == "GetRight" then return right end
+                                if method == "GetBottom" then return bottom end
+                                if method == "GetCenter" then return (left + right) / 2, (top + bottom) / 2 end
+                                if method == "GetRect" then return left, bottom, fw, fh end
+                            end
+
+                            return unpack(results)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     -- Register Options
     if self.Config and self.Config.RegisterOptions then
         self.Config:RegisterOptions()

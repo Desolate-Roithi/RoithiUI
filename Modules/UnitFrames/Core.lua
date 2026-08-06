@@ -125,4 +125,7 @@ function UF:OnEnable()
     if not self.units then self.units = {} end
 
     -- Note: Actual spawning is handled by Units.lua hooking OnEnable and calling InitializeUnits
+    if self.UpdateAllCustomAuras then
+        self:UpdateAllCustomAuras()
+    end
 end

@@ -6,7 +6,19 @@ RoithiUI.Config = Config
 local LSM = LibStub("LibSharedMedia-3.0")
 local AL = ns.AttachmentLogic
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
+local SafeNum = function(val, default)
+    if val == nil or (issecretvalue and issecretvalue(val)) then
+        return default or 0
+    end
+    local num = tonumber(val)
+    return num or default or 0
+end
 
+local RESTRICTED_FRIENDLY_DEBUFF_SPELLS = {
+    [124275] = "Light Stagger",
+    [124274] = "Moderate Stagger",
+    [124273] = "Heavy Stagger",
+}
 
 -- ----------------------------------------------------------------------------
 -- AceConfig Table Definition
@@ -24,7 +36,7 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
     return {
         group1_global = {
             type = "group",
-            name = L["Global Visibility & Layout"],
+            name = L["Global Visibility & Container Settings"],
             order = 1,
             inline = true,
             args = {
@@ -53,45 +65,17 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     name = L["Separate Buffs & Debuffs"],
                     desc  = L["When checked, Buffs and Debuffs will anchor separately instead of flowing consecutively."],
                     order = 3,
-                    get = function() return GetDB().separateAuras end,
+                    get = function() return GetDB().separateAuras == true end,
                     set = function(_, v)
                         GetDB().separateAuras = v; RefreshFunc()
                     end,
                     hidden = function() return GetDB().isStandaloneCustom end,
                 },
-            },
-        },
-        group2_base = {
-            type = "group",
-            name = L["Base Filters"],
-            order = 2,
-            inline = true,
-            args = {
-                showAllBuffs = {
-                    type = "toggle",
-                    name = L["All Buffs"],
-                    desc  = L["Overrides Smart Filters to show every active Buff on the unit."],
-                    order = 1,
-                    get = function() return GetDB().showAllBuffs end,
-                    set = function(_, v)
-                        GetDB().showAllBuffs = v; RefreshFunc()
-                    end,
-                },
-                showAllDebuffs = {
-                    type = "toggle",
-                    name = L["All Debuffs"],
-                    desc  = L["Overrides Smart Filters to show every active Debuff on the unit."],
-                    order = 2,
-                    get = function() return GetDB().showAllDebuffs end,
-                    set = function(_, v)
-                        GetDB().showAllDebuffs = v; RefreshFunc()
-                    end,
-                },
                 hideTimeless = {
                     type = "toggle",
                     name = L["Hide Timeless Auras"],
                     desc  = L["Hides passive auras with no duration."],
-                    order = 3,
+                    order = 4,
                     get = function() return GetDB().hideTimeless == true end,
                     set = function(_, v)
                         GetDB().hideTimeless = v; RefreshFunc()
@@ -99,127 +83,181 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 },
             },
         },
-        group3_player = {
+        group2_buffs = {
             type = "group",
-            name = L["Player Auras"],
-            order = 3,
+            name = L["Helpful Aura Filters (Buffs)"],
+            order = 2,
             inline = true,
             args = {
+                showAllBuffs = {
+                    type = "toggle",
+                    name = L["All Buffs"],
+                    desc  = L["Shows every active Buff on the unit. Overrides specific buff sub-filters below."],
+                    order = 1,
+                    get = function() return GetDB().showAllBuffs == true end,
+                    set = function(_, v)
+                        GetDB().showAllBuffs = v
+                        if v then GetDB().onlyWhitelistBuffs = false end
+                        RefreshFunc()
+                    end,
+                    disabled = function() return GetDB().onlyWhitelistBuffs == true end,
+                },
                 playerBuffs = {
                     type = "toggle",
                     name = L["My Buffs"],
                     desc  = L["Shows generic helpful auras cast by you."],
-                    order = 1,
-                    get = function() return GetDB().playerBuffs ~= false end,
+                    order = 2,
+                    get = function() return GetDB().playerBuffs == true end,
                     set = function(_, v)
                         GetDB().playerBuffs = v; RefreshFunc()
                     end,
+                    disabled = function() return GetDB().showAllBuffs == true or GetDB().onlyWhitelistBuffs == true end,
+                },
+                raidInCombat = {
+                    type = "toggle",
+                    name = L["My Raid HoTs/Buffs"],
+                    desc  = L["Safely shows your HoTs while in combat."],
+                    order = 3,
+                    get = function() return GetDB().raidInCombat == true end,
+                    set = function(_, v)
+                        GetDB().raidInCombat = v; RefreshFunc()
+                    end,
+                    disabled = function() return GetDB().showAllBuffs == true or GetDB().onlyWhitelistBuffs == true end,
+                },
+                importantBuffs = {
+                    type = "toggle",
+                    name = L["Important Buffs"],
+                    desc  = L["Shows Buffs explicitly flagged by Blizzard developers as critical for the encounter."],
+                    order = 4,
+                    get = function() return GetDB().importantBuffs == true end,
+                    set = function(_, v)
+                        GetDB().importantBuffs = v; RefreshFunc()
+                    end,
+                    disabled = function() return GetDB().showAllBuffs == true or GetDB().onlyWhitelistBuffs == true end,
+                },
+                majorDefensivesBuffs = {
+                    type = "toggle",
+                    name = L["Major Defensives (Tanks)"],
+                    desc  = L["Shows major defensive cooldowns (Buffs) on the unit (e.g. Shield Wall, Barkskin)."],
+                    order = 5,
+                    get = function() return GetDB().majorDefensivesBuffs == true or GetDB().majorDefensives == true end,
+                    set = function(_, v)
+                        GetDB().majorDefensivesBuffs = v; GetDB().majorDefensives = v; RefreshFunc()
+                    end,
+                    disabled = function() return GetDB().showAllBuffs == true or GetDB().onlyWhitelistBuffs == true end,
+                },
+                externalDefensives = {
+                    type = "toggle",
+                    name = L["External Defensives"],
+                    desc  = L["Shows major defensive buffs cast on the unit by OTHER players (e.g. Pain Suppression)."],
+                    order = 6,
+                    get = function() return GetDB().externalDefensives == true end,
+                    set = function(_, v)
+                        GetDB().externalDefensives = v; RefreshFunc()
+                    end,
+                    disabled = function() return GetDB().showAllBuffs == true or GetDB().onlyWhitelistBuffs == true end,
+                },
+                onlyWhitelistBuffs = {
+                    type = "toggle",
+                    name = L["Show Only Whitelisted Buffs"],
+                    desc  = L["Hides all Buffs except those explicitly added to the Spell Whitelist."],
+                    order = 7,
+                    get = function() return GetDB().onlyWhitelistBuffs == true end,
+                    set = function(_, v)
+                        GetDB().onlyWhitelistBuffs = v
+                        if v then GetDB().showAllBuffs = false end
+                        RefreshFunc()
+                    end,
+                    disabled = function() return GetDB().showAllBuffs == true end,
+                },
+            },
+        },
+        group3_debuffs = {
+            type = "group",
+            name = L["Harmful Aura Filters (Debuffs)"],
+            order = 3,
+            inline = true,
+            args = {
+                showAllDebuffs = {
+                    type = "toggle",
+                    name = L["All Debuffs"],
+                    desc  = L["Shows every active Debuff on the unit. Overrides specific debuff sub-filters below."],
+                    order = 1,
+                    get = function() return GetDB().showAllDebuffs == true end,
+                    set = function(_, v)
+                        GetDB().showAllDebuffs = v
+                        if v then GetDB().onlyWhitelistDebuffs = false end
+                        RefreshFunc()
+                    end,
+                    disabled = function() return GetDB().onlyWhitelistDebuffs == true end,
                 },
                 playerDebuffs = {
                     type = "toggle",
                     name = L["My Debuffs"],
                     desc  = L["Shows generic harmful auras (like DoTs) cast by you."],
                     order = 2,
-                    get = function() return GetDB().playerDebuffs ~= false end,
+                    get = function() return GetDB().playerDebuffs == true end,
                     set = function(_, v)
                         GetDB().playerDebuffs = v; RefreshFunc()
                     end,
-                },
-                raidInCombat = {
-                    type = "toggle",
-                    name = L["My Raid HoTs/Buffs"],
-                    desc  = L["Safely shows your HoTs while in combat (bypassing native combat hiding restrictions)."],
-                    order = 3,
-                    get = function() return GetDB().raidInCombat ~= false end,
-                    set = function(_, v)
-                        GetDB().raidInCombat = v; RefreshFunc()
-                    end,
-                },
-            },
-        },
-        group4_mechanics = {
-            type = "group",
-            name = L["Mechanics & Warnings"],
-            order = 4,
-            inline = true,
-            args = {
-                importantBuffs = {
-                    type = "toggle",
-                    name = L["Important Buffs"],
-                    desc  = L["Shows Buffs explicitly flagged by Blizzard developers as critical for the encounter."],
-                    order = 1,
-                    get = function() return GetDB().importantBuffs ~= false end,
-                    set = function(_, v)
-                        GetDB().importantBuffs = v; RefreshFunc()
-                    end,
+                    disabled = function() return GetDB().showAllDebuffs == true or GetDB().onlyWhitelistDebuffs == true end,
                 },
                 importantDebuffs = {
                     type = "toggle",
                     name = L["Important Debuffs"],
                     desc  = L["Shows Debuffs explicitly flagged by Blizzard developers as critical for the encounter."],
-                    order = 2,
-                    get = function() return GetDB().importantDebuffs ~= false end,
+                    order = 3,
+                    get = function() return GetDB().importantDebuffs == true end,
                     set = function(_, v)
                         GetDB().importantDebuffs = v; RefreshFunc()
                     end,
+                    disabled = function() return GetDB().showAllDebuffs == true or GetDB().onlyWhitelistDebuffs == true end,
                 },
                 cc = {
                     type = "toggle",
                     name = L["Crowd Control"],
                     desc  = L["Shows Debuffs that restrict character control (Stuns, Fears, Roots, etc)."],
-                    order = 3,
-                    get = function() return GetDB().cc ~= false end,
+                    order = 4,
+                    get = function() return GetDB().cc == true end,
                     set = function(_, v)
                         GetDB().cc = v; RefreshFunc()
                     end,
+                    disabled = function() return GetDB().showAllDebuffs == true or GetDB().onlyWhitelistDebuffs == true end,
                 },
                 dispellable = {
                     type = "toggle",
                     name = L["Dispellable"],
                     desc  = L["Shows Debuffs that your current Class/Spec is physically capable of dispelling."],
-                    order = 4,
-                    get = function() return GetDB().dispellable ~= false end,
+                    order = 5,
+                    get = function() return GetDB().dispellable == true or GetDB().onlyDispellable == true end,
                     set = function(_, v)
-                        GetDB().dispellable = v; RefreshFunc()
+                        GetDB().dispellable = v; GetDB().onlyDispellable = v; RefreshFunc()
                     end,
-                },
-            },
-        },
-        group5_defensives = {
-            type = "group",
-            name = L["Defensives"],
-            order = 5,
-            inline = true,
-            args = {
-                majorDefensivesBuffs = {
-                    type = "toggle",
-                    name = L["Major Defensives (Tanks)"],
-                    desc  = L["Shows major defensive cooldowns (Buffs) on the unit (e.g. Shield Wall, Barkskin)."],
-                    order = 1,
-                    get = function() return GetDB().majorDefensivesBuffs ~= false end,
-                    set = function(_, v)
-                        GetDB().majorDefensivesBuffs = v; RefreshFunc()
-                    end,
+                    disabled = function() return GetDB().showAllDebuffs == true or GetDB().onlyWhitelistDebuffs == true end,
                 },
                 majorDefensivesDebuffs = {
                     type = "toggle",
                     name = L["Major Defensives (Debuffs)"],
                     desc  = L["Shows major defensive restrictions (Debuffs) on the unit (e.g. Forbearance, Weakened Soul)."],
-                    order = 2,
-                    get = function() return GetDB().majorDefensivesDebuffs ~= false end,
+                    order = 6,
+                    get = function() return GetDB().majorDefensivesDebuffs == true end,
                     set = function(_, v)
                         GetDB().majorDefensivesDebuffs = v; RefreshFunc()
                     end,
+                    disabled = function() return GetDB().showAllDebuffs == true or GetDB().onlyWhitelistDebuffs == true end,
                 },
-                externalDefensives = {
+                onlyWhitelistDebuffs = {
                     type = "toggle",
-                    name = L["External Defensives"],
-                    desc  = L["Shows major defensive buffs cast on the unit by OTHER players (e.g. Pain Suppression)."],
-                    order = 3,
-                    get = function() return GetDB().externalDefensives ~= false end,
+                    name = L["Show Only Whitelisted Debuffs"],
+                    desc  = L["Hides all Debuffs except those explicitly added to the Spell Whitelist."],
+                    order = 7,
+                    get = function() return GetDB().onlyWhitelistDebuffs == true end,
                     set = function(_, v)
-                        GetDB().externalDefensives = v; RefreshFunc()
+                        GetDB().onlyWhitelistDebuffs = v
+                        if v then GetDB().showAllDebuffs = false end
+                        RefreshFunc()
                     end,
+                    disabled = function() return GetDB().showAllDebuffs == true end,
                 },
             },
         },
@@ -229,6 +267,11 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
             order = 6,
             inline = true,
             args = {
+                engineNotice = {
+                    type = "description",
+                    name = L["|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID blacklisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be hidden by spell ID."],
+                    order = 0.5,
+                },
                 addSpell = {
                     type = "input",
                     name = L["Add Spell ID"],
@@ -238,6 +281,11 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     set = function(_, v)
                         local id = tonumber(v)
                         if id then
+                            if RESTRICTED_FRIENDLY_DEBUFF_SPELLS[id] then
+                                local sName = RESTRICTED_FRIENDLY_DEBUFF_SPELLS[id]
+                                print(string.format("|cffff8800[RoithiUI]|r Spell ID %d (%s) cannot be blacklisted because Blizzard's 12.1.0 engine protects harmful debuffs on friendly units from identity filtering.", id, sName))
+                                return
+                            end
                             local db = GetDB()
                             if not db.Blacklist then db.Blacklist = {} end
                             db.Blacklist[id] = true
@@ -319,6 +367,11 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
             order = 7,
             inline = true,
             args = {
+                engineNotice = {
+                    type = "description",
+                    name = L["|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID whitelisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be whitelisted by spell ID."],
+                    order = 0.5,
+                },
                 addSpell = {
                     type = "input",
                     name = L["Add Spell ID"],
@@ -328,6 +381,11 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     set = function(_, v)
                         local id = tonumber(v)
                         if id then
+                            if RESTRICTED_FRIENDLY_DEBUFF_SPELLS[id] then
+                                local sName = RESTRICTED_FRIENDLY_DEBUFF_SPELLS[id]
+                                print(string.format("|cffff8800[RoithiUI]|r Spell ID %d (%s) cannot be whitelisted because Blizzard's 12.1.0 engine protects harmful debuffs on friendly units from identity filtering.", id, sName))
+                                return
+                            end
                             local db = GetDB()
                             if not db.Whitelist then db.Whitelist = {} end
                             db.Whitelist[id] = true
@@ -516,6 +574,19 @@ local function GetGlobalAuraOptions()
                                     GetDB().maxAuras = v; ns.RefreshAllUnitFrames()
                                 end,
                             },
+                            perRow = {
+                                type = "range",
+                                name = L["Icons Per Row"],
+                                desc  = L["Number of aura icons per row before line wrapping."],
+                                order = 4.5,
+                                min = 1,
+                                max = 40,
+                                step = 1,
+                                get = function() return GetDB().maxAurasPerRow or GetDB().perRow or GetDB().maxAuras or 4 end,
+                                set = function(_, v)
+                                    GetDB().maxAurasPerRow = v; GetDB().perRow = v; ns.RefreshAllUnitFrames()
+                                end,
+                            },
                             spacing = {
                                 type = "range",
                                 name = L["Spacing"],
@@ -532,19 +603,26 @@ local function GetGlobalAuraOptions()
                                 type = "select",
                                 name = L["Grow Direction"],
                                 order = 6,
-                                values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["CENTER_VERTICAL"] = "Centered Vertical" },
-                                get = function() return GetDB().auraGrowDirection or "RIGHT" end,
+                                values = {
+                                    ["RIGHT_DOWN"]             = "Right then Down",
+                                    ["RIGHT_UP"]               = "Right then Up",
+                                    ["LEFT_DOWN"]              = "Left then Down",
+                                    ["LEFT_UP"]                = "Left then Up",
+                                    ["DOWN_RIGHT"]             = "Down then Right",
+                                    ["DOWN_LEFT"]              = "Down then Left",
+                                    ["UP_RIGHT"]               = "Up then Right",
+                                    ["UP_LEFT"]                = "Up then Left",
+                                    ["CENTER_HORIZONTAL"]      = "Centered Horizontal",
+                                    -- ["CENTER_HORIZONTAL_DOWN"] = "Centered Horizontal (Grow Down)",
+                                    -- ["CENTER_HORIZONTAL_UP"]   = "Centered Horizontal (Grow Up)",
+                                    ["CENTER_VERTICAL"]        = "Centered Vertical",
+                                    -- ["CENTER_VERTICAL_RIGHT"]  = "Centered Vertical (Grow Right)",
+                                    -- ["CENTER_VERTICAL_LEFT"]   = "Centered Vertical (Grow Left)",
+                                },
+                                sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" --[[, "CENTER_HORIZONTAL_DOWN", "CENTER_HORIZONTAL_UP", "CENTER_VERTICAL_RIGHT", "CENTER_VERTICAL_LEFT"]] },
+                                get = function() return GetDB().auraGrowDirection or "RIGHT_DOWN" end,
                                 set = function(_, v)
                                     GetDB().auraGrowDirection = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            hideBorder = {
-                                type = "toggle",
-                                name = L["Hide Border"],
-                                order = 7,
-                                get = function() return GetDB().hideBorder ~= false end,
-                                set = function(_, v)
-                                    GetDB().hideBorder = v; ns.RefreshAllUnitFrames()
                                 end,
                             },
                             zoom = {
@@ -627,15 +705,16 @@ local function GetGlobalAuraOptions()
                                 order = 2,
                                 values = {
                                     ["TOPLEFT"] = "Top Left",
-                                    ["TOP"] = "Top",
-                                    ["TOPRIGHT"] = "Top Right",
                                     ["LEFT"] = "Left",
-                                    ["CENTER"] = "Center",
-                                    ["RIGHT"] = "Right",
                                     ["BOTTOMLEFT"] = "Bottom Left",
+                                    ["TOP"] = "Top",
+                                    ["CENTER"] = "Center",
                                     ["BOTTOM"] = "Bottom",
+                                    ["TOPRIGHT"] = "Top Right",
+                                    ["RIGHT"] = "Right",
                                     ["BOTTOMRIGHT"] = "Bottom Right"
                                 },
+                                sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
                                 get = function() return GetDB().timerAnchor or "CENTER" end,
                                 set = function(_, v)
                                     GetDB().timerAnchor = v; ns.RefreshAllUnitFrames()
@@ -691,15 +770,16 @@ local function GetGlobalAuraOptions()
                                 order = 2,
                                 values = {
                                     ["TOPLEFT"] = "Top Left",
-                                    ["TOP"] = "Top",
-                                    ["TOPRIGHT"] = "Top Right",
                                     ["LEFT"] = "Left",
-                                    ["CENTER"] = "Center",
-                                    ["RIGHT"] = "Right",
                                     ["BOTTOMLEFT"] = "Bottom Left",
+                                    ["TOP"] = "Top",
+                                    ["CENTER"] = "Center",
                                     ["BOTTOM"] = "Bottom",
+                                    ["TOPRIGHT"] = "Top Right",
+                                    ["RIGHT"] = "Right",
                                     ["BOTTOMRIGHT"] = "Bottom Right"
                                 },
+                                sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
                                 get = function() return GetDB().stackAnchor or "BOTTOMRIGHT" end,
                                 set = function(_, v)
                                     GetDB().stackAnchor = v; ns.RefreshAllUnitFrames()
@@ -1440,7 +1520,7 @@ local function GetOptions()
                     min = 10,
                     max = 100,
                     step = 1,
-                    get = function() return GetDB().auraSize or 20 end,
+                    get = function() return SafeNum(GetDB().auraSize, 20) end,
                     set = function(_, v)
                         GetDB().auraSize = v; ns.RefreshUnitFrame(unit)
                     end,
@@ -1453,7 +1533,7 @@ local function GetOptions()
                     min = 0,
                     max = 40,
                     step = 1,
-                    get = function() return GetDB().auraSpacing or 4 end,
+                    get = function() return SafeNum(GetDB().auraSpacing, 4) end,
                     set = function(_, v)
                         GetDB().auraSpacing = v; ns.RefreshUnitFrame(unit)
                     end,
@@ -1462,13 +1542,28 @@ local function GetOptions()
                 max = {
                     type = "range",
                     name = L["Max Auras"],
+                    desc = L["Maximum number of total aura icons to display."],
                     order = 4,
                     min = 1,
                     max = 40,
                     step = 1,
-                    get = function() return GetDB().maxAuras or 8 end,
+                    get = function() return SafeNum(GetDB().maxAuras, 16) end,
                     set = function(_, v)
                         GetDB().maxAuras = v; ns.RefreshUnitFrame(unit)
+                    end,
+                    hidden = function() return GetDB().separateAuras end,
+                },
+                perRow = {
+                    type = "range",
+                    name = L["Icons Per Row"],
+                    desc = L["Number of aura icons per row before line wrapping."],
+                    order = 4.5,
+                    min = 1,
+                    max = 20,
+                    step = 1,
+                    get = function() return SafeNum(GetDB().aurasPerRow, 8) end,
+                    set = function(_, v)
+                        GetDB().aurasPerRow = v; ns.RefreshUnitFrame(unit)
                     end,
                     hidden = function() return GetDB().separateAuras end,
                 },
@@ -1476,19 +1571,47 @@ local function GetOptions()
                     type = "select",
                     name = L["Anchor Point"],
                     order = 5,
-                    values = { ["TOP"] = "Top", ["BOTTOM"] = "Bottom", ["LEFT"] = "Left", ["RIGHT"] = "Right", ["TOPLEFT"] = "Top Left", ["TOPRIGHT"] = "Top Right", ["BOTTOMLEFT"] = "Bottom Left", ["BOTTOMRIGHT"] = "Bottom Right", ["CENTER"] = "Center" },
+                    values = {
+                        ["TOPLEFT"] = "Top Left",
+                        ["LEFT"] = "Left",
+                        ["BOTTOMLEFT"] = "Bottom Left",
+                        ["TOP"] = "Top",
+                        ["CENTER"] = "Center",
+                        ["BOTTOM"] = "Bottom",
+                        ["TOPRIGHT"] = "Top Right",
+                        ["RIGHT"] = "Right",
+                        ["BOTTOMRIGHT"] = "Bottom Right"
+                    },
+                    sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
                     get = function() return GetDB().auraAnchor or "BOTTOM" end,
                     set = function(_, v)
                         GetDB().auraAnchor = v; ns.RefreshUnitFrame(unit)
                     end,
+                    disabled = function() return GetDB().auraDetached == true end,
                     hidden = function() return GetDB().separateAuras end,
                 },
                 grow = {
                     type = "select",
                     name = L["Grow Direction"],
                     order = 6,
-                    values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_VERTICAL"] = "Centered Vertical" },
-                    get = function() return GetDB().auraGrowDirection or "RIGHT" end,
+                    values = {
+                        ["RIGHT_DOWN"]             = "Right then Down",
+                        ["RIGHT_UP"]               = "Right then Up",
+                        ["LEFT_DOWN"]              = "Left then Down",
+                        ["LEFT_UP"]                = "Left then Up",
+                        ["DOWN_RIGHT"]             = "Down then Right",
+                        ["DOWN_LEFT"]              = "Down then Left",
+                        ["UP_RIGHT"]               = "Up then Right",
+                        ["UP_LEFT"]                = "Up then Left",
+                        ["CENTER_HORIZONTAL"]      = "Centered Horizontal",
+                        -- ["CENTER_HORIZONTAL_DOWN"] = "Centered Horizontal (Grow Down)",
+                        -- ["CENTER_HORIZONTAL_UP"]   = "Centered Horizontal (Grow Up)",
+                        ["CENTER_VERTICAL"]        = "Centered Vertical",
+                        -- ["CENTER_VERTICAL_RIGHT"]  = "Centered Vertical (Grow Right)",
+                        -- ["CENTER_VERTICAL_LEFT"]   = "Centered Vertical (Grow Left)",
+                    },
+                    sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" --[[, "CENTER_HORIZONTAL_DOWN", "CENTER_HORIZONTAL_UP", "CENTER_VERTICAL_RIGHT", "CENTER_VERTICAL_LEFT"]] },
+                    get = function() return GetDB().auraGrowDirection or "RIGHT_DOWN" end,
                     set = function(_, v)
                         GetDB().auraGrowDirection = v; ns.RefreshUnitFrame(unit)
                     end,
@@ -1501,11 +1624,11 @@ local function GetOptions()
                     min = -1000,
                     max = 1000,
                     step = 1,
-                    get = function() return GetDB().auraX or 0 end,
+                    get = function() return SafeNum(GetDB().auraX, 0) end,
                     set = function(_, v)
                         GetDB().auraX = v; ns.RefreshUnitFrame(unit)
                     end,
-                    hidden = function() return GetDB().separateAuras end,
+                    hidden = function() return GetDB().separateAuras or GetDB().auraDetached == true end,
                 },
                 y = {
                     type = "range",
@@ -1514,11 +1637,11 @@ local function GetOptions()
                     min = -1000,
                     max = 1000,
                     step = 1,
-                    get = function() return GetDB().auraY or 4 end,
+                    get = function() return SafeNum(GetDB().auraY, 4) end,
                     set = function(_, v)
                         GetDB().auraY = v; ns.RefreshUnitFrame(unit)
                     end,
-                    hidden = function() return GetDB().separateAuras end,
+                    hidden = function() return GetDB().separateAuras or GetDB().auraDetached == true end,
                 },
                 detached = {
                     type = "toggle",
@@ -1531,6 +1654,32 @@ local function GetOptions()
                         ns.RefreshUnitFrame(unit)
                     end,
                     hidden = function() return GetDB().separateAuras end,
+                },
+                screenX = {
+                    type = "range",
+                    name = L["X Position (Detached)"],
+                    order = 7,
+                    min = -1000,
+                    max = 1000,
+                    step = 1,
+                    get = function() return SafeNum(GetDB().auraScreenX, 0) end,
+                    set = function(_, v)
+                        GetDB().auraScreenX = v; ns.RefreshUnitFrame(unit)
+                    end,
+                    hidden = function() return GetDB().separateAuras or not GetDB().auraDetached end,
+                },
+                screenY = {
+                    type = "range",
+                    name = L["Y Position (Detached)"],
+                    order = 8,
+                    min = -1000,
+                    max = 1000,
+                    step = 1,
+                    get = function() return SafeNum(GetDB().auraScreenY, 0) end,
+                    set = function(_, v)
+                        GetDB().auraScreenY = v; ns.RefreshUnitFrame(unit)
+                    end,
+                    hidden = function() return GetDB().separateAuras or not GetDB().auraDetached end,
                 },
                 buffGroup = {
                     type = "group",
@@ -1545,7 +1694,7 @@ local function GetOptions()
                             min = 10,
                             max = 100,
                             step = 1,
-                            get = function() return GetDB().buffSize or GetDB().auraSize or 20 end,
+                            get = function() return SafeNum(GetDB().buffSize or GetDB().auraSize, 20) end,
                             set = function(_, v)
                                 GetDB().buffSize = v; ns.RefreshUnitFrame(unit)
                             end,
@@ -1553,13 +1702,27 @@ local function GetOptions()
                         max = {
                             type = "range",
                             name = L["Max Auras"],
+                            desc = L["Maximum number of total aura icons to display."],
                             order = 2,
                             min = 1,
                             max = 40,
                             step = 1,
-                            get = function() return GetDB().buffMaxAuras or GetDB().maxAuras or 8 end,
+                            get = function() return SafeNum(GetDB().buffMaxAuras or GetDB().maxAuras, 16) end,
                             set = function(_, v)
                                 GetDB().buffMaxAuras = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        perRow = {
+                            type = "range",
+                            name = L["Icons Per Row"],
+                            desc = L["Number of aura icons per row before line wrapping."],
+                            order = 2.5,
+                            min = 1,
+                            max = 20,
+                            step = 1,
+                            get = function() return SafeNum(GetDB().buffsPerRow or GetDB().aurasPerRow, 8) end,
+                            set = function(_, v)
+                                GetDB().buffsPerRow = v; ns.RefreshUnitFrame(unit)
                             end,
                         },
                         spacing = {
@@ -1569,7 +1732,7 @@ local function GetOptions()
                             min = 0,
                             max = 40,
                             step = 1,
-                            get = function() return GetDB().buffSpacing or GetDB().auraSpacing or 4 end,
+                            get = function() return SafeNum(GetDB().buffSpacing or GetDB().auraSpacing, 4) end,
                             set = function(_, v)
                                 GetDB().buffSpacing = v; ns.RefreshUnitFrame(unit)
                             end,
@@ -1578,18 +1741,46 @@ local function GetOptions()
                             type = "select",
                             name = L["Anchor Point"],
                             order = 4,
-                            values = { ["TOP"] = "Top", ["BOTTOM"] = "Bottom", ["LEFT"] = "Left", ["RIGHT"] = "Right", ["TOPLEFT"] = "Top Left", ["TOPRIGHT"] = "Top Right", ["BOTTOMLEFT"] = "Bottom Left", ["BOTTOMRIGHT"] = "Bottom Right", ["CENTER"] = "Center" },
+                            values = {
+                                ["TOPLEFT"] = "Top Left",
+                                ["LEFT"] = "Left",
+                                ["BOTTOMLEFT"] = "Bottom Left",
+                                ["TOP"] = "Top",
+                                ["CENTER"] = "Center",
+                                ["BOTTOM"] = "Bottom",
+                                ["TOPRIGHT"] = "Top Right",
+                                ["RIGHT"] = "Right",
+                                ["BOTTOMRIGHT"] = "Bottom Right"
+                            },
+                            sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
                             get = function() return GetDB().buffAnchor or GetDB().auraAnchor or "BOTTOM" end,
                             set = function(_, v)
                                 GetDB().buffAnchor = v; ns.RefreshUnitFrame(unit)
                             end,
+                            disabled = function() return GetDB().buffDetached == true end,
                         },
                         grow = {
                             type = "select",
                             name = L["Grow Direction"],
                             order = 5,
-                            values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_VERTICAL"] = "Centered Vertical" },
-                            get = function() return GetDB().buffGrowDirection or GetDB().auraGrowDirection or "RIGHT" end,
+                            values = {
+                                ["RIGHT_DOWN"]             = "Right then Down",
+                                ["RIGHT_UP"]               = "Right then Up",
+                                ["LEFT_DOWN"]              = "Left then Down",
+                                ["LEFT_UP"]                = "Left then Up",
+                                ["DOWN_RIGHT"]             = "Down then Right",
+                                ["DOWN_LEFT"]              = "Down then Left",
+                                ["UP_RIGHT"]               = "Up then Right",
+                                ["UP_LEFT"]                = "Up then Left",
+                                ["CENTER_HORIZONTAL"]      = "Centered Horizontal",
+                                -- ["CENTER_HORIZONTAL_DOWN"] = "Centered Horizontal (Grow Down)",
+                                -- ["CENTER_HORIZONTAL_UP"]   = "Centered Horizontal (Grow Up)",
+                                ["CENTER_VERTICAL"]        = "Centered Vertical",
+                                -- ["CENTER_VERTICAL_RIGHT"]  = "Centered Vertical (Grow Right)",
+                                -- ["CENTER_VERTICAL_LEFT"]   = "Centered Vertical (Grow Left)",
+                            },
+                            sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" --[[, "CENTER_HORIZONTAL_DOWN", "CENTER_HORIZONTAL_UP", "CENTER_VERTICAL_RIGHT", "CENTER_VERTICAL_LEFT"]] },
+                            get = function() return GetDB().buffGrowDirection or GetDB().auraGrowDirection or "RIGHT_DOWN" end,
                             set = function(_, v)
                                 GetDB().buffGrowDirection = v; ns.RefreshUnitFrame(unit)
                             end,
@@ -1610,10 +1801,11 @@ local function GetOptions()
                             min = -1000,
                             max = 1000,
                             step = 1,
-                            get = function() return GetDB().buffXOffset or GetDB().auraX or 0 end,
+                            get = function() return SafeNum(GetDB().buffXOffset or GetDB().auraX, 0) end,
                             set = function(_, v)
                                 GetDB().buffXOffset = v; ns.RefreshUnitFrame(unit)
                             end,
+                            hidden = function() return GetDB().buffDetached == true end,
                         },
                         y = {
                             type = "range",
@@ -1622,10 +1814,37 @@ local function GetOptions()
                             min = -1000,
                             max = 1000,
                             step = 1,
-                            get = function() return GetDB().buffYOffset or GetDB().auraY or 4 end,
+                            get = function() return SafeNum(GetDB().buffYOffset or GetDB().auraY, 4) end,
                             set = function(_, v)
                                 GetDB().buffYOffset = v; ns.RefreshUnitFrame(unit)
                             end,
+                            hidden = function() return GetDB().buffDetached == true end,
+                        },
+                        screenX = {
+                            type = "range",
+                            name = L["X Position (Detached)"],
+                            order = 7,
+                            min = -1000,
+                            max = 1000,
+                            step = 1,
+                            get = function() return SafeNum(GetDB().buffScreenX, 0) end,
+                            set = function(_, v)
+                                GetDB().buffScreenX = v; ns.RefreshUnitFrame(unit)
+                            end,
+                            hidden = function() return not GetDB().buffDetached end,
+                        },
+                        screenY = {
+                            type = "range",
+                            name = L["Y Position (Detached)"],
+                            order = 8,
+                            min = -1000,
+                            max = 1000,
+                            step = 1,
+                            get = function() return SafeNum(GetDB().buffScreenY, 0) end,
+                            set = function(_, v)
+                                GetDB().buffScreenY = v; ns.RefreshUnitFrame(unit)
+                            end,
+                            hidden = function() return not GetDB().buffDetached end,
                         },
                     }
                 },
@@ -1642,7 +1861,7 @@ local function GetOptions()
                             min = 10,
                             max = 100,
                             step = 1,
-                            get = function() return GetDB().debuffSize or GetDB().auraSize or 20 end,
+                            get = function() return SafeNum(GetDB().debuffSize or GetDB().auraSize, 20) end,
                             set = function(_, v)
                                 GetDB().debuffSize = v; ns.RefreshUnitFrame(unit)
                             end,
@@ -1650,13 +1869,27 @@ local function GetOptions()
                         max = {
                             type = "range",
                             name = L["Max Auras"],
+                            desc = L["Maximum number of total aura icons to display."],
                             order = 2,
                             min = 1,
                             max = 40,
                             step = 1,
-                            get = function() return GetDB().debuffMaxAuras or GetDB().maxAuras or 8 end,
+                            get = function() return SafeNum(GetDB().debuffMaxAuras or GetDB().maxAuras, 16) end,
                             set = function(_, v)
                                 GetDB().debuffMaxAuras = v; ns.RefreshUnitFrame(unit)
+                            end,
+                        },
+                        perRow = {
+                            type = "range",
+                            name = L["Icons Per Row"],
+                            desc = L["Number of aura icons per row before line wrapping."],
+                            order = 2.5,
+                            min = 1,
+                            max = 20,
+                            step = 1,
+                            get = function() return SafeNum(GetDB().debuffsPerRow or GetDB().aurasPerRow, 8) end,
+                            set = function(_, v)
+                                GetDB().debuffsPerRow = v; ns.RefreshUnitFrame(unit)
                             end,
                         },
                         spacing = {
@@ -1666,7 +1899,7 @@ local function GetOptions()
                             min = 0,
                             max = 40,
                             step = 1,
-                            get = function() return GetDB().debuffSpacing or GetDB().auraSpacing or 4 end,
+                            get = function() return SafeNum(GetDB().debuffSpacing or GetDB().auraSpacing, 4) end,
                             set = function(_, v)
                                 GetDB().debuffSpacing = v; ns.RefreshUnitFrame(unit)
                             end,
@@ -1675,18 +1908,46 @@ local function GetOptions()
                             type = "select",
                             name = L["Anchor Point"],
                             order = 4,
-                            values = { ["TOP"] = "Top", ["BOTTOM"] = "Bottom", ["LEFT"] = "Left", ["RIGHT"] = "Right", ["TOPLEFT"] = "Top Left", ["TOPRIGHT"] = "Top Right", ["BOTTOMLEFT"] = "Bottom Left", ["BOTTOMRIGHT"] = "Bottom Right", ["CENTER"] = "Center" },
+                            values = {
+                                ["TOPLEFT"] = "Top Left",
+                                ["LEFT"] = "Left",
+                                ["BOTTOMLEFT"] = "Bottom Left",
+                                ["TOP"] = "Top",
+                                ["CENTER"] = "Center",
+                                ["BOTTOM"] = "Bottom",
+                                ["TOPRIGHT"] = "Top Right",
+                                ["RIGHT"] = "Right",
+                                ["BOTTOMRIGHT"] = "Bottom Right"
+                            },
+                            sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
                             get = function() return GetDB().debuffAnchor or GetDB().auraAnchor or "BOTTOM" end,
                             set = function(_, v)
                                 GetDB().debuffAnchor = v; ns.RefreshUnitFrame(unit)
                             end,
+                            disabled = function() return GetDB().debuffDetached == true end,
                         },
                         grow = {
                             type = "select",
                             name = L["Grow Direction"],
                             order = 5,
-                            values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_VERTICAL"] = "Centered Vertical" },
-                            get = function() return GetDB().debuffGrowDirection or GetDB().auraGrowDirection or "RIGHT" end,
+                            values = {
+                                ["RIGHT_DOWN"]             = "Right then Down",
+                                ["RIGHT_UP"]               = "Right then Up",
+                                ["LEFT_DOWN"]              = "Left then Down",
+                                ["LEFT_UP"]                = "Left then Up",
+                                ["DOWN_RIGHT"]             = "Down then Right",
+                                ["DOWN_LEFT"]              = "Down then Left",
+                                ["UP_RIGHT"]               = "Up then Right",
+                                ["UP_LEFT"]                = "Up then Left",
+                                ["CENTER_HORIZONTAL"]      = "Centered Horizontal",
+                                -- ["CENTER_HORIZONTAL_DOWN"] = "Centered Horizontal (Grow Down)",
+                                -- ["CENTER_HORIZONTAL_UP"]   = "Centered Horizontal (Grow Up)",
+                                ["CENTER_VERTICAL"]        = "Centered Vertical",
+                                -- ["CENTER_VERTICAL_RIGHT"]  = "Centered Vertical (Grow Right)",
+                                -- ["CENTER_VERTICAL_LEFT"]   = "Centered Vertical (Grow Left)",
+                            },
+                            sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" --[[, "CENTER_HORIZONTAL_DOWN", "CENTER_HORIZONTAL_UP", "CENTER_VERTICAL_RIGHT", "CENTER_VERTICAL_LEFT"]] },
+                            get = function() return GetDB().debuffGrowDirection or GetDB().auraGrowDirection or "RIGHT_DOWN" end,
                             set = function(_, v)
                                 GetDB().debuffGrowDirection = v; ns.RefreshUnitFrame(unit)
                             end,
@@ -1707,10 +1968,11 @@ local function GetOptions()
                             min = -1000,
                             max = 1000,
                             step = 1,
-                            get = function() return GetDB().debuffXOffset or GetDB().auraX or 0 end,
+                            get = function() return SafeNum(GetDB().debuffXOffset or GetDB().auraX, 0) end,
                             set = function(_, v)
                                 GetDB().debuffXOffset = v; ns.RefreshUnitFrame(unit)
                             end,
+                            hidden = function() return GetDB().debuffDetached == true end,
                         },
                         y = {
                             type = "range",
@@ -1719,10 +1981,37 @@ local function GetOptions()
                             min = -1000,
                             max = 1000,
                             step = 1,
-                            get = function() return GetDB().debuffYOffset or GetDB().auraY or 4 end,
+                            get = function() return SafeNum(GetDB().debuffYOffset or GetDB().auraY, 4) end,
                             set = function(_, v)
                                 GetDB().debuffYOffset = v; ns.RefreshUnitFrame(unit)
                             end,
+                            hidden = function() return GetDB().debuffDetached == true end,
+                        },
+                        screenX = {
+                            type = "range",
+                            name = L["X Position (Detached)"],
+                            order = 7,
+                            min = -1000,
+                            max = 1000,
+                            step = 1,
+                            get = function() return SafeNum(GetDB().debuffScreenX, 0) end,
+                            set = function(_, v)
+                                GetDB().debuffScreenX = v; ns.RefreshUnitFrame(unit)
+                            end,
+                            hidden = function() return not GetDB().debuffDetached end,
+                        },
+                        screenY = {
+                            type = "range",
+                            name = L["Y Position (Detached)"],
+                            order = 8,
+                            min = -1000,
+                            max = 1000,
+                            step = 1,
+                            get = function() return SafeNum(GetDB().debuffScreenY, 0) end,
+                            set = function(_, v)
+                                GetDB().debuffScreenY = v; ns.RefreshUnitFrame(unit)
+                            end,
+                            hidden = function() return not GetDB().debuffDetached end,
                         },
                     }
                 },
@@ -1732,15 +2021,7 @@ local function GetOptions()
                     order = 9.5,
                     inline = true,
                     args = {
-                        hideBorder = {
-                            type = "toggle",
-                            name = L["Hide Border"],
-                            order = 1,
-                            get = function() return GetDB().hideBorder ~= false end,
-                            set = function(_, v)
-                                GetDB().hideBorder = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
+
                         zoom = {
                             type = "range",
                             name = L["Icon Zoom (%)"],
@@ -1772,15 +2053,16 @@ local function GetOptions()
                             order = 11,
                             values = {
                                 ["TOPLEFT"] = "Top Left",
-                                ["TOP"] = "Top",
-                                ["TOPRIGHT"] = "Top Right",
                                 ["LEFT"] = "Left",
-                                ["CENTER"] = "Center",
-                                ["RIGHT"] = "Right",
                                 ["BOTTOMLEFT"] = "Bottom Left",
+                                ["TOP"] = "Top",
+                                ["CENTER"] = "Center",
                                 ["BOTTOM"] = "Bottom",
+                                ["TOPRIGHT"] = "Top Right",
+                                ["RIGHT"] = "Right",
                                 ["BOTTOMRIGHT"] = "Bottom Right"
                             },
+                            sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
                             get = function() return GetDB().timerAnchor or "CENTER" end,
                             set = function(_, v)
                                 GetDB().timerAnchor = v; ns.RefreshUnitFrame(unit)
@@ -1829,15 +2111,16 @@ local function GetOptions()
                             order = 21,
                             values = {
                                 ["TOPLEFT"] = "Top Left",
-                                ["TOP"] = "Top",
-                                ["TOPRIGHT"] = "Top Right",
                                 ["LEFT"] = "Left",
-                                ["CENTER"] = "Center",
-                                ["RIGHT"] = "Right",
                                 ["BOTTOMLEFT"] = "Bottom Left",
+                                ["TOP"] = "Top",
+                                ["CENTER"] = "Center",
                                 ["BOTTOM"] = "Bottom",
+                                ["TOPRIGHT"] = "Top Right",
+                                ["RIGHT"] = "Right",
                                 ["BOTTOMRIGHT"] = "Bottom Right"
                             },
+                            sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
                             get = function() return GetDB().stackAnchor or "BOTTOMRIGHT" end,
                             set = function(_, v)
                                 GetDB().stackAnchor = v; ns.RefreshUnitFrame(unit)
