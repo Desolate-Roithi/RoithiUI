@@ -72,14 +72,18 @@ function UF:UpdateAuras(frame)
     RADLog("UF:UpdateAuras 12.1.0 for unit [%s] | Enabled: %s", unit, tostring(enabled))
 
     if not enabled then
-        if UF.AuraContainers["RoithiAuraContainer_" .. unit .. "_Buffs"] then
-            UF.AuraContainers["RoithiAuraContainer_" .. unit .. "_Buffs"]:Hide()
-        end
-        if UF.AuraContainers["RoithiAuraContainer_" .. unit .. "_Debuffs"] then
-            UF.AuraContainers["RoithiAuraContainer_" .. unit .. "_Debuffs"]:Hide()
-        end
-        if UF.AuraContainers["RoithiAuraContainer_" .. unit .. "_Combined"] then
-            UF.AuraContainers["RoithiAuraContainer_" .. unit .. "_Combined"]:Hide()
+        local suffixes = { "Buffs", "Debuffs", "Combined" }
+        for _, suf in ipairs(suffixes) do
+            local key = "RoithiAuraContainer_" .. unit .. "_" .. suf
+            local c = UF.AuraContainers[key]
+            if c then
+                c:Hide()
+                if c.AuraMover then c.AuraMover:Hide() end
+            end
+            local mKey = key .. "_Mover"
+            if UF.AuraMovers and UF.AuraMovers[mKey] then
+                UF.AuraMovers[mKey]:Hide()
+            end
         end
         return
     end
@@ -88,13 +92,18 @@ function UF:UpdateAuras(frame)
     local showBuffs = db.showBuffs ~= false
     local showDebuffs = db.showDebuffs ~= false
 
-    -- Pre-compute whether there are actual queries to show for each type.
-    -- If showBuffs is true but ALL buff filter checkboxes are off, buffQueries
-    -- is empty and there is nothing to configure — treat as "no buffs".
+    local isEditMode = false
+    local LEM = LibStub("LibEditMode-Roithi", true)
+    if LEM and LEM.IsInEditMode and LEM:IsInEditMode() then
+        isEditMode = true
+    elseif EditModeManagerFrame and EditModeManagerFrame:IsShown() then
+        isEditMode = true
+    end
+
     local buffQueries  = GetSmartFilterQueries("HELPFUL",  db, unit)
     local debuffQueries = GetSmartFilterQueries("HARMFUL", db, unit)
-    local hasBuffs  = showBuffs  and #buffQueries  > 0
-    local hasDebuffs = showDebuffs and #debuffQueries > 0
+    local hasBuffs  = showBuffs  and (isEditMode or #buffQueries  > 0)
+    local hasDebuffs = showDebuffs and (isEditMode or #debuffQueries > 0)
 
     RADLog("[AuraFilter] unit=[%s] separateAuras=%s showBuffs=%s showDebuffs=%s hasBuffs=%s hasDebuffs=%s buffQ=%d debuffQ=%d",
         unit, tostring(separateAuras), tostring(showBuffs), tostring(showDebuffs),
@@ -102,9 +111,14 @@ function UF:UpdateAuras(frame)
 
     if separateAuras then
         -- Hide combined container if previously created
-        local combined = UF.AuraContainers[MakeContainerKey(unit, "Combined")]
+        local combinedKey = MakeContainerKey(unit, "Combined")
+        local combined = UF.AuraContainers[combinedKey]
         if combined then
             FlushContainerFrames(combined)
+            if combined.AuraMover then combined.AuraMover:Hide() end
+        end
+        if UF.AuraMovers and UF.AuraMovers[combinedKey .. "_Mover"] then
+            UF.AuraMovers[combinedKey .. "_Mover"]:Hide()
         end
 
         -- Buffs Container
@@ -117,6 +131,10 @@ function UF:UpdateAuras(frame)
             if buffContainer then
                 RADLog("[AuraFilter] Flushing Buffs container (hasBuffs=false) for unit [%s]", unit)
                 FlushContainerFrames(buffContainer)
+                if buffContainer.AuraMover then buffContainer.AuraMover:Hide() end
+            end
+            if UF.AuraMovers and UF.AuraMovers[buffContainerKey .. "_Mover"] then
+                UF.AuraMovers[buffContainerKey .. "_Mover"]:Hide()
             end
         end
 
@@ -130,14 +148,33 @@ function UF:UpdateAuras(frame)
             if debuffContainer then
                 RADLog("[AuraFilter] Flushing Debuffs container (hasDebuffs=false) for unit [%s]", unit)
                 FlushContainerFrames(debuffContainer)
+                if debuffContainer.AuraMover then debuffContainer.AuraMover:Hide() end
+            end
+            if UF.AuraMovers and UF.AuraMovers[debuffContainerKey .. "_Mover"] then
+                UF.AuraMovers[debuffContainerKey .. "_Mover"]:Hide()
             end
         end
     else
         -- Hide separate containers if previously created
-        local buffs = UF.AuraContainers[MakeContainerKey(unit, "Buffs")]
-        if buffs then FlushContainerFrames(buffs) end
-        local debuffs = UF.AuraContainers[MakeContainerKey(unit, "Debuffs")]
-        if debuffs then FlushContainerFrames(debuffs) end
+        local buffsKey = MakeContainerKey(unit, "Buffs")
+        local buffs = UF.AuraContainers[buffsKey]
+        if buffs then
+            FlushContainerFrames(buffs)
+            if buffs.AuraMover then buffs.AuraMover:Hide() end
+        end
+        if UF.AuraMovers and UF.AuraMovers[buffsKey .. "_Mover"] then
+            UF.AuraMovers[buffsKey .. "_Mover"]:Hide()
+        end
+
+        local debuffsKey = MakeContainerKey(unit, "Debuffs")
+        local debuffs = UF.AuraContainers[debuffsKey]
+        if debuffs then
+            FlushContainerFrames(debuffs)
+            if debuffs.AuraMover then debuffs.AuraMover:Hide() end
+        end
+        if UF.AuraMovers and UF.AuraMovers[debuffsKey .. "_Mover"] then
+            UF.AuraMovers[debuffsKey .. "_Mover"]:Hide()
+        end
 
         -- Combined Container
         local combinedContainerKey = MakeContainerKey(unit, "Combined")
@@ -149,6 +186,10 @@ function UF:UpdateAuras(frame)
             if combinedContainer then
                 RADLog("[AuraFilter] Flushing Combined container (hasBuffs/Debuffs=false) for unit [%s]", unit)
                 FlushContainerFrames(combinedContainer)
+                if combinedContainer.AuraMover then combinedContainer.AuraMover:Hide() end
+            end
+            if UF.AuraMovers and UF.AuraMovers[combinedContainerKey .. "_Mover"] then
+                UF.AuraMovers[combinedContainerKey .. "_Mover"]:Hide()
             end
         end
     end
@@ -169,6 +210,18 @@ end
 
 function UF:UpdateAllCustomAuras()
     local customDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.CustomAuraFrames
+    if RoithiUI.CustomAuras then
+        for id, frame in pairs(RoithiUI.CustomAuras) do
+            if not customDB or not customDB[id] or customDB[id].enabled == false then
+                frame:Hide()
+                if frame.AuraMover then frame.AuraMover:Hide() end
+                local mKey = "RoithiAuraContainer_Custom_" .. id .. "_Mover"
+                if UF.AuraMovers and UF.AuraMovers[mKey] then
+                    UF.AuraMovers[mKey]:Hide()
+                end
+            end
+        end
+    end
     if not customDB then return end
     for id in pairs(customDB) do
         self:UpdateCustomAura(id)

@@ -1,0 +1,10 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Script file="Init.lua"/>
+    <Script file="Helpers.lua"/>
+    <Script file="Formatting.lua"/>
+    <Script file="Movers.lua"/>
+    <Script file="Containers.lua"/>
+    <Script file="CustomAuras.lua"/>
+    <Script file="Options.lua"/>
+    <Script file="Auras.lua"/>
+</Ui>

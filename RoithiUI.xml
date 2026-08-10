@@ -2,66 +2,25 @@
     <!-- Libraries -->
     <Include file="Libs/Init.xml"/>
 
-
-    <!-- Core -->
-    <Script file="Core/Locales.lua"/>
+    <!-- Locales -->
+    <Include file="Locales/Locales.xml"/>
     <Script file="Core/Init.lua"/>
+    <Script file="Core/OptionsEngine.lua"/>
     <Script file="Core/Utils.lua"/>
     <Script file="Core/Commands.lua"/>
     <Script file="Core/Media.lua"/>
     <Script file="Core/AttachmentLogic.lua"/>
+
+    <!-- Config -->
     <Script file="Config/Defaults.lua"/>
     <Script file="Config/Dashboard.lua"/>
     <Script file="Config/CustomTags.lua"/>
-
-    <Script file="Config/LEMConfig/UnitFrames.lua"/>
-    <Script file="Config/LEMConfig/BossFrames.lua"/>
-    <Script file="Config/LEMConfig/Castbars.lua"/>
-    <Script file="Config/LEMConfig/EncounterBar.lua"/>
+    <Script file="Config/GeneralOptions.lua"/>
     <Script file="Config/Options.lua"/>
 
-
-
-    <!-- Modules -->
-    <!-- UnitFrames -->
-    <Script file="Modules/UnitFrames/Elements/SafeHealth.lua"/>
-    <Script file="Modules/UnitFrames/Core.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Bars.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Text.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Tags.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Indicators.lua"/>
-    <!-- Auras 12.1.0 Modular Sub-Files -->
-    <Script file="Modules/UnitFrames/Elements/Auras/Init.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Auras/Helpers.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Auras/Formatting.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Auras/Movers.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Auras/Containers.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Auras/CustomAuras.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Auras/Auras.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Range.lua"/>
-    <Script file="Modules/UnitFrames/Elements/HealthPrediction.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Fader.lua"/>
-    <Script file="Modules/UnitFrames/Elements/ClassPower.lua"/>
-    <Script file="Modules/UnitFrames/Elements/AdditionalPower.lua"/>
-    <Script file="Modules/UnitFrames/Boss.lua"/>
-    <Script file="Modules/UnitFrames/Units.lua"/>
-    
-    <!-- Profile Sharing -->
-    <Script file="Modules/ProfileSharing.lua"/>
-    
-    <!-- Encounter Bar -->
-    <Script file="Modules/EncounterBar/EncounterBar.lua"/>
-    
-    <!-- Timers (Removed) -->
-
-
-    
-    <!-- Castbar Integration (Loaded here or by Core if it was pure Lua, but XML loading implies direct file reference) -->
-    <!-- User asked for integration of existing Castbar. We'll add the likely entry point. -->
-    <Script file="Modules/Castbar/Core.lua"/>
-    <Script file="Modules/Castbar/Empower.lua"/>
-    <Script file="Modules/Castbar/Castbar.lua"/>
-    
-    <!-- Manual Tests (Safe to load, requires /rs on to activate) -->
-    <!-- <Script file="Tests/Manual/SimulateSecrets.lua"/> -->
+    <!-- Modular XML Manifests -->
+    <Include file="Modules/UnitFrames/UnitFrames.xml"/>
+    <Include file="Modules/Castbar/Castbar.xml"/>
+    <Include file="Modules/EncounterBar/EncounterBar.xml"/>
+    <Include file="Modules/ProfileSharing/ProfileSharing.xml"/>
 </Ui>

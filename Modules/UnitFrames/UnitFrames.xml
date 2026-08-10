@@ -1,0 +1,20 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Script file="Elements/SafeHealth.lua"/>
+    <Script file="Core.lua"/>
+    <Script file="Elements/Bars.lua"/>
+    <Script file="Elements/Text.lua"/>
+    <Script file="Elements/Tags.lua"/>
+    <Script file="Elements/Indicators.lua"/>
+    
+    <!-- Include Auras Sub-Manifest -->
+    <Include file="Elements/Auras/Auras.xml"/>
+
+    <Script file="Elements/Range.lua"/>
+    <Script file="Elements/HealthPrediction.lua"/>
+    <Script file="Elements/Fader.lua"/>
+    <Script file="Elements/ClassPower.lua"/>
+    <Script file="Elements/AdditionalPower.lua"/>
+    <Script file="Boss.lua"/>
+    <Script file="Options.lua"/>
+    <Script file="Units.lua"/>
+</Ui>

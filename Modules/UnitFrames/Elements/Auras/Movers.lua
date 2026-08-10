@@ -218,6 +218,10 @@ local function GetOrCreateAuraMover(container, unit, containerSuffix)
                 end
                 local AL = ns.AttachmentLogic
                 if AL and AL.ApplyLayout then AL:ApplyLayout(u, suf) end
+
+                if LEM and LEM.RefreshFrameSettings then
+                    LEM:RefreshFrameSettings()
+                end
             end, defaults, mover.editModeName)
 
             if isCustom and ns.GetSettingsForCustomAura then
@@ -266,10 +270,22 @@ local function UpdateAuraMover(
 )
     local mover = GetOrCreateAuraMover(container, unit, containerSuffix)
 
-    if not isEditMode then
+    local isCustom = containerSuffix:find("^Custom_")
+    local customID = isCustom and containerSuffix:sub(8)
+    local customDB = isCustom and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.CustomAuraFrames and RoithiUI.db.profile.CustomAuraFrames[customID]
+
+    local isEnabled = isCustom and (customDB and customDB.enabled ~= false)
+                   or (db and db.aurasEnabled ~= false
+                       and (containerSuffix ~= "Buffs" or db.showBuffs ~= false)
+                       and (containerSuffix ~= "Debuffs" or db.showDebuffs ~= false))
+
+    if not isEditMode or not isEnabled then
         mover:Hide()
         return
     end
+
+    mover:SetFrameStrata("DIALOG")
+    mover:SetFrameLevel(200)
 
     ---------------------------------------------------------------------------
     -- 1. Size the mover to match the computed sample layout
@@ -309,11 +325,11 @@ local function UpdateAuraMover(
     mover:ClearAllPoints()
 
     if isDetached then
-        local isCustom = containerSuffix:find("^Custom_")
+        isCustom = containerSuffix:find("^Custom_")
         local savedPt = isCustom and (db.screenPoint or db.auraScreenPoint)
                      or (containerSuffix == "Buffs"   and db.buffScreenPoint)
                      or (containerSuffix == "Debuffs" and db.debuffScreenPoint)
-                     or db.auraScreenPoint
+                     or db.auraScreenPoint or "TOPLEFT"
         local px = isCustom and (db.screenX or db.auraScreenX)
                 or (containerSuffix == "Buffs"   and db.buffScreenX)
                 or (containerSuffix == "Debuffs" and db.debuffScreenX)
@@ -323,44 +339,7 @@ local function UpdateAuraMover(
                 or (containerSuffix == "Debuffs" and db.debuffScreenY)
                 or db.auraScreenY or 0
 
-        local targetAnchor = "TOPLEFT"
-        if growDir == "RIGHT_UP" or growDir == "UP" or growDir == "UP_RIGHT" or growDir == "BOTTOM_TO_TOP" then
-            targetAnchor = "BOTTOMLEFT"
-        elseif growDir == "LEFT_DOWN" or growDir == "DOWN_LEFT" or growDir == "LEFT" then
-            targetAnchor = "TOPRIGHT"
-        elseif growDir == "LEFT_UP" or growDir == "UP_LEFT" then
-            targetAnchor = "BOTTOMRIGHT"
-        elseif growDir == "CENTER_HORIZONTAL_UP" then
-            targetAnchor = "BOTTOM"
-        elseif growDir == "CENTER_HORIZONTAL_DOWN" or isCenterHoriz then
-            targetAnchor = "TOP"
-        elseif growDir == "CENTER_VERTICAL_LEFT" then
-            targetAnchor = "RIGHT"
-        elseif growDir == "CENTER_VERTICAL_RIGHT" or isCenterVert then
-            targetAnchor = "LEFT"
-        end
-
-        local pt = savedPt or targetAnchor
-        if not savedPt or savedPt ~= targetAnchor then
-            local ConvertAnchorPosition = ns.Auras and ns.Auras.ConvertAnchorPosition
-            if ConvertAnchorPosition then
-                pt, px, py = ConvertAnchorPosition(savedPt, px, py, targetAnchor, moverW, moverH)
-            else
-                pt = targetAnchor
-            end
-            if isCustom then
-                db.screenPoint = pt; db.screenX = px; db.screenY = py
-                db.auraScreenPoint = pt; db.auraScreenX = px; db.auraScreenY = py
-            elseif containerSuffix == "Buffs" then
-                db.buffScreenPoint = pt; db.buffScreenX = px; db.buffScreenY = py
-            elseif containerSuffix == "Debuffs" then
-                db.debuffScreenPoint = pt; db.debuffScreenX = px; db.debuffScreenY = py
-            else
-                db.auraScreenPoint = pt; db.auraScreenX = px; db.auraScreenY = py
-            end
-        end
-
-        mover:SetPoint(pt, UIParent, pt, px, py)
+        mover:SetPoint(savedPt, UIParent, savedPt, px, py)
     else
         -- Attached: use the container's saved anchor (plain Lua values, never secret)
         local anchorPt  = container.roithiSavedPoint    or "BOTTOMLEFT"
@@ -398,8 +377,10 @@ local function UpdateAuraMover(
 
     for i = 1, editSampleCount do
         local btn = sg.samples[i] or CreateFrame("Frame", nil, sg)
+        sg.samples[i] = btn
         btn:SetSize(size, size)
         btn:EnableMouse(false)
+        btn:Show()
 
         local isSampleDebuff = (containerSuffix == "Debuffs") or (isCombined and i > 5)
         FormatAuraButton(btn, container.containerKey, isSampleDebuff, size, db)
@@ -459,22 +440,8 @@ local function UpdateAuraMover(
             iconCenterY = goesUp and (ri * (size + spacing) + size / 2) or (-ri * (size + spacing) - size / 2)
         end
 
-        local targetAnchor = "TOPLEFT"
-        if growDir == "RIGHT_UP" or growDir == "UP" or growDir == "UP_RIGHT" or growDir == "BOTTOM_TO_TOP" then
-            targetAnchor = "BOTTOMLEFT"
-        elseif growDir == "LEFT_DOWN" or growDir == "DOWN_LEFT" or growDir == "LEFT" then
-            targetAnchor = "TOPRIGHT"
-        elseif growDir == "LEFT_UP" or growDir == "UP_LEFT" then
-            targetAnchor = "BOTTOMRIGHT"
-        elseif growDir == "CENTER_HORIZONTAL_UP" then
-            targetAnchor = "BOTTOM"
-        elseif growDir == "CENTER_HORIZONTAL_DOWN" or isCenterHoriz then
-            targetAnchor = "TOP"
-        elseif growDir == "CENTER_VERTICAL_LEFT" then
-            targetAnchor = "RIGHT"
-        elseif growDir == "CENTER_VERTICAL_RIGHT" or isCenterVert then
-            targetAnchor = "LEFT"
-        end
+        local GetTargetAnchorFromGrowDir = ns.Auras and ns.Auras.GetTargetAnchorFromGrowDir
+        local targetAnchor = GetTargetAnchorFromGrowDir and GetTargetAnchorFromGrowDir(growDir, isCenterHoriz, isCenterVert) or "TOPLEFT"
 
         btn:ClearAllPoints()
         btn:SetPoint("CENTER", sg, targetAnchor, iconCenterX, iconCenterY)
@@ -488,6 +455,14 @@ local function UpdateAuraMover(
     end
 
     mover:Show()
+
+    local LEM = LibStub("LibEditMode-Roithi", true)
+    if LEM and LEM.frameSelections then
+        local selection = LEM.frameSelections[mover]
+        if selection and not selection:IsShown() then
+            selection:Show()
+        end
+    end
 end
 
 -------------------------------------------------------------------------------
@@ -496,3 +471,492 @@ end
 ns.Auras = ns.Auras or {}
 ns.Auras.GetOrCreateAuraMover = GetOrCreateAuraMover
 ns.Auras.UpdateAuraMover = UpdateAuraMover
+
+local function RefreshAuraSettings(unit)
+    local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+    if ufMod then
+        if unit and unit:find("^boss%d+$") then
+            for i = 1, 5 do
+                local bUnit = "boss" .. i
+                if ufMod.units and ufMod.units[bUnit] then
+                    ufMod:UpdateAuras(ufMod.units[bUnit])
+                end
+            end
+        elseif unit and ufMod.units and ufMod.units[unit] then
+            ufMod:UpdateAuras(ufMod.units[unit])
+        elseif ufMod.UpdateAllAuras then
+            ufMod:UpdateAllAuras()
+        end
+    end
+end
+
+function ns.GetSettingsForAuras(unit, containerSuffix)
+    local LEM = LibStub("LibEditMode-Roithi", true)
+    if not LEM then return {} end
+
+    local isBuffs = (containerSuffix == "Buffs")
+    local isDebuffs = (containerSuffix == "Debuffs")
+
+    return {
+        {
+            kind = LEM.SettingType.Checkbox,
+            name = "Enable Auras",
+            get = function()
+                local db = GetUnitDB(unit)
+                return db and db.aurasEnabled ~= false
+            end,
+            set = function(_, v)
+                local db = GetUnitDB(unit)
+                if db then db.aurasEnabled = v end
+                RefreshAuraSettings(unit)
+            end,
+        },
+        {
+            kind = LEM.SettingType.Checkbox,
+            name = "Detach Auras",
+            get = function()
+                local db = GetUnitDB(unit)
+                if isBuffs then return db and db.buffDetached == true end
+                if isDebuffs then return db and db.debuffDetached == true end
+                return db and db.auraDetached == true
+            end,
+            set = function(_, v)
+                local db = GetUnitDB(unit)
+                if db then
+                    if isBuffs then
+                        db.buffDetached = v
+                        if v and (db.buffScreenX == nil or db.buffScreenY == nil) then
+                            local key = ns.Auras and ns.Auras.MakeContainerKey and (ns.Auras.MakeContainerKey(unit, "Buffs") .. "_Mover")
+                            local mover = key and UF and UF.AuraMovers and UF.AuraMovers[key]
+                            if mover and mover:GetLeft() and UIParent:GetHeight() then
+                                db.buffScreenPoint = "TOPLEFT"
+                                db.buffScreenX = math.floor(mover:GetLeft() + 0.5)
+                                db.buffScreenY = math.floor(mover:GetTop() - UIParent:GetHeight() + 0.5)
+                            else
+                                db.buffScreenPoint = "CENTER"
+                                db.buffScreenX = 0
+                                db.buffScreenY = 0
+                            end
+                        end
+                    elseif isDebuffs then
+                        db.debuffDetached = v
+                        if v and (db.debuffScreenX == nil or db.debuffScreenY == nil) then
+                            local key = ns.Auras and ns.Auras.MakeContainerKey and (ns.Auras.MakeContainerKey(unit, "Debuffs") .. "_Mover")
+                            local mover = key and UF and UF.AuraMovers and UF.AuraMovers[key]
+                            if mover and mover:GetLeft() and UIParent:GetHeight() then
+                                db.debuffScreenPoint = "TOPLEFT"
+                                db.debuffScreenX = math.floor(mover:GetLeft() + 0.5)
+                                db.debuffScreenY = math.floor(mover:GetTop() - UIParent:GetHeight() + 0.5)
+                            else
+                                db.debuffScreenPoint = "CENTER"
+                                db.debuffScreenX = 0
+                                db.debuffScreenY = 0
+                            end
+                        end
+                    else
+                        db.auraDetached = v
+                        if v and (db.auraScreenX == nil or db.auraScreenY == nil) then
+                            local key = ns.Auras and ns.Auras.MakeContainerKey and (ns.Auras.MakeContainerKey(unit, "Combined") .. "_Mover")
+                            local mover = key and UF and UF.AuraMovers and UF.AuraMovers[key]
+                            if mover and mover:GetLeft() and UIParent:GetHeight() then
+                                db.auraScreenPoint = "TOPLEFT"
+                                db.auraScreenX = math.floor(mover:GetLeft() + 0.5)
+                                db.auraScreenY = math.floor(mover:GetTop() - UIParent:GetHeight() + 0.5)
+                            else
+                                db.auraScreenPoint = "CENTER"
+                                db.auraScreenX = 0
+                                db.auraScreenY = 0
+                            end
+                        end
+                    end
+                end
+                RefreshAuraSettings(unit)
+                if LEM and LEM.RefreshFrameSettings then
+                    LEM:RefreshFrameSettings()
+                end
+            end,
+        },
+        {
+            kind = LEM.SettingType.Slider,
+            name = "Aura Size",
+            get = function()
+                local db = GetUnitDB(unit)
+                if isBuffs then return (db and db.buffSize) or 20 end
+                if isDebuffs then return (db and db.debuffSize) or 20 end
+                return (db and db.auraSize) or 20
+            end,
+            set = function(_, v)
+                local db = GetUnitDB(unit)
+                if db then
+                    if isBuffs then db.buffSize = v
+                    elseif isDebuffs then db.debuffSize = v
+                    else db.auraSize = v end
+                end
+                RefreshAuraSettings(unit)
+            end,
+            minValue = 10,
+            maxValue = 60,
+            valueStep = 1,
+        },
+        {
+            kind = LEM.SettingType.Slider,
+            name = "Icons Per Row",
+            get = function()
+                local db = GetUnitDB(unit)
+                if isBuffs then return (db and db.buffsPerRow) or 8 end
+                if isDebuffs then return (db and db.debuffsPerRow) or 8 end
+                return (db and db.aurasPerRow) or 8
+            end,
+            set = function(_, v)
+                local db = GetUnitDB(unit)
+                if db then
+                    if isBuffs then db.buffsPerRow = v
+                    elseif isDebuffs then db.debuffsPerRow = v
+                    else db.aurasPerRow = v end
+                end
+                RefreshAuraSettings(unit)
+            end,
+            minValue = 1,
+            maxValue = 20,
+            valueStep = 1,
+        },
+        {
+            kind = LEM.SettingType.Slider,
+            name = "Max Auras",
+            get = function()
+                local db = GetUnitDB(unit)
+                if isBuffs then return (db and db.maxBuffs) or 16 end
+                if isDebuffs then return (db and db.maxDebuffs) or 16 end
+                return (db and db.maxAuras) or 16
+            end,
+            set = function(_, v)
+                local db = GetUnitDB(unit)
+                if db then
+                    if isBuffs then db.maxBuffs = v
+                    elseif isDebuffs then db.maxDebuffs = v
+                    else db.maxAuras = v end
+                end
+                RefreshAuraSettings(unit)
+            end,
+            minValue = 1,
+            maxValue = 40,
+            valueStep = 1,
+        },
+        {
+            kind = LEM.SettingType.Dropdown,
+            name = "Anchor Point",
+            values = {
+                { text = "Top Left",     value = "TOPLEFT" },
+                { text = "Left",         value = "LEFT" },
+                { text = "Bottom Left",  value = "BOTTOMLEFT" },
+                { text = "Top",          value = "TOP" },
+                { text = "Center",       value = "CENTER" },
+                { text = "Bottom",       value = "BOTTOM" },
+                { text = "Top Right",    value = "TOPRIGHT" },
+                { text = "Right",        value = "RIGHT" },
+                { text = "Bottom Right", value = "BOTTOMRIGHT" },
+            },
+            get = function()
+                local db = GetUnitDB(unit)
+                if not db then return "BOTTOM" end
+                if isBuffs then return db.buffAnchor or db.auraAnchor or "BOTTOM" end
+                if isDebuffs then return db.debuffAnchor or db.auraAnchor or "BOTTOM" end
+                return db.auraAnchor or "BOTTOM"
+            end,
+            set = function(_, v)
+                local db = GetUnitDB(unit)
+                if db then
+                    if isBuffs then db.buffAnchor = v
+                    elseif isDebuffs then db.debuffAnchor = v
+                    else db.auraAnchor = v end
+                end
+                RefreshAuraSettings(unit)
+            end,
+        },
+        {
+            kind = LEM.SettingType.Dropdown,
+            name = "Grow Direction",
+            values = {
+                { text = "Right then Down",      value = "RIGHT_DOWN" },
+                { text = "Right then Up",        value = "RIGHT_UP" },
+                { text = "Left then Down",       value = "LEFT_DOWN" },
+                { text = "Left then Up",         value = "LEFT_UP" },
+                { text = "Down then Right",      value = "DOWN_RIGHT" },
+                { text = "Down then Left",       value = "DOWN_LEFT" },
+                { text = "Up then Right",        value = "UP_RIGHT" },
+                { text = "Up then Left",         value = "UP_LEFT" },
+                { text = "Centered Horizontal",  value = "CENTER_HORIZONTAL" },
+                { text = "Centered Vertical",    value = "CENTER_VERTICAL" },
+            },
+            get = function()
+                local db = GetUnitDB(unit)
+                if not db then return "RIGHT_DOWN" end
+                local dir
+                if isBuffs then dir = db.buffGrowDirection or db.auraGrowDirection
+                elseif isDebuffs then dir = db.debuffGrowDirection or db.auraGrowDirection
+                else dir = db.auraGrowDirection end
+                if dir == "RIGHT" then return "RIGHT_DOWN" end
+                if dir == "LEFT" then return "LEFT_DOWN" end
+                return dir or "RIGHT_DOWN"
+            end,
+            set = function(_, v)
+                local db = GetUnitDB(unit)
+                if db then
+                    if isBuffs then db.buffGrowDirection = v
+                    elseif isDebuffs then db.debuffGrowDirection = v
+                    else db.auraGrowDirection = v end
+                end
+                RefreshAuraSettings(unit)
+            end,
+        },
+        {
+            kind = LEM.SettingType.Slider,
+            name = "X Position",
+            get = function()
+                local db = GetUnitDB(unit)
+                if not db then return 0 end
+                local isDetached = isBuffs and (db.buffDetached == true)
+                                or isDebuffs and (db.debuffDetached == true)
+                                or (db.auraDetached == true)
+                if isDetached then
+                    local val = isBuffs and db.buffScreenX
+                             or isDebuffs and db.debuffScreenX
+                             or db.auraScreenX
+                    return tonumber(val) or 0
+                else
+                    local val = isBuffs and db.buffX
+                             or isDebuffs and db.debuffX
+                             or db.auraX
+                    return tonumber(val) or 0
+                end
+            end,
+            set = function(_, v)
+                local db = GetUnitDB(unit)
+                if db then
+                    local isDetached = isBuffs and (db.buffDetached == true)
+                                    or isDebuffs and (db.debuffDetached == true)
+                                    or (db.auraDetached == true)
+                    if isDetached then
+                        if isBuffs then db.buffScreenX = v
+                        elseif isDebuffs then db.debuffScreenX = v
+                        else db.auraScreenX = v end
+                    else
+                        if isBuffs then db.buffX = v
+                        elseif isDebuffs then db.debuffX = v
+                        else db.auraX = v end
+                    end
+                end
+                RefreshAuraSettings(unit)
+            end,
+            minValue = -2000,
+            maxValue = 2000,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.0f", v) end,
+        },
+        {
+            kind = LEM.SettingType.Slider,
+            name = "Y Position",
+            get = function()
+                local db = GetUnitDB(unit)
+                if not db then return 0 end
+                local isDetached = isBuffs and (db.buffDetached == true)
+                                or isDebuffs and (db.debuffDetached == true)
+                                or (db.auraDetached == true)
+                if isDetached then
+                    local val = isBuffs and db.buffScreenY
+                             or isDebuffs and db.debuffScreenY
+                             or db.auraScreenY
+                    return tonumber(val) or 0
+                else
+                    local val = isBuffs and db.buffY
+                             or isDebuffs and db.debuffY
+                             or db.auraY
+                    return tonumber(val) or 4
+                end
+            end,
+            set = function(_, v)
+                local db = GetUnitDB(unit)
+                if db then
+                    local isDetached = isBuffs and (db.buffDetached == true)
+                                    or isDebuffs and (db.debuffDetached == true)
+                                    or (db.auraDetached == true)
+                    if isDetached then
+                        if isBuffs then db.buffScreenY = v
+                        elseif isDebuffs then db.debuffScreenY = v
+                        else db.auraScreenY = v end
+                    else
+                        if isBuffs then db.buffY = v
+                        elseif isDebuffs then db.debuffY = v
+                        else db.auraY = v end
+                    end
+                end
+                RefreshAuraSettings(unit)
+            end,
+            minValue = -2000,
+            maxValue = 2000,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.0f", v) end,
+        },
+    }
+end
+
+function ns.GetSettingsForCustomAura(customID)
+    local LEM = LibStub("LibEditMode-Roithi", true)
+    if not LEM then return {} end
+
+    local function GetCDB()
+        if RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.CustomAuraFrames then
+            return RoithiUI.db.profile.CustomAuraFrames[customID]
+        end
+    end
+
+    return {
+        {
+            kind = LEM.SettingType.Slider,
+            name = "Aura Size",
+            get = function()
+                local db = GetCDB()
+                return (db and db.auraSize) or 30
+            end,
+            set = function(_, v)
+                local db = GetCDB()
+                if db then db.auraSize = v end
+                local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
+            end,
+            minValue = 10,
+            maxValue = 100,
+            valueStep = 1,
+        },
+        {
+            kind = LEM.SettingType.Slider,
+            name = "Icons Per Row",
+            get = function()
+                local db = GetCDB()
+                return (db and db.aurasPerRow) or 8
+            end,
+            set = function(_, v)
+                local db = GetCDB()
+                if db then db.aurasPerRow = v end
+                local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
+            end,
+            minValue = 1,
+            maxValue = 20,
+            valueStep = 1,
+        },
+        {
+            kind = LEM.SettingType.Slider,
+            name = "Max Auras",
+            get = function()
+                local db = GetCDB()
+                return (db and db.maxAuras) or 16
+            end,
+            set = function(_, v)
+                local db = GetCDB()
+                if db then db.maxAuras = v end
+                local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
+            end,
+            minValue = 1,
+            maxValue = 40,
+            valueStep = 1,
+        },
+        {
+            kind = LEM.SettingType.Dropdown,
+            name = "Anchor Point",
+            values = {
+                { text = "Top Left",     value = "TOPLEFT" },
+                { text = "Left",         value = "LEFT" },
+                { text = "Bottom Left",  value = "BOTTOMLEFT" },
+                { text = "Top",          value = "TOP" },
+                { text = "Center",       value = "CENTER" },
+                { text = "Bottom",       value = "BOTTOM" },
+                { text = "Top Right",    value = "TOPRIGHT" },
+                { text = "Right",        value = "RIGHT" },
+                { text = "Bottom Right", value = "BOTTOMRIGHT" },
+            },
+            get = function()
+                local db = GetCDB()
+                return (db and db.auraAnchor) or "BOTTOM"
+            end,
+            set = function(_, v)
+                local db = GetCDB()
+                if db then db.auraAnchor = v end
+                local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
+            end,
+        },
+        {
+            kind = LEM.SettingType.Dropdown,
+            name = "Grow Direction",
+            values = {
+                { text = "Right then Down",      value = "RIGHT_DOWN" },
+                { text = "Right then Up",        value = "RIGHT_UP" },
+                { text = "Left then Down",       value = "LEFT_DOWN" },
+                { text = "Left then Up",         value = "LEFT_UP" },
+                { text = "Down then Right",      value = "DOWN_RIGHT" },
+                { text = "Down then Left",       value = "DOWN_LEFT" },
+                { text = "Up then Right",        value = "UP_RIGHT" },
+                { text = "Up then Left",         value = "UP_LEFT" },
+                { text = "Centered Horizontal",  value = "CENTER_HORIZONTAL" },
+                { text = "Centered Vertical",    value = "CENTER_VERTICAL" },
+            },
+            get = function()
+                local db = GetCDB()
+                return (db and db.auraGrowDirection) or "RIGHT_DOWN"
+            end,
+            set = function(_, v)
+                local db = GetCDB()
+                if db then db.auraGrowDirection = v end
+                local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
+            end,
+        },
+        {
+            kind = LEM.SettingType.Slider,
+            name = "X Position",
+            get = function()
+                local db = GetCDB()
+                return (db and (db.screenX or db.auraScreenX or db.x)) or 0
+            end,
+            set = function(_, v)
+                local db = GetCDB()
+                if db then
+                    db.screenX = v
+                    db.auraScreenX = v
+                    db.x = v
+                end
+                local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
+            end,
+            minValue = -2000,
+            maxValue = 2000,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.0f", v) end,
+        },
+        {
+            kind = LEM.SettingType.Slider,
+            name = "Y Position",
+            get = function()
+                local db = GetCDB()
+                return (db and (db.screenY or db.auraScreenY or db.y)) or 0
+            end,
+            set = function(_, v)
+                local db = GetCDB()
+                if db then
+                    db.screenY = v
+                    db.auraScreenY = v
+                    db.y = v
+                end
+                local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
+            end,
+            minValue = -2000,
+            maxValue = 2000,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.0f", v) end,
+        },
+    }
+end
+

@@ -19,6 +19,7 @@ ns.Defaults = {
             },
         },
         CustomAuraFrames = {},
+        LEMDialogPosition = false,
         SmartFilters = {
             showAll = false,
             showCrowdControl = true,
@@ -1242,8 +1243,8 @@ ns.Defaults = {
                 additionalPowerWidth = 230,
                 additionalPowerX = 106.99920654297,
                 additionalPowerY = -255.00018310547,
-                auraAnchor = "TOP",
-                auraGrowDirection = "LEFT",
+                auraAnchor = "BOTTOM",
+                auraGrowDirection = "RIGHT_DOWN",
                 aurasEnabled = true,
                 classPowerDetached = false,
                 classPowerEnabled = true,

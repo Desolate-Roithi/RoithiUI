@@ -27,8 +27,13 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
                 db.x = x
                 db.y = y
             end
-        end -- Close OnPosChanged
+        end
         LEM:AddFrame(frame, OnPosChanged, { point = "CENTER", x = 0, y = 0 })
+
+        if ns.OptionsEngine and ns.OptionsEngine.RegisterLEMOptions then
+            local ufUnit = (unit:match("^boss%d$")) and "boss" or unit
+            ns.OptionsEngine:RegisterLEMOptions(frame, "unitframes", ufUnit)
+        end
 
         -- Selection Overlay
         local overlay = frame:CreateTexture(nil, "OVERLAY")
@@ -134,8 +139,8 @@ function UF:UpdateFrameFromSettings(unit)
             local specificDB = db or {}
             db = setmetatable({}, {
                 __index = function(_, k)
-                    if k == "width" or k == "height" then
-                        return (driverDB and driverDB[k]) or 180 -- Fallback
+                    if k == "width" or k == "height" or k == "scale" then
+                        return (driverDB and driverDB[k]) or (k == "scale" and 1.0 or 180) -- Fallback
                     end
                     return specificDB[k]
                 end
@@ -154,16 +159,16 @@ function UF:UpdateFrameFromSettings(unit)
     -- Fix: Use separate local variables for final values, handling nil DB gracefully
     local width = (db and db.width and db.width > 0) and db.width or defW
     local height = (db and db.height and db.height > 0) and db.height or defH
-
-
+    local scale = (db and db.scale and db.scale > 0) and db.scale or 1.0
 
     frame:SetWidth(width)
     frame:SetHeight(height)
+    frame:SetScale(scale)
 
     -- Update position (SKIP for boss 2-5, managed by Boss.lua)
     if not string.match(unit, "^boss[2-5]$") then
-        local point = (db and db.point) or "CENTER"
-        local x = (db and db.x) or 0
+        local point = (db and db.point) or (string.match(unit, "boss") and "RIGHT" or "CENTER")
+        local x = (db and db.x) or (string.match(unit, "boss") and -250 or 0)
         local y = (db and db.y) or 0
 
         frame:ClearAllPoints()
@@ -226,6 +231,13 @@ end
 function UF:ToggleFrame(unit, enabled)
     local frame = self.units[unit]
 
+    local isEditMode = false
+    if LEM and LEM.IsInEditMode and LEM:IsInEditMode() then
+        isEditMode = true
+    elseif EditModeManagerFrame and EditModeManagerFrame:IsShown() then
+        isEditMode = true
+    end
+
     if enabled then
         -- 1. Enable / Create Path
         -- Lazy Create if missing
@@ -254,10 +266,17 @@ function UF:ToggleFrame(unit, enabled)
         if not frame then return end -- Creation failed?
 
         if frame.Enable then frame:Enable() end
-        RegisterUnitWatch(frame) -- Drive visibility
 
-        -- Let oUF decide show/hide based on UnitExists, but force update
-        if UnitExists(unit) then frame:Show() end
+        if isEditMode or (frame and frame.isInEditMode) then
+            UnregisterUnitWatch(frame)
+            frame.forceShowEditMode = true
+            frame:Show()
+            if frame.EditModeOverlay then frame.EditModeOverlay:Show() end
+        else
+            RegisterUnitWatch(frame) -- Drive visibility
+            -- Let oUF decide show/hide based on UnitExists, but force update
+            if UnitExists(unit) then frame:Show() end
+        end
 
         -- Disable Blizzard Frame (Ensure it stays hidden)
         if self.DisableBlizzard then
@@ -271,7 +290,9 @@ function UF:ToggleFrame(unit, enabled)
         if not frame then return end -- If never created, nothing to disable
 
         UnregisterUnitWatch(frame)
+        frame.forceShowEditMode = nil
         frame:Hide()
+        if frame.EditModeOverlay then frame.EditModeOverlay:Hide() end
         if frame.Disable then frame:Disable() end
 
         -- FIX: Auto-Detach Castbar if it should remain enabled

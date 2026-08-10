@@ -56,6 +56,9 @@ function ns.CreateCastBar(unit)
     bar.Latency = latency
 
     bar.unit = unit; bar:Hide()
+    if bar.SetOnUpdateMode then
+        bar:SetOnUpdateMode("RunWhenVisible")
+    end
     bar:SetClampedToScreen(true)
     return bar
 end
@@ -78,14 +81,28 @@ end
 
 function ns.RefreshAllCastbars()
     if not ns.bars then return end
+    local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar
     for unit, bar in pairs(ns.bars) do
         ns.UpdateCastBarMedia(bar)
+        local db = cbDB and cbDB[unit]
+        if db then
+            if not db.enabled then
+                bar:Hide()
+            end
+            if ns.SetCastbarAttachment then
+                ns.SetCastbarAttachment(unit, not db.detached)
+            end
+        end
     end
 end
 
 function ns.InitializeBars()
     for unit, _ in pairs(ns.DEFAULTS) do
-        ns.bars[unit] = ns.CreateCastBar(unit)
+        local bar = ns.CreateCastBar(unit)
+        ns.bars[unit] = bar
+        if ns.RegisterCastbarLEM then
+            ns.RegisterCastbarLEM(bar, unit)
+        end
     end
 end
 
@@ -144,13 +161,17 @@ function ns.UpdateCast(bar, unitOverride)
     local state = "cast" -- cast | channel | empowered
 
     -- 1. Check Channel / Empowered
-    local chName, chText, chTexture, _, _, _, chNotInt, _, isEmpowered, numEmpowerStages = UnitChannelInfo(unit)
+    local chName, chText, chTexture, chStartTime, chEndTime, _, chNotInt, _, isEmpowered, numEmpowerStages = UnitChannelInfo(unit)
 
     if chName then
         name = chName
         text = chText
         texture = chTexture
         notInterruptible = chNotInt
+        bar.casting = false
+        bar.channeling = true
+        bar.startTime = chStartTime
+        bar.endTime = chEndTime
 
         -- Empowered Check
         if isEmpowered or (numEmpowerStages and numEmpowerStages > 0) then
@@ -166,13 +187,17 @@ function ns.UpdateCast(bar, unitOverride)
         end
     else
         -- 2. Check Standard Cast
-        local cName, cText, cTexture, _, _, _, _, cNotInt, _ = UnitCastingInfo(unit)
+        local cName, cText, cTexture, cStartTime, cEndTime, _, _, cNotInt, _ = UnitCastingInfo(unit)
         if cName then
             state = "cast"
             name = cName
             text = cText
             texture = cTexture
             notInterruptible = cNotInt
+            bar.casting = true
+            bar.channeling = false
+            bar.startTime = cStartTime
+            bar.endTime = cEndTime
 
             if UnitCastingDuration then
                 durationObj = UnitCastingDuration(unit)
@@ -238,17 +263,6 @@ function ns.UpdateCast(bar, unitOverride)
     end
     bar.Text:SetText(text)
 
-
-    -- ------------------------------------------------------------------------
-    -- C. Apply Duration Object (Native 12.0 API)
-    -- ------------------------------------------------------------------------
-    -- The Magic: This handles MinMax, Value, and Animation automatically (incl. Secrets)
-    if bar.SetTimerDuration then
-        bar:SetTimerDuration(durationObj)
-    else
-        -- Fallback for pre-12.0 environments (should never happen based on user context)
-        RoithiUI:Log("Error: SetTimerDuration not supported on this client.")
-    end
 
     -- Store for Latency/OnUpdate
     bar.durationObj = durationObj
@@ -331,21 +345,42 @@ function ns.UpdateCast(bar, unitOverride)
     -- ------------------------------------------------------------------------
     -- F. OnUpdate (Text Only)
     -- ------------------------------------------------------------------------
-    -- SetTimerDuration handles progress. We only need to update the text.
     bar:SetScript("OnUpdate", function(self, elapsed)
-        -- We do NOT call SetValue here anymore.
+        if self.isEmpower and ns.OnEmpowerUpdate then
+            ns.OnEmpowerUpdate(self)
+            return
+        end
 
-        if self.TimeFS and self.durationObj then
+        local now = GetTime() * 1000
+        if self.casting and self.endTime and self.startTime and self.endTime > self.startTime then
+            local dur = (self.endTime - self.startTime) / 1000
+            local cur = (now - self.startTime) / 1000
+            if cur > dur then cur = dur end
+            self:SetMinMaxValues(0, dur)
+            self:SetValue(cur)
+
+            local rem = dur - cur
+            if rem < 0 then rem = 0 end
+            if self.TimeFS then
+                self.TimeFS:SetText(FormatDuration(rem))
+            end
+        elseif self.channeling and self.endTime and self.startTime and self.endTime > self.startTime then
+            local dur = (self.endTime - self.startTime) / 1000
+            local rem = (self.endTime - now) / 1000
+            if rem < 0 then rem = 0 end
+            self:SetMinMaxValues(0, dur)
+            self:SetValue(rem)
+
+            if self.TimeFS then
+                self.TimeFS:SetText(FormatDuration(rem))
+            end
+        elseif self.TimeFS and self.durationObj then
             local textVal = ""
             if self.durationObj.GetRemainingDuration then
                 local rem = self.durationObj:GetRemainingDuration()
                 textVal = FormatDuration(rem)
             end
             self.TimeFS:SetText(textVal)
-        end
-
-        if self.isEmpower and ns.OnEmpowerUpdate then
-            ns.OnEmpowerUpdate(self)
         end
     end)
 end

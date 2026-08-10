@@ -45,6 +45,34 @@ if expanderPool then
     end
 end
 
+-- 1b. Bridge for Slider Refresh Value Update
+local sliderPool = lib.internal:GetPool(lib.SettingType.Slider)
+if sliderPool then
+    local oldAcquire = sliderPool.Acquire
+    sliderPool.Acquire = function(self, parent)
+        local frame, isNew = oldAcquire(self, parent)
+
+        if not frame.isRefreshBridged then
+            frame.isRefreshBridged = true
+            local oldRefresh = frame.Refresh
+            frame.Refresh = function(s)
+                if oldRefresh then oldRefresh(s) end
+                local data = s.setting
+                if data and data.get then
+                    local val = data.get(lib:GetActiveLayoutName())
+                    if val ~= nil and s.Slider and s.Slider.SetValue then
+                        s.initInProgress = true
+                        s.Slider:SetValue(val)
+                        s.initInProgress = false
+                    end
+                end
+            end
+        end
+
+        return frame, isNew
+    end
+end
+
 -- 2. Stale Closure Protection (Self-Healing)
 -- If lib.internal is wiped but lib object persists, we restore basic hooks.
 if not lib.internal.IsHealed then
@@ -87,3 +115,51 @@ if not lib.internal.IsHealed then
     end
     lib.internal.IsHealed = true
 end
+
+-- 3. Persistent LEM Dialog Position Saving & Restoring
+local function SetupPersistentDialogPosition(dialog)
+    if not dialog or dialog.isPositionHooked then return end
+    dialog.isPositionHooked = true
+
+    dialog:HookScript("OnDragStop", function(self)
+        local point, _, relativePoint, x, y = self:GetPoint()
+        if _G.RoithiUI and _G.RoithiUI.db and _G.RoithiUI.db.profile then
+            _G.RoithiUI.db.profile.LEMDialogPosition = {
+                point = point or "CENTER",
+                relativePoint = relativePoint or point or "CENTER",
+                x = math.floor((x or 0) + 0.5),
+                y = math.floor((y or 0) + 0.5),
+            }
+        end
+    end)
+
+    local oldReset = dialog.Reset
+    dialog.Reset = function(self)
+        if oldReset then oldReset(self) end
+        local pos = _G.RoithiUI and _G.RoithiUI.db and _G.RoithiUI.db.profile and _G.RoithiUI.db.profile.LEMDialogPosition
+        if pos and pos.point and pos.x and pos.y then
+            self:ClearAllPoints()
+            self:SetPoint(pos.point, UIParent, pos.relativePoint or pos.point, pos.x, pos.y)
+        end
+    end
+
+    local pos = _G.RoithiUI and _G.RoithiUI.db and _G.RoithiUI.db.profile and _G.RoithiUI.db.profile.LEMDialogPosition
+    if pos and pos.point and pos.x and pos.y then
+        dialog:ClearAllPoints()
+        dialog:SetPoint(pos.point, UIParent, pos.relativePoint or pos.point, pos.x, pos.y)
+    end
+end
+
+if lib.internal and lib.internal.dialog then
+    SetupPersistentDialogPosition(lib.internal.dialog)
+end
+
+if lib.internal and lib.internal.CreateDialog then
+    local oldCreateDialog = lib.internal.CreateDialog
+    lib.internal.CreateDialog = function(self)
+        local dialog = oldCreateDialog(self)
+        SetupPersistentDialogPosition(dialog)
+        return dialog
+    end
+end
+

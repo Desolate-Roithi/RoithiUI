@@ -91,7 +91,7 @@ end
 -------------------------------------------------------------------------------
 local function IsSupportedUnit(unit)
     if not unit then return false end
-    if unit == "player" or unit == "target" or unit == "focus" or unit == "pet" then
+    if unit == "player" or unit == "target" or unit == "focus" or unit == "pet" or unit == "targettarget" or unit == "focustarget" then
         return true
     end
     if unit:find("^boss%d+$") then
@@ -105,19 +105,13 @@ end
 -------------------------------------------------------------------------------
 local function GetUnitDB(unit)
     local profile = RoithiUI.db and RoithiUI.db.profile
-    if not profile or not profile.UnitFrames then return {} end
+    if not profile then return {} end
+    if not profile.UnitFrames then profile.UnitFrames = {} end
 
-    if unit:find("^boss%d+$") then
-        local bossDB = profile.UnitFrames.boss or {}
-        local copy = {}
-        for k, v in pairs(bossDB) do copy[k] = v end
-        if profile.UnitFrames[unit] then
-            for k, v in pairs(profile.UnitFrames[unit]) do copy[k] = v end
-        end
-        return copy
+    if not profile.UnitFrames[unit] then
+        profile.UnitFrames[unit] = {}
     end
-
-    return profile.UnitFrames[unit] or {}
+    return profile.UnitFrames[unit]
 end
 
 -------------------------------------------------------------------------------
@@ -310,10 +304,35 @@ local function GetClosestScreenAnchor(frame, point, inX, inY)
 end
 
 -------------------------------------------------------------------------------
+-- Helper: Target Anchor from Grow Direction
+-------------------------------------------------------------------------------
+local function GetTargetAnchorFromGrowDir(growDir, isCenterHoriz, isCenterVert)
+    growDir = growDir or "RIGHT_DOWN"
+    local targetAnchor = "TOPLEFT"
+    if growDir == "LEFT_DOWN" or growDir == "DOWN_LEFT" then
+        targetAnchor = "TOPRIGHT"
+    elseif growDir == "RIGHT_UP" or growDir == "UP_RIGHT" then
+        targetAnchor = "BOTTOMLEFT"
+    elseif growDir == "LEFT_UP" or growDir == "UP_LEFT" then
+        targetAnchor = "BOTTOMRIGHT"
+    elseif growDir == "CENTER_HORIZONTAL_UP" then
+        targetAnchor = "BOTTOM"
+    elseif growDir == "CENTER_HORIZONTAL_DOWN" or isCenterHoriz then
+        targetAnchor = "TOP"
+    elseif growDir == "CENTER_VERTICAL_LEFT" then
+        targetAnchor = "RIGHT"
+    elseif growDir == "CENTER_VERTICAL_RIGHT" or isCenterVert then
+        targetAnchor = "LEFT"
+    end
+    return targetAnchor
+end
+
+-------------------------------------------------------------------------------
 -- Sub-Module Function Exports
 -------------------------------------------------------------------------------
 ns.Auras = ns.Auras or {}
 ns.Auras.ConvertAnchorPosition = ConvertAnchorPosition
+ns.Auras.GetTargetAnchorFromGrowDir = GetTargetAnchorFromGrowDir
 ns.Auras.IsSupportedUnit = IsSupportedUnit
 ns.Auras.GetUnitDB = GetUnitDB
 ns.Auras.GetSmartFilterQueries = GetSmartFilterQueries

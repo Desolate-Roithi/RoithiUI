@@ -21,9 +21,18 @@ function sliderMixin:Setup(data)
 	self:Refresh()
 
 	self.initInProgress = true
+	local formatterFunc = data.formatter
+	if not formatterFunc then
+		local stepSize = data.valueStep or 1
+		if stepSize >= 1 then
+			formatterFunc = function(v) return string.format("%.0f", math.floor(v + 0.5)) end
+		else
+			formatterFunc = function(v) return string.format("%.1f", v) end
+		end
+	end
 	self.formatters = {}
 	self.formatters[MinimalSliderWithSteppersMixin.Label.Right] =
-		CreateMinimalSliderFormatter(MinimalSliderWithSteppersMixin.Label.Right, data.formatter)
+		CreateMinimalSliderFormatter(MinimalSliderWithSteppersMixin.Label.Right, formatterFunc)
 
 	local stepSize = data.valueStep or 1
 	local steps = (data.maxValue - data.minValue) / stepSize
@@ -79,8 +88,16 @@ local function onEditFocus(self)
 	self:SetPoint("BOTTOMLEFT", parent.Slider)
 
 	-- set editbox text to current slider value
-	-- TODO: maybe flatten the value here
-	self:SetText(parent.Slider.Slider:GetValue())
+	local val = parent.Slider.Slider:GetValue()
+	if val then
+		local step = parent.setting and parent.setting.valueStep or 1
+		if step >= 1 then
+			val = math.floor(val + 0.5)
+		else
+			val = math.floor(val * 100 + 0.5) / 100
+		end
+	end
+	self:SetText(val)
 	self:SetCursorPosition(0)
 end
 

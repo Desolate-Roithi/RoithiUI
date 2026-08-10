@@ -275,23 +275,8 @@ function UF:UpdateCustomAura(id)
 
     container:SetSize(math.max(16, lineSizeVal), math.max(16, size))
 
-    local isDetached = true
-    local targetAnchor = "TOPLEFT"
-    if growDir == "RIGHT_UP" or growDir == "UP" or growDir == "UP_RIGHT" or growDir == "BOTTOM_TO_TOP" then
-        targetAnchor = "BOTTOMLEFT"
-    elseif growDir == "LEFT_DOWN" or growDir == "DOWN_LEFT" or growDir == "LEFT" then
-        targetAnchor = "TOPRIGHT"
-    elseif growDir == "LEFT_UP" or growDir == "UP_LEFT" then
-        targetAnchor = "BOTTOMRIGHT"
-    elseif growDir == "CENTER_HORIZONTAL_UP" then
-        targetAnchor = "BOTTOM"
-    elseif growDir == "CENTER_HORIZONTAL_DOWN" or isCenterHoriz then
-        targetAnchor = "TOP"
-    elseif growDir == "CENTER_VERTICAL_LEFT" then
-        targetAnchor = "RIGHT"
-    elseif growDir == "CENTER_VERTICAL_RIGHT" or isCenterVert then
-        targetAnchor = "TOPLEFT"
-    end
+    local GetTargetAnchorFromGrowDir = ns.Auras and ns.Auras.GetTargetAnchorFromGrowDir
+    local targetAnchor = GetTargetAnchorFromGrowDir and GetTargetAnchorFromGrowDir(growDir, isCenterHoriz, isCenterVert) or "TOPLEFT"
 
     local savedPt = db.screenPoint or db.auraScreenPoint or db.anchor or targetAnchor
     local savedX = tonumber(db.screenX or db.auraScreenX or db.x) or 0
@@ -330,6 +315,7 @@ function UF:UpdateCustomAura(id)
         container:Show()
     end
 
+    local isDetached = true
     local UpdateAuraMover = ns.Auras and ns.Auras.UpdateAuraMover
     if UpdateAuraMover then
         UpdateAuraMover(

@@ -40,7 +40,8 @@ local function Update(self, event, unit)
         element:SetStatusBarColor(t.r, t.g, t.b)
     elseif (element.colorClass and UnitIsPlayer(unit) and not UnitHasVehicleUI(unit)) then
         local _, class = UnitClass(unit)
-        local t = element.colors.class[class]
+        local isClassSecret = issecretvalue and issecretvalue(class)
+        local t = (class and not isClassSecret) and element.colors.class[class] or nil
         if t then
             element:SetStatusBarColor(t.r, t.g, t.b)
         else

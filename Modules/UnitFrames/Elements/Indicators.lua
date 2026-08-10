@@ -185,17 +185,28 @@ function UF:CreateIndicators(frame)
 
         local function ShowIndicator(indicator, key, condition)
             if not indicator then return end
-            if IsEnabled(key) and (condition or inTestMode) then
-                -- Unit Specific Filtering
-                if key == "resting" and unit ~= "player" then
-                    indicator:Hide()
-                    return
-                end
-                if key == "quest" and unit == "player" then
-                    indicator:Hide()
-                    return
-                end
+            if not IsEnabled(key) then
+                indicator:Hide()
+                return
+            end
 
+            -- Unit Specific Filtering
+            if key == "resting" and unit ~= "player" then
+                indicator:Hide()
+                return
+            end
+            if key == "quest" and unit == "player" then
+                indicator:Hide()
+                return
+            end
+
+            if issecretvalue and issecretvalue(condition) then
+                if _G.SetShownFromSecret then
+                    _G.SetShownFromSecret(indicator, condition)
+                else
+                    indicator:Hide()
+                end
+            elseif condition or inTestMode then
                 indicator:Show()
             else
                 indicator:Hide()
@@ -228,8 +239,9 @@ function UF:CreateIndicators(frame)
 
         -- Role
         local roleType = UnitGroupRolesAssigned(unit)
-        if IsEnabled("role") and (roleType ~= "NONE" or inTestMode) then
-            local r = roleType == "NONE" and "TANK" or roleType -- Default to tank in test mode
+        local isRoleSecret = issecretvalue and issecretvalue(roleType)
+        if IsEnabled("role") and (inTestMode or (roleType and not isRoleSecret and roleType ~= "NONE")) then
+            local r = (roleType == nil or roleType == "NONE" or isRoleSecret) and "TANK" or roleType
             if r == "TANK" then
                 role:SetTexCoord(0, 19 / 64, 22 / 64, 41 / 64)
             elseif r == "HEALER" then

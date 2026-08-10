@@ -251,7 +251,9 @@ function Castbar:OnEnable()
 
     ns.UpdateBlizzardVisibility()
     ns.InitializeBars()          -- Defined in Castbar.lua
-    ns.InitializeCastbarConfig() -- Defined in Config/Castbars.lua
+    if ns.InitializeCastbarConfig then
+        ns.InitializeCastbarConfig()
+    end
 
     -- Register Cast Events
     self.eventFrame = CreateFrame("Frame")

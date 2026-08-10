@@ -1,5 +1,32 @@
-local L = LibStub("AceLocale-3.0"):NewLocale("RoithiUI", "enUS", true)
+local L = LibStub("AceLocale-3.0"):NewLocale("RoithiUI", "enUS", true, true)
 if not L then return end
+
+-- Castbars
+L["Player Castbar"] = "Player Castbar"
+L["Target Castbar"] = "Target Castbar"
+L["Focus Castbar"] = "Focus Castbar"
+L["Pet Castbar"] = "Pet Castbar"
+L["Target of Target Castbar"] = "Target of Target Castbar"
+L["Focus Target Castbar"] = "Focus Target Castbar"
+L["Boss 1 Castbar"] = "Boss 1 Castbar"
+L["Boss 2 Castbar"] = "Boss 2 Castbar"
+L["Boss 3 Castbar"] = "Boss 3 Castbar"
+L["Boss 4 Castbar"] = "Boss 4 Castbar"
+L["Boss 5 Castbar"] = "Boss 5 Castbar"
+L["Show Spell Icon"] = "Show Spell Icon"
+
+-- Unit Names
+L["Player"] = "Player"
+L["Target"] = "Target"
+L["Target of Target"] = "Target of Target"
+L["Focus"] = "Focus"
+L["Focus Target"] = "Focus Target"
+L["Pet"] = "Pet"
+L["Boss 1"] = "Boss 1"
+L["Boss 2"] = "Boss 2"
+L["Boss 3"] = "Boss 3"
+L["Boss 4"] = "Boss 4"
+L["Boss 5"] = "Boss 5"
 
 -- Base English
 L["> Auras"] = "> Auras"
@@ -226,7 +253,74 @@ L["Show Only Whitelisted Buffs"] = "Show Only Whitelisted Buffs"
 L["Hides all Buffs except those explicitly added to the Spell Whitelist."] = "Hides all Buffs except those explicitly added to the Spell Whitelist."
 L["Show Only Whitelisted Debuffs"] = "Show Only Whitelisted Debuffs"
 L["Hides all Debuffs except those explicitly added to the Spell Whitelist."] = "Hides all Debuffs except those explicitly added to the Spell Whitelist."
+L["|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted Buffs' or 'Show Only Whitelisted Debuffs' is checked above."] =
+"|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted Buffs' or 'Show Only Whitelisted Debuffs' is checked above."
 L["|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID blacklisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be hidden by spell ID."] =
 "|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID blacklisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be hidden by spell ID."
 L["|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID whitelisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be whitelisted by spell ID."] =
 "|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID whitelisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be whitelisted by spell ID."
+
+-- Quick Links (castbar / boss)
+L["> Auras (Boss 1)"] = "> Auras (Boss 1)"
+L["> Boss Castbars"] = "> Boss Castbars"
+
+-- Frame & Layout sub-group
+L["Frame & Layout"] = "Frame & Layout"
+L["Scale"] = "Scale"
+L["X Position"] = "X Position"
+L["Y Position"] = "Y Position"
+L["Aura X"] = "Aura X"
+L["Aura Y"] = "Aura Y"
+
+-- Power Bar sub-group
+L["Power Bar"] = "Power Bar"
+L["Enable Power"] = "Enable Power"
+L["Power Height"] = "Power Height"
+L["Power Width"] = "Power Width"
+L["Detached"] = "Detached"
+
+-- Aura toggles
+L["Enable Auras"] = "Enable Auras"
+L["Show Only My Auras"] = "Show Only My Auras"
+
+-- Castbar colors & empower
+L["Boss Castbars"] = "Boss Castbars"
+L["Cast Color"] = "Cast Color"
+L["Channel Color"] = "Channel Color"
+L["Interrupted Color"] = "Interrupted Color"
+L["Shield Color"] = "Shield Color"
+L["Colors"] = "Colors"
+L["Empower Stage Colors"] = "Empower Stage Colors"
+L["Empower Stage 1"] = "Empower Stage 1"
+L["Empower Stage 2"] = "Empower Stage 2"
+L["Empower Stage 3"] = "Empower Stage 3"
+L["Empower Stage 4"] = "Empower Stage 4"
+L["Stage 1"] = "Stage 1"
+L["Stage 2"] = "Stage 2"
+L["Stage 3"] = "Stage 3"
+L["Stage 4"] = "Stage 4"
+
+-- Global Blacklist (Auras tab)
+L["Global Spell Blacklist"] = "Global Spell Blacklist"
+L["|cffff8800Note:|r Spells added here are hidden on ALL aura containers. Use the per-frame blacklist (inside each unit's Auras > Filters) for frame-specific overrides."] =
+"|cffff8800Note:|r Spells added here are hidden on ALL aura containers. Use the per-frame blacklist (inside each unit's Auras > Filters) for frame-specific overrides."
+L["Enter a Spell ID to globally blacklist (hide on all frames)."] = "Enter a Spell ID to globally blacklist (hide on all frames)."
+L["Globally Blacklisted Spell IDs"] = "Globally Blacklisted Spell IDs"
+L["Uncheck a Spell ID to remove it from the global blacklist."] = "Uncheck a Spell ID to remove it from the global blacklist."
+
+-- Per-frame Blacklist
+L["Enter a Spell ID to blacklist it on this frame only."] = "Enter a Spell ID to blacklist it on this frame only."
+L["Frame Blacklisted Spell IDs"] = "Frame Blacklisted Spell IDs"
+L["Uncheck a Spell ID to remove it from this frame's blacklist. Globally blacklisted spells are managed in the Auras tab."] =
+"Uncheck a Spell ID to remove it from this frame's blacklist. Globally blacklisted spells are managed in the Auras tab."
+L["|cff00ccff%d spell(s) are already hidden by the Global Blacklist|r (Auras tab). They are not shown here — manage them there."] =
+"|cff00ccff%d spell(s) are already hidden by the Global Blacklist|r (Auras tab). They are not shown here — manage them there."
+
+-- Profile Sharing (Profiles tab)
+L["Profile Sharing"] = "Profile Sharing"
+
+-- Subpower Bars (Class Power & Additional Power)
+L["Class Power"] = "Class Power"
+L["Enable Class Power"] = "Enable Class Power"
+L["Additional Power"] = "Additional Power"
+L["Enable Additional Power"] = "Enable Additional Power"

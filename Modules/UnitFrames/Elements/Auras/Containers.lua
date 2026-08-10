@@ -56,14 +56,18 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
     local showBuffs = db.showBuffs ~= false
     local showDebuffs = db.showDebuffs ~= false
 
-    local size = isDebuffs and (tonumber(db.debuffSize) or tonumber(db.auraSize) or 28)
-                or (tonumber(db.buffSize) or tonumber(db.auraSize) or 28)
-    local spacing = isDebuffs and (tonumber(db.debuffSpacing) or tonumber(db.auraSpacing) or 4)
-                   or (tonumber(db.buffSpacing) or tonumber(db.auraSpacing) or 4)
-    local maxCount = isDebuffs and (tonumber(db.debuffMaxAuras) or tonumber(db.maxAuras) or 16)
-                 or (tonumber(db.buffMaxAuras) or tonumber(db.maxAuras) or 16)
-    local perRow = isDebuffs and (tonumber(db.debuffsPerRow) or tonumber(db.aurasPerRow) or 8)
-                or (tonumber(db.buffsPerRow) or tonumber(db.aurasPerRow) or 8)
+    local size = isCombined and (tonumber(db.auraSize) or 28)
+                or (isDebuffs and (tonumber(db.debuffSize) or tonumber(db.auraSize) or 28)
+                or (tonumber(db.buffSize) or tonumber(db.auraSize) or 28))
+    local spacing = isCombined and (tonumber(db.auraSpacing) or 4)
+                   or (isDebuffs and (tonumber(db.debuffSpacing) or tonumber(db.auraSpacing) or 4)
+                   or (tonumber(db.buffSpacing) or tonumber(db.auraSpacing) or 4))
+    local maxCount = isCombined and (tonumber(db.maxAuras) or 16)
+                 or (isDebuffs and (tonumber(db.debuffMaxAuras) or tonumber(db.maxAuras) or 16)
+                 or (tonumber(db.buffMaxAuras) or tonumber(db.maxAuras) or 16))
+    local perRow = isCombined and (tonumber(db.aurasPerRow) or 8)
+                or (isDebuffs and (tonumber(db.debuffsPerRow) or tonumber(db.aurasPerRow) or 8)
+                or (tonumber(db.buffsPerRow) or tonumber(db.aurasPerRow) or 8))
     if perRow < 1 then perRow = 8 end
     if maxCount and maxCount > 0 and perRow > maxCount then perRow = maxCount end
 
@@ -352,7 +356,7 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
     if isDetached then
         local savedPt = (containerSuffix == "Buffs" and db.buffScreenPoint)
                      or (containerSuffix == "Debuffs" and db.debuffScreenPoint)
-                     or (containerSuffix == "Combined" and db.auraScreenPoint)
+                     or (containerSuffix == "Combined" and db.auraScreenPoint) or "TOPLEFT"
         local px = (containerSuffix == "Buffs" and db.buffScreenX)
                 or (containerSuffix == "Debuffs" and db.debuffScreenX)
                 or (containerSuffix == "Combined" and db.auraScreenX) or 0
@@ -360,47 +364,13 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
                 or (containerSuffix == "Debuffs" and db.debuffScreenY)
                 or (containerSuffix == "Combined" and db.auraScreenY) or 0
 
-        local targetAnchor = "TOPLEFT"
-        if growDir == "RIGHT_UP" or growDir == "UP" or growDir == "UP_RIGHT" or growDir == "BOTTOM_TO_TOP" then
-            targetAnchor = "BOTTOMLEFT"
-        elseif growDir == "LEFT_DOWN" or growDir == "DOWN_LEFT" or growDir == "LEFT" then
-            targetAnchor = "TOPRIGHT"
-        elseif growDir == "LEFT_UP" or growDir == "UP_LEFT" then
-            targetAnchor = "BOTTOMRIGHT"
-        elseif growDir == "CENTER_HORIZONTAL_UP" then
-            targetAnchor = "BOTTOM"
-        elseif growDir == "CENTER_HORIZONTAL_DOWN" or isCenterHoriz then
-            targetAnchor = "TOP"
-        elseif growDir == "CENTER_VERTICAL_LEFT" then
-            targetAnchor = "RIGHT"
-        elseif growDir == "CENTER_VERTICAL_RIGHT" or isCenterVert then
-            targetAnchor = "LEFT"
-        end
-
-        local pt = savedPt or targetAnchor
-        if not savedPt or savedPt ~= targetAnchor then
-            local ConvertAnchorPosition = ns.Auras and ns.Auras.ConvertAnchorPosition
-            if ConvertAnchorPosition then
-                pt, px, py = ConvertAnchorPosition(savedPt, px, py, targetAnchor, calcWidth, calcHeight)
-            else
-                pt = targetAnchor
-            end
-            if containerSuffix == "Buffs" then
-                db.buffScreenPoint = pt; db.buffScreenX = px; db.buffScreenY = py
-            elseif containerSuffix == "Debuffs" then
-                db.debuffScreenPoint = pt; db.debuffScreenX = px; db.debuffScreenY = py
-            else
-                db.auraScreenPoint = pt; db.auraScreenX = px; db.auraScreenY = py
-            end
-        end
-
-        local isSec = issecretvalue and (issecretvalue(pt) or issecretvalue(px) or issecretvalue(py))
+        local isSec = issecretvalue and (issecretvalue(savedPt) or issecretvalue(px) or issecretvalue(py))
         if not isSec then
-            local ok = pcall(container.SetPoint, container, pt, UIParent, pt, px, py)
+            local ok = pcall(container.SetPoint, container, savedPt, UIParent, savedPt, px, py)
             if ok then
                 hasSavedPos = true
-                container.roithiSavedPoint = pt
-                container.roithiSavedRelPoint = pt
+                container.roithiSavedPoint = savedPt
+                container.roithiSavedRelPoint = savedPt
                 container.roithiSavedX = px
                 container.roithiSavedY = py
             end
@@ -412,13 +382,13 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
                         or isBuffs and db.buffAnchor
                         or db.auraAnchor or (unit == "target" and "TOPLEFT" or "BOTTOMLEFT")
 
-        local userX = isDebuffs and (tonumber(db.debuffXOffset) or tonumber(db.auraXOffset) or tonumber(db.auraX) or 0)
-                   or isBuffs and (tonumber(db.buffXOffset) or tonumber(db.auraXOffset) or tonumber(db.auraX) or 0)
-                   or (tonumber(db.auraXOffset) or tonumber(db.auraX) or 0)
+        local userX = isCombined and (tonumber(db.auraX) or tonumber(db.auraXOffset) or 0)
+                   or (isDebuffs and (tonumber(db.debuffX) or tonumber(db.debuffXOffset) or tonumber(db.auraX) or 0)
+                   or (tonumber(db.buffX) or tonumber(db.buffXOffset) or tonumber(db.auraX) or 0))
 
-        local userY = isDebuffs and (tonumber(db.debuffYOffset) or tonumber(db.auraYOffset) or tonumber(db.auraY) or (unit == "target" and -10 or 10))
-                   or isBuffs and (tonumber(db.buffYOffset) or tonumber(db.auraYOffset) or tonumber(db.auraY) or (unit == "target" and -45 or 10))
-                   or (tonumber(db.auraYOffset) or tonumber(db.auraY) or (unit == "target" and -10 or 10))
+        local userY = isCombined and (tonumber(db.auraY) or tonumber(db.auraYOffset) or 0)
+                   or (isDebuffs and (tonumber(db.debuffY) or tonumber(db.debuffYOffset) or tonumber(db.auraY) or (unit == "target" and -10 or 10))
+                   or (tonumber(db.buffY) or tonumber(db.buffYOffset) or tonumber(db.auraY) or (unit == "target" and -45 or 10)))
 
         local anchorFrame = parent
 
