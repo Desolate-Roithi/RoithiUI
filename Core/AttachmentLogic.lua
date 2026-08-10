@@ -35,9 +35,9 @@ ns.AttachmentLogic = AL
 AL.BarHierarchies = {
     ["Power"] = { "UnitFrame" },
     ["ClassPower"] = { "Power" },                                                -- Falls back to UnitFrame if Power detached
-    ["AdditionalPower"] = { "UnitFrame", { "Power", "ClassPower" } },            -- Group requires both Attached
-    ["Castbar"] = { "UnitFrame", "Power", "ClassPower", "AdditionalPower" }, -- Priority: Add -> Class -> Power -> UF (stays attached even if parent detached)
-    ["Auras"] = { "UnitFrame" },                                                  -- Auras always attach to UnitFrame (Satellite)
+    ["AdditionalPower"] = { "UnitFrame", "Power", "ClassPower" },                -- Priority: ClassPower -> Power -> UnitFrame (prevents overlap)
+    ["Castbar"] = { "UnitFrame", "Power", "ClassPower", "AdditionalPower" },     -- Checks AddPower -> ClassPower -> Power -> UnitFrame
+    ["Auras"] = { "UnitFrame" },
     ["Buffs"] = { "UnitFrame" },
     ["Debuffs"] = { "UnitFrame" },
     ["Combined"] = { "UnitFrame" },
@@ -220,9 +220,11 @@ function AL:GetValidAnchor(unit, frameType)
             return uFrame
         else
             -- [SINGLE ENTRY] (e.g. "Power")
-            -- LOOSE: Valid even if parent is DETACHED.
-            -- User Rule: "Even if Power is detached it should stay with power" (for ClassPower)
-            if self:IsActive(unit, entry) then
+            -- ClassPower follows Power even if Power is detached.
+            -- AdditionalPower & Castbar require the target entry to be active AND attached (not detached).
+            local isDetached = self:IsDetached(unit, entry)
+            local isParentValid = not isDetached or (frameType == "ClassPower")
+            if isParentValid and self:IsActive(unit, entry) then
                 local elementKey = ElementMap[entry]
                 if frameType == "Castbar" and entry == "AdditionalPower" then
                     -- Special case: Castbar anchoring to AdditionalPower frame

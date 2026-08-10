@@ -4,6 +4,7 @@ local RoithiUI = _G.RoithiUI
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
 local AL = ns.AttachmentLogic
 local SafeNum = ns.SafeNum
+local LEM = LibStub("LibEditModeOverride-1.0", true) or LibStub("LibEditMode-1.0", true)
 
 function ns.BuildUnitAndCastbarOptions(options)
     -- Populate Unit Frame Options
@@ -1812,9 +1813,26 @@ function ns.RefreshUnitFrame(unit)
                 if UF.UpdateFrameFromSettings then
                     UF:UpdateFrameFromSettings(bUnit)
                 end
+                local uFrame = UF.units and UF.units[bUnit]
+                if uFrame and LEM and LEM.RefreshFrame then
+                    LEM:RefreshFrame(uFrame)
+                end
             end
-        elseif UF.UpdateFrameFromSettings then
-            UF:UpdateFrameFromSettings(unit)
+        else
+            if UF.UpdateFrameFromSettings then
+                UF:UpdateFrameFromSettings(unit)
+            end
+            local uFrame = UF.units and UF.units[unit]
+            if uFrame and LEM and LEM.RefreshFrame then
+                LEM:RefreshFrame(uFrame)
+            end
+            local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
+            if cbDB and not cbDB.detached and ns.bars and ns.bars[unit] then
+                local castbarDB = RoithiUI.db.profile.Castbar[unit]
+                if castbarDB and ns.SetCastbarAttachment then
+                    ns.SetCastbarAttachment(unit, true)
+                end
+            end
         end
     end
 end
@@ -1845,7 +1863,7 @@ ns.BuildUnitAndCastbarOptions(dummyContainer)
 -- Single Source of Truth - Moved from Config/LEMConfig/
 -- ============================================================================
 
-local LEM = LibStub("LibEditMode-Roithi", true)
+LEM = LibStub("LibEditMode-Roithi", true) or LEM
 
 local function GetUnitDB(unit)
     if not RoithiUI.db.profile.UnitFrames[unit] then RoithiUI.db.profile.UnitFrames[unit] = {} end
@@ -1875,19 +1893,6 @@ local function GetSettingsForPower(unit)
             end,
         },
         {
-            name = "Height",
-            kind = LEM.SettingType.Slider,
-            default = 10,
-            minValue = 2,
-            maxValue = 50,
-            valueStep = 1,
-            get = function() return GetUnitDB(unit).powerHeight or 10 end,
-            set = function(_, value)
-                GetUnitDB(unit).powerHeight = value
-                UpdateFrameFromSettings(unit)
-            end,
-        },
-        {
             name = "Detached",
             kind = LEM.SettingType.Checkbox,
             default = false,
@@ -1911,6 +1916,34 @@ local function GetSettingsForPower(unit)
                 AL = ns.AttachmentLogic
                 if AL then AL:GlobalLayoutRefresh(unit) end
             end,
+        },
+        {
+            name = "Height",
+            kind = LEM.SettingType.Slider,
+            default = 10,
+            minValue = 2,
+            maxValue = 50,
+            valueStep = 1,
+            get = function() return GetUnitDB(unit).powerHeight or 10 end,
+            set = function(_, value)
+                GetUnitDB(unit).powerHeight = value
+                UpdateFrameFromSettings(unit)
+            end,
+        },
+        {
+            name = "Width",
+            kind = LEM.SettingType.Slider,
+            default = 200,
+            minValue = 50,
+            maxValue = 400,
+            valueStep = 1,
+            get = function() return math.floor((GetUnitDB(unit).powerWidth or 200) + 0.5) end,
+            set = function(_, value)
+                GetUnitDB(unit).powerWidth = math.floor(value + 0.5)
+                UpdateFrameFromSettings(unit)
+            end,
+            formatter = function(v) return string.format("%.0f", v) end,
+            hidden = function() return not GetUnitDB(unit).powerDetached end,
         },
         {
             name = "X Position",
@@ -1950,21 +1983,6 @@ local function GetSettingsForPower(unit)
             formatter = function(v) return string.format("%.1f", v) end,
             hidden = function() return not GetUnitDB(unit).powerDetached end,
         },
-        {
-            name = "Width",
-            kind = LEM.SettingType.Slider,
-            default = 200,
-            minValue = 50,
-            maxValue = 400,
-            valueStep = 1,
-            get = function() return math.floor((GetUnitDB(unit).powerWidth or 200) + 0.5) end,
-            set = function(_, value)
-                GetUnitDB(unit).powerWidth = math.floor(value + 0.5)
-                UpdateFrameFromSettings(unit)
-            end,
-            formatter = function(v) return string.format("%.0f", v) end,
-            hidden = function() return not GetUnitDB(unit).powerDetached end,
-        },
     }
 end
 
@@ -1981,19 +1999,6 @@ local function GetSettingsForClassPower(unit)
                 UpdateFrameFromSettings(unit)
                 AL = ns.AttachmentLogic
                 if AL then AL:GlobalLayoutRefresh(unit) end
-            end,
-        },
-        {
-            name = "Height",
-            kind = LEM.SettingType.Slider,
-            default = 10,
-            minValue = 2,
-            maxValue = 50,
-            valueStep = 1,
-            get = function() return GetUnitDB(unit).classPowerHeight or 10 end,
-            set = function(_, value)
-                GetUnitDB(unit).classPowerHeight = value
-                UpdateFrameFromSettings(unit)
             end,
         },
         {
@@ -2023,6 +2028,34 @@ local function GetSettingsForClassPower(unit)
                 AL = ns.AttachmentLogic
                 if AL then AL:GlobalLayoutRefresh(unit) end
             end,
+        },
+        {
+            name = "Height",
+            kind = LEM.SettingType.Slider,
+            default = 10,
+            minValue = 2,
+            maxValue = 50,
+            valueStep = 1,
+            get = function() return GetUnitDB(unit).classPowerHeight or 10 end,
+            set = function(_, value)
+                GetUnitDB(unit).classPowerHeight = value
+                UpdateFrameFromSettings(unit)
+            end,
+        },
+        {
+            name = "Width",
+            kind = LEM.SettingType.Slider,
+            default = 200,
+            minValue = 50,
+            maxValue = 400,
+            valueStep = 1,
+            get = function() return math.floor((GetUnitDB(unit).classPowerWidth or 200) + 0.5) end,
+            set = function(_, value)
+                GetUnitDB(unit).classPowerWidth = math.floor(value + 0.5)
+                UpdateFrameFromSettings(unit)
+            end,
+            formatter = function(v) return string.format("%.0f", v) end,
+            hidden = function() return not GetUnitDB(unit).classPowerDetached end,
         },
         {
             name = "X Position",
@@ -2062,21 +2095,6 @@ local function GetSettingsForClassPower(unit)
             formatter = function(v) return string.format("%.1f", v) end,
             hidden = function() return not GetUnitDB(unit).classPowerDetached end,
         },
-        {
-            name = "Width",
-            kind = LEM.SettingType.Slider,
-            default = 200,
-            minValue = 50,
-            maxValue = 400,
-            valueStep = 1,
-            get = function() return math.floor((GetUnitDB(unit).classPowerWidth or 200) + 0.5) end,
-            set = function(_, value)
-                GetUnitDB(unit).classPowerWidth = math.floor(value + 0.5)
-                UpdateFrameFromSettings(unit)
-            end,
-            formatter = function(v) return string.format("%.0f", v) end,
-            hidden = function() return not GetUnitDB(unit).classPowerDetached end,
-        },
     }
 end
 
@@ -2097,19 +2115,6 @@ local function GetSettingsForAdditionalPower(unit)
                         ns.SetCastbarAttachment(unit, true)
                     end
                 end
-            end,
-        },
-        {
-            name = "Height",
-            kind = LEM.SettingType.Slider,
-            default = 10,
-            minValue = 2,
-            maxValue = 50,
-            valueStep = 1,
-            get = function() return GetUnitDB(unit).additionalPowerHeight or 10 end,
-            set = function(_, value)
-                GetUnitDB(unit).additionalPowerHeight = value
-                UpdateFrameFromSettings(unit)
             end,
         },
         {
@@ -2138,6 +2143,34 @@ local function GetSettingsForAdditionalPower(unit)
                 AL = ns.AttachmentLogic
                 if AL then AL:GlobalLayoutRefresh(unit) end
             end,
+        },
+        {
+            name = "Height",
+            kind = LEM.SettingType.Slider,
+            default = 10,
+            minValue = 2,
+            maxValue = 50,
+            valueStep = 1,
+            get = function() return GetUnitDB(unit).additionalPowerHeight or 10 end,
+            set = function(_, value)
+                GetUnitDB(unit).additionalPowerHeight = value
+                UpdateFrameFromSettings(unit)
+            end,
+        },
+        {
+            name = "Width",
+            kind = LEM.SettingType.Slider,
+            default = 200,
+            minValue = 50,
+            maxValue = 400,
+            valueStep = 1,
+            get = function() return math.floor((GetUnitDB(unit).additionalPowerWidth or 200) + 0.5) end,
+            set = function(_, value)
+                GetUnitDB(unit).additionalPowerWidth = math.floor(value + 0.5)
+                UpdateFrameFromSettings(unit)
+            end,
+            formatter = function(v) return string.format("%.0f", v) end,
+            hidden = function() return not GetUnitDB(unit).additionalPowerDetached end,
         },
         {
             name = "X Position",
@@ -2175,21 +2208,6 @@ local function GetSettingsForAdditionalPower(unit)
                 if frame and frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
             end,
             formatter = function(v) return string.format("%.1f", v) end,
-            hidden = function() return not GetUnitDB(unit).additionalPowerDetached end,
-        },
-        {
-            name = "Width",
-            kind = LEM.SettingType.Slider,
-            default = 200,
-            minValue = 50,
-            maxValue = 400,
-            valueStep = 1,
-            get = function() return math.floor((GetUnitDB(unit).additionalPowerWidth or 200) + 0.5) end,
-            set = function(_, value)
-                GetUnitDB(unit).additionalPowerWidth = math.floor(value + 0.5)
-                UpdateFrameFromSettings(unit)
-            end,
-            formatter = function(v) return string.format("%.0f", v) end,
             hidden = function() return not GetUnitDB(unit).additionalPowerDetached end,
         },
     }

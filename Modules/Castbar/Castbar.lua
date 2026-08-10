@@ -56,9 +56,6 @@ function ns.CreateCastBar(unit)
     bar.Latency = latency
 
     bar.unit = unit; bar:Hide()
-    if bar.SetOnUpdateMode then
-        bar:SetOnUpdateMode("RunWhenVisible")
-    end
     bar:SetClampedToScreen(true)
     return bar
 end
@@ -143,9 +140,38 @@ end
 -- 2. Update Logic
 -- ----------------------------------------------------------------------------
 
+-- ----------------------------------------------------------------------------
+-- 2. Update Logic (Matching castbar_example.lua)
+-- ----------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------
+-- 2. Update Logic (Pure Combat-Safe durationObj Engine)
+-- ----------------------------------------------------------------------------
+local function OnCastbarUpdate(self, elapsed)
+    if self.isInEditMode or self.isInterrupted then return end
+    if not self.casting and not self.channeling then return end
+    if not self.durationObj then return end
+
+    local total = self.durationObj:GetTotalDuration()
+    local rem = self.durationObj:GetRemainingDuration()
+
+    if total and total > 0 then
+        self.maxValue = total
+        self.value = self.channeling and rem or (total - rem)
+
+        self:SetMinMaxValues(0, total)
+        self:SetValue(self.value)
+
+        if self.TimeFS then
+            self.TimeFS:SetText(FormatDuration(rem))
+        end
+    end
+end
+
 function ns.UpdateCast(bar, unitOverride)
-    local unit = unitOverride or bar.unit
-    local db = RoithiUI.db.profile.Castbar[bar.unit] -- Always use the bar's own DB for sizing/config
+    local unit = unitOverride or (bar and bar.unit)
+    if not bar or not unit then return end
+
+    local db = RoithiUI.db.profile.Castbar[bar.unit]
     if not db or not db.enabled then
         bar:Hide(); bar:SetScript("OnUpdate", nil)
         return
@@ -153,98 +179,71 @@ function ns.UpdateCast(bar, unitOverride)
 
     if bar.isInEditMode then return end
 
-    -- ------------------------------------------------------------------------
-    -- A. Determine State & Fetch Duration Object
-    -- ------------------------------------------------------------------------
-    local name, text, texture, notInterruptible
+    local name, text, texture, notInterruptible, castID
     local durationObj
-    local state = "cast" -- cast | channel | empowered
+    local isChannel = false
+    local state = "cast"
 
-    -- 1. Check Channel / Empowered
-    local chName, chText, chTexture, chStartTime, chEndTime, _, chNotInt, _, isEmpowered, numEmpowerStages = UnitChannelInfo(unit)
-
+    -- Check Channel / Empowered
+    local chName, chText, chTexture, _, _, _, chNotInt, _, isEmpowered, numEmpowerStages = UnitChannelInfo(unit)
     if chName then
         name = chName
         text = chText
         texture = chTexture
         notInterruptible = chNotInt
-        bar.casting = false
-        bar.channeling = true
-        bar.startTime = chStartTime
-        bar.endTime = chEndTime
-
-        -- Empowered Check
+        isChannel = true
+        state = (isEmpowered or (numEmpowerStages and numEmpowerStages > 0)) and "empowered" or "channel"
         if isEmpowered or (numEmpowerStages and numEmpowerStages > 0) then
-            state = "empowered"
-            if UnitEmpoweredChannelDuration then
-                durationObj = UnitEmpoweredChannelDuration(unit, true)
-            end
+            durationObj = UnitEmpoweredChannelDuration and UnitEmpoweredChannelDuration(unit, true)
         else
-            state = "channel"
-            if UnitChannelDuration then
-                durationObj = UnitChannelDuration(unit)
-            end
+            durationObj = UnitChannelDuration and UnitChannelDuration(unit)
         end
     else
-        -- 2. Check Standard Cast
-        local cName, cText, cTexture, cStartTime, cEndTime, _, _, cNotInt, _ = UnitCastingInfo(unit)
+        local cName, cText, cTexture, _, _, _, cID, cNotInt = UnitCastingInfo(unit)
         if cName then
-            state = "cast"
             name = cName
             text = cText
             texture = cTexture
+            castID = cID
             notInterruptible = cNotInt
-            bar.casting = true
-            bar.channeling = false
-            bar.startTime = cStartTime
-            bar.endTime = cEndTime
-
-            if UnitCastingDuration then
-                durationObj = UnitCastingDuration(unit)
-            end
+            isChannel = false
+            state = "cast"
+            durationObj = UnitCastingDuration and UnitCastingDuration(unit)
         end
     end
 
-    -- If no active cast (or API missing), hide
     if not name or not durationObj then
         if bar.isEmpower and ns.StopEmpower then ns.StopEmpower(bar) end
-        if not bar.isInterrupted then
-            bar:Hide(); bar:SetScript("OnUpdate", nil)
+        if not bar.isInterrupted and not bar.isInEditMode then
+            bar.casting = false
+            bar.channeling = false
+            bar.durationObj = nil
+            bar.castID = nil
+            bar:Hide()
+            bar:SetScript("OnUpdate", nil)
         end
         return
     end
 
-    -- Clear Interrupt State
+    local totalSec = durationObj:GetTotalDuration()
+    local remSec = durationObj:GetRemainingDuration()
+    if not totalSec or totalSec <= 0 then totalSec = 1 end
+
+    local curVal = isChannel and remSec or (totalSec - remSec)
+    if curVal < 0 then curVal = 0 end
+    if curVal > totalSec then curVal = totalSec end
+
     bar.isInterrupted = false
+    bar.casting = not isChannel
+    bar.channeling = isChannel
+    bar.value = curVal
+    bar.maxValue = totalSec
+    bar.durationObj = durationObj
+    bar.castID = castID
 
-    -- ------------------------------------------------------------------------
-    -- B. Visual Setup (Colors, Icon, Spark)
-    -- ------------------------------------------------------------------------
+    -- Visual Setup
     local colors = db.colors
-    local c = colors[state] or colors.cast
-
-    local safeNotInt = false
-    local isSecretNotInt = issecretvalue and issecretvalue(notInterruptible)
-    
-    -- Safely check basic boolean if not secret
-    if not isSecretNotInt then
-        pcall(function() if notInterruptible then safeNotInt = true end end)
-    end
-
-    local evalColor = nil
-
-    if isSecretNotInt and colors.shield and C_CurveUtil and C_CurveUtil.EvaluateColorFromBoolean and CreateColor then
-        local trueColor = CreateColor(colors.shield[1], colors.shield[2], colors.shield[3], colors.shield[4] or 1)
-        local falseColor = CreateColor(c[1], c[2], c[3], c[4] or 1)
-        evalColor = C_CurveUtil.EvaluateColorFromBoolean(notInterruptible, trueColor, falseColor)
-        
-        -- Spark visibility based on secret
-    elseif safeNotInt and colors.shield then
-        c = colors.shield
-        if bar.Spark then bar.Spark:Hide() end
-    else
-        if bar.Spark then bar.Spark:Show() end
-    end
+    local c = (notInterruptible and colors.shield) or colors[state] or colors.cast
 
     if db.showIcon then
         bar.Icon:Show(); bar.Icon:SetTexture(texture)
@@ -252,137 +251,50 @@ function ns.UpdateCast(bar, unitOverride)
         bar.Icon:Hide()
     end
 
-
-
-    -- Feature: Cap cast name length at 22 (Safe handling for Secret values)
-    local isSecret = (issecretvalue and issecretvalue(text)) or (canaccessvalue and not canaccessvalue(text))
-    if text and not isSecret then
-        if string.len(text) > 22 then
-            text = string.sub(text, 1, 22) .. "..."
-        end
+    if text and string.len(text) > 22 then
+        text = string.sub(text, 1, 22) .. "..."
     end
-    bar.Text:SetText(text)
+    if bar.Text then bar.Text:SetText(text) end
 
-
-    -- Store for Latency/OnUpdate
-    bar.durationObj = durationObj
-
-    -- Store state for OnUpdate logic evaluating native value
-    bar.castState = state
-
-    -- ------------------------------------------------------------------------
-    -- D. Mode Specific Logic
-    -- ------------------------------------------------------------------------
-    if state == "empowered" then
-        bar:SetReverseFill(false)
-
-        -- Empower Setup
-        local needSetup = true
-        if bar.isEmpower then needSetup = false end
-
-        if needSetup then
-            ns.SetupEmpower(bar) -- Will use UnitEmpoweredStageDurations
-        end
-
-        bar:SetStatusBarColor(0.5, 0.5, 0.5, 1)
-        if bar.Background then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
-    elseif state == "channel" then
-        if bar.isEmpower then ns.StopEmpower(bar) end
+    if state == "channel" then
         bar:SetReverseFill(true)
         bar:SetStatusBarColor(0, 0, 0, 1)
         if bar.Background then bar.Background:SetColorTexture(c[1], c[2], c[3], c[4]) end
     else
-        -- Standard
-        if bar.isEmpower then ns.StopEmpower(bar) end
         bar:SetReverseFill(false)
-        if evalColor then
-            -- Note: SetStatusBarColor accepts ColorMixin objects in 10.0+
-            bar:SetStatusBarColor(evalColor:GetRGBA())
-        else
-            bar:SetStatusBarColor(c[1], c[2], c[3], c[4])
-        end
+        bar:SetStatusBarColor(c[1], c[2], c[3], c[4])
         if bar.Background then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
     end
 
-    -- ------------------------------------------------------------------------
-    -- E. Latency (Requires TotalDuration)
-    -- ------------------------------------------------------------------------
+    -- Latency Ping Bar
     if bar.Latency then
-        local showLatency = false
-
-        -- Check if safe to calculate using Native Object Methods
-        -- CRITICAL: Check HasSecretValues() FIRST. If true, IsZero() might return a Secret<bool> which crashes on 'not'.
-        if not durationObj:HasSecretValues() and not durationObj:IsZero() then
-            local totalSec = durationObj:GetTotalDuration()
-            local latencySec = GetSafeLatency()
-
-            -- We trust totalSec is a number because HasSecretValues() is false
-            if totalSec > 0 then
-                local width = bar:GetWidth() * (latencySec / totalSec)
-                if width > bar:GetWidth() then width = bar:GetWidth() end
-
-                bar.Latency:SetWidth(width)
-                bar.Latency:SetHeight(bar:GetHeight())
-                bar.Latency:ClearAllPoints()
-                if state == "channel" then
-                    bar.Latency:SetPoint("LEFT", bar, "LEFT", 0, 0)
-                else
-                    bar.Latency:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
-                end
-                showLatency = true
+        local latencySec = GetSafeLatency()
+        if totalSec > 0 and latencySec > 0 then
+            local width = bar:GetWidth() * (latencySec / totalSec)
+            if width > bar:GetWidth() then width = bar:GetWidth() end
+            bar.Latency:SetWidth(width)
+            bar.Latency:SetHeight(bar:GetHeight())
+            bar.Latency:ClearAllPoints()
+            if isChannel then
+                bar.Latency:SetPoint("LEFT", bar, "LEFT", 0, 0)
+            else
+                bar.Latency:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
             end
-        end
-
-        if showLatency then
             bar.Latency:Show()
         else
             bar.Latency:Hide()
         end
     end
 
+    bar:SetMinMaxValues(0, totalSec)
+    bar:SetValue(curVal)
+
+    if bar.TimeFS then
+        bar.TimeFS:SetText(FormatDuration(remSec))
+    end
+
+    bar:SetScript("OnUpdate", OnCastbarUpdate)
     bar:Show()
-
-    -- ------------------------------------------------------------------------
-    -- F. OnUpdate (Text Only)
-    -- ------------------------------------------------------------------------
-    bar:SetScript("OnUpdate", function(self, elapsed)
-        if self.isEmpower and ns.OnEmpowerUpdate then
-            ns.OnEmpowerUpdate(self)
-            return
-        end
-
-        local now = GetTime() * 1000
-        if self.casting and self.endTime and self.startTime and self.endTime > self.startTime then
-            local dur = (self.endTime - self.startTime) / 1000
-            local cur = (now - self.startTime) / 1000
-            if cur > dur then cur = dur end
-            self:SetMinMaxValues(0, dur)
-            self:SetValue(cur)
-
-            local rem = dur - cur
-            if rem < 0 then rem = 0 end
-            if self.TimeFS then
-                self.TimeFS:SetText(FormatDuration(rem))
-            end
-        elseif self.channeling and self.endTime and self.startTime and self.endTime > self.startTime then
-            local dur = (self.endTime - self.startTime) / 1000
-            local rem = (self.endTime - now) / 1000
-            if rem < 0 then rem = 0 end
-            self:SetMinMaxValues(0, dur)
-            self:SetValue(rem)
-
-            if self.TimeFS then
-                self.TimeFS:SetText(FormatDuration(rem))
-            end
-        elseif self.TimeFS and self.durationObj then
-            local textVal = ""
-            if self.durationObj.GetRemainingDuration then
-                local rem = self.durationObj:GetRemainingDuration()
-                textVal = FormatDuration(rem)
-            end
-            self.TimeFS:SetText(textVal)
-        end
-    end)
 end
 
 function ns.HandleInterrupt(bar)
@@ -403,13 +315,6 @@ function ns.HandleInterrupt(bar)
     bar.isInterrupted = true; bar:SetScript("OnUpdate", nil)
     local frozenVal = bar:GetValue()
     bar:SetValue(frozenVal) -- Explicitly freeze visual state
-
-    -- 3. FIX CRASH: Stop Native Animation Safely (12.0)
-    if bar.SetTimerDuration then
-        -- Use pcall to prevent crashes if API is strict about arguments
-        -- Pass 0 instead of nil if that helps, or just swallow the error
-        pcall(bar.SetTimerDuration, bar, 0)
-    end
 
     -- 4. Vanish after 1 second
     C_Timer.After(1.0, function()

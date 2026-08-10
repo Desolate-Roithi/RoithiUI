@@ -13,6 +13,7 @@ end
 local UpdateBar
 
 local function UpdateCastbar(unit)
+    if UpdateBar then UpdateBar(unit) end
     if ns.UpdateCast and ns.bars and ns.bars[unit] then
         ns.UpdateCast(ns.bars[unit])
     end
@@ -455,7 +456,8 @@ function UpdateBar(unit)
 
     local finalWidth = db.width or 200
     local finalHeight = db.height or 20
-    local iconSize = finalHeight * (db.iconScale or 1.0)
+    local iconScale = db.iconScale or 1.0
+    local iconSize = finalHeight * iconScale
 
     if not db.detached then
         local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
@@ -463,7 +465,7 @@ function UpdateBar(unit)
         local uFrame = UF and UF.units and UF.units[unit]
         if uFrame then
             finalWidth = uFrame:GetWidth()
-            if db.showIcon then
+            if db.showIcon ~= false then
                 finalWidth = finalWidth - iconSize
                 if finalWidth < 1 then finalWidth = 1 end
             end
@@ -479,16 +481,31 @@ function UpdateBar(unit)
 
     bar:SetSize(finalWidth, finalHeight)
 
-    if db.showIcon and bar.Icon then
+    if db.showIcon ~= false and bar.Icon then
         bar.Icon:Show()
         bar.Icon:SetSize(iconSize, iconSize)
         if bar.isInEditMode then bar.Icon:SetTexture(136243) end
     elseif bar.Icon then
         bar.Icon:Hide()
     end
+
     if bar.Spark then bar.Spark:SetSize(20, finalHeight * 2.2) end
-    if bar.Text and ns.STANDARD_TEXT_FONT then
-        bar.Text:SetFont(ns.STANDARD_TEXT_FONT, db.fontSize or 12, "OUTLINE")
+
+    -- Real-time Font Update
+    local LSM = LibStub("LibSharedMedia-3.0")
+    local general = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General
+    local font = (LSM and LSM:Fetch("font", (general and general.font) or "Friz Quadrata TT")) or [[Fonts\FRIZQT__.TTF]]
+    local fontSize = db.fontSize or 12
+    if bar.Text then bar.Text:SetFont(font, fontSize, "OUTLINE") end
+    if bar.TimeFS then bar.TimeFS:SetFont(font, fontSize, "OUTLINE") end
+
+    -- Real-time Edit Mode Color & Preview Update
+    if bar.isInEditMode then
+        local c = db.colors and db.colors.cast or { 1, 1, 0, 1 }
+        bar:SetStatusBarColor(c[1], c[2], c[3], c[4] or 1)
+        if LEM and LEM.RefreshFrame then
+            LEM:RefreshFrame(bar)
+        end
     end
 end
 

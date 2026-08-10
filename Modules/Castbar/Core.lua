@@ -293,7 +293,13 @@ function Castbar:OnEnable()
                 if event == "UNIT_SPELLCAST_INTERRUPTED" then
                     ns.HandleInterrupt(targetBar)
                 elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
+                    local _, castGUID = ...
+                    if targetBar.castID and castGUID and targetBar.castID ~= castGUID then
+                        return
+                    end
                     if not targetBar.isInterrupted and not targetBar.isInEditMode then
+                        targetBar.casting = false
+                        targetBar.channeling = false
                         targetBar:Hide(); targetBar:SetScript("OnUpdate", nil)
                     end
                 else

@@ -3,6 +3,7 @@ if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
 local LSM = LibStub("LibSharedMedia-3.0")
+local LEM = LibStub("LibEditModeOverride-1.0", true) or LibStub("LibEditMode-1.0", true)
 
 local function GetLSMKeys(mediaType)
     local list = LSM:List(mediaType)
@@ -58,7 +59,10 @@ function ns.GetEncounterBarOptions()
                                     local db = RoithiUI.db.profile.EncounterResource
                                     if db then db.width = v end
                                     local bar = _G.RoithiEncounterResource
-                                    if bar then bar:SetWidth(v) end
+                                    if bar then
+                                        bar:SetWidth(v)
+                                        if LEM and LEM.RefreshFrame then LEM:RefreshFrame(bar) end
+                                    end
                                 end,
                             },
                             height = {
@@ -71,7 +75,10 @@ function ns.GetEncounterBarOptions()
                                     local db = RoithiUI.db.profile.EncounterResource
                                     if db then db.height = v end
                                     local bar = _G.RoithiEncounterResource
-                                    if bar then bar:SetHeight(v) end
+                                    if bar then
+                                        bar:SetHeight(v)
+                                        if LEM and LEM.RefreshFrame then LEM:RefreshFrame(bar) end
+                                    end
                                 end,
                             },
                         },
@@ -195,7 +202,7 @@ end
 -- Single Source of Truth - Moved from Config/LEMConfig/
 -- ============================================================================
 
-local LEM = LibStub("LibEditMode-Roithi", true)
+LEM = LibStub("LibEditMode-Roithi", true) or LEM
 local LibRoithi = LibStub("LibRoithi-1.0", true)
 
 local function GetEncounterDB()
