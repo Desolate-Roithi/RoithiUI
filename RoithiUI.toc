@@ -1,6 +1,6 @@
-## Interface: 120007
+## Interface: 120100, 120007
 ## Title: RoithiUI
-## Notes: Modular UI suite for Patch 12.0
+## Notes: Modular UI suite for Patch 12.1
 ## Author: Roithi
 ## Version: @project-version@
 ## SavedVariables: RoithiUIDB

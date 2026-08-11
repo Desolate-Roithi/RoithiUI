@@ -1,17 +1,18 @@
 # RoithiUI
 
-A modular UI replacement for **World of Warcraft: Midnight (12.0)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
+A modular UI replacement for **World of Warcraft: Midnight (12.1)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v1.3.0  
-**Last Updated:** 2026-04-22  
-**Compatibility:** WoW 12.0.5 (Midnight)
+**Latest Version:** v1.5.0  
+**Last Updated:** 2026-08-12  
+**Compatibility:** WoW 12.1.0 (Midnight)
 
-## 🆕 Recent Updates (v1.3.0)
+## 🆕 Recent Updates (v1.5.0)
 
-* **Vehicle UI Stabilization**: Resolved persistent race conditions during vehicle entry/exit. Units now correctly display names, health, and power values immediately upon transition.
-* **Encounter Bar Module**: A new modular bar for world widgets (Oxygen, Scenario Progress, etc.). Fully integrated with **Edit Mode** for custom positioning and scaling.
-* **Scenario Blacklisting**: Intelligent automatic suppression of the UI in specific scenarios like *Prop Hunt*, *Hide and Seek*, and *Decor Duel* to keep the screen clutter-free.
-* **Secure Visibility Management**: Refactored Blizzard frame hiding logic to be more resilient against 12.0.1 "Secret" value taint.
+* **WoW 12.1 Aura System Refactor**: Full support for Patch 12.1 `AuraContainer` APIs, custom aura blacklisting, and refined stack count formatting.
+* **Midnight Combat Safety**: Strict `durationObj` pipeline implementation across castbars and timers ensuring zero secret value taint during combat.
+* **Options Engine Rework**: Re-architected options menu with modular localization (`enUS`/`deDE`), fixed profile management, and real-time LibEditMode sync.
+* **Encounter Bar Enhancements**: Added keyword blacklisting, widget whitelist filtering (e.g. Oxygen widget in Abyss Angling), and aggressive state resets to eliminate ghost bars.
+* **Smart Anchoring & Edit Mode**: Improved LibEditMode control flow, fixed power bar attachment stacking, and enhanced real-time layout updates.
 
 ## 🚀 Key Features
 
@@ -23,14 +24,26 @@ A modular UI replacement for **World of Warcraft: Midnight (12.0)**. Built on na
 ## 📦 Modules
 
 ### 1. UnitFrames
-* Supports Player, Target, Focus, Pet, and Boss frames.
+* Supports Player, Target, Focus, Pet, TargetTarget, FocusTarget, and Boss frames.
 * Dynamic class colors and custom status bar textures via SharedMedia.
-* Integrated aura handling with whitelist/blacklist support.
+* Refactored aura management with WoW 12.1 `AuraContainer` support, whitelist/blacklist filtering, and custom mover anchors.
+* Combat-safe health prediction, class power, additional power, and dynamic status tags.
 
 ### 2. Castbars
-* Support for all major units including TargetTarget and FocusTarget.
-* Native Empowered Spell stages and channeling ticks.
-* Smart anchoring to unit frames with optional manual placement.
+* Comprehensive support for Player, Target, Focus, Pet, and Boss castbars.
+* Native Empowered Spell stages and channeling ticks using pure combat-safe `durationObj` pipelines.
+* Smart anchoring hierarchy to unit frames with optional manual placement and Edit Mode integration.
+
+### 3. EncounterBar
+* Modular tracking for scenario objectives and world bar widgets (e.g. Oxygen bar).
+* Keyword blacklisting for automatic UI suppression in specific minigames/scenarios (e.g. *Prop Hunt*, *Decor Duel*).
+* Widget whitelist filtering and Unit Power Bar verification to eliminate ghost bars during encounters.
+* Fully movable and scalable via native Blizzard Edit Mode.
+
+### 4. ProfileSharing
+* Complete profile management suite supporting seamless export, import, and sharing of UI layouts.
+* Modular localized translations (`enUS`/`deDE`).
+* Real-time synchronization with options engine and Edit Mode configurations.
 
 ## 💻 Commands & Configuration
 
