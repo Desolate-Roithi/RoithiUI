@@ -32,22 +32,28 @@ local function Update(self, event, unit)
 
     -- 4. Color Update
     -- Do NOT use cur/max. Use 'per'.
+    local isPlayer = (unit == "player") or (UnitIsPlayer and UnitIsPlayer(unit))
+    local isPlayerSecret = (issecretvalue and issecretvalue(isPlayer)) or (canaccessvalue and not canaccessvalue(isPlayer))
+    local isPlayerUnit = (unit == "player") or (not isPlayerSecret and isPlayer)
+
     if ((element.safeColorTapping or element.colorTapping) and not UnitPlayerControlled(unit) and UnitIsTapDenied(unit)) then
         local t = element.colors.tapped
         element:SetStatusBarColor(t.r, t.g, t.b)
     elseif ((element.safeColorDisconnected or element.colorDisconnected) and not UnitIsConnected(unit)) then
         local t = element.colors.disconnected
         element:SetStatusBarColor(t.r, t.g, t.b)
-    elseif ((element.safeColorClass or element.colorClass) and UnitIsPlayer(unit) and not UnitHasVehicleUI(unit)) then
+    elseif ((element.safeColorClass or element.colorClass) and isPlayerUnit and not UnitHasVehicleUI(unit)) then
         local _, class = UnitClass(unit)
         local isClassSecret = issecretvalue and issecretvalue(class)
-        local t = (class and not isClassSecret) and element.colors.class[class] or nil
+        local colorsClass = (element.colors and element.colors.class) or _G.RAID_CLASS_COLORS
+        local t = (class and not isClassSecret and colorsClass) and colorsClass[class] or nil
         if t then
             element:SetStatusBarColor(t.r, t.g, t.b)
         else
-            element:SetStatusBarColor(1, 1, 1)                          -- Fallback
+            local fallback = (element.colors and element.colors.health) or { r = 0.2, g = 0.8, b = 0.2 }
+            element:SetStatusBarColor(fallback.r, fallback.g, fallback.b) -- Green fallback if class color is missing
         end
-    elseif ((element.safeColorReaction or element.colorReaction) and (UnitIsPlayer(unit) == false or UnitHasVehicleUI(unit))) then -- check Reaction
+    elseif ((element.safeColorReaction or element.colorReaction) and (not isPlayerUnit or UnitHasVehicleUI(unit))) then -- check Reaction
         local reaction = UnitReaction(unit, "player")
         local isReactionSecret = (issecretvalue and issecretvalue(reaction)) or (canaccessvalue and not canaccessvalue(reaction))
         if not isReactionSecret and reaction and element.colors and element.colors.reaction then
