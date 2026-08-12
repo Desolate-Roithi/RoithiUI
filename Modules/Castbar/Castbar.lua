@@ -151,19 +151,25 @@ local function OnCastbarUpdate(self, elapsed)
     if not self.casting and not self.channeling then return end
     if not self.durationObj then return end
 
-    local total = self.durationObj:GetTotalDuration()
-    local rem = self.durationObj:GetRemainingDuration()
-
-    if total and total > 0 then
-        self.maxValue = total
-        self.value = self.channeling and rem or (total - rem)
-
-        self:SetMinMaxValues(0, total)
-        self:SetValue(self.value)
-
-        if self.TimeFS then
-            self.TimeFS:SetText(FormatDuration(rem))
+    if self.SetTimerDuration then
+        local dir = self.channeling and (_G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarTimerDirection.RemainingTime or 1) or (_G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarTimerDirection.ElapsedTime or 0)
+        local interp = _G.Enum and _G.Enum.StatusBarInterpolation and _G.Enum.StatusBarInterpolation.Immediate or 0
+        self:SetTimerDuration(self.durationObj, interp, dir)
+    else
+        local total = self.durationObj:GetTotalDuration()
+        local rem = self.durationObj:GetRemainingDuration()
+        local isSecret = (issecretvalue and issecretvalue(total)) or (canaccessvalue and not canaccessvalue(total))
+        if not isSecret and total and total > 0 then
+            self.maxValue = total
+            self.value = self.channeling and rem or (total - rem)
+            self:SetMinMaxValues(0, total)
+            self:SetValue(self.value)
         end
+    end
+
+    if self.TimeFS then
+        local rem = self.durationObj:GetRemainingDuration()
+        self.TimeFS:SetText(FormatDuration(rem))
     end
 end
 
@@ -227,11 +233,15 @@ function ns.UpdateCast(bar, unitOverride)
 
     local totalSec = durationObj:GetTotalDuration()
     local remSec = durationObj:GetRemainingDuration()
-    if not totalSec or totalSec <= 0 then totalSec = 1 end
+    local isTotalSecret = (issecretvalue and issecretvalue(totalSec)) or (canaccessvalue and not canaccessvalue(totalSec))
 
-    local curVal = isChannel and remSec or (totalSec - remSec)
-    if curVal < 0 then curVal = 0 end
-    if curVal > totalSec then curVal = totalSec end
+    local curVal = 0
+    if not isTotalSecret then
+        if not totalSec or totalSec <= 0 then totalSec = 1 end
+        curVal = isChannel and remSec or (totalSec - remSec)
+        if curVal < 0 then curVal = 0 end
+        if curVal > totalSec then curVal = totalSec end
+    end
 
     bar.isInterrupted = false
     bar.casting = not isChannel
@@ -243,7 +253,9 @@ function ns.UpdateCast(bar, unitOverride)
 
     -- Visual Setup
     local colors = db.colors
-    local c = (notInterruptible and colors.shield) or colors[state] or colors.cast
+    local isNotIntSecret = (issecretvalue and issecretvalue(notInterruptible)) or (canaccessvalue and not canaccessvalue(notInterruptible))
+    local isShield = not isNotIntSecret and notInterruptible
+    local c = (isShield and colors.shield) or colors[state] or colors.cast
 
     if db.showIcon then
         bar.Icon:Show(); bar.Icon:SetTexture(texture)
@@ -251,7 +263,8 @@ function ns.UpdateCast(bar, unitOverride)
         bar.Icon:Hide()
     end
 
-    if text and string.len(text) > 22 then
+    local isSecretText = (issecretvalue and issecretvalue(text)) or (canaccessvalue and not canaccessvalue(text))
+    if not isSecretText and text and string.len(text) > 22 then
         text = string.sub(text, 1, 22) .. "..."
     end
     if bar.Text then bar.Text:SetText(text) end
@@ -268,26 +281,36 @@ function ns.UpdateCast(bar, unitOverride)
 
     -- Latency Ping Bar
     if bar.Latency then
-        local latencySec = GetSafeLatency()
-        if totalSec > 0 and latencySec > 0 then
-            local width = bar:GetWidth() * (latencySec / totalSec)
-            if width > bar:GetWidth() then width = bar:GetWidth() end
-            bar.Latency:SetWidth(width)
-            bar.Latency:SetHeight(bar:GetHeight())
-            bar.Latency:ClearAllPoints()
-            if isChannel then
-                bar.Latency:SetPoint("LEFT", bar, "LEFT", 0, 0)
+        if not isTotalSecret and totalSec and totalSec > 0 then
+            local latencySec = GetSafeLatency()
+            if latencySec > 0 then
+                local width = bar:GetWidth() * (latencySec / totalSec)
+                if width > bar:GetWidth() then width = bar:GetWidth() end
+                bar.Latency:SetWidth(width)
+                bar.Latency:SetHeight(bar:GetHeight())
+                bar.Latency:ClearAllPoints()
+                if isChannel then
+                    bar.Latency:SetPoint("LEFT", bar, "LEFT", 0, 0)
+                else
+                    bar.Latency:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+                end
+                bar.Latency:Show()
             else
-                bar.Latency:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+                bar.Latency:Hide()
             end
-            bar.Latency:Show()
         else
             bar.Latency:Hide()
         end
     end
 
-    bar:SetMinMaxValues(0, totalSec)
-    bar:SetValue(curVal)
+    if bar.SetTimerDuration then
+        local dir = isChannel and (_G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarTimerDirection.RemainingTime or 1) or (_G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarTimerDirection.ElapsedTime or 0)
+        local interp = _G.Enum and _G.Enum.StatusBarInterpolation and _G.Enum.StatusBarInterpolation.Immediate or 0
+        bar:SetTimerDuration(durationObj, interp, dir)
+    elseif not isTotalSecret then
+        bar:SetMinMaxValues(0, totalSec)
+        bar:SetValue(curVal)
+    end
 
     if bar.TimeFS then
         bar.TimeFS:SetText(FormatDuration(remSec))

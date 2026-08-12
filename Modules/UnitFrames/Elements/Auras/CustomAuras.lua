@@ -82,8 +82,8 @@ function UF:UpdateCustomAura(id)
             c.groups = c.groups or {}
             c.groups[groupKey] = options
             if _G.C_UnitAuras and _G.C_UnitAuras.GetUnitAuraInstanceIDs then
-                local ids = _G.C_UnitAuras.GetUnitAuraInstanceIDs(unit or "player", filterStr, options and options.sortMethod)
-                if ids and options and options.initializeFrame then
+                local ok, ids = pcall(_G.C_UnitAuras.GetUnitAuraInstanceIDs, unit or "player", filterStr, options and options.sortMethod)
+                if ok and ids and options and options.initializeFrame then
                     for idx, auraInstId in ipairs(ids) do
                         local btn = c.icons[idx] or CreateFrame("Frame", nil, c)
                         btn.auraInstanceID = auraInstId
@@ -191,9 +191,6 @@ function UF:UpdateCustomAura(id)
                 elementWidth = size,
                 elementHeight = size,
             }
-            if _G.C_UnitAuras and _G.C_UnitAuras.GetUnitAuraInstanceIDs then
-                _G.C_UnitAuras.GetUnitAuraInstanceIDs(unit or "player", filterStr, sortMethodVal)
-            end
             if container.HasAuraGroup and container:HasAuraGroup(groupKey) then
                 if container.SetAuraGroupFilterString then container:SetAuraGroupFilterString(groupKey, filterStr) end
                 if container.SetAuraGroupMaxFrameCount then container:SetAuraGroupMaxFrameCount(groupKey, maxCount) end
@@ -233,9 +230,6 @@ function UF:UpdateCustomAura(id)
                 elementWidth = size,
                 elementHeight = size,
             }
-            if _G.C_UnitAuras and _G.C_UnitAuras.GetUnitAuraInstanceIDs then
-                _G.C_UnitAuras.GetUnitAuraInstanceIDs(unit or "player", filterStr, sortMethodVal)
-            end
             if container.HasAuraGroup and container:HasAuraGroup(groupKey) then
                 if container.SetAuraGroupFilterString then container:SetAuraGroupFilterString(groupKey, filterStr) end
                 if container.SetAuraGroupMaxFrameCount then container:SetAuraGroupMaxFrameCount(groupKey, maxCount) end

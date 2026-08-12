@@ -9,7 +9,9 @@ local oUF = ns.oUF
 
 local function Update(self, _)
     -- 1. Check Combat
-    if UnitAffectingCombat("player") then
+    local isCombat = UnitAffectingCombat("player")
+    local isSecretCombat = (issecretvalue and issecretvalue(isCombat)) or (canaccessvalue and not canaccessvalue(isCombat))
+    if not isSecretCombat and isCombat then
         self:SetAlpha(1)
         return
     end
@@ -21,7 +23,10 @@ local function Update(self, _)
     end
 
     -- 3. Check Casting (Optional, usually desired)
-    if UnitCastingInfo("player") or UnitChannelInfo("player") then
+    local cName = UnitCastingInfo("player")
+    local chName = UnitChannelInfo("player")
+    local isSecretCast = (issecretvalue and (issecretvalue(cName) or issecretvalue(chName))) or (canaccessvalue and (not canaccessvalue(cName) or not canaccessvalue(chName)))
+    if not isSecretCast and (cName or chName) then
         self:SetAlpha(1)
         return
     end

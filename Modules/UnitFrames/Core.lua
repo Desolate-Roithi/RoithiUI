@@ -66,15 +66,30 @@ local function Shared(self, unit)
     Health:SetPoint("BOTTOMRIGHT", -1, 1)
     Health:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
 
-    -- Options
-    Health.colorTapping = true
-    Health.colorDisconnected = true
-    Health.colorClass = true
-    Health.colorReaction = true
-    Health.colorSmooth = true -- Uses our SafeHealth gradient logic
+    -- Options for SafeHealth (RoithiUI custom safe element)
+    Health.safeColorTapping = true
+    Health.safeColorDisconnected = true
+    Health.safeColorClass = true
+    Health.safeColorReaction = true
+    Health.safeColorSmooth = true
 
-    self.SafeHealth = Health  -- Register as "SafeHealth" element
-    self.Health = Health      -- Register as standard "Health" for compatibility with other elements
+    -- Disable color flags on standard oUF element to prevent oUF's health.lua from indexing tables with secret keys
+    Health.colorTapping = false
+    Health.colorDisconnected = false
+    Health.colorClass = false
+    Health.colorReaction = false
+    Health.colorSmooth = false
+    Health.colorSelection = false
+    Health.colorThreat = false
+    Health.colorHealth = true
+
+    self.SafeHealth = Health  -- Register as "SafeHealth" element (Secret-safe)
+    self.Health = Health      -- Register as standard "Health" frame object
+
+    -- Disable oUF's built-in Health element so it does not attempt to index colors.class with secret keys
+    if self.DisableElement then
+        self:DisableElement("Health")
+    end
 
     -- 4. Text (Tags)
     if UF.CreateTags then

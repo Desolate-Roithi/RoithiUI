@@ -230,7 +230,8 @@ function UF:CreateIndicators(frame)
 
         -- Raid Target
         local raidIndex = GetRaidTargetIndex(unit)
-        if IsEnabled("raidicon") and (raidIndex or inTestMode) then
+        local isSecretRaidIndex = (issecretvalue and issecretvalue(raidIndex)) or (canaccessvalue and not canaccessvalue(raidIndex))
+        if IsEnabled("raidicon") and (not isSecretRaidIndex and raidIndex or inTestMode) then
             SetRaidTargetIconTexture(raidDate, raidIndex or 1)
             raidDate:Show()
         else
@@ -256,7 +257,8 @@ function UF:CreateIndicators(frame)
 
         -- Ready Check
         local rcStatus = GetReadyCheckStatus(unit)
-        if IsEnabled("readycheck") and (rcStatus or inTestMode) then
+        local isSecretRC = (issecretvalue and issecretvalue(rcStatus)) or (canaccessvalue and not canaccessvalue(rcStatus))
+        if IsEnabled("readycheck") and (not isSecretRC and rcStatus or inTestMode) then
             local s = rcStatus or "ready"
             if s == "ready" then
                 readyCheck:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
@@ -271,34 +273,47 @@ function UF:CreateIndicators(frame)
         end
 
         -- PvP
-        local pvpType
-        if UnitIsPVPFreeForAll(unit) then
-            pvpType = "FFA"
-        elseif UnitIsPVP(unit) then
-            pvpType = UnitFactionGroup(unit) or "Neutral"
-        end
+        local pvpFFA = UnitIsPVPFreeForAll and UnitIsPVPFreeForAll(unit)
+        local isPVP = UnitIsPVP and UnitIsPVP(unit)
+        local isSecretPvP = (issecretvalue and (issecretvalue(pvpFFA) or issecretvalue(isPVP))) or (canaccessvalue and (not canaccessvalue(pvpFFA) or not canaccessvalue(isPVP)))
 
-        -- 12.0.1 Secret Safety: If pvpType is a secret, we can't compare it directly to "Alliance" etc.
-        -- However, we can use it in SetTexture if there's a native path, or just fallback if it's secret.
-        local isSecretFaction = _G.issecretvalue and _G.issecretvalue(pvpType)
-
-        if IsEnabled("pvp") and (pvpType or inTestMode) then
-            if isSecretFaction then
-                -- If it's a secret, we don't know the faction, show Neutral or special "Secret" icon
-                pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
-            else
-                local faction = pvpType or (UnitFactionGroup("player") or "Neutral")
-                if faction == "FFA" then
-                    pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-FFA")
-                elseif faction == "Alliance" then
-                    pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Alliance")
-                elseif faction == "Horde" then
-                    pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Horde")
-                else
+        if IsEnabled("pvp") then
+            if isSecretPvP then
+                if _G.SetShownFromSecret then
+                    _G.SetShownFromSecret(pvp, isPVP or pvpFFA)
                     pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
+                else
+                    pvp:Hide()
+                end
+            else
+                local pvpType
+                if pvpFFA then
+                    pvpType = "FFA"
+                elseif isPVP then
+                    pvpType = UnitFactionGroup(unit) or "Neutral"
+                end
+
+                if pvpType or inTestMode then
+                    local isSecretFaction = _G.issecretvalue and _G.issecretvalue(pvpType)
+                    if isSecretFaction then
+                        pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
+                    else
+                        local faction = pvpType or (UnitFactionGroup("player") or "Neutral")
+                        if faction == "FFA" then
+                            pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-FFA")
+                        elseif faction == "Alliance" then
+                            pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Alliance")
+                        elseif faction == "Horde" then
+                            pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Horde")
+                        else
+                            pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
+                        end
+                    end
+                    pvp:Show()
+                else
+                    pvp:Hide()
                 end
             end
-            pvp:Show()
         else
             pvp:Hide()
         end
@@ -307,16 +322,23 @@ function UF:CreateIndicators(frame)
         ShowIndicator(quest, "quest", UnitIsQuestBoss and UnitIsQuestBoss(unit))
 
         -- Tank / Assist
-        local isMT = GetPartyAssignment("MAINTANK", unit)
-        local isMA = GetPartyAssignment("MAINASSIST", unit)
+        local isMT = GetPartyAssignment and GetPartyAssignment("MAINTANK", unit)
+        local isMA = GetPartyAssignment and GetPartyAssignment("MAINASSIST", unit)
+        local isSecretMT = (issecretvalue and (issecretvalue(isMT) or issecretvalue(isMA))) or (canaccessvalue and (not canaccessvalue(isMT) or not canaccessvalue(isMA)))
 
-        if IsEnabled("tankassist") and (isMT or isMA or inTestMode) then
-            if isMT or (inTestMode and not isMA) then
-                tankassist:SetTexture("Interface\\GroupFrame\\UI-Group-MainTankIcon")
+        if IsEnabled("tankassist") then
+            if isSecretMT then
+                tankassist:Hide()
+            elseif (isMT or isMA or inTestMode) then
+                if isMT or (inTestMode and not isMA) then
+                    tankassist:SetTexture("Interface\\GroupFrame\\UI-Group-MainTankIcon")
+                else
+                    tankassist:SetTexture("Interface\\GroupFrame\\UI-Group-MainAssistIcon")
+                end
+                tankassist:Show()
             else
-                tankassist:SetTexture("Interface\\GroupFrame\\UI-Group-MainAssistIcon")
+                tankassist:Hide()
             end
-            tankassist:Show()
         else
             tankassist:Hide()
         end

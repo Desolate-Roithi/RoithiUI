@@ -155,6 +155,26 @@ function ns.UpdateBlizzardVisibility()
                         self:Hide()
                     end
                 end)
+                if frame.GetHeight then
+                    local origGetHeight = frame.GetHeight
+                    frame.GetHeight = function(self, ...)
+                        local h = origGetHeight(self, ...)
+                        if (issecretvalue and issecretvalue(h)) or (canaccessvalue and not canaccessvalue(h)) then
+                            return 20
+                        end
+                        return h
+                    end
+                end
+                if frame.GetWidth then
+                    local origGetWidth = frame.GetWidth
+                    frame.GetWidth = function(self, ...)
+                        local w = origGetWidth(self, ...)
+                        if (issecretvalue and issecretvalue(w)) or (canaccessvalue and not canaccessvalue(w)) then
+                            return 150
+                        end
+                        return w
+                    end
+                end
                 frame.RoithiHooked = true
             end
             frame.shouldBeHiddenRoithi = true
@@ -294,7 +314,8 @@ function Castbar:OnEnable()
                     ns.HandleInterrupt(targetBar)
                 elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
                     local _, castGUID = ...
-                    if targetBar.castID and castGUID and targetBar.castID ~= castGUID then
+                    local isSecretID = (issecretvalue and (issecretvalue(targetBar.castID) or issecretvalue(castGUID))) or (canaccessvalue and (not canaccessvalue(targetBar.castID) or not canaccessvalue(castGUID)))
+                    if not isSecretID and targetBar.castID and castGUID and targetBar.castID ~= castGUID then
                         return
                     end
                     if not targetBar.isInterrupted and not targetBar.isInEditMode then

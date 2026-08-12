@@ -2,17 +2,17 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v1.5.0  
+**Latest Version:** v1.5.1  
 **Last Updated:** 2026-08-12  
 **Compatibility:** WoW 12.1.0 (Midnight)
 
-## 🆕 Recent Updates (v1.5.0)
+## 🆕 Recent Updates (v1.5.1)
 
-* **WoW 12.1 Aura System Refactor**: Full support for Patch 12.1 `AuraContainer` APIs, custom aura blacklisting, and refined stack count formatting.
-* **Midnight Combat Safety**: Strict `durationObj` pipeline implementation across castbars and timers ensuring zero secret value taint during combat.
-* **Options Engine Rework**: Re-architected options menu with modular localization (`enUS`/`deDE`), fixed profile management, and real-time LibEditMode sync.
-* **Encounter Bar Enhancements**: Added keyword blacklisting, widget whitelist filtering (e.g. Oxygen widget in Abyss Angling), and aggressive state resets to eliminate ghost bars.
-* **Smart Anchoring & Edit Mode**: Improved LibEditMode control flow, fixed power bar attachment stacking, and enhanced real-time layout updates.
+* **WoW 12.1.0 Live Secrecy & Taint Fixes**: Comprehensive secrecy and taint audit resolving runtime Lua errors under 12.1.0 Live C-engine constraints.
+* **Castbar Combat Safety**: Implemented native `StatusBar:SetTimerDuration` C-engine pipeline and guarded spell name truncation and castID comparisons against secret strings.
+* **UnitFrame Health Decoupling**: Decoupled oUF built-in health element from secret class keys while maintaining RoithiUI's native `SafeHealth` secret-safe color pipeline.
+* **Forbidden Object Protection**: Wrapped `AuraButton` frame updates in `pcall` isolation to handle `ScopedModifier useForbiddenObjectTable="true"` native containers cleanly.
+* **Addon Dimension Bridging**: Added dimension wrappers to suppressed Blizzard castbars (`TargetFrameSpellBar`) returning safe fallback values to protect third-party add-ons (`EditModeExpanded`) from secret number arithmetic crashes.
 
 ## 🚀 Key Features
 
