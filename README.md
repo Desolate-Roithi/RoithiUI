@@ -2,14 +2,14 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v1.5.2  
+**Latest Version:** v1.5.3  
 **Last Updated:** 2026-08-12  
 **Compatibility:** WoW 12.1.0 (Midnight)
 
-## 🆕 Recent Updates (v1.5.2)
+## 🆕 Recent Updates (v1.5.3)
 
-* **UnitFrame Player Class Color Fix**: Resolved class color fallback where secret boolean evaluations (`UnitIsPlayer`) bypassed class coloring for player unit frames. Guaranteed class color lookup across all player classes with green fallback retained if class color is missing.
-* **WoW 12.1.0 Live Secrecy & Taint Fixes**: Comprehensive secrecy and taint audit resolving runtime Lua errors under 12.1.0 Live C-engine constraints.
+* **oUF v14.0.0 Library Compatibility**: Resolved health bar color overwrite where `oUF v14.0.0` health element (`Health.colorHealth`) forced neon green status bar coloring. Synced all third-party libraries (`oUF v14.0.0`, `Ace3 Release-r1403`, `LibDualSpec-1.0 v1.30.0`).
+* **UnitFrame Class Color Fix**: Resolved class color fallback where secret boolean evaluations (`UnitIsPlayer`) bypassed class coloring for player unit frames. Guaranteed class color lookup across all player classes with green fallback retained if class color is missing.
 
 ## 🚀 Key Features
 

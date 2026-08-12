@@ -81,7 +81,7 @@ local function Shared(self, unit)
     Health.colorSmooth = false
     Health.colorSelection = false
     Health.colorThreat = false
-    Health.colorHealth = true
+    Health.colorHealth = false
 
     self.SafeHealth = Health  -- Register as "SafeHealth" element (Secret-safe)
     self.Health = Health      -- Register as standard "Health" frame object
