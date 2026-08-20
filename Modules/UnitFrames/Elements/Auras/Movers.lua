@@ -20,8 +20,8 @@ local ConfigureAuraContainer = function(c, unit, suf) return ns.Auras and ns.Aur
 -------------------------------------------------------------------------------
 local SAMPLE_ICONS  = { 136075, 136042, 136025, 136056, 136012,
                          135940, 135813, 136193, 135987, 136071 }
-local SAMPLE_TIMERS = { "12m", "8s", "10s", "15s", "45s",
-                         "18m", "5s", "12s", "24s", "6s" }
+local SAMPLE_TIMERS = { "12m", "8", "10", "15", "45",
+                         "18m", "5", "12", "24", "6" }
 local SAMPLE_COUNTS = { nil, "3", nil, "2", nil, "5", nil, nil, "2", nil }
 
 local function GetOrCreateAuraMover(container, unit, containerSuffix)
@@ -864,31 +864,6 @@ function ns.GetSettingsForCustomAura(customID)
         },
         {
             kind = LEM.SettingType.Dropdown,
-            name = "Anchor Point",
-            values = {
-                { text = "Top Left",     value = "TOPLEFT" },
-                { text = "Left",         value = "LEFT" },
-                { text = "Bottom Left",  value = "BOTTOMLEFT" },
-                { text = "Top",          value = "TOP" },
-                { text = "Center",       value = "CENTER" },
-                { text = "Bottom",       value = "BOTTOM" },
-                { text = "Top Right",    value = "TOPRIGHT" },
-                { text = "Right",        value = "RIGHT" },
-                { text = "Bottom Right", value = "BOTTOMRIGHT" },
-            },
-            get = function()
-                local db = GetCDB()
-                return (db and db.auraAnchor) or "BOTTOM"
-            end,
-            set = function(_, v)
-                local db = GetCDB()
-                if db then db.auraAnchor = v end
-                local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
-                if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
-            end,
-        },
-        {
-            kind = LEM.SettingType.Dropdown,
             name = "Grow Direction",
             values = {
                 { text = "Right then Down",      value = "RIGHT_DOWN" },
@@ -909,6 +884,48 @@ function ns.GetSettingsForCustomAura(customID)
             set = function(_, v)
                 local db = GetCDB()
                 if db then db.auraGrowDirection = v end
+                local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
+            end,
+        },
+        {
+            kind = LEM.SettingType.Checkbox,
+            name = "Hide Icon",
+            get = function()
+                local db = GetCDB()
+                return db and db.hideIcon == true
+            end,
+            set = function(_, v)
+                local db = GetCDB()
+                if db then db.hideIcon = v end
+                local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
+            end,
+        },
+        {
+            kind = LEM.SettingType.Checkbox,
+            name = "Hide Timer",
+            get = function()
+                local db = GetCDB()
+                return db and db.hideTimer == true
+            end,
+            set = function(_, v)
+                local db = GetCDB()
+                if db then db.hideTimer = v end
+                local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
+                if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
+            end,
+        },
+        {
+            kind = LEM.SettingType.Checkbox,
+            name = "Hide Stack Count",
+            get = function()
+                local db = GetCDB()
+                return db and db.hideCount == true
+            end,
+            set = function(_, v)
+                local db = GetCDB()
+                if db then db.hideCount = v end
                 local ufMod = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
                 if ufMod and ufMod.UpdateCustomAura then ufMod:UpdateCustomAura(customID) end
             end,

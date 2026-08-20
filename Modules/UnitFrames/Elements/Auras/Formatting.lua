@@ -6,11 +6,12 @@ local LibRoithi = LibStub("LibRoithi-1.0")
 -------------------------------------------------------------------------------
 -- FormatAuraButton Callback for 12.1.0 AuraButtons
 -------------------------------------------------------------------------------
-local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, db)
+local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, db, isWhitelistGroup)
     if not auraButton then return end
 
     pcall(function()
         buttonSize = buttonSize or 28
+
         if auraButton.SetSize then
             pcall(auraButton.SetSize, auraButton, buttonSize, buttonSize)
         end
@@ -36,6 +37,11 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
         -- Font settings from profile options
         local fontName = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Friz Quadrata TT"
 
+        -- Visibility Flags
+        local hideIcon = isDebuff and (db.hideDebuffIcon or db.hideIcon) or (db.hideBuffIcon or db.hideIcon)
+        local hideTimer = isDebuff and (db.hideDebuffTimer or db.hideTimer) or (db.hideBuffTimer or db.hideTimer)
+        local hideCount = isDebuff and (db.hideDebuffCount or db.hideCount) or (db.hideBuffCount or db.hideCount)
+
         -- 2. Icon Texture with Zoom %
         local icon = auraButton.Icon or auraButton:CreateTexture(nil, "ARTWORK")
         if icon then
@@ -44,6 +50,13 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
             if zoomPercent == nil then zoomPercent = 15 end
             local offset = (tonumber(zoomPercent) or 15) / 100
             if icon.SetTexCoord then icon:SetTexCoord(offset, 1 - offset, offset, 1 - offset) end
+            if icon.SetShown then
+                icon:SetShown(not hideIcon)
+            elseif hideIcon and icon.Hide then
+                icon:Hide()
+            elseif icon.Show then
+                icon:Show()
+            end
             auraButton.Icon = icon
             if auraButton.SetIcon then
                 pcall(auraButton.SetIcon, auraButton, icon)
@@ -51,15 +64,47 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
         end
 
         -- 3. Duration Cooldown Swipe
-        local cd = auraButton.Cooldown or CreateFrame("Cooldown", nil, auraButton, "CooldownFrameTemplate")
+        local cd = auraButton.Cooldown or auraButton.cooldown or CreateFrame("Cooldown", nil, auraButton, "CooldownFrameTemplate")
         if cd then
             if cd.SetAllPoints then cd:SetAllPoints(auraButton) end
             if cd.SetReverse then cd:SetReverse(true) end
             if cd.SetHideCountdownNumbers then cd:SetHideCountdownNumbers(true) end
+            local hideSwipe = hideIcon or hideTimer
+            if cd.SetDrawSwipe then cd:SetDrawSwipe(not hideSwipe) end
+            if cd.SetDrawEdge then cd:SetDrawEdge(not hideSwipe) end
+            if cd.SetDrawBling then cd:SetDrawBling(not hideSwipe) end
+            if cd.SetShown then
+                cd:SetShown(not hideSwipe)
+            elseif hideSwipe and cd.Hide then
+                cd:Hide()
+            elseif cd.Show then
+                cd:Show()
+            end
             auraButton.Cooldown = cd
             if auraButton.SetDurationCooldown then
                 pcall(auraButton.SetDurationCooldown, auraButton, cd)
             end
+        end
+
+        -- Bare seconds numeric rule formatter cache (removes 's' suffix: "45", "2m", "1h")
+        local bareSecondsFormatterCache = nil
+        local function GetBareSecondsFormatter()
+            if bareSecondsFormatterCache ~= nil then return bareSecondsFormatterCache end
+            if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Enum and Enum.NumericRuleFormatRounding) then
+                bareSecondsFormatterCache = false
+                return false
+            end
+            local ok, fmt = pcall(function()
+                local down = Enum.NumericRuleFormatRounding.Down
+                local up   = Enum.NumericRuleFormatRounding.Up
+                local f = C_StringUtil.CreateNumericRuleFormatter()
+                f:AddBreakpoint({ threshold = 0, step = 1, rounding = up, min = 1, format = "%d" })
+                f:AddBreakpoint({ threshold = 60, step = 1, rounding = down, min = 1, format = "%dm", components = { { div = 60, rounding = up } } })
+                f:AddBreakpoint({ threshold = 3600, step = 1, rounding = down, min = 1, format = "%dh", components = { { div = 3600, rounding = up } } })
+                return f
+            end)
+            bareSecondsFormatterCache = (ok and fmt) or false
+            return bareSecondsFormatterCache
         end
 
         -- Text Overlay Frame: High FrameLevel parented to auraButton so timer & stack text render ABOVE the swipe and never get hidden by dormant Cooldown frames
@@ -84,7 +129,6 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                 local timerAnchor = isDebuff and (db.debuffTimerAnchor or db.timerAnchor) or (db.buffTimerAnchor or db.timerAnchor) or "CENTER"
                 local timerX = isDebuff and (db.debuffTimerX or db.timerX) or (db.buffTimerX or db.timerX) or 0
                 local timerY = isDebuff and (db.debuffTimerY or db.timerY) or (db.buffTimerY or db.timerY) or 0
-                local hideTimer = isDebuff and (db.hideDebuffTimer or db.hideTimer) or (db.hideBuffTimer or db.hideTimer)
 
                 if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
                     LibRoithi.mixins:SetFont(durationText, fontName, timerFontSize, "OUTLINE")
@@ -98,9 +142,24 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                 elseif durationText.Show then
                     durationText:Show()
                 end
+
                 auraButton.DurationText = durationText
                 if auraButton.SetDurationText then
-                    pcall(auraButton.SetDurationText, auraButton, durationText)
+                    local fmt = GetBareSecondsFormatter()
+                    if fmt then
+                        local opts = {}
+                        if C_DurationUtil and C_DurationUtil.CreateDurationTextBinding then
+                            local b = C_DurationUtil.CreateDurationTextBinding()
+                            if b.SetFormatter then b:SetFormatter(fmt) end
+                            if b.SetEnabled then b:SetEnabled(true) end
+                            opts.binding = b
+                        else
+                            opts.formatter = fmt
+                        end
+                        pcall(auraButton.SetDurationText, auraButton, durationText, opts)
+                    else
+                        pcall(auraButton.SetDurationText, auraButton, durationText)
+                    end
                 end
             end
 
@@ -114,7 +173,6 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                 local stackAnchor = isDebuff and (db.debuffStackAnchor or db.stackAnchor) or (db.buffStackAnchor or db.stackAnchor) or "BOTTOMRIGHT"
                 local stackX = isDebuff and (db.debuffStackX or db.stackX) or (db.buffStackX or db.stackX) or 2
                 local stackY = isDebuff and (db.debuffStackY or db.stackY) or (db.buffStackY or db.stackY) or -2
-                local hideCount = isDebuff and (db.hideDebuffCount or db.hideCount) or (db.hideBuffCount or db.hideCount)
 
                 if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
                     LibRoithi.mixins:SetFont(countText, fontName, stackFontSize, "OUTLINE")
@@ -151,7 +209,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                 pcall(auraButton.SetAuraBorder, auraButton, borderTex)
             end
 
-            if isDebuff then
+            if isDebuff and not hideIcon then
                 if borderTex.SetVertexColor then borderTex:SetVertexColor(0.8, 0.1, 0.1, 1) end
                 if borderTex.Show then borderTex:Show() end
             else

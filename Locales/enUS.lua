@@ -58,6 +58,14 @@ L["Create New Frame (ID)"] = "Create New Frame (ID)"
 L["Crowd Control"] = "Crowd Control"
 L["Custom Frames"] = "Custom Frames"
 L["Debuffs Bar Settings"] = "Debuffs Bar Settings"
+L["Hide Icon"] = "Hide Icon"
+L["Hide Aura Icon"] = "Hide Aura Icon"
+L["Hide Timer"] = "Hide Timer"
+L["Hide Duration Timer"] = "Hide Duration Timer"
+L["Hide Stack Count"] = "Hide Stack Count"
+L["Hide the aura icon texture and cooldown swipe."] = "Hide the aura icon texture and cooldown swipe."
+L["Hide the remaining duration text."] = "Hide the remaining duration text."
+L["Hide the stack/application count text."] = "Hide the stack/application count text."
 L["Defensives"] = "Defensives"
 L["Delete Frame"] = "Delete Frame"
 L["Detach (Move in Edit Mode)"] = "Detach (Move in Edit Mode)"
@@ -251,14 +259,21 @@ L["Configure the visual appearance of the auras."] = "Configure the visual appea
 -- Whitelist / Blacklist Mode & Notices
 L["Show Only Whitelisted Buffs"] = "Show Only Whitelisted Buffs"
 L["Hides all Buffs except those explicitly added to the Spell Whitelist."] = "Hides all Buffs except those explicitly added to the Spell Whitelist."
+L["Include Whitelisted Buffs"] = "Include Whitelisted Buffs"
+L["Displays spells from the Spell Whitelist in addition to the filtered Buffs above."] = "Displays spells from the Spell Whitelist in addition to the filtered Buffs above."
 L["Show Only Whitelisted Debuffs"] = "Show Only Whitelisted Debuffs"
 L["Hides all Debuffs except those explicitly added to the Spell Whitelist."] = "Hides all Debuffs except those explicitly added to the Spell Whitelist."
+L["Include Whitelisted Debuffs"] = "Include Whitelisted Debuffs"
+L["Displays spells from the Spell Whitelist in addition to the filtered Debuffs above."] = "Displays spells from the Spell Whitelist in addition to the filtered Debuffs above."
+L["|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted' or 'Include Whitelisted' is enabled above."] =
+"|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted' or 'Include Whitelisted' is enabled above."
 L["|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted Buffs' or 'Show Only Whitelisted Debuffs' is checked above."] =
-"|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted Buffs' or 'Show Only Whitelisted Debuffs' is checked above."
+"|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted' or 'Include Whitelisted' is enabled above."
 L["|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID blacklisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be hidden by spell ID."] =
 "|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID blacklisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be hidden by spell ID."
 L["|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID whitelisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be whitelisted by spell ID."] =
 "|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID whitelisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be whitelisted by spell ID."
+
 
 -- Quick Links (castbar / boss)
 L["> Auras (Boss 1)"] = "> Auras (Boss 1)"

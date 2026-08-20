@@ -5,7 +5,7 @@ local RoithiUI = _G.RoithiUI
 ---@class UF : AceModule, AceAddon
 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 
-local BuildCandidateFilters = function(db, fType) return ns.Auras and ns.Auras.BuildCandidateFilters and ns.Auras.BuildCandidateFilters(db, fType) end
+local BuildCandidateFilters = function(db, fType, isWL) return ns.Auras and ns.Auras.BuildCandidateFilters and ns.Auras.BuildCandidateFilters(db, fType, isWL) end
 local GetSmartFilterQueries = function(fType, db, unit) return ns.Auras and ns.Auras.GetSmartFilterQueries and ns.Auras.GetSmartFilterQueries(fType, db, unit) end
 local FormatAuraButton = function(btn, key, isDebuff, size, db) return ns.Auras and ns.Auras.FormatAuraButton and ns.Auras.FormatAuraButton(btn, key, isDebuff, size, db) end
 
@@ -212,6 +212,63 @@ function UF:UpdateCustomAura(id)
                     candidateFilters = buffCandidateFilters,
                 })
             end
+
+            if container.GetAuraGroupFrameCount then
+                local count = container:GetAuraGroupFrameCount(groupKey)
+                for i = 1, count do
+                    local btn = container:GetAuraGroupFrame(groupKey, i)
+                    if btn then FormatAuraButton(btn, containerKey, false, size, db) end
+                end
+            end
+        end
+
+        local buffWLCandidateFilters = BuildCandidateFilters(db, "HELPFUL", true)
+        if (db.additionalWhitelistBuffs or db.additionalWhitelist) and not db.onlyWhitelistBuffs and not db.onlyWhitelist and not db.showAllBuffs and buffWLCandidateFilters and buffWLCandidateFilters.includeSpellIDs then
+            local groupKey = "CustomBuffs_Whitelist"
+            newActiveGroupKeys[groupKey] = true
+            local groupLayout = {
+                anchorPoint = layoutAnchor,
+                layoutAxis = axisVal,
+                maximumLineSize = lineSizeVal,
+                elementSpacing = spacing,
+                lineSpacing = spacing,
+                forceNewLine = false,
+                elementWidth = size,
+                elementHeight = size,
+            }
+            if container.HasAuraGroup and container:HasAuraGroup(groupKey) then
+                if container.SetAuraGroupFilterString then container:SetAuraGroupFilterString(groupKey, "HELPFUL") end
+                if container.SetAuraGroupMaxFrameCount then container:SetAuraGroupMaxFrameCount(groupKey, maxCount) end
+                if container.SetAuraGroupLayout then container:SetAuraGroupLayout(groupKey, groupLayout) end
+                if container.SetAuraGroupCandidateFilters then container:SetAuraGroupCandidateFilters(groupKey, buffWLCandidateFilters) end
+                if container.SetAuraGroupSortMethod then container:SetAuraGroupSortMethod(groupKey, sortMethodVal, sortDirVal) end
+            elseif container.AddAuraGroup then
+                container:AddAuraGroup(groupKey, "HELPFUL", {
+                    maxFrameCount = maxCount,
+                    sortMethod = sortMethodVal,
+                    sortDirection = sortDirVal,
+                    initializeFrame = function(auraButton)
+                        auraButton.unit = unit
+                        local exists = false
+                        for _, existing in ipairs(container.icons) do if existing == auraButton then exists = true break end end
+                        if not exists then table.insert(container.icons, auraButton) end
+                        FormatAuraButton(auraButton, containerKey, false, size, db)
+                    end,
+                    layout = groupLayout,
+                    candidateFilters = buffWLCandidateFilters,
+                })
+            end
+
+            if container.GetAuraGroupFrameCount then
+                local count = container:GetAuraGroupFrameCount(groupKey)
+                for i = 1, count do
+                    local btn = container:GetAuraGroupFrame(groupKey, i)
+                    if btn then
+                        btn.unit = unit
+                        FormatAuraButton(btn, containerKey, false, size, db)
+                    end
+                end
+            end
         end
     end
 
@@ -242,6 +299,7 @@ function UF:UpdateCustomAura(id)
                     sortMethod = sortMethodVal,
                     sortDirection = sortDirVal,
                     initializeFrame = function(auraButton)
+                        auraButton.unit = unit
                         local exists = false
                         for _, existing in ipairs(container.icons) do if existing == auraButton then exists = true break end end
                         if not exists then table.insert(container.icons, auraButton) end
@@ -250,6 +308,67 @@ function UF:UpdateCustomAura(id)
                     layout = groupLayout,
                     candidateFilters = debuffCandidateFilters,
                 })
+            end
+
+            if container.GetAuraGroupFrameCount then
+                local count = container:GetAuraGroupFrameCount(groupKey)
+                for i = 1, count do
+                    local btn = container:GetAuraGroupFrame(groupKey, i)
+                    if btn then
+                        btn.unit = unit
+                        FormatAuraButton(btn, containerKey, true, size, db)
+                    end
+                end
+            end
+        end
+
+        local debuffWLCandidateFilters = BuildCandidateFilters(db, "HARMFUL", true)
+        if (db.additionalWhitelistDebuffs or db.additionalWhitelist) and not db.onlyWhitelistDebuffs and not db.onlyWhitelist and not db.showAllDebuffs and debuffWLCandidateFilters and debuffWLCandidateFilters.includeSpellIDs then
+            local groupKey = "CustomDebuffs_Whitelist"
+            newActiveGroupKeys[groupKey] = true
+            local groupLayout = {
+                anchorPoint = layoutAnchor,
+                layoutAxis = axisVal,
+                maximumLineSize = lineSizeVal,
+                elementSpacing = spacing,
+                lineSpacing = spacing,
+                forceNewLine = false,
+                elementWidth = size,
+                elementHeight = size,
+            }
+            local debuffWLCandidateFilters = BuildCandidateFilters(db, "HARMFUL", true)
+            if container.HasAuraGroup and container:HasAuraGroup(groupKey) then
+                if container.SetAuraGroupFilterString then container:SetAuraGroupFilterString(groupKey, "HARMFUL") end
+                if container.SetAuraGroupMaxFrameCount then container:SetAuraGroupMaxFrameCount(groupKey, maxCount) end
+                if container.SetAuraGroupLayout then container:SetAuraGroupLayout(groupKey, groupLayout) end
+                if container.SetAuraGroupCandidateFilters then container:SetAuraGroupCandidateFilters(groupKey, debuffWLCandidateFilters) end
+                if container.SetAuraGroupSortMethod then container:SetAuraGroupSortMethod(groupKey, sortMethodVal, sortDirVal) end
+            elseif container.AddAuraGroup then
+                container:AddAuraGroup(groupKey, "HARMFUL", {
+                    maxFrameCount = maxCount,
+                    sortMethod = sortMethodVal,
+                    sortDirection = sortDirVal,
+                    initializeFrame = function(auraButton)
+                        auraButton.unit = unit
+                        local exists = false
+                        for _, existing in ipairs(container.icons) do if existing == auraButton then exists = true break end end
+                        if not exists then table.insert(container.icons, auraButton) end
+                        FormatAuraButton(auraButton, containerKey, true, size, db)
+                    end,
+                    layout = groupLayout,
+                    candidateFilters = debuffWLCandidateFilters,
+                })
+            end
+
+            if container.GetAuraGroupFrameCount then
+                local count = container:GetAuraGroupFrameCount(groupKey)
+                for i = 1, count do
+                    local btn = container:GetAuraGroupFrame(groupKey, i)
+                    if btn then
+                        btn.unit = unit
+                        FormatAuraButton(btn, containerKey, true, size, db)
+                    end
+                end
             end
         end
     end

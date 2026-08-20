@@ -44,32 +44,18 @@ UF.TagManager = TM
 
 
 
--- Helper: Shorten Number (12.0.1 Style K/M)
+-- Helper: Shorten Number (12.0.1 Style K/M/B)
 local function AbbreviateNumber(value)
-    -- CRITICAL: Check for Secret values using the GLOBAL function
-    -- Secrets have type() == "number" or "string" but forbid math/comparison.
-    if issecretvalue and issecretvalue(value) then
-        if AbbreviateLargeNumbers then
-            return AbbreviateLargeNumbers(value)
+    if value == nil then return "" end
+
+    if AbbreviateLargeNumbers then
+        local success, result = pcall(AbbreviateLargeNumbers, value)
+        if success and result then
+            return result
         end
-        return value
     end
 
-    local n = tonumber(value)
-    if not n then return value end
-
-    -- Fallback for non-secret values
-    local success, result = pcall(function()
-        if n >= 1000000000 then
-            return string.format("%.1fB", n / 1000000000)
-        elseif n >= 1000000 then
-            return string.format("%.1fM", n / 1000000)
-        elseif n >= 1000 then
-            return string.format("%.1fk", n / 1000)
-        end
-        return tostring(n)
-    end)
-    return success and result or value
+    return tostring(value)
 end
 
 -- ----------------------------------------------------------------------------

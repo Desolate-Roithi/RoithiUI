@@ -58,6 +58,14 @@ L["Create New Frame (ID)"] = "Neues Fenster erstellen (ID)"
 L["Crowd Control"] = "Kontrolleffekte (CC)"
 L["Custom Frames"] = "Benutzerdefinierte Fenster"
 L["Debuffs Bar Settings"] = "Schwächungszauber-Einstellungen"
+L["Hide Icon"] = "Icon ausblenden"
+L["Hide Aura Icon"] = "Aura-Icon ausblenden"
+L["Hide Timer"] = "Timer ausblenden"
+L["Hide Duration Timer"] = "Dauer-Timer ausblenden"
+L["Hide Stack Count"] = "Stapelanzahl ausblenden"
+L["Hide the aura icon texture and cooldown swipe."] = "Aura-Icon-Textur und Abklingzeit-Swipe ausblenden."
+L["Hide the remaining duration text."] = "Verbleibenden Dauer-Text ausblenden."
+L["Hide the stack/application count text."] = "Stapel-/Anwendungsanzahl ausblenden."
 L["Defensives"] = "Defensivzauber"
 L["Delete Frame"] = "Fenster löschen"
 L["Detach (Move in Edit Mode)"] = "Abtrennen (Im Bearbeitungsmodus bewegen)"
@@ -251,14 +259,21 @@ L["Configure the visual appearance of the auras."] = "Konfigurieren Sie das visu
 -- Whitelist / Blacklist Mode & Notices
 L["Show Only Whitelisted Buffs"] = "Nur Stärkungszauber der Positivliste anzeigen"
 L["Hides all Buffs except those explicitly added to the Spell Whitelist."] = "Blendet alle Buffs aus, außer jene auf der Positivliste."
+L["Include Whitelisted Buffs"] = "Zusätzliche Positivlisten-Buffs anzeigen"
+L["Displays spells from the Spell Whitelist in addition to the filtered Buffs above."] = "Zeigt Zauber aus der Positivliste zusätzlich zu den oben gefilterten Buffs an."
 L["Show Only Whitelisted Debuffs"] = "Nur Schwächungszauber der Positivliste anzeigen"
 L["Hides all Debuffs except those explicitly added to the Spell Whitelist."] = "Blendet alle Debuffs aus, außer jene auf der Positivliste."
+L["Include Whitelisted Debuffs"] = "Zusätzliche Positivlisten-Debuffs anzeigen"
+L["Displays spells from the Spell Whitelist in addition to the filtered Debuffs above."] = "Zeigt Zauber aus der Positivliste zusätzlich zu den oben gefilterten Debuffs an."
+L["|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted' or 'Include Whitelisted' is enabled above."] =
+"|cffff8800Hinweis:|r Die Positivliste ist nur aktiv, wenn 'Nur Positivliste anzeigen' oder 'Zusätzliche Positivliste anzeigen' oben aktiviert ist."
 L["|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted Buffs' or 'Show Only Whitelisted Debuffs' is checked above."] =
-"|cffff8800Hinweis:|r Die Zauber-Positivliste ist nur aktiv, wenn oben 'Nur Stärkungszauber der Positivliste anzeigen' oder 'Nur Schwächungszauber der Positivliste anzeigen' aktiviert ist."
+"|cffff8800Hinweis:|r Die Positivliste ist nur aktiv, wenn 'Nur Positivliste anzeigen' oder 'Zusätzliche Positivliste anzeigen' oben aktiviert ist."
 L["|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID blacklisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be hidden by spell ID."] =
 "|cffff8800Hinweis:|r Das 12.1.0-System von Blizzard erlaubt die Sperrung von Zauber-IDs bei förderlichen Buffs und gegnerischen Debuffs. Schädliche Debuffs auf freundlichen Einheiten sind geschützt und können nicht über die Zauber-ID ausgeblendet werden."
 L["|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID whitelisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be whitelisted by spell ID."] =
 "|cffff8800Hinweis:|r Das 12.1.0-System von Blizzard erlaubt die Positivliste von Zauber-IDs bei förderlichen Buffs und gegnerischen Debuffs. Schädliche Debuffs auf freundlichen Einheiten sind geschützt und können nicht über die Zauber-ID zur Positivliste hinzugefügt werden."
+
 
 -- Quick Links (castbar / boss)
 L["> Auras (Boss 1)"] = "> Auren (Boss 1)"

@@ -32,9 +32,16 @@ local function Update(self, event, unit)
 
     -- 4. Color Update
     -- Do NOT use cur/max. Use 'per'.
-    local isPlayer = (unit == "player") or (UnitIsPlayer and UnitIsPlayer(unit))
-    local isPlayerSecret = (issecretvalue and issecretvalue(isPlayer)) or (canaccessvalue and not canaccessvalue(isPlayer))
-    local isPlayerUnit = (unit == "player") or (not isPlayerSecret and isPlayer)
+    local isPlayer = (unit == "player")
+    if not isPlayer and UnitIsPlayer then
+        local rawIsPlayer = UnitIsPlayer(unit)
+        local isSecretPlayer = (issecretvalue and issecretvalue(rawIsPlayer)) or (canaccessvalue and not canaccessvalue(rawIsPlayer))
+        if isSecretPlayer then
+            isPlayer = (UnitPlayerControlled and UnitPlayerControlled(unit)) or false
+        else
+            isPlayer = (rawIsPlayer == true or rawIsPlayer == 1)
+        end
+    end
 
     if ((element.safeColorTapping or element.colorTapping) and not UnitPlayerControlled(unit) and UnitIsTapDenied(unit)) then
         local t = element.colors.tapped
@@ -42,18 +49,18 @@ local function Update(self, event, unit)
     elseif ((element.safeColorDisconnected or element.colorDisconnected) and not UnitIsConnected(unit)) then
         local t = element.colors.disconnected
         element:SetStatusBarColor(t.r, t.g, t.b)
-    elseif ((element.safeColorClass or element.colorClass) and isPlayerUnit and not UnitHasVehicleUI(unit)) then
+    elseif ((element.safeColorClass or element.colorClass) and isPlayer and not UnitHasVehicleUI(unit)) then
         local _, class = UnitClass(unit)
-        local isClassSecret = issecretvalue and issecretvalue(class)
+        local isClassSecret = (issecretvalue and issecretvalue(class)) or (canaccessvalue and not canaccessvalue(class))
         local colorsClass = (element.colors and element.colors.class) or _G.RAID_CLASS_COLORS
         local t = (class and not isClassSecret and colorsClass) and colorsClass[class] or nil
         if t then
             element:SetStatusBarColor(t.r, t.g, t.b)
         else
             local fallback = (element.colors and element.colors.health) or { r = 0.2, g = 0.8, b = 0.2 }
-            element:SetStatusBarColor(fallback.r, fallback.g, fallback.b) -- Green fallback if class color is missing
+            element:SetStatusBarColor(fallback.r, fallback.g, fallback.b)
         end
-    elseif ((element.safeColorReaction or element.colorReaction) and (not isPlayerUnit or UnitHasVehicleUI(unit))) then -- check Reaction
+    elseif ((element.safeColorReaction or element.colorReaction) and (not isPlayer or UnitHasVehicleUI(unit))) then
         local reaction = UnitReaction(unit, "player")
         local isReactionSecret = (issecretvalue and issecretvalue(reaction)) or (canaccessvalue and not canaccessvalue(reaction))
         if not isReactionSecret and reaction and element.colors and element.colors.reaction then
@@ -63,8 +70,6 @@ local function Update(self, event, unit)
             end
         end
     elseif (element.safeColorSmooth or element.colorSmooth) then
-        -- oUF Smooth Color usually relies on value/max.
-        -- We must use 'per/100' here.
         local r, g, b = self:ColorGradient(per, 100, unpack(element.smoothGradient or self.colors.smooth))
         element:SetStatusBarColor(r, g, b)
     elseif (element.colorHealth) then

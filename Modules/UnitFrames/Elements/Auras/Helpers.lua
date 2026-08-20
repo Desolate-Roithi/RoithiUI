@@ -122,10 +122,12 @@ local function GetSmartFilterQueries(filterType, db, unit)
     local queries = {}
 
     if filterType == "HELPFUL" then
-        if db.onlyWhitelistBuffs then
+        if db.onlyWhitelistBuffs or db.onlyWhitelist then
+            RADLog("[SmartFilter] unit=[%s] HELPFUL -> onlyWhitelist active", tostring(unit))
             return { "HELPFUL" }
         end
         if db.showAllBuffs then
+            RADLog("[SmartFilter] unit=[%s] HELPFUL -> showAllBuffs active", tostring(unit))
             return { "HELPFUL" }
         end
         if db.playerBuffs == true then
@@ -144,15 +146,19 @@ local function GetSmartFilterQueries(filterType, db, unit)
             table.insert(queries, "HELPFUL|RAID_IN_COMBAT|PLAYER")
         end
         -- Fallback: ONLY if NO explicit buff filter toggles have been set at all
-        local hasAnyBuffToggle = (db.showAllBuffs ~= nil) or (db.playerBuffs ~= nil) or (db.importantBuffs ~= nil) or (db.majorDefensives ~= nil) or (db.externalDefensives ~= nil) or (db.raidInCombat ~= nil) or (db.onlyWhitelistBuffs ~= nil)
+        local hasAnyBuffToggle = (db.showAllBuffs ~= nil) or (db.playerBuffs ~= nil) or (db.importantBuffs ~= nil) or (db.majorDefensives ~= nil) or (db.majorDefensivesBuffs ~= nil) or (db.externalDefensives ~= nil) or (db.raidInCombat ~= nil) or (db.onlyWhitelistBuffs ~= nil) or (db.onlyWhitelist ~= nil) or (db.additionalWhitelistBuffs ~= nil) or (db.additionalWhitelist ~= nil)
         if #queries == 0 and not hasAnyBuffToggle then
+            RADLog("[SmartFilter] unit=[%s] HELPFUL -> fallback default", tostring(unit))
             table.insert(queries, unit == "player" and "HELPFUL" or "HELPFUL|PLAYER")
         end
+        RADLog("[SmartFilter] unit=[%s] HELPFUL queries count=%d: %s", tostring(unit), #queries, table.concat(queries, ", "))
     elseif filterType == "HARMFUL" then
-        if db.onlyWhitelistDebuffs then
+        if db.onlyWhitelistDebuffs or db.onlyWhitelist then
+            RADLog("[SmartFilter] unit=[%s] HARMFUL -> onlyWhitelist active", tostring(unit))
             return { "HARMFUL" }
         end
         if db.showAllDebuffs then
+            RADLog("[SmartFilter] unit=[%s] HARMFUL -> showAllDebuffs active", tostring(unit))
             return { "HARMFUL" }
         end
         if db.playerDebuffs == true then
@@ -167,14 +173,16 @@ local function GetSmartFilterQueries(filterType, db, unit)
         if db.onlyDispellable == true or db.dispellable == true then
             table.insert(queries, "HARMFUL|RAID_PLAYER_DISPELLABLE")
         end
-        if db.majorDefensivesDebuff == true then
+        if db.majorDefensivesDebuff == true or db.majorDefensivesDebuffs == true then
             table.insert(queries, "HARMFUL|BIG_DEFENSIVE")
         end
         -- Fallback: ONLY if NO explicit debuff filter toggles have been set at all
-        local hasAnyDebuffToggle = (db.showAllDebuffs ~= nil) or (db.playerDebuffs ~= nil) or (db.importantDebuffs ~= nil) or (db.crowdControl ~= nil) or (db.dispellable ~= nil) or (db.majorDefensivesDebuff ~= nil) or (db.onlyWhitelistDebuffs ~= nil)
+        local hasAnyDebuffToggle = (db.showAllDebuffs ~= nil) or (db.playerDebuffs ~= nil) or (db.importantDebuffs ~= nil) or (db.crowdControl ~= nil) or (db.dispellable ~= nil) or (db.majorDefensivesDebuffs ~= nil) or (db.majorDefensivesDebuff ~= nil) or (db.onlyWhitelistDebuffs ~= nil) or (db.onlyWhitelist ~= nil) or (db.additionalWhitelistDebuffs ~= nil) or (db.additionalWhitelist ~= nil)
         if #queries == 0 and not hasAnyDebuffToggle then
+            RADLog("[SmartFilter] unit=[%s] HARMFUL -> fallback default", tostring(unit))
             table.insert(queries, "HARMFUL|PLAYER")
         end
+        RADLog("[SmartFilter] unit=[%s] HARMFUL queries count=%d: %s", tostring(unit), #queries, table.concat(queries, ", "))
     end
 
     return queries
@@ -183,7 +191,7 @@ end
 -------------------------------------------------------------------------------
 -- Helper to Build candidateFilters pipeline for 12.1.0 AuraGroups
 -------------------------------------------------------------------------------
-local function BuildCandidateFilters(db, filterType)
+local function BuildCandidateFilters(db, filterType, isWhitelistGroup)
     db = db or {}
     local candidateFilters = {}
 
@@ -191,43 +199,72 @@ local function BuildCandidateFilters(db, filterType)
         candidateFilters.maxDuration = 86400
     end
 
-    -- "Show Only Whitelisted" Mode check
+    -- "Show Only Whitelisted" Mode check or explicit Whitelist Group check
     local isOnlyWhitelist = (filterType == "HELPFUL" and db.onlyWhitelistBuffs)
                          or (filterType == "HARMFUL" and db.onlyWhitelistDebuffs)
                          or db.onlyWhitelist
 
-    if isOnlyWhitelist then
-        if db.Whitelist and next(db.Whitelist) then
-            candidateFilters.includeSpellIDs = db.Whitelist
-        else
-            -- Whitelist is empty → match spell ID 0 to hide all auras in this group
-            candidateFilters.includeSpellIDs = { [0] = true }
-        end
-    else
-        -- Standard Blacklist & Whitelist merging
-        local combinedBlacklist = {}
-        local globalBlacklist = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Auras and RoithiUI.db.profile.Auras.Blacklist
-        if globalBlacklist then
-            for spellID, active in pairs(globalBlacklist) do
-                if active then combinedBlacklist[spellID] = true end
+    if isOnlyWhitelist or isWhitelistGroup then
+        local includeList = {}
+        local combinedWhitelist = {}
+        local globalWhitelist = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Auras and RoithiUI.db.profile.Auras.Whitelist
+        if globalWhitelist then
+            for spellID, active in pairs(globalWhitelist) do
+                if active then combinedWhitelist[spellID] = true end
             end
         end
-        if db.Blacklist then
-            for spellID, active in pairs(db.Blacklist) do
+        if db.Whitelist then
+            for spellID, active in pairs(db.Whitelist) do
                 if active then
-                    combinedBlacklist[spellID] = true
+                    combinedWhitelist[spellID] = true
                 elseif active == false then
-                    combinedBlacklist[spellID] = nil
+                    combinedWhitelist[spellID] = nil
                 end
             end
         end
-        if next(combinedBlacklist) then
-            candidateFilters.excludeSpellIDs = combinedBlacklist
-        end
 
-        if db.Whitelist and next(db.Whitelist) then
-            candidateFilters.includeSpellIDs = db.Whitelist
+        for spellID, active in pairs(combinedWhitelist) do
+            if active then
+                local idNum = tonumber(spellID)
+                if idNum then
+                    includeList[idNum] = true
+                end
+            end
         end
+        if next(includeList) ~= nil then
+            candidateFilters.includeSpellIDs = includeList
+        end
+    end
+
+    -- Standard Blacklist merging (applies to standard groups and whitelist groups)
+    local combinedBlacklist = {}
+    local globalBlacklist = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Auras and RoithiUI.db.profile.Auras.Blacklist
+    if globalBlacklist then
+        for spellID, active in pairs(globalBlacklist) do
+            if active then combinedBlacklist[spellID] = true end
+        end
+    end
+    if db.Blacklist then
+        for spellID, active in pairs(db.Blacklist) do
+            if active then
+                combinedBlacklist[spellID] = true
+            elseif active == false then
+                combinedBlacklist[spellID] = nil
+            end
+        end
+    end
+
+    local excludeList = {}
+    for spellID, active in pairs(combinedBlacklist) do
+        if active then
+            local idNum = tonumber(spellID)
+            if idNum then
+                excludeList[idNum] = true
+            end
+        end
+    end
+    if next(excludeList) ~= nil then
+        candidateFilters.excludeSpellIDs = excludeList
     end
 
     if not next(candidateFilters) then

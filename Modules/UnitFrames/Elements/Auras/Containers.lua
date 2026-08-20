@@ -215,6 +215,66 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
                 end
             end
         end
+
+        -- Additional Whitelisted Buffs group (ONLY if Whitelist has active spell IDs)
+        local buffWLCandidateFilters = BuildCandidateFilters(db, "HELPFUL", true)
+        if (db.additionalWhitelistBuffs or db.additionalWhitelist) and not db.onlyWhitelistBuffs and not db.onlyWhitelist and not db.showAllBuffs and buffWLCandidateFilters and buffWLCandidateFilters.includeSpellIDs then
+            local groupKey = "Buffs_Whitelist"
+            newActiveGroupKeys[groupKey] = true
+            RADLog("Setting Additional Whitelist AuraGroup [%s]", groupKey)
+
+            local groupLayout = {
+                anchorPoint = layoutAnchor,
+                layoutAxis = axisVal,
+                maximumLineSize = lineSizeVal,
+                elementSpacing = spacing,
+                lineSpacing = spacing,
+                forceNewLine = false,
+                elementWidth = size,
+                elementHeight = size,
+            }
+
+            if container.HasAuraGroup and container:HasAuraGroup(groupKey) then
+                if container.SetAuraGroupFilterString then
+                    container:SetAuraGroupFilterString(groupKey, "HELPFUL")
+                end
+                if container.SetAuraGroupMaxFrameCount then
+                    container:SetAuraGroupMaxFrameCount(groupKey, maxCount)
+                end
+                if container.SetAuraGroupLayout then
+                    container:SetAuraGroupLayout(groupKey, groupLayout)
+                end
+                if container.SetAuraGroupCandidateFilters then
+                    container:SetAuraGroupCandidateFilters(groupKey, buffWLCandidateFilters)
+                end
+                if container.SetAuraGroupSortMethod then
+                    container:SetAuraGroupSortMethod(groupKey, sortMethodVal, sortDirVal)
+                end
+            else
+                container:AddAuraGroup(groupKey, "HELPFUL", {
+                    maxFrameCount = maxCount,
+                    sortMethod = sortMethodVal,
+                    sortDirection = sortDirVal,
+                    initializeFrame = function(auraButton)
+                        auraButton.unit = unit
+                        FormatAuraButton(auraButton, container.containerKey, false, size, db)
+                    end,
+                    layout = groupLayout,
+                    candidateFilters = buffWLCandidateFilters,
+                })
+            end
+
+            if container.GetAuraGroupFrameCount then
+                local count = container:GetAuraGroupFrameCount(groupKey)
+                for i = 1, count do
+                    local btn = container:GetAuraGroupFrame(groupKey, i)
+                    if btn then
+                        btn.unit = unit
+                        FormatAuraButton(btn, container.containerKey, false, size, db)
+                    end
+                end
+            end
+        end
     end
 
     -- 2. Configure Debuff AuraGroups
@@ -260,6 +320,7 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
                     sortMethod = sortMethodVal,
                     sortDirection = sortDirVal,
                     initializeFrame = function(auraButton)
+                        auraButton.unit = unit
                         FormatAuraButton(auraButton, container.containerKey, true, size, db)
                     end,
                     layout = groupLayout,
@@ -271,7 +332,73 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
                 local count = container:GetAuraGroupFrameCount(groupKey)
                 for i = 1, count do
                     local btn = container:GetAuraGroupFrame(groupKey, i)
-                    if btn then FormatAuraButton(btn, container.containerKey, true, size, db) end
+                    if btn then
+                        btn.unit = unit
+                        FormatAuraButton(btn, container.containerKey, true, size, db)
+                    end
+                end
+            end
+        end
+
+        -- Additional Whitelisted Debuffs group (ONLY if Whitelist has active spell IDs)
+        local debuffWLCandidateFilters = BuildCandidateFilters(db, "HARMFUL", true)
+        if (db.additionalWhitelistDebuffs or db.additionalWhitelist) and not db.onlyWhitelistDebuffs and not db.onlyWhitelist and not db.showAllDebuffs and debuffWLCandidateFilters and debuffWLCandidateFilters.includeSpellIDs then
+            local groupKey = "Debuffs_Whitelist"
+            newActiveGroupKeys[groupKey] = true
+            RADLog("Setting Additional Whitelist AuraGroup [%s]", groupKey)
+
+            local groupLayout = {
+                anchorPoint = layoutAnchor,
+                layoutAxis = axisVal,
+                maximumLineSize = lineSizeVal,
+                elementSpacing = spacing,
+                lineSpacing = spacing,
+                forceNewLine = false,
+                elementWidth = size,
+                elementHeight = size,
+            }
+
+            local debuffMaxCount = isCombined and math.max(0, maxCount - ((container.GetAuraGroupFrameCount and container:GetAuraGroupFrameCount("Buffs_1")) or 0)) or maxCount
+            local debuffWLCandidateFilters = BuildCandidateFilters(db, "HARMFUL", true)
+
+            if container.HasAuraGroup and container:HasAuraGroup(groupKey) then
+                if container.SetAuraGroupFilterString then
+                    container:SetAuraGroupFilterString(groupKey, "HARMFUL")
+                end
+                if container.SetAuraGroupMaxFrameCount then
+                    container:SetAuraGroupMaxFrameCount(groupKey, debuffMaxCount)
+                end
+                if container.SetAuraGroupLayout then
+                    container:SetAuraGroupLayout(groupKey, groupLayout)
+                end
+                if container.SetAuraGroupCandidateFilters then
+                    container:SetAuraGroupCandidateFilters(groupKey, debuffWLCandidateFilters)
+                end
+                if container.SetAuraGroupSortMethod then
+                    container:SetAuraGroupSortMethod(groupKey, sortMethodVal, sortDirVal)
+                end
+            else
+                container:AddAuraGroup(groupKey, "HARMFUL", {
+                    maxFrameCount = debuffMaxCount,
+                    sortMethod = sortMethodVal,
+                    sortDirection = sortDirVal,
+                    initializeFrame = function(auraButton)
+                        auraButton.unit = unit
+                        FormatAuraButton(auraButton, container.containerKey, true, size, db)
+                    end,
+                    layout = groupLayout,
+                    candidateFilters = debuffWLCandidateFilters,
+                })
+            end
+
+            if container.GetAuraGroupFrameCount then
+                local count = container:GetAuraGroupFrameCount(groupKey)
+                for i = 1, count do
+                    local btn = container:GetAuraGroupFrame(groupKey, i)
+                    if btn then
+                        btn.unit = unit
+                        FormatAuraButton(btn, container.containerKey, true, size, db)
+                    end
                 end
             end
         end

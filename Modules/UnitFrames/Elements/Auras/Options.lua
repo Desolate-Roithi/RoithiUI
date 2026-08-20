@@ -58,6 +58,36 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                         GetDB().hideTimeless = v; RefreshFunc()
                     end,
                 },
+                hideIcon = {
+                    type = "toggle",
+                    name = L["Hide Aura Icon"],
+                    desc  = L["Hide the aura icon texture and cooldown swipe."],
+                    order = 5,
+                    get = function() return GetDB().hideIcon == true end,
+                    set = function(_, v)
+                        GetDB().hideIcon = v; RefreshFunc()
+                    end,
+                },
+                hideTimer = {
+                    type = "toggle",
+                    name = L["Hide Duration Timer"],
+                    desc  = L["Hide the remaining duration text."],
+                    order = 6,
+                    get = function() return GetDB().hideTimer == true end,
+                    set = function(_, v)
+                        GetDB().hideTimer = v; RefreshFunc()
+                    end,
+                },
+                hideCount = {
+                    type = "toggle",
+                    name = L["Hide Stack Count"],
+                    desc  = L["Hide the stack/application count text."],
+                    order = 7,
+                    get = function() return GetDB().hideCount == true end,
+                    set = function(_, v)
+                        GetDB().hideCount = v; RefreshFunc()
+                    end,
+                },
             },
         },
         group2_buffs = {
@@ -74,7 +104,10 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     get = function() return GetDB().showAllBuffs == true end,
                     set = function(_, v)
                         GetDB().showAllBuffs = v
-                        if v then GetDB().onlyWhitelistBuffs = false end
+                        if v then
+                            GetDB().onlyWhitelistBuffs = false
+                            GetDB().additionalWhitelistBuffs = false
+                        end
                         RefreshFunc()
                     end,
                     disabled = function() return GetDB().onlyWhitelistBuffs == true end,
@@ -104,7 +137,7 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 importantBuffs = {
                     type = "toggle",
                     name = L["Important Buffs"],
-                    desc  = L["Shows Buffs explicitly flagged by Blizzard developers as critical for the encounter."],
+                    desc  = L["Shows important raid & encounter buffs."],
                     order = 4,
                     get = function() return GetDB().importantBuffs == true end,
                     set = function(_, v)
@@ -115,7 +148,7 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 majorDefensivesBuffs = {
                     type = "toggle",
                     name = L["Major Defensives (Tanks)"],
-                    desc  = L["Shows major defensive cooldowns (Buffs) on the unit (e.g. Shield Wall, Barkskin)."],
+                    desc  = L["Shows major tank defensive cooldowns (e.g. Shield Wall, Icebound Fortitude)."],
                     order = 5,
                     get = function() return GetDB().majorDefensivesBuffs == true or GetDB().majorDefensives == true end,
                     set = function(_, v)
@@ -126,7 +159,7 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 externalDefensives = {
                     type = "toggle",
                     name = L["External Defensives"],
-                    desc  = L["Shows major defensive buffs cast on the unit by OTHER players (e.g. Pain Suppression)."],
+                    desc  = L["Shows external defensive cooldowns (e.g. Pain Suppression, Blessing of Sacrifice)."],
                     order = 6,
                     get = function() return GetDB().externalDefensives == true end,
                     set = function(_, v)
@@ -142,10 +175,29 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     get = function() return GetDB().onlyWhitelistBuffs == true end,
                     set = function(_, v)
                         GetDB().onlyWhitelistBuffs = v
-                        if v then GetDB().showAllBuffs = false end
+                        if v then
+                            GetDB().showAllBuffs = false
+                            GetDB().additionalWhitelistBuffs = false
+                        end
                         RefreshFunc()
                     end,
                     disabled = function() return GetDB().showAllBuffs == true end,
+                },
+                additionalWhitelistBuffs = {
+                    type = "toggle",
+                    name = L["Include Whitelisted Buffs"],
+                    desc  = L["Displays spells from the Spell Whitelist in addition to the filtered Buffs above."],
+                    order = 8,
+                    get = function() return GetDB().additionalWhitelistBuffs == true end,
+                    set = function(_, v)
+                        GetDB().additionalWhitelistBuffs = v
+                        if v then
+                            GetDB().showAllBuffs = false
+                            GetDB().onlyWhitelistBuffs = false
+                        end
+                        RefreshFunc()
+                    end,
+                    disabled = function() return GetDB().onlyWhitelistBuffs == true end,
                 },
             },
         },
@@ -163,7 +215,10 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     get = function() return GetDB().showAllDebuffs == true end,
                     set = function(_, v)
                         GetDB().showAllDebuffs = v
-                        if v then GetDB().onlyWhitelistDebuffs = false end
+                        if v then
+                            GetDB().onlyWhitelistDebuffs = false
+                            GetDB().additionalWhitelistDebuffs = false
+                        end
                         RefreshFunc()
                     end,
                     disabled = function() return GetDB().onlyWhitelistDebuffs == true end,
@@ -182,7 +237,7 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 importantDebuffs = {
                     type = "toggle",
                     name = L["Important Debuffs"],
-                    desc  = L["Shows Debuffs explicitly flagged by Blizzard developers as critical for the encounter."],
+                    desc  = L["Shows important raid & encounter debuffs."],
                     order = 3,
                     get = function() return GetDB().importantDebuffs == true end,
                     set = function(_, v)
@@ -190,21 +245,21 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     end,
                     disabled = function() return GetDB().showAllDebuffs == true or GetDB().onlyWhitelistDebuffs == true end,
                 },
-                cc = {
+                crowdControl = {
                     type = "toggle",
                     name = L["Crowd Control"],
-                    desc  = L["Shows Debuffs that restrict character control (Stuns, Fears, Roots, etc)."],
+                    desc  = L["Shows crowd control debuffs (e.g. Polymorph, Stun)."],
                     order = 4,
-                    get = function() return GetDB().cc == true end,
+                    get = function() return GetDB().crowdControl == true or GetDB().cc == true end,
                     set = function(_, v)
-                        GetDB().cc = v; RefreshFunc()
+                        GetDB().crowdControl = v; GetDB().cc = v; RefreshFunc()
                     end,
                     disabled = function() return GetDB().showAllDebuffs == true or GetDB().onlyWhitelistDebuffs == true end,
                 },
                 dispellable = {
                     type = "toggle",
                     name = L["Dispellable"],
-                    desc  = L["Shows Debuffs that your current Class/Spec is physically capable of dispelling."],
+                    desc  = L["Shows debuffs that you can dispel."],
                     order = 5,
                     get = function() return GetDB().dispellable == true or GetDB().onlyDispellable == true end,
                     set = function(_, v)
@@ -215,7 +270,7 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                 majorDefensivesDebuffs = {
                     type = "toggle",
                     name = L["Major Defensives (Debuffs)"],
-                    desc  = L["Shows major defensive restrictions (Debuffs) on the unit (e.g. Forbearance, Weakened Soul)."],
+                    desc  = L["Shows major defensive debuffs."],
                     order = 6,
                     get = function() return GetDB().majorDefensivesDebuffs == true end,
                     set = function(_, v)
@@ -231,10 +286,29 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     get = function() return GetDB().onlyWhitelistDebuffs == true end,
                     set = function(_, v)
                         GetDB().onlyWhitelistDebuffs = v
-                        if v then GetDB().showAllDebuffs = false end
+                        if v then
+                            GetDB().showAllDebuffs = false
+                            GetDB().additionalWhitelistDebuffs = false
+                        end
                         RefreshFunc()
                     end,
                     disabled = function() return GetDB().showAllDebuffs == true end,
+                },
+                additionalWhitelistDebuffs = {
+                    type = "toggle",
+                    name = L["Include Whitelisted Debuffs"],
+                    desc  = L["Displays spells from the Spell Whitelist in addition to the filtered Debuffs above."],
+                    order = 8,
+                    get = function() return GetDB().additionalWhitelistDebuffs == true end,
+                    set = function(_, v)
+                        GetDB().additionalWhitelistDebuffs = v
+                        if v then
+                            GetDB().showAllDebuffs = false
+                            GetDB().onlyWhitelistDebuffs = false
+                        end
+                        RefreshFunc()
+                    end,
+                    disabled = function() return GetDB().onlyWhitelistDebuffs == true end,
                 },
             },
         },
@@ -248,6 +322,7 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     type = "description",
                     name = L["|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID blacklisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be hidden by spell ID."],
                     order = 0.5,
+                    hidden = function() return false end,
                 },
                 globalNotice = {
                     type = "description",
@@ -364,11 +439,11 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
             args = {
                 disabledNotice = {
                     type = "description",
-                    name = L["|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted Buffs' or 'Show Only Whitelisted Debuffs' is checked above."],
+                    name = L["|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted' or 'Include Whitelisted' is enabled above."],
                     order = 0.1,
                     hidden = function()
                         local db = GetDB()
-                        return db and (db.onlyWhitelistBuffs or db.onlyWhitelistDebuffs)
+                        return db and (db.onlyWhitelistBuffs or db.onlyWhitelistDebuffs or db.additionalWhitelistBuffs or db.additionalWhitelistDebuffs or db.onlyWhitelist or db.additionalWhitelist)
                     end,
                 },
                 engineNotice = {
@@ -377,7 +452,7 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     order = 0.5,
                     hidden = function()
                         local db = GetDB()
-                        return not (db and (db.onlyWhitelistBuffs or db.onlyWhitelistDebuffs))
+                        return not (db and (db.onlyWhitelistBuffs or db.onlyWhitelistDebuffs or db.additionalWhitelistBuffs or db.additionalWhitelistDebuffs or db.onlyWhitelist or db.additionalWhitelist))
                     end,
                 },
                 addSpell = {
@@ -402,7 +477,7 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     end,
                     disabled = function()
                         local db = GetDB()
-                        return not (db and (db.onlyWhitelistBuffs or db.onlyWhitelistDebuffs))
+                        return not (db and (db.onlyWhitelistBuffs or db.onlyWhitelistDebuffs or db.additionalWhitelistBuffs or db.additionalWhitelistDebuffs or db.onlyWhitelist or db.additionalWhitelist))
                     end,
                 },
                 removeSpell = {
@@ -442,7 +517,7 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                     confirm = true,
                     disabled = function()
                         local db = GetDB()
-                        return not (db and (db.onlyWhitelistBuffs or db.onlyWhitelistDebuffs))
+                        return not (db and (db.onlyWhitelistBuffs or db.onlyWhitelistDebuffs or db.additionalWhitelistBuffs or db.additionalWhitelistDebuffs or db.onlyWhitelist or db.additionalWhitelist))
                     end,
                     hidden = function()
                         local db = GetDB()
@@ -571,6 +646,9 @@ local function GetGlobalAuraOptions()
                                         stackY = -2,
                                         hideBorder = true,
                                         zoomPercent = 15,
+                                        hideIcon = false,
+                                        hideTimer = false,
+                                        hideCount = false,
                                     }
                                     ns.RefreshAllUnitFrames()
                                 end

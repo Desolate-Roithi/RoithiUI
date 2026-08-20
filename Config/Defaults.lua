@@ -17,6 +17,9 @@ ns.Defaults = {
             UseLibCustomGlow = true,
             Whitelist = {
             },
+            hideIcon = false,
+            hideTimer = false,
+            hideCount = false,
         },
         CustomAuraFrames = {},
         LEMDialogPosition = false,
