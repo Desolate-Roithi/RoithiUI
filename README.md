@@ -2,14 +2,15 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v1.5.3  
-**Last Updated:** 2026-08-12  
+**Latest Version:** v1.6.0  
+**Last Updated:** 2026-08-20  
 **Compatibility:** WoW 12.1.0 (Midnight)
 
-## 🆕 Recent Updates (v1.5.3)
+## 🆕 Recent Updates (v1.6.0)
 
-* **oUF v14.0.0 Library Compatibility**: Resolved health bar color overwrite where `oUF v14.0.0` health element (`Health.colorHealth`) forced neon green status bar coloring. Synced all third-party libraries (`oUF v14.0.0`, `Ace3 Release-r1403`, `LibDualSpec-1.0 v1.30.0`).
-* **UnitFrame Class Color Fix**: Resolved class color fallback where secret boolean evaluations (`UnitIsPlayer`) bypassed class coloring for player unit frames. Guaranteed class color lookup across all player classes with green fallback retained if class color is missing.
+* **Selective Aura Hiding & Bare Seconds Formatting**: Added independent controls to hide aura icon texture, cooldown swipe, duration text, or stack counts. Implemented bare seconds formatting (`45`, `2m`, `1h`) stripping the `'s'` suffix using native `C_StringUtil.CreateNumericRuleFormatter()`.
+* **C-Engine Additional Whitelist Candidate Filters**: Fixed candidate filter validation when Whitelist has 0 active spell IDs, ensuring zero unwanted buffs display when "Include Whitelisted Buffs" is enabled alongside Major/External Defensives.
+* **Combat-Safe Castbars & Encounter Bar**: Pure `durationObj` castbars preventing secret value taints in combat, and keyword blacklisting (Prop Hunt, Decor Duel) for Encounter Bars.
 
 ## 🚀 Key Features
 
