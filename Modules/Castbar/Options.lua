@@ -130,6 +130,18 @@ local function BuildCastbarGroup(uKey, orderIdx)
                     UpdateCastbar(uKey)
                 end,
             },
+            colorOnInterruptCD = (uKey ~= "player") and {
+                type = "toggle",
+                name = L["Color when Interrupt on Cooldown"],
+                desc = L["Change the castbar color if the cast is interruptible but your interrupt ability is currently on cooldown."],
+                order = 7,
+                scope = "both",
+                get = function() return GetCastbarDB(uKey).colorOnInterruptCD == true end,
+                set = function(_, v)
+                    GetCastbarDB(uKey).colorOnInterruptCD = v
+                    UpdateCastbar(uKey)
+                end,
+            } or nil,
             colorsGroup = {
                 type = "group",
                 name = L["Colors"],
@@ -201,10 +213,26 @@ local function BuildCastbarGroup(uKey, orderIdx)
                             UpdateCastbar(uKey)
                         end,
                     },
+                    interruptOnCDColor = (uKey ~= "player") and {
+                        type = "color",
+                        name = L["Interrupt on Cooldown Color"],
+                        order = 5,
+                        hasAlpha = true,
+                        get = function()
+                            local c = GetCastbarDB(uKey).colors and GetCastbarDB(uKey).colors.interruptOnCD or { 0.9, 0.5, 0.1, 1 }
+                            return c[1], c[2], c[3], c[4] or 1
+                        end,
+                        set = function(_, r, g, b, a)
+                            local db = GetCastbarDB(uKey)
+                            if not db.colors then db.colors = {} end
+                            db.colors.interruptOnCD = { r, g, b, a }
+                            UpdateCastbar(uKey)
+                        end,
+                    } or nil,
                     empowerGroup = {
                         type = "group",
                         name = L["Empower Stage Colors"],
-                        order = 5,
+                        order = 6,
                         inline = true,
                         scope = "ace",
                         args = {
@@ -657,6 +685,19 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
             })
         end
 
+        if unit ~= "player" then
+            table.insert(settings, {
+                name = L["Color when Interrupt on Cooldown"] or "Color when Interrupt on Cooldown",
+                kind = LEM.SettingType.Checkbox,
+                default = false,
+                get = function() return db.colorOnInterruptCD == true end,
+                set = function(_, value)
+                    db.colorOnInterruptCD = value
+                    UpdateBar(unit)
+                end,
+            })
+        end
+
         table.insert(settings, { kind = LEM.SettingType.Divider })
 
         table.insert(settings, {
@@ -680,6 +721,9 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
                 { key = "interrupted", name = "Interrupted" },
                 { key = "shield",      name = "Shield" },
             }
+            if unit ~= "player" then
+                table.insert(colorKeys, { key = "interruptOnCD", name = L["Interrupt on CD"] or "Interrupt on CD" })
+            end
 
             for _, info in ipairs(colorKeys) do
                 table.insert(settings, {

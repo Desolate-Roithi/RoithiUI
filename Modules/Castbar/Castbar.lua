@@ -137,6 +137,131 @@ local function GetSafeLatency()
 end
 
 -- ----------------------------------------------------------------------------
+-- 1.6. Player Class Interrupt Tracking
+-- ----------------------------------------------------------------------------
+local INTERRUPT_SPELLS = {
+    -- Warrior
+    [6552] = true, -- Pummel
+    -- Death Knight
+    [47528] = true, -- Mind Freeze
+    -- Demon Hunter
+    [183752] = true, -- Disrupt
+    -- Druid
+    [106839] = true, -- Skull Bash
+    [78675] = true, -- Solar Beam
+    -- Evoker
+    [351338] = true, -- Quell
+    -- Hunter
+    [147362] = true, -- Counter Shot
+    [187707] = true, -- Muzzle
+    -- Mage
+    [2139] = true, -- Counterspell
+    -- Monk
+    [116705] = true, -- Spear Hand Strike
+    -- Paladin
+    [96231] = true, -- Rebuke
+    [31935] = true, -- Avenger's Shield
+    -- Priest
+    [15487] = true, -- Silence
+    -- Rogue
+    [1766] = true, -- Kick
+    -- Shaman
+    [57994] = true, -- Wind Shear
+    -- Warlock
+    [19647] = true, -- Spell Lock (Pet)
+    [119910] = true, -- Spell Lock (Command Demon)
+    [119898] = true, -- Command Demon
+    [132409] = true, -- Spell Lock (Grimoire)
+    [171138] = true, -- Shadow Lock
+    [89766] = true, -- Axe Toss (Felguard)
+}
+
+local cachedInterruptSpellID = nil
+
+local function UpdatePlayerInterruptSpell()
+    cachedInterruptSpellID = nil
+    for spellID in pairs(INTERRUPT_SPELLS) do
+        if (_G.C_SpellBook and _G.C_SpellBook.IsSpellKnownOrInSpellBook and (_G.C_SpellBook.IsSpellKnownOrInSpellBook(spellID) or (_G.Enum and _G.Enum.SpellBookSpellBank and _G.C_SpellBook.IsSpellKnownOrInSpellBook(spellID, _G.Enum.SpellBookSpellBank.Pet))))
+            or (_G.IsSpellKnownOrOverridesKnown and _G.IsSpellKnownOrOverridesKnown(spellID))
+            or (_G.IsPlayerSpell and _G.IsPlayerSpell(spellID)) then
+            cachedInterruptSpellID = spellID
+            return spellID
+        end
+    end
+    if _G.IsSpellKnownOrOverridesKnown and _G.IsSpellKnownOrOverridesKnown(119898) then
+        cachedInterruptSpellID = 119898
+        return 119898
+    end
+    return nil
+end
+
+ns.UpdatePlayerInterruptSpell = UpdatePlayerInterruptSpell
+
+local function GetPlayerInterruptCooldownState()
+    local spellID = cachedInterruptSpellID or UpdatePlayerInterruptSpell()
+    if not spellID then return false, nil end
+
+    -- 1. Try C_Spell.GetSpellCooldownDuration(spellID, true) first (12.0.1+ Native API)
+    if C_Spell and C_Spell.GetSpellCooldownDuration then
+        local success, durObj = pcall(C_Spell.GetSpellCooldownDuration, spellID, true)
+        if success and durObj and durObj.IsZero then
+            local isZeroSuccess, isZero = pcall(durObj.IsZero, durObj)
+            if isZeroSuccess and isZero ~= nil then
+                local isZeroSecret = (issecretvalue and issecretvalue(isZero)) or (canaccessvalue and not canaccessvalue(isZero))
+                if isZeroSecret then
+                    -- isZero is a SECRET boolean (true = 0 CD / Ready, false = on CD)
+                    return nil, isZero
+                else
+                    return not isZero, nil
+                end
+            end
+        end
+    end
+
+    -- 2. Fallback to C_Spell.GetSpellCooldown
+    local startTime, duration, isEnabled
+    if C_Spell and C_Spell.GetSpellCooldown then
+        local success, info = pcall(C_Spell.GetSpellCooldown, spellID)
+        if success and info then
+            startTime = info.startTime
+            duration = info.duration
+            isEnabled = info.isEnabled
+        end
+    elseif _G.GetSpellCooldown then
+        local success, sT, dur, en = pcall(_G.GetSpellCooldown, spellID)
+        if success then
+            startTime = sT
+            duration = dur
+            isEnabled = en
+        end
+    end
+
+    if isEnabled == 0 or isEnabled == false then
+        return false, nil
+    end
+
+    local isDurationSecret = (issecretvalue and issecretvalue(duration)) or (canaccessvalue and not canaccessvalue(duration))
+    local isStartSecret = (issecretvalue and issecretvalue(startTime)) or (canaccessvalue and not canaccessvalue(startTime))
+    if isDurationSecret or isStartSecret then
+        return false, nil
+    end
+
+    if not duration or duration <= 1.5 or not startTime or startTime <= 0 then
+        return false, nil
+    end
+
+    local curTime = _G.GetTime and _G.GetTime() or 0
+    if curTime > 0 and startTime > 0 then
+        local rem = (startTime + duration) - curTime
+        return rem > 0.1, nil
+    end
+
+    return true, nil
+end
+
+ns.GetPlayerInterruptCooldownState = GetPlayerInterruptCooldownState
+
+-- ----------------------------------------------------------------------------
 -- 2. Update Logic
 -- ----------------------------------------------------------------------------
 
@@ -253,9 +378,17 @@ function ns.UpdateCast(bar, unitOverride)
 
     -- Visual Setup
     local colors = db.colors
+    local shieldC = (colors and colors.shield) or { 0.5, 0.5, 0.5, 1 }
+    local kickCDC = (colors and colors.interruptOnCD) or { 0.9, 0.5, 0.1, 1 }
+    local normC = (colors and (colors[state] or colors.cast)) or { 1, 0.95, 0, 1 }
+
+    local isKickOnCD, isKickZeroSecret
+    if bar.unit ~= "player" and db.colorOnInterruptCD then
+        isKickOnCD, isKickZeroSecret = GetPlayerInterruptCooldownState()
+    end
+
     local isNotIntSecret = (issecretvalue and issecretvalue(notInterruptible)) or (canaccessvalue and not canaccessvalue(notInterruptible))
-    local isShield = not isNotIntSecret and notInterruptible
-    local c = (isShield and colors.shield) or colors[state] or colors.cast
+    local hasKickZeroSecret = (issecretvalue and issecretvalue(isKickZeroSecret)) or (canaccessvalue and not canaccessvalue(isKickZeroSecret))
 
     if db.showIcon then
         bar.Icon:Show(); bar.Icon:SetTexture(texture)
@@ -269,14 +402,72 @@ function ns.UpdateCast(bar, unitOverride)
     end
     if bar.Text then bar.Text:SetText(text) end
 
-    if state == "channel" then
-        bar:SetReverseFill(true)
-        bar:SetStatusBarColor(0, 0, 0, 1)
-        if bar.Background then bar.Background:SetColorTexture(c[1], c[2], c[3], c[4]) end
+    -- Color Evaluation Pipeline (Pure Combat-Safe with C_CurveUtil)
+    if (isNotIntSecret or hasKickZeroSecret) and C_CurveUtil and (C_CurveUtil.EvaluateColorValueFromBoolean or C_CurveUtil.EvaluateColorFromBoolean) then
+        local rBase, gBase, bBase, aBase
+        if hasKickZeroSecret then
+            -- isKickZeroSecret: true = 0 CD (Ready) -> normC, false = active CD -> kickCDC
+            if C_CurveUtil.EvaluateColorValueFromBoolean then
+                rBase = C_CurveUtil.EvaluateColorValueFromBoolean(isKickZeroSecret, normC[1], kickCDC[1])
+                gBase = C_CurveUtil.EvaluateColorValueFromBoolean(isKickZeroSecret, normC[2], kickCDC[2])
+                bBase = C_CurveUtil.EvaluateColorValueFromBoolean(isKickZeroSecret, normC[3], kickCDC[3])
+                aBase = C_CurveUtil.EvaluateColorValueFromBoolean(isKickZeroSecret, normC[4] or 1, kickCDC[4] or 1)
+            else
+                local baseObj = C_CurveUtil.EvaluateColorFromBoolean(isKickZeroSecret, _G.CreateColor(normC[1], normC[2], normC[3], normC[4] or 1), _G.CreateColor(kickCDC[1], kickCDC[2], kickCDC[3], kickCDC[4] or 1))
+                rBase, gBase, bBase, aBase = baseObj:GetRGBA()
+            end
+        else
+            local baseC = (isKickOnCD == true) and kickCDC or normC
+            rBase, gBase, bBase, aBase = baseC[1], baseC[2], baseC[3], baseC[4] or 1
+        end
+
+        local rFinal, gFinal, bFinal, aFinal
+        if isNotIntSecret then
+            -- notInterruptible: true = shielded -> shieldC, false = kickable -> base color
+            if C_CurveUtil.EvaluateColorValueFromBoolean then
+                rFinal = C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, shieldC[1], rBase)
+                gFinal = C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, shieldC[2], gBase)
+                bFinal = C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, shieldC[3], bBase)
+                aFinal = C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, shieldC[4] or 1, aBase)
+            else
+                local finalObj = C_CurveUtil.EvaluateColorFromBoolean(notInterruptible, _G.CreateColor(shieldC[1], shieldC[2], shieldC[3], shieldC[4] or 1), _G.CreateColor(rBase, gBase, bBase, aBase))
+                rFinal, gFinal, bFinal, aFinal = finalObj:GetRGBA()
+            end
+        elseif notInterruptible == true then
+            rFinal, gFinal, bFinal, aFinal = shieldC[1], shieldC[2], shieldC[3], shieldC[4] or 1
+        else
+            rFinal, gFinal, bFinal, aFinal = rBase, gBase, bBase, aBase
+        end
+
+        if state == "channel" then
+            bar:SetReverseFill(true)
+            bar:SetStatusBarColor(0, 0, 0, 1)
+            if bar.Background then
+                if bar.Background.SetColorTexture then
+                    bar.Background:SetColorTexture(rFinal, gFinal, bFinal, aFinal)
+                elseif bar.Background.SetVertexColor then
+                    bar.Background:SetVertexColor(rFinal, gFinal, bFinal, aFinal)
+                end
+            end
+        else
+            bar:SetReverseFill(false)
+            bar:SetStatusBarColor(rFinal, gFinal, bFinal, aFinal)
+            if bar.Background then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
+        end
     else
-        bar:SetReverseFill(false)
-        bar:SetStatusBarColor(c[1], c[2], c[3], c[4])
-        if bar.Background then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
+        local isShield = (not isNotIntSecret and notInterruptible == true)
+        local baseC = (isKickOnCD == true) and kickCDC or normC
+        local c = isShield and shieldC or baseC
+
+        if state == "channel" then
+            bar:SetReverseFill(true)
+            bar:SetStatusBarColor(0, 0, 0, 1)
+            if bar.Background then bar.Background:SetColorTexture(c[1], c[2], c[3], c[4] or 1) end
+        else
+            bar:SetReverseFill(false)
+            bar:SetStatusBarColor(c[1], c[2], c[3], c[4] or 1)
+            if bar.Background then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
+        end
     end
 
     -- Latency Ping Bar

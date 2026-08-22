@@ -16,6 +16,7 @@ local DEFAULT_COLORS = {
     channel = { 0, 0.98, 1, 1 },     -- 00F9FF
     interrupted = { 1, 0, 0, 1 },    -- FF0000
     shield = { 0.5, 0.5, 0.5, 1 },   -- 808080
+    interruptOnCD = { 0.9, 0.5, 0.1, 1 }, -- E6801A (Amber-Orange)
     empower1 = { 0.8, 0.5, 0.1, 1 }, -- CC801A
     empower2 = { 0.9, 0.9, 0.2, 1 }, -- E6E633
     empower3 = { 0.2, 0.7, 0.2, 1 }, -- 33B333
@@ -38,6 +39,7 @@ ns.DEFAULTS = {
     },
     target = {
         enabled = true,
+        colorOnInterruptCD = false,
         point = "CENTER",
         relPoint = "CENTER",
         x = 0,
@@ -51,6 +53,7 @@ ns.DEFAULTS = {
     },
     focus = {
         enabled = true,
+        colorOnInterruptCD = false,
         point = "CENTER",
         relPoint = "CENTER",
         x = -200,
@@ -64,6 +67,7 @@ ns.DEFAULTS = {
     },
     pet = {
         enabled = true,
+        colorOnInterruptCD = false,
         point = "CENTER",
         relPoint = "CENTER",
         x = 0,
@@ -77,6 +81,7 @@ ns.DEFAULTS = {
     },
     targettarget = {
         enabled = true,
+        colorOnInterruptCD = false,
         point = "CENTER",
         relPoint = "CENTER",
         x = 0,
@@ -90,6 +95,7 @@ ns.DEFAULTS = {
     },
     focustarget = {
         enabled = true,
+        colorOnInterruptCD = false,
         point = "CENTER",
         relPoint = "CENTER",
         x = -200,
@@ -107,6 +113,7 @@ ns.DEFAULTS = {
 for i = 1, 5 do
     ns.DEFAULTS["boss" .. i] = {
         enabled = true,
+        colorOnInterruptCD = false,
         detached = false,
         point = "TOP",
         relPoint = "BOTTOM",
@@ -300,6 +307,18 @@ function Castbar:OnEnable()
             local cbDB = RoithiUI.db.profile.Castbar["pet"]
             local isDetached = cbDB and cbDB.detached
             ns.SetCastbarAttachment("pet", not isDetached)
+        elseif event == "SPELL_UPDATE_COOLDOWN" then
+            if ns.bars then
+                for u, bar in pairs(ns.bars) do
+                    if u ~= "player" and bar:IsShown() and (bar.casting or bar.channeling) then
+                        ns.UpdateCast(bar, u)
+                    end
+                end
+            end
+        elseif event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
+            if ns.UpdatePlayerInterruptSpell then
+                ns.UpdatePlayerInterruptSpell()
+            end
         else
             local unit = ...
             local targetBar = ns.bars[unit]
@@ -334,12 +353,18 @@ function Castbar:OnEnable()
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_UPDATE")
+    f:RegisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
+    f:RegisterEvent("UNIT_SPELLCAST_NOT_INTERRUPTIBLE")
     f:RegisterEvent("UNIT_SPELLCAST_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
     f:RegisterEvent("PLAYER_TARGET_CHANGED")
     f:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    f:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    f:RegisterEvent("SPELLS_CHANGED")
+    f:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    f:RegisterEvent("PLAYER_ENTERING_WORLD")
     -- Events are registered above
 end
 
