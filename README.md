@@ -2,15 +2,15 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v1.6.0  
-**Last Updated:** 2026-08-20  
+**Latest Version:** v1.7.0  
+**Last Updated:** 2026-08-22  
 **Compatibility:** WoW 12.1.0 (Midnight)
 
-## 🆕 Recent Updates (v1.6.0)
+## 🆕 Recent Updates (v1.7.0)
 
-* **Selective Aura Hiding & Bare Seconds Formatting**: Added independent controls to hide aura icon texture, cooldown swipe, duration text, or stack counts. Implemented bare seconds formatting (`45`, `2m`, `1h`) stripping the `'s'` suffix using native `C_StringUtil.CreateNumericRuleFormatter()`.
-* **C-Engine Additional Whitelist Candidate Filters**: Fixed candidate filter validation when Whitelist has 0 active spell IDs, ensuring zero unwanted buffs display when "Include Whitelisted Buffs" is enabled alongside Major/External Defensives.
-* **Combat-Safe Castbars & Encounter Bar**: Pure `durationObj` castbars preventing secret value taints in combat, and keyword blacklisting (Prop Hunt, Decor Duel) for Encounter Bars.
+* **Castbar 'Interrupt on Cooldown' Coloring**: Added an opt-in toggle and customizable color for all non-player castbars (`target`, `focus`, `pet`, `boss1`..`boss5`). When enabled, kickable casts display a distinct color if your interrupt ability is on cooldown. Automatically tracks all 13 player classes while filtering out standard GCDs.
+* **Midnight Secret-Safe Curve Pipeline**: Upgraded castbar shield and cooldown coloring to use `C_CurveUtil.EvaluateColorValueFromBoolean` and `C_Spell.GetSpellCooldownDuration()`, ensuring 100% C-side evaluation with zero Lua boolean tests or comparisons on secret userdata in combat.
+* **Flight Path & Vehicle Whitelist Aura Suppression**: Fixed an issue where being on a flight path/taxi (e.g. Vault of Ula'thek) or vehicle caused `UnitCanAssist("player", "player")` to return `false`, leading Blizzard's C-Engine to bypass whitelist candidate filters and display all buffs. Whitelist containers and groups are now cleanly suppressed during flight and restored immediately upon landing.
 
 ## 🚀 Key Features
 
