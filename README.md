@@ -8,9 +8,9 @@ A modular UI replacement for **World of Warcraft: Midnight (12.1)**. Built on na
 
 ## 🆕 Recent Updates (v1.7.0)
 
-* **Castbar 'Interrupt on Cooldown' Coloring**: Added an opt-in toggle and customizable color for all non-player castbars (`target`, `focus`, `pet`, `boss1`..`boss5`). When enabled, kickable casts display a distinct color if your interrupt ability is on cooldown. Automatically tracks all 13 player classes while filtering out standard GCDs.
-* **Midnight Secret-Safe Curve Pipeline**: Upgraded castbar shield and cooldown coloring to use `C_CurveUtil.EvaluateColorValueFromBoolean` and `C_Spell.GetSpellCooldownDuration()`, ensuring 100% C-side evaluation with zero Lua boolean tests or comparisons on secret userdata in combat.
-* **Flight Path & Vehicle Whitelist Aura Suppression**: Fixed an issue where being on a flight path/taxi (e.g. Vault of Ula'thek) or vehicle caused `UnitCanAssist("player", "player")` to return `false`, leading Blizzard's C-Engine to bypass whitelist candidate filters and display all buffs. Whitelist containers and groups are now cleanly suppressed during flight and restored immediately upon landing.
+* **Castbar "Interrupt on Cooldown" Color**: You can now enable a custom castbar color that triggers when an enemy spell is kickable, but your interrupt is currently on cooldown. Supports all classes and specs, ignores global cooldowns, and updates in real-time.
+* **Uninterruptible Cast Shield Coloring**: Fixed an issue where non-interruptible (shielded) enemy casts failed to show their gray shield color during combat in Midnight.
+* **Flight Path & Taxi Aura Fix**: Fixed a bug where custom whitelist buff bars would suddenly show all your buffs while on flight paths or in vehicles (like the Vault of Ula'thek taxi).
 
 ## 🚀 Key Features
 
