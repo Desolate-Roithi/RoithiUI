@@ -365,13 +365,27 @@ local function GetTargetAnchorFromGrowDir(growDir, isCenterHoriz, isCenterVert)
 end
 
 -------------------------------------------------------------------------------
+-- Helper: Inaccessible / Vehicle / Flight Path State Check
+-------------------------------------------------------------------------------
+local function IsPlayerInaccessible(unit)
+    if not unit or (unit ~= "player" and unit ~= "vehicle") then return false end
+    if _G.UnitOnTaxi and _G.UnitOnTaxi("player") then return true end
+    if _G.UnitInVehicle and _G.UnitInVehicle("player") then return true end
+    if _G.UnitHasVehicleUI and _G.UnitHasVehicleUI("player") then return true end
+    if _G.UnitCanAssist and not _G.UnitCanAssist("player", "player") then return true end
+    return false
+end
+
+-------------------------------------------------------------------------------
 -- Sub-Module Function Exports
 -------------------------------------------------------------------------------
 ns.Auras = ns.Auras or {}
 ns.Auras.ConvertAnchorPosition = ConvertAnchorPosition
 ns.Auras.GetTargetAnchorFromGrowDir = GetTargetAnchorFromGrowDir
 ns.Auras.IsSupportedUnit = IsSupportedUnit
+ns.Auras.IsPlayerInaccessible = IsPlayerInaccessible
 ns.Auras.GetUnitDB = GetUnitDB
 ns.Auras.GetSmartFilterQueries = GetSmartFilterQueries
 ns.Auras.BuildCandidateFilters = BuildCandidateFilters
 ns.Auras.GetClosestScreenAnchor = GetClosestScreenAnchor
+

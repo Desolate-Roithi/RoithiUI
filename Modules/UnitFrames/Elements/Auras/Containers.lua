@@ -10,6 +10,7 @@ local GetUnitDB = function(unit) return ns.Auras and ns.Auras.GetUnitDB and ns.A
 local BuildCandidateFilters = function(db, fType) return ns.Auras and ns.Auras.BuildCandidateFilters and ns.Auras.BuildCandidateFilters(db, fType) end
 local GetSmartFilterQueries = function(fType, db, unit) return ns.Auras and ns.Auras.GetSmartFilterQueries and ns.Auras.GetSmartFilterQueries(fType, db, unit) end
 local FormatAuraButton = function(btn, key, isDebuff, size, db) if ns.Auras and ns.Auras.FormatAuraButton then ns.Auras.FormatAuraButton(btn, key, isDebuff, size, db) end end
+local IsPlayerInaccessible = function(unit) return ns.Auras and ns.Auras.IsPlayerInaccessible and ns.Auras.IsPlayerInaccessible(unit) end
 
 -------------------------------------------------------------------------------
 -- Container Key Maker
@@ -55,6 +56,7 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
 
     local showBuffs = db.showBuffs ~= false
     local showDebuffs = db.showDebuffs ~= false
+    local isPlayerInaccessible = IsPlayerInaccessible(unit)
 
     local size = isCombined and (tonumber(db.auraSize) or 28)
                 or (isDebuffs and (tonumber(db.debuffSize) or tonumber(db.auraSize) or 28)
@@ -216,9 +218,9 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
             end
         end
 
-        -- Additional Whitelisted Buffs group (ONLY if Whitelist has active spell IDs)
+        -- Additional Whitelisted Buffs group (ONLY if Whitelist has active spell IDs and player is accessible)
         local buffWLCandidateFilters = BuildCandidateFilters(db, "HELPFUL", true)
-        if (db.additionalWhitelistBuffs or db.additionalWhitelist) and not db.onlyWhitelistBuffs and not db.onlyWhitelist and not db.showAllBuffs and buffWLCandidateFilters and buffWLCandidateFilters.includeSpellIDs then
+        if (db.additionalWhitelistBuffs or db.additionalWhitelist) and not db.onlyWhitelistBuffs and not db.onlyWhitelist and not db.showAllBuffs and buffWLCandidateFilters and buffWLCandidateFilters.includeSpellIDs and not isPlayerInaccessible then
             local groupKey = "Buffs_Whitelist"
             newActiveGroupKeys[groupKey] = true
             RADLog("Setting Additional Whitelist AuraGroup [%s]", groupKey)
@@ -340,9 +342,9 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
             end
         end
 
-        -- Additional Whitelisted Debuffs group (ONLY if Whitelist has active spell IDs)
+        -- Additional Whitelisted Debuffs group (ONLY if Whitelist has active spell IDs and player is accessible)
         local debuffWLCandidateFilters = BuildCandidateFilters(db, "HARMFUL", true)
-        if (db.additionalWhitelistDebuffs or db.additionalWhitelist) and not db.onlyWhitelistDebuffs and not db.onlyWhitelist and not db.showAllDebuffs and debuffWLCandidateFilters and debuffWLCandidateFilters.includeSpellIDs then
+        if (db.additionalWhitelistDebuffs or db.additionalWhitelist) and not db.onlyWhitelistDebuffs and not db.onlyWhitelist and not db.showAllDebuffs and debuffWLCandidateFilters and debuffWLCandidateFilters.includeSpellIDs and not isPlayerInaccessible then
             local groupKey = "Debuffs_Whitelist"
             newActiveGroupKeys[groupKey] = true
             RADLog("Setting Additional Whitelist AuraGroup [%s]", groupKey)
@@ -578,7 +580,13 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
         )
     end
 
+    local isOnlyWhitelistContainer = (isBuffs and (db.onlyWhitelistBuffs or db.onlyWhitelist))
+                                   or (isDebuffs and (db.onlyWhitelistDebuffs or db.onlyWhitelist))
+                                   or (isCombined and (db.onlyWhitelist or (db.onlyWhitelistBuffs and db.onlyWhitelistDebuffs)))
+
     if isEditMode then
+        container:Hide()
+    elseif isPlayerInaccessible and isOnlyWhitelistContainer then
         container:Hide()
     elseif (isBuffs and not showBuffs) or (isDebuffs and not showDebuffs) then
         container:Hide()

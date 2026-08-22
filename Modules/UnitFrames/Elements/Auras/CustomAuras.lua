@@ -8,6 +8,7 @@ local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
 local BuildCandidateFilters = function(db, fType, isWL) return ns.Auras and ns.Auras.BuildCandidateFilters and ns.Auras.BuildCandidateFilters(db, fType, isWL) end
 local GetSmartFilterQueries = function(fType, db, unit) return ns.Auras and ns.Auras.GetSmartFilterQueries and ns.Auras.GetSmartFilterQueries(fType, db, unit) end
 local FormatAuraButton = function(btn, key, isDebuff, size, db) return ns.Auras and ns.Auras.FormatAuraButton and ns.Auras.FormatAuraButton(btn, key, isDebuff, size, db) end
+local IsPlayerInaccessible = function(unit) return ns.Auras and ns.Auras.IsPlayerInaccessible and ns.Auras.IsPlayerInaccessible(unit) end
 
 -------------------------------------------------------------------------------
 -- Custom Aura Containers (User-Defined Satellite Frames)
@@ -40,6 +41,7 @@ function UF:UpdateCustomAura(id)
     end
 
     local unit = db.unit or "player"
+    local isPlayerInaccessible = IsPlayerInaccessible(unit)
     local frame = self.units and self.units[unit]
     local parentFrame = frame or UIParent
 
@@ -223,7 +225,7 @@ function UF:UpdateCustomAura(id)
         end
 
         local buffWLCandidateFilters = BuildCandidateFilters(db, "HELPFUL", true)
-        if (db.additionalWhitelistBuffs or db.additionalWhitelist) and not db.onlyWhitelistBuffs and not db.onlyWhitelist and not db.showAllBuffs and buffWLCandidateFilters and buffWLCandidateFilters.includeSpellIDs then
+        if (db.additionalWhitelistBuffs or db.additionalWhitelist) and not db.onlyWhitelistBuffs and not db.onlyWhitelist and not db.showAllBuffs and buffWLCandidateFilters and buffWLCandidateFilters.includeSpellIDs and not isPlayerInaccessible then
             local groupKey = "CustomBuffs_Whitelist"
             newActiveGroupKeys[groupKey] = true
             local groupLayout = {
@@ -323,7 +325,7 @@ function UF:UpdateCustomAura(id)
         end
 
         local debuffWLCandidateFilters = BuildCandidateFilters(db, "HARMFUL", true)
-        if (db.additionalWhitelistDebuffs or db.additionalWhitelist) and not db.onlyWhitelistDebuffs and not db.onlyWhitelist and not db.showAllDebuffs and debuffWLCandidateFilters and debuffWLCandidateFilters.includeSpellIDs then
+        if (db.additionalWhitelistDebuffs or db.additionalWhitelist) and not db.onlyWhitelistDebuffs and not db.onlyWhitelist and not db.showAllDebuffs and debuffWLCandidateFilters and debuffWLCandidateFilters.includeSpellIDs and not isPlayerInaccessible then
             local groupKey = "CustomDebuffs_Whitelist"
             newActiveGroupKeys[groupKey] = true
             local groupLayout = {
@@ -422,7 +424,10 @@ function UF:UpdateCustomAura(id)
         end
     end
 
+    local isOnlyWhitelist = (db.onlyWhitelistBuffs or db.onlyWhitelistDebuffs or db.onlyWhitelist)
     if isEditMode then
+        container:Hide()
+    elseif isPlayerInaccessible and isOnlyWhitelist then
         container:Hide()
     else
         container:Show()
