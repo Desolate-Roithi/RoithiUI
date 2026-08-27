@@ -47,6 +47,20 @@ local function Shared(self, unit)
         self:SetAttribute("toggleForVehicle", true)
     end
 
+    -- Ping Receiver Registration (Blizzard Ping System)
+    self:SetAttribute("ping-receiver", true)
+    if PingableType_UnitFrameMixin then
+        Mixin(self, PingableType_UnitFrameMixin)
+    else
+        self.GetIsPingable = function() return true end
+        self.GetAllowRadialWheel = function() return true end
+        self.GetTargetInfo = function(frame)
+            return {
+                guid = UnitGUID(frame.unit or frame:GetAttribute("unit"))
+            }
+        end
+    end
+
     -- 2. Backdrop
     if not self.SetBackdrop then
         Mixin(self, BackdropTemplateMixin)
