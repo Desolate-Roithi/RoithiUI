@@ -2,15 +2,13 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v1.7.0  
-**Last Updated:** 2026-08-22  
+**Latest Version:** v1.7.1  
+**Last Updated:** 2026-08-27  
 **Compatibility:** WoW 12.1.0 (Midnight)
 
-## 🆕 Recent Updates (v1.7.0)
+## 🆕 Recent Updates (v1.7.1)
 
-* **Castbar "Interrupt on Cooldown" Color**: You can now enable a custom castbar color that triggers when an enemy spell is kickable, but your interrupt is currently on cooldown. Supports all classes and specs, ignores global cooldowns, and updates in real-time.
-* **Uninterruptible Cast Shield Coloring**: Fixed an issue where non-interruptible (shielded) enemy casts failed to show their gray shield color during combat in Midnight.
-* **Flight Path & Taxi Aura Fix**: Fixed a bug where custom whitelist buff bars would suddenly show all your buffs while on flight paths or in vehicles (like the Vault of Ula'thek taxi).
+* **Blizzard Ping Tool Support on Unit Frames**: Added native Ping Receiver registration (`PingableType_UnitFrameMixin` and `ping-receiver` attribute) across all unit frames. Resolves an issue where using Blizzard's ping tool on an enemy target frame caused the ping to fail and get stuck on the mouse cursor.
 
 ## 🚀 Key Features
 
