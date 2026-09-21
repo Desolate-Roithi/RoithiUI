@@ -338,7 +338,6 @@ function UF:UpdateCustomAura(id)
                 elementWidth = size,
                 elementHeight = size,
             }
-            local debuffWLCandidateFilters = BuildCandidateFilters(db, "HARMFUL", true)
             if container.HasAuraGroup and container:HasAuraGroup(groupKey) then
                 if container.SetAuraGroupFilterString then container:SetAuraGroupFilterString(groupKey, "HARMFUL") end
                 if container.SetAuraGroupMaxFrameCount then container:SetAuraGroupMaxFrameCount(groupKey, maxCount) end

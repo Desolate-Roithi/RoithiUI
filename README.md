@@ -2,13 +2,15 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v1.7.1  
-**Last Updated:** 2026-08-27  
-**Compatibility:** WoW 12.1.0 (Midnight)
+**Latest Version:** v1.7.2  
+**Last Updated:** 2026-09-21  
+**Compatibility:** WoW 12.1.0 (Midnight) & WoW Forever (16001)
 
-## 🆕 Recent Updates (v1.7.1)
+## 🆕 Recent Updates (v1.7.2)
 
-* **Blizzard Ping Tool Support on Unit Frames**: Added native Ping Receiver registration (`PingableType_UnitFrameMixin` and `ping-receiver` attribute) across all unit frames. Resolves an issue where using Blizzard's ping tool on an enemy target frame caused the ping to fail and get stuck on the mouse cursor.
+* **Unit Frame Native Ping Integration**: Re-architected unit frame pinging to inherit Blizzard's native `PingableUnitFrameTemplate`. Resolves `securecopy()` secret-string engine crashes when pinging enemy targets and bosses during combat in Patch 12.0.7 / 12.1.0.
+* **Player HP / Resource Pinging**: Pinging the player unit frame now reports your current health and resource status (`isPlayerResource`) with instant radial wheel bypass, matching default Blizzard PlayerFrame behavior.
+* **WoW Forever (16001) & Multi-Version Support**: Full compatibility added for WoW Forever / Classic, including nil-safe specialization guards in TagManager, combo point target synchronization in ClassPower, and Classic kick spell IDs in Castbars.
 
 ## 🚀 Key Features
 

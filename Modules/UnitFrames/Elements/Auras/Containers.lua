@@ -361,7 +361,6 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
             }
 
             local debuffMaxCount = isCombined and math.max(0, maxCount - ((container.GetAuraGroupFrameCount and container:GetAuraGroupFrameCount("Buffs_1")) or 0)) or maxCount
-            local debuffWLCandidateFilters = BuildCandidateFilters(db, "HARMFUL", true)
 
             if container.HasAuraGroup and container:HasAuraGroup(groupKey) then
                 if container.SetAuraGroupFilterString then
