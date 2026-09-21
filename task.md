@@ -25,3 +25,5 @@
    - Updated `Tests/Test_Forever_Compatibility.lua` verifying TagManager and ClassPower nil safety in Classic/Forever.
    - All 23 test suites in `Tests/TestRunner.lua` pass 100%.
    - Luacheck verified 0 warnings, 0 errors.
+8. **Git Staging Protocol**:
+   - Documented mandatory `git add .` usage in `.agent/AGENTS.md` and `.agent/rules/wow-development.md` to rely on `.gitignore` and prevent partial staging.
