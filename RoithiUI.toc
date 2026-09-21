@@ -1,6 +1,7 @@
-## Interface: 120100, 120007
+## Interface: 120100, 120007, 16001
+## AllowLoadGameType: standard, camelot
 ## Title: RoithiUI
-## Notes: Modular UI suite for Patch 12.1
+## Notes: Modular UI suite for Patch 12.1 and Forever
 ## Author: Roithi
 ## Version: @project-version@
 ## SavedVariables: RoithiUIDB

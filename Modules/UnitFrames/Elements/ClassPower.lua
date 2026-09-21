@@ -9,6 +9,7 @@ local UF = RoithiUI:GetModule("UnitFrames")
 
 -- 12.0.1 Secret APIs
 local issecretvalue = _G.issecretvalue
+local GetComboPoints = _G.GetComboPoints
 
 -- Configuration for Class Power
 local ClassPowerConfig = {
@@ -236,7 +237,7 @@ function UF:CreateClassPower(frame)
         end
 
         local _, class = UnitClass("player")
-        local spec = GetSpecialization()
+        local spec = GetSpecialization and GetSpecialization() or 1
 
         -- Robust Config Logic
         local classConfig = ClassPowerConfig[class]
@@ -334,7 +335,16 @@ function UF:CreateClassPower(frame)
                 modifier = 10
             end
 
-            curValue = UnitPower("player", config.type, true) -- get raw fragment value
+            if config.type == Enum.PowerType.ComboPoints and (ns.IsForever or GetComboPoints) then
+                local cp = GetComboPoints and GetComboPoints("player", "target")
+                if cp and cp > 0 then
+                    curValue = cp
+                else
+                    curValue = UnitPower("player", config.type, true)
+                end
+            else
+                curValue = UnitPower("player", config.type, true) -- get raw fragment value
+            end
         elseif config.mode == "STAGGER" then
             curValue = UnitStagger("player") or 0
             local hpMax = UnitHealthMax("player")

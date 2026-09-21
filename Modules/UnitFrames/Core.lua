@@ -30,6 +30,11 @@ local oUF = ns.oUF or _G.oUF
 ---@field frames table<string, table>
 local UF = RoithiUI:NewModule("UnitFrames")
 
+local UnitGUID = _G.UnitGUID
+local issecretvalue = _G.issecretvalue
+local canaccessvalue = _G.canaccessvalue
+local PingableType_UnitFrameMixin = _G.PingableType_UnitFrameMixin
+
 -- ----------------------------------------------------------------------------
 -- Style Function
 -- ----------------------------------------------------------------------------
@@ -47,16 +52,57 @@ local function Shared(self, unit)
         self:SetAttribute("toggleForVehicle", true)
     end
 
-    -- Ping Receiver Registration (Blizzard Ping System)
-    self:SetAttribute("ping-receiver", true)
-    if PingableType_UnitFrameMixin then
-        Mixin(self, PingableType_UnitFrameMixin)
+    -- Ping System Integration (Native Blizzard PingableUnitFrameTemplate)
+    local cXmlUtil = _G.C_XMLUtil
+    local hasPingTemplate = cXmlUtil and cXmlUtil.GetTemplateInfo and cXmlUtil.GetTemplateInfo("PingableUnitFrameTemplate")
+    if hasPingTemplate then
+        local pingRegion = CreateFrame("Frame", nil, self, "PingableUnitFrameTemplate")
+        pingRegion:SetAllPoints(self)
+        pingRegion:SetAttribute("unit", unit)
+        if unit == "player" then
+            pingRegion.GetAllowRadialWheel = function()
+                if self.Portrait and self.Portrait.IsMouseOver and self.Portrait:IsMouseOver() then
+                    return true
+                end
+                return false
+            end
+            pingRegion.GetTargetInfo = function()
+                local isOverPortrait = self.Portrait and self.Portrait.IsMouseOver and self.Portrait:IsMouseOver()
+                local getGuid = _G.UnitGUID or UnitGUID
+                return {
+                    guid = getGuid and getGuid("player") or nil,
+                    isPlayerResource = not isOverPortrait,
+                }
+            end
+        end
+        self.pingRegion = pingRegion
     else
+        -- Fallback for environments without the XML template (e.g. Classic / Forever)
+        self:SetAttribute("ping-receiver", true)
+        if PingableType_UnitFrameMixin then
+            Mixin(self, PingableType_UnitFrameMixin)
+        end
         self.GetIsPingable = function() return true end
-        self.GetAllowRadialWheel = function() return true end
+        self.GetAllowRadialWheel = function()
+            if unit == "player" then
+                if self.Portrait and self.Portrait.IsMouseOver and self.Portrait:IsMouseOver() then
+                    return true
+                end
+                return false
+            end
+            return true
+        end
         self.GetTargetInfo = function(frame)
+            local unitToken = frame.unit or (frame.GetAttribute and frame:GetAttribute("unit"))
+            local getGuid = _G.UnitGUID or UnitGUID
+            local guid = (unitToken and getGuid) and getGuid(unitToken) or nil
+            if guid and ((issecretvalue and issecretvalue(guid)) or (canaccessvalue and not canaccessvalue(guid))) then
+                guid = nil
+            end
+            local isOverPortrait = self.Portrait and self.Portrait.IsMouseOver and self.Portrait:IsMouseOver()
             return {
-                guid = UnitGUID(frame.unit or frame:GetAttribute("unit"))
+                guid = guid,
+                isPlayerResource = (unitToken == "player" and not isOverPortrait)
             }
         end
     end

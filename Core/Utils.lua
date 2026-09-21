@@ -1,14 +1,27 @@
 local _, ns = ...
 if ns.skipLoad then return end
 
--- ----------------------------------------------------------------------------
+-- -------------------------------------------------------------------------
+-- Environment & Client Flavor Detection
+-- -------------------------------------------------------------------------
+local GetBuildInfo = _G.GetBuildInfo
+local C_GameRules = _G.C_GameRules
+local WOW_PROJECT_ID = _G.WOW_PROJECT_ID
+local WOW_PROJECT_MAINLINE = _G.WOW_PROJECT_MAINLINE
+
+local _, _, _, interfaceVersion = GetBuildInfo()
+ns.InterfaceVersion = tonumber(interfaceVersion) or 0
+ns.IsForever = (ns.InterfaceVersion == 16001) or (C_GameRules and C_GameRules.IsForever and C_GameRules.IsForever() or false)
+ns.IsRetail = not ns.IsForever and (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+
+-- -------------------------------------------------------------------------
 -- Utils Module
--- ----------------------------------------------------------------------------
+-- -------------------------------------------------------------------------
 ns.Utils = {}
 
--- ----------------------------------------------------------------------------
+-- -------------------------------------------------------------------------
 -- Table Helpers
--- ----------------------------------------------------------------------------
+-- -------------------------------------------------------------------------
 function ns.Utils.MergeTable(target, source)
     if type(target) ~= "table" then target = {} end
     for k, v in pairs(source) do
@@ -27,9 +40,9 @@ function ns.Utils.MergeTable(target, source)
     return target
 end
 
--- ----------------------------------------------------------------------------
+-- -------------------------------------------------------------------------
 -- Serialization (Export)
--- ----------------------------------------------------------------------------
+-- -------------------------------------------------------------------------
 function ns.Utils.Serialize(tbl, indent)
     indent = indent or 0
     local parts = {}
@@ -45,7 +58,7 @@ function ns.Utils.Serialize(tbl, indent)
     for _, k in ipairs(keys) do
         local v = tbl[k]
         local keyStr
-        if type(k) == "string" and k:match("^[%a_][%w_]*$") then
+        if type(k) == "string" and k:match("^[a_][%w_]*$") then
             keyStr = k
         else
             keyStr = "[" .. (type(k) == "string" and string.format("%q", k) or k) .. "]"
@@ -66,9 +79,9 @@ function ns.Utils.Serialize(tbl, indent)
     return table.concat(parts)
 end
 
--- ----------------------------------------------------------------------------
+-- -------------------------------------------------------------------------
 -- UI Helpers
--- ----------------------------------------------------------------------------
+-- -------------------------------------------------------------------------
 function ns.Utils.ShowExportWindow(exportString)
     -- Show in a copy-paste dialog
     ---@diagnostic disable-next-line: undefined-global
