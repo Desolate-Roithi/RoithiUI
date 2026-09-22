@@ -1,6 +1,19 @@
 local _, ns = ...
 if ns.skipLoad then return end
 
+-- -------------------------------------------------------------------------
+-- Environment & Client Flavor Detection
+-- -------------------------------------------------------------------------
+local GetBuildInfo = _G.GetBuildInfo
+local C_GameRules = _G.C_GameRules
+local WOW_PROJECT_ID = _G.WOW_PROJECT_ID
+local WOW_PROJECT_MAINLINE = _G.WOW_PROJECT_MAINLINE
+
+local _, _, _, interfaceVersion = GetBuildInfo()
+ns.InterfaceVersion = tonumber(interfaceVersion) or 0
+ns.IsForever = (ns.InterfaceVersion == 16001) or (C_GameRules and C_GameRules.IsForever and C_GameRules.IsForever() or false)
+ns.IsRetail = not ns.IsForever and (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+
 -- ----------------------------------------------------------------------------
 -- Utils Module
 -- ----------------------------------------------------------------------------

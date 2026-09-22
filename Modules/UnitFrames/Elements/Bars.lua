@@ -514,7 +514,7 @@ function UF:CreateHealPrediction(frame)
                 -- 2. We cannot multiply maxHealth * 1.1 (Arithmetic Crash)
                 -- 3. We Must pass-through values directly to widgets.
 
-                local totalAbsorb = UnitGetTotalAbsorbs(frame.unit)
+                local totalAbsorb = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(frame.unit) or 0
 
                 absorb:ClearAllPoints()
                 absorb:SetPoint("TOPLEFT", frame.Health, "TOPLEFT", 0, 0)

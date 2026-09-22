@@ -10,18 +10,29 @@ local UF = RoithiUI:GetModule("UnitFrames")
 -- 12.0.1 Secret APIs
 local issecretvalue = _G.issecretvalue
 
+local GetComboPoints = _G.GetComboPoints
+local GetSpecialization = _G.GetSpecialization
+
+local PowerType = (Enum and Enum.PowerType) or {}
+local ComboPointsType = PowerType.ComboPoints or 4
+local ChiType = PowerType.Chi or 12
+local HolyPowerType = PowerType.HolyPower or 9
+local SoulShardsType = PowerType.SoulShards or 7
+local ArcaneChargesType = PowerType.ArcaneCharges or 16
+local EssenceType = PowerType.Essence or 19
+
 -- Configuration for Class Power
 local ClassPowerConfig = {
-    ["ROGUE"] = { mode = "POWER", type = Enum.PowerType.ComboPoints },
-    ["DRUID"] = { mode = "POWER", type = Enum.PowerType.ComboPoints, requireForm = true },
+    ["ROGUE"] = { mode = "POWER", type = ComboPointsType },
+    ["DRUID"] = { mode = "POWER", type = ComboPointsType, requireForm = true },
     ["MONK"] = {
         [1] = { mode = "STAGGER", style = "BAR" },          -- Brewmaster Stagger
-        [3] = { mode = "POWER", type = Enum.PowerType.Chi } -- Windwalker Only
+        [3] = { mode = "POWER", type = ChiType } -- Windwalker Only
     },
-    ["PALADIN"] = { mode = "POWER", type = Enum.PowerType.HolyPower },
-    ["WARLOCK"] = { mode = "POWER", type = Enum.PowerType.SoulShards },
-    ["MAGE"] = { mode = "POWER", type = Enum.PowerType.ArcaneCharges, spec = 1 },
-    ["EVOKER"] = { mode = "POWER", type = Enum.PowerType.Essence },
+    ["PALADIN"] = { mode = "POWER", type = HolyPowerType },
+    ["WARLOCK"] = { mode = "POWER", type = SoulShardsType },
+    ["MAGE"] = { mode = "POWER", type = ArcaneChargesType, spec = 1 },
+    ["EVOKER"] = { mode = "POWER", type = EssenceType },
     ["DEATHKNIGHT"] = {
         mode = "RUNES",
         color = { r = 0.2, g = 0.6, b = 1.0 } -- Blueish Rune Color
@@ -235,7 +246,15 @@ function UF:CreateClassPower(frame)
         end
 
         local _, class = UnitClass("player")
-        local spec = GetSpecialization()
+        local getSpec = GetSpecialization or _G.GetSpecialization
+        local spec = getSpec and getSpec() or 1
+
+        -- Forever / Classic: Only Rogues and Druids track combo points as a secondary class power
+        if ns.IsForever and class ~= "ROGUE" and class ~= "DRUID" then
+            element:Hide()
+            element:SetScript("OnUpdate", nil)
+            return
+        end
 
         -- Robust Config Logic
         local classConfig = ClassPowerConfig[class]
@@ -329,11 +348,20 @@ function UF:CreateClassPower(frame)
             end
 
             -- Explicit Warlock Fix: Soul Shards are always 10 fragments per shard
-            if class == "WARLOCK" and config.type == Enum.PowerType.SoulShards then
+            if class == "WARLOCK" and config.type == SoulShardsType then
                 modifier = 10
             end
 
-            curValue = UnitPower("player", config.type, true) -- get raw fragment value
+            if (config.type == ComboPointsType or (Enum and Enum.PowerType and config.type == Enum.PowerType.ComboPoints)) and (ns.IsForever or GetComboPoints) then
+                local cp = GetComboPoints and GetComboPoints("player", "target")
+                if cp and cp > 0 then
+                    curValue = cp
+                else
+                    curValue = UnitPower("player", config.type, true)
+                end
+            else
+                curValue = UnitPower("player", config.type, true) -- get raw fragment value
+            end
         elseif config.mode == "STAGGER" then
             curValue = UnitStagger("player") or 0
             local hpMax = UnitHealthMax("player")
@@ -483,6 +511,7 @@ function UF:CreateClassPower(frame)
     frame:RegisterEvent("PLAYER_ENTERING_WORLD", Update, true)
     frame:RegisterEvent("SPELLS_CHANGED", Update, true)
     local _, pclass = UnitClass("player")
+    if pclass == "ROGUE" or pclass == "DRUID" then frame:RegisterEvent("PLAYER_TARGET_CHANGED", Update, true) end
     if pclass == "DRUID" then frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM", Update, true) end
     if pclass == "DEATHKNIGHT" then frame:RegisterEvent("RUNE_POWER_UPDATE", Update, true) end
     frame:RegisterEvent("UNIT_POWER_UPDATE", Update)

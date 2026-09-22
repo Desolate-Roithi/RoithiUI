@@ -13,7 +13,7 @@ local UnitGetTotalHealAbsorbs = _G.UnitGetTotalHealAbsorbs
 local UnitIsConnected, UnitIsGhost, UnitIsDead = UnitIsConnected, UnitIsGhost, UnitIsDead
 local UnitClassification, UnitCreatureFamily, UnitCreatureType = UnitClassification, UnitCreatureFamily, UnitCreatureType
 local CreateFramePool, CreateFontStringPool = CreateFramePool, CreateFontStringPool
-local strsplit = strsplit
+local strsplit = _G.strsplit
 
 -- 12.0.1 Secret APIs (Localized if present)
 local issecretvalue = _G.issecretvalue
@@ -178,7 +178,8 @@ TM.Methods = {
     ["power.class"] = function(unit)
         if unit ~= "player" then return "" end
         local _, class = UnitClass("player")
-        local spec = GetSpecialization()
+        local getSpec = GetSpecialization or _G.GetSpecialization
+        local spec = getSpec and getSpec() or 1
         local classConfig = UF.ClassPowerConfig and UF.ClassPowerConfig[class]
         local config = nil
 
@@ -210,7 +211,8 @@ TM.Methods = {
     ["power.class.max"] = function(unit)
         if unit ~= "player" then return "" end
         local _, class = UnitClass("player")
-        local spec = GetSpecialization()
+        local getSpec = GetSpecialization or _G.GetSpecialization
+        local spec = getSpec and getSpec() or 1
         local classConfig = UF.ClassPowerConfig and UF.ClassPowerConfig[class]
         local config = nil
 
@@ -247,7 +249,8 @@ TM.Methods = {
     ["power.class.percent"] = function(unit)
         if unit ~= "player" then return "" end
         local _, class = UnitClass("player")
-        local spec = GetSpecialization()
+        local getSpec = GetSpecialization or _G.GetSpecialization
+        local spec = getSpec and getSpec() or 1
         local classConfig = UF.ClassPowerConfig and UF.ClassPowerConfig[class]
         local config = nil
 
@@ -363,14 +366,14 @@ TM.Methods = {
 
     -- Monk Stagger
     ["power.stagger"] = function(unit)
-        local stagger = UnitStagger(unit)
+        local stagger = UnitStagger and UnitStagger(unit)
         if not stagger or stagger == 0 then return "" end
         if issecretvalue and issecretvalue(stagger) then return stagger end
         return stagger
     end,
 
     ["power.stagger.percent"] = function(unit)
-        local stagger = UnitStagger(unit)
+        local stagger = UnitStagger and UnitStagger(unit)
         if not stagger or stagger == 0 then return "" end
 
         local healthMax = UnitHealthMax(unit)
@@ -383,7 +386,7 @@ TM.Methods = {
 
     -- Absorb
     ["absorb"] = function(unit)
-        local absorb = UnitGetTotalAbsorbs(unit) or 0
+        local absorb = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
         if issecretvalue and issecretvalue(absorb) then return absorb end
 
         -- Safe check for > 0 using pcall to avoid crash if comparison fails
@@ -460,7 +463,8 @@ function TM:GetSegments(formatString, unit)
     -- Supports {DH:3}(...) or {MAGE}(...)
     if formatString:find("%{") then
         local _, class = UnitClass(unit or "player")
-        local spec = GetSpecialization()
+        local getSpec = GetSpecialization or _G.GetSpecialization
+        local spec = getSpec and getSpec()
 
         -- Class Abbreviation Map
         local classMap = {
@@ -491,7 +495,7 @@ function TM:GetSegments(formatString, unit)
             local specMatch = true
 
             if reqSpec then
-                if tonumber(reqSpec) ~= spec then specMatch = false end
+                if not spec or tonumber(reqSpec) ~= spec then specMatch = false end
             end
 
             if classMatch and specMatch then
