@@ -7,9 +7,7 @@ local LibRoithi = LibStub("LibRoithi-1.0")
 ---@class UF
 local UF = RoithiUI:GetModule("UnitFrames")
 
--- 12.0.1 Secret APIs
 local issecretvalue = _G.issecretvalue
-
 local GetComboPoints = _G.GetComboPoints
 local GetSpecialization = _G.GetSpecialization
 
@@ -185,7 +183,8 @@ function UF:CreateClassPower(frame)
             RuneData[i].start = start
             RuneData[i].duration = duration
             RuneData[i].ready = runeReady
-            if not runeReady and start and duration then
+            local isSecretRune = (issecretvalue and (issecretvalue(start) or issecretvalue(duration))) or (canaccessvalue and (not canaccessvalue(start) or not canaccessvalue(duration)))
+            if not isSecretRune and not runeReady and start and duration then
                 RuneData[i].remain = (start + duration) - GetTime()
             else
                 RuneData[i].remain = 0

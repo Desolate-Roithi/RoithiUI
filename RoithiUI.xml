@@ -2,52 +2,38 @@
     <!-- Libraries -->
     <Include file="Libs/Init.xml"/>
 
-
+    <!-- Locales -->
+    <Include file="Locales/Locales.xml"/>
+    
     <!-- Core -->
-    <Script file="Core/Locales.lua"/>
     <Script file="Core/Init.lua"/>
     <Script file="Core/ModuleManager.lua"/>
-    <Script file="Core/OptionGenerator.lua"/>
+    <Script file="Core/OptionsEngine.lua"/>
     <Script file="Core/Utils.lua"/>
     <Script file="Core/Commands.lua"/>
     <Script file="Core/Media.lua"/>
     <Script file="Core/AttachmentLogic.lua"/>
-    <Script file="Core/ProfileSharing.lua"/>
-    
+
+    <!-- Config -->
     <Script file="Config/Defaults.lua"/>
     <Script file="Config/Dashboard.lua"/>
+    <Script file="Config/CustomTags.lua"/>
+    <Script file="Config/GeneralOptions.lua"/>
     <Script file="Config/Options.lua"/>
 
-    <!-- Modules -->
-    <!-- UnitFrames -->
-    <Script file="Modules/UnitFrames/Elements/SafeHealth.lua"/>
-    <Script file="Modules/UnitFrames/Core.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Bars.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Text.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Tags.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Indicators.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Auras.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Range.lua"/>
-    <Script file="Modules/UnitFrames/Elements/HealthPrediction.lua"/>
-    <Script file="Modules/UnitFrames/Elements/Fader.lua"/>
-    <Script file="Modules/UnitFrames/Elements/ClassPower.lua"/>
-    <Script file="Modules/UnitFrames/Elements/AdditionalPower.lua"/>
-    <Script file="Modules/UnitFrames/Boss.lua"/>
-    <Script file="Modules/UnitFrames/Units.lua"/>
-    <Script file="Modules/UnitFrames/CustomTags.lua"/>
-    <Script file="Modules/UnitFrames/LEM.lua"/>
-    <Script file="Modules/UnitFrames/BossLEM.lua"/>
-    
-    <!-- Encounter Bar -->
-    <Script file="Modules/EncounterBar/EncounterBar.lua"/>
-    
+    <!-- Modular XML Manifests -->
+    <Include file="Modules/UnitFrames/UnitFrames.xml"/>
+    <Include file="Modules/Castbar/Castbar.xml"/>
+    <Include file="Modules/EncounterBar/EncounterBar.xml"/>
+    <Include file="Modules/ProfileSharing/ProfileSharing.xml"/>
+
     <!-- Minimap -->
     <Script file="Modules/Minimap/Minimap.lua"/>
     <Script file="Modules/Minimap/AddonBar.lua"/>
-    
-    <!-- Castbar Integration -->
-    <Script file="Modules/Castbar/Core.lua"/>
-    <Script file="Modules/Castbar/Empower.lua"/>
-    <Script file="Modules/Castbar/Castbar.lua"/>
-    <Script file="Modules/Castbar/LEM.lua"/>
+
+    <!-- Actionbars -->
+    <Script file="Modules/Actionbars/Core.lua"/>
+    <Script file="Modules/Actionbars/Bars.lua"/>
+    <Script file="Modules/Actionbars/LEM.lua"/>
+    <Script file="Modules/Actionbars/Options.lua"/>
 </Ui>

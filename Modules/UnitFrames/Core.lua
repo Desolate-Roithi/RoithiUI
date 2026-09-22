@@ -40,6 +40,11 @@ function UF:GetOptions()
     return RoithiUI.Config:GetUnitFramesOptions()
 end
 
+local UnitGUID = _G.UnitGUID
+local issecretvalue = _G.issecretvalue
+local canaccessvalue = _G.canaccessvalue
+local PingableType_UnitFrameMixin = _G.PingableType_UnitFrameMixin
+
 -- ----------------------------------------------------------------------------
 -- Style Function
 -- ----------------------------------------------------------------------------
@@ -55,6 +60,61 @@ local function Shared(self, unit)
     -- Enable vehicle switching for player/pet
     if unit == "player" or unit == "pet" then
         self:SetAttribute("toggleForVehicle", true)
+    end
+
+    -- Ping System Integration (Native Blizzard PingableUnitFrameTemplate)
+    local cXmlUtil = _G.C_XMLUtil
+    local hasPingTemplate = cXmlUtil and cXmlUtil.GetTemplateInfo and cXmlUtil.GetTemplateInfo("PingableUnitFrameTemplate")
+    if hasPingTemplate then
+        local pingRegion = CreateFrame("Frame", nil, self, "PingableUnitFrameTemplate")
+        pingRegion:SetAllPoints(self)
+        pingRegion:SetAttribute("unit", unit)
+        if unit == "player" then
+            pingRegion.GetAllowRadialWheel = function()
+                if self.Portrait and self.Portrait.IsMouseOver and self.Portrait:IsMouseOver() then
+                    return true
+                end
+                return false
+            end
+            pingRegion.GetTargetInfo = function()
+                local isOverPortrait = self.Portrait and self.Portrait.IsMouseOver and self.Portrait:IsMouseOver()
+                local getGuid = _G.UnitGUID or UnitGUID
+                return {
+                    guid = getGuid and getGuid("player") or nil,
+                    isPlayerResource = not isOverPortrait,
+                }
+            end
+        end
+        self.pingRegion = pingRegion
+    else
+        -- Fallback for environments without the XML template (e.g. Classic / Forever)
+        self:SetAttribute("ping-receiver", true)
+        if PingableType_UnitFrameMixin then
+            Mixin(self, PingableType_UnitFrameMixin)
+        end
+        self.GetIsPingable = function() return true end
+        self.GetAllowRadialWheel = function()
+            if unit == "player" then
+                if self.Portrait and self.Portrait.IsMouseOver and self.Portrait:IsMouseOver() then
+                    return true
+                end
+                return false
+            end
+            return true
+        end
+        self.GetTargetInfo = function(frame)
+            local unitToken = frame.unit or (frame.GetAttribute and frame:GetAttribute("unit"))
+            local getGuid = _G.UnitGUID or UnitGUID
+            local guid = (unitToken and getGuid) and getGuid(unitToken) or nil
+            if guid and ((issecretvalue and issecretvalue(guid)) or (canaccessvalue and not canaccessvalue(guid))) then
+                guid = nil
+            end
+            local isOverPortrait = self.Portrait and self.Portrait.IsMouseOver and self.Portrait:IsMouseOver()
+            return {
+                guid = guid,
+                isPlayerResource = (unitToken == "player" and not isOverPortrait)
+            }
+        end
     end
 
     -- 2. Backdrop
@@ -76,15 +136,30 @@ local function Shared(self, unit)
     Health:SetPoint("BOTTOMRIGHT", -1, 1)
     Health:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
 
-    -- Options
-    Health.colorTapping = true
-    Health.colorDisconnected = true
-    Health.colorClass = true
-    Health.colorReaction = true
-    Health.colorSmooth = true -- Uses our SafeHealth gradient logic
+    -- Options for SafeHealth (RoithiUI custom safe element)
+    Health.safeColorTapping = true
+    Health.safeColorDisconnected = true
+    Health.safeColorClass = true
+    Health.safeColorReaction = true
+    Health.safeColorSmooth = true
 
-    self.SafeHealth = Health  -- Register as "SafeHealth" element
-    self.Health = Health      -- Register as standard "Health" for compatibility with other elements
+    -- Disable color flags on standard oUF element to prevent oUF's health.lua from indexing tables with secret keys
+    Health.colorTapping = false
+    Health.colorDisconnected = false
+    Health.colorClass = false
+    Health.colorReaction = false
+    Health.colorSmooth = false
+    Health.colorSelection = false
+    Health.colorThreat = false
+    Health.colorHealth = false
+
+    self.SafeHealth = Health  -- Register as "SafeHealth" element (Secret-safe)
+    self.Health = Health      -- Register as standard "Health" frame object
+
+    -- Disable oUF's built-in Health element so it does not attempt to index colors.class with secret keys
+    if self.DisableElement then
+        self:DisableElement("Health")
+    end
 
     -- 4. Text (Tags)
     if UF.CreateTags then
@@ -135,4 +210,7 @@ function UF:OnEnable()
     if not self.units then self.units = {} end
 
     -- Note: Actual spawning is handled by Units.lua hooking OnEnable and calling InitializeUnits
+    if self.UpdateAllCustomAuras then
+        self:UpdateAllCustomAuras()
+    end
 end

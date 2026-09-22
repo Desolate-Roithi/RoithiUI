@@ -78,14 +78,28 @@ end
 
 function ns.RefreshAllCastbars()
     if not ns.bars then return end
+    local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar
     for unit, bar in pairs(ns.bars) do
         ns.UpdateCastBarMedia(bar)
+        local db = cbDB and cbDB[unit]
+        if db then
+            if not db.enabled then
+                bar:Hide()
+            end
+            if ns.SetCastbarAttachment then
+                ns.SetCastbarAttachment(unit, not db.detached)
+            end
+        end
     end
 end
 
 function ns.InitializeBars()
     for unit, _ in pairs(ns.DEFAULTS) do
-        ns.bars[unit] = ns.CreateCastBar(unit)
+        local bar = ns.CreateCastBar(unit)
+        ns.bars[unit] = bar
+        if ns.RegisterCastbarLEM then
+            ns.RegisterCastbarLEM(bar, unit)
+        end
     end
 end
 
@@ -123,12 +137,172 @@ local function GetSafeLatency()
 end
 
 -- ----------------------------------------------------------------------------
+-- 1.6. Player Class Interrupt Tracking
+-- ----------------------------------------------------------------------------
+local INTERRUPT_SPELLS = {
+    -- Warrior
+    [6552] = true, -- Pummel
+    -- Death Knight
+    [47528] = true, -- Mind Freeze
+    -- Demon Hunter
+    [183752] = true, -- Disrupt
+    -- Druid
+    [106839] = true, -- Skull Bash
+    [78675] = true, -- Solar Beam
+    -- Evoker
+    [351338] = true, -- Quell
+    -- Hunter
+    [147362] = true, -- Counter Shot
+    [187707] = true, -- Muzzle
+    -- Mage
+    [2139] = true, -- Counterspell
+    -- Monk
+    [116705] = true, -- Spear Hand Strike
+    -- Paladin
+    [96231] = true, -- Rebuke
+    [31935] = true, -- Avenger's Shield
+    -- Priest
+    [15487] = true, -- Silence
+    -- Rogue
+    [1766] = true, -- Kick
+    -- Shaman
+    [57994] = true, -- Wind Shear
+    -- Warlock
+    [19647] = true, -- Spell Lock (Pet)
+    [119910] = true, -- Spell Lock (Command Demon)
+    [119898] = true, -- Command Demon
+    [132409] = true, -- Spell Lock (Grimoire)
+    [171138] = true, -- Shadow Lock
+    [89766] = true, -- Axe Toss (Felguard)
+}
+
+local cachedInterruptSpellID = nil
+
+local function UpdatePlayerInterruptSpell()
+    cachedInterruptSpellID = nil
+    for spellID in pairs(INTERRUPT_SPELLS) do
+        if (_G.C_SpellBook and _G.C_SpellBook.IsSpellKnownOrInSpellBook and (_G.C_SpellBook.IsSpellKnownOrInSpellBook(spellID) or (_G.Enum and _G.Enum.SpellBookSpellBank and _G.C_SpellBook.IsSpellKnownOrInSpellBook(spellID, _G.Enum.SpellBookSpellBank.Pet))))
+            or (_G.IsSpellKnownOrOverridesKnown and _G.IsSpellKnownOrOverridesKnown(spellID))
+            or (_G.IsPlayerSpell and _G.IsPlayerSpell(spellID)) then
+            cachedInterruptSpellID = spellID
+            return spellID
+        end
+    end
+    if _G.IsSpellKnownOrOverridesKnown and _G.IsSpellKnownOrOverridesKnown(119898) then
+        cachedInterruptSpellID = 119898
+        return 119898
+    end
+    return nil
+end
+
+ns.UpdatePlayerInterruptSpell = UpdatePlayerInterruptSpell
+
+local function GetPlayerInterruptCooldownState()
+    local spellID = cachedInterruptSpellID or UpdatePlayerInterruptSpell()
+    if not spellID then return false, nil end
+
+    -- 1. Try C_Spell.GetSpellCooldownDuration(spellID, true) first (12.0.1+ Native API)
+    if C_Spell and C_Spell.GetSpellCooldownDuration then
+        local success, durObj = pcall(C_Spell.GetSpellCooldownDuration, spellID, true)
+        if success and durObj and durObj.IsZero then
+            local isZeroSuccess, isZero = pcall(durObj.IsZero, durObj)
+            if isZeroSuccess and isZero ~= nil then
+                local isZeroSecret = (issecretvalue and issecretvalue(isZero)) or (canaccessvalue and not canaccessvalue(isZero))
+                if isZeroSecret then
+                    -- isZero is a SECRET boolean (true = 0 CD / Ready, false = on CD)
+                    return nil, isZero
+                else
+                    return not isZero, nil
+                end
+            end
+        end
+    end
+
+    -- 2. Fallback to C_Spell.GetSpellCooldown
+    local startTime, duration, isEnabled
+    if C_Spell and C_Spell.GetSpellCooldown then
+        local success, info = pcall(C_Spell.GetSpellCooldown, spellID)
+        if success and info then
+            startTime = info.startTime
+            duration = info.duration
+            isEnabled = info.isEnabled
+        end
+    elseif _G.GetSpellCooldown then
+        local success, sT, dur, en = pcall(_G.GetSpellCooldown, spellID)
+        if success then
+            startTime = sT
+            duration = dur
+            isEnabled = en
+        end
+    end
+
+    if isEnabled == 0 or isEnabled == false then
+        return false, nil
+    end
+
+    local isDurationSecret = (issecretvalue and issecretvalue(duration)) or (canaccessvalue and not canaccessvalue(duration))
+    local isStartSecret = (issecretvalue and issecretvalue(startTime)) or (canaccessvalue and not canaccessvalue(startTime))
+    if isDurationSecret or isStartSecret then
+        return false, nil
+    end
+
+    if not duration or duration <= 1.5 or not startTime or startTime <= 0 then
+        return false, nil
+    end
+
+    local curTime = _G.GetTime and _G.GetTime() or 0
+    if curTime > 0 and startTime > 0 then
+        local rem = (startTime + duration) - curTime
+        return rem > 0.1, nil
+    end
+
+    return true, nil
+end
+
+ns.GetPlayerInterruptCooldownState = GetPlayerInterruptCooldownState
+
+-- ----------------------------------------------------------------------------
 -- 2. Update Logic
 -- ----------------------------------------------------------------------------
 
+-- ----------------------------------------------------------------------------
+-- 2. Update Logic (Matching castbar_example.lua)
+-- ----------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------
+-- 2. Update Logic (Pure Combat-Safe durationObj Engine)
+-- ----------------------------------------------------------------------------
+local function OnCastbarUpdate(self, elapsed)
+    if self.isInEditMode or self.isInterrupted then return end
+    if not self.casting and not self.channeling then return end
+    if not self.durationObj then return end
+
+    if self.SetTimerDuration then
+        local dir = self.channeling and (_G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarTimerDirection.RemainingTime or 1) or (_G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarTimerDirection.ElapsedTime or 0)
+        local interp = _G.Enum and _G.Enum.StatusBarInterpolation and _G.Enum.StatusBarInterpolation.Immediate or 0
+        self:SetTimerDuration(self.durationObj, interp, dir)
+    else
+        local total = self.durationObj:GetTotalDuration()
+        local rem = self.durationObj:GetRemainingDuration()
+        local isSecret = (issecretvalue and issecretvalue(total)) or (canaccessvalue and not canaccessvalue(total))
+        if not isSecret and total and total > 0 then
+            self.maxValue = total
+            self.value = self.channeling and rem or (total - rem)
+            self:SetMinMaxValues(0, total)
+            self:SetValue(self.value)
+        end
+    end
+
+    if self.TimeFS then
+        local rem = self.durationObj:GetRemainingDuration()
+        self.TimeFS:SetText(FormatDuration(rem))
+    end
+end
+
 function ns.UpdateCast(bar, unitOverride)
-    local unit = unitOverride or bar.unit
-    local db = RoithiUI.db.profile.Castbar[bar.unit] -- Always use the bar's own DB for sizing/config
+    local unit = unitOverride or (bar and bar.unit)
+    if not bar or not unit then return end
+
+    local db = RoithiUI.db.profile.Castbar[bar.unit]
     if not db or not db.enabled then
         bar:Hide(); bar:SetScript("OnUpdate", nil)
         return
@@ -136,90 +310,86 @@ function ns.UpdateCast(bar, unitOverride)
 
     if bar.isInEditMode then return end
 
-    -- ------------------------------------------------------------------------
-    -- A. Determine State & Fetch Duration Object
-    -- ------------------------------------------------------------------------
-    local name, text, texture, notInterruptible
+    local name, text, texture, notInterruptible, castID
     local durationObj
-    local state = "cast" -- cast | channel | empowered
+    local isChannel = false
+    local state = "cast"
 
-    -- 1. Check Channel / Empowered
+    -- Check Channel / Empowered
     local chName, chText, chTexture, _, _, _, chNotInt, _, isEmpowered, numEmpowerStages = UnitChannelInfo(unit)
-
     if chName then
         name = chName
         text = chText
         texture = chTexture
         notInterruptible = chNotInt
-
-        -- Empowered Check
+        isChannel = true
+        state = (isEmpowered or (numEmpowerStages and numEmpowerStages > 0)) and "empowered" or "channel"
         if isEmpowered or (numEmpowerStages and numEmpowerStages > 0) then
-            state = "empowered"
-            if UnitEmpoweredChannelDuration then
-                durationObj = UnitEmpoweredChannelDuration(unit, true)
-            end
+            durationObj = UnitEmpoweredChannelDuration and UnitEmpoweredChannelDuration(unit, true)
         else
-            state = "channel"
-            if UnitChannelDuration then
-                durationObj = UnitChannelDuration(unit)
-            end
+            durationObj = UnitChannelDuration and UnitChannelDuration(unit)
         end
     else
-        -- 2. Check Standard Cast
-        local cName, cText, cTexture, _, _, _, _, cNotInt, _ = UnitCastingInfo(unit)
+        local cName, cText, cTexture, _, _, _, cID, cNotInt = UnitCastingInfo(unit)
         if cName then
-            state = "cast"
             name = cName
             text = cText
             texture = cTexture
+            castID = cID
             notInterruptible = cNotInt
-
-            if UnitCastingDuration then
-                durationObj = UnitCastingDuration(unit)
-            end
+            isChannel = false
+            state = "cast"
+            durationObj = UnitCastingDuration and UnitCastingDuration(unit)
         end
     end
 
-    -- If no active cast (or API missing), hide
     if not name or not durationObj then
         if bar.isEmpower and ns.StopEmpower then ns.StopEmpower(bar) end
-        if not bar.isInterrupted then
-            bar:Hide(); bar:SetScript("OnUpdate", nil)
+        if not bar.isInterrupted and not bar.isInEditMode then
+            bar.casting = false
+            bar.channeling = false
+            bar.durationObj = nil
+            bar.castID = nil
+            bar:Hide()
+            bar:SetScript("OnUpdate", nil)
         end
         return
     end
 
-    -- Clear Interrupt State
+    local totalSec = durationObj:GetTotalDuration()
+    local remSec = durationObj:GetRemainingDuration()
+    local isTotalSecret = (issecretvalue and issecretvalue(totalSec)) or (canaccessvalue and not canaccessvalue(totalSec)) or (type(totalSec) == "userdata" or type(totalSec) == "table")
+    local isRemSecret = (issecretvalue and issecretvalue(remSec)) or (canaccessvalue and not canaccessvalue(remSec)) or (type(remSec) == "userdata" or type(remSec) == "table")
+
+    local curVal = 0
+    if not isTotalSecret and not isRemSecret and type(totalSec) == "number" and type(remSec) == "number" then
+        if totalSec <= 0 then totalSec = 1 end
+        curVal = isChannel and remSec or (totalSec - remSec)
+        if curVal < 0 then curVal = 0 end
+        if curVal > totalSec then curVal = totalSec end
+    end
+
     bar.isInterrupted = false
+    bar.casting = not isChannel
+    bar.channeling = isChannel
+    bar.value = curVal
+    bar.maxValue = totalSec
+    bar.durationObj = durationObj
+    bar.castID = castID
 
-    -- ------------------------------------------------------------------------
-    -- B. Visual Setup (Colors, Icon, Spark)
-    -- ------------------------------------------------------------------------
+    -- Visual Setup
     local colors = db.colors
-    local c = colors[state] or colors.cast
+    local shieldC = (colors and colors.shield) or { 0.5, 0.5, 0.5, 1 }
+    local kickCDC = (colors and colors.interruptOnCD) or { 0.9, 0.5, 0.1, 1 }
+    local normC = (colors and (colors[state] or colors.cast)) or { 1, 0.95, 0, 1 }
 
-    local safeNotInt = false
-    local isSecretNotInt = issecretvalue and issecretvalue(notInterruptible)
-    
-    -- Safely check basic boolean if not secret
-    if not isSecretNotInt then
-        pcall(function() if notInterruptible then safeNotInt = true end end)
+    local isKickOnCD, isKickZeroSecret
+    if bar.unit ~= "player" and db.colorOnInterruptCD then
+        isKickOnCD, isKickZeroSecret = GetPlayerInterruptCooldownState()
     end
 
-    local evalColor = nil
-
-    if isSecretNotInt and colors.shield and C_CurveUtil and C_CurveUtil.EvaluateColorFromBoolean and CreateColor then
-        local trueColor = CreateColor(colors.shield[1], colors.shield[2], colors.shield[3], colors.shield[4] or 1)
-        local falseColor = CreateColor(c[1], c[2], c[3], c[4] or 1)
-        evalColor = C_CurveUtil.EvaluateColorFromBoolean(notInterruptible, trueColor, falseColor)
-        
-        -- Spark visibility based on secret
-    elseif safeNotInt and colors.shield then
-        c = colors.shield
-        if bar.Spark then bar.Spark:Hide() end
-    else
-        if bar.Spark then bar.Spark:Show() end
-    end
+    local isNotIntSecret = (issecretvalue and issecretvalue(notInterruptible)) or (canaccessvalue and not canaccessvalue(notInterruptible))
+    local hasKickZeroSecret = (issecretvalue and issecretvalue(isKickZeroSecret)) or (canaccessvalue and not canaccessvalue(isKickZeroSecret))
 
     if db.showIcon then
         bar.Icon:Show(); bar.Icon:SetTexture(texture)
@@ -227,127 +397,119 @@ function ns.UpdateCast(bar, unitOverride)
         bar.Icon:Hide()
     end
 
-
-
-    -- Feature: Cap cast name length at 22 (Safe handling for Secret values)
-    local isSecret = (issecretvalue and issecretvalue(text)) or (canaccessvalue and not canaccessvalue(text))
-    if text and not isSecret then
-        if string.len(text) > 22 then
-            text = string.sub(text, 1, 22) .. "..."
-        end
+    local isSecretText = (issecretvalue and issecretvalue(text)) or (canaccessvalue and not canaccessvalue(text))
+    if not isSecretText and text and string.len(text) > 22 then
+        text = string.sub(text, 1, 22) .. "..."
     end
-    bar.Text:SetText(text)
+    if bar.Text then bar.Text:SetText(text) end
 
-
-    -- ------------------------------------------------------------------------
-    -- C. Apply Duration Object (Native 12.0 API)
-    -- ------------------------------------------------------------------------
-    -- The Magic: This handles MinMax, Value, and Animation automatically (incl. Secrets)
-    if bar.SetTimerDuration then
-        bar:SetTimerDuration(durationObj)
-    else
-        -- Fallback for pre-12.0 environments (should never happen based on user context)
-        RoithiUI:Log("Error: SetTimerDuration not supported on this client.")
-    end
-
-    -- Store for Latency/OnUpdate
-    bar.durationObj = durationObj
-
-    -- Store state for OnUpdate logic evaluating native value
-    bar.castState = state
-
-    -- ------------------------------------------------------------------------
-    -- D. Mode Specific Logic
-    -- ------------------------------------------------------------------------
-    if state == "empowered" then
-        bar:SetReverseFill(false)
-
-        -- Empower Setup
-        local needSetup = true
-        if bar.isEmpower then needSetup = false end
-
-        if needSetup then
-            ns.SetupEmpower(bar) -- Will use UnitEmpoweredStageDurations
-        end
-
-        bar:SetStatusBarColor(0.5, 0.5, 0.5, 1)
-        if bar.Background then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
-    elseif state == "channel" then
-        if bar.isEmpower then ns.StopEmpower(bar) end
-        bar:SetReverseFill(true)
-        bar:SetStatusBarColor(0, 0, 0, 1)
-        if bar.Background then bar.Background:SetColorTexture(c[1], c[2], c[3], c[4]) end
-    else
-        -- Standard
-        if bar.isEmpower then ns.StopEmpower(bar) end
-        bar:SetReverseFill(false)
-        if evalColor then
-            -- Note: SetStatusBarColor accepts ColorMixin objects in 10.0+
-            bar:SetStatusBarColor(evalColor:GetRGBA())
+    -- Color Evaluation Pipeline (Pure Combat-Safe with C_CurveUtil)
+    if (isNotIntSecret or hasKickZeroSecret) and C_CurveUtil and (C_CurveUtil.EvaluateColorValueFromBoolean or C_CurveUtil.EvaluateColorFromBoolean) then
+        local rBase, gBase, bBase, aBase
+        if hasKickZeroSecret then
+            -- isKickZeroSecret: true = 0 CD (Ready) -> normC, false = active CD -> kickCDC
+            if C_CurveUtil.EvaluateColorValueFromBoolean then
+                rBase = C_CurveUtil.EvaluateColorValueFromBoolean(isKickZeroSecret, normC[1], kickCDC[1])
+                gBase = C_CurveUtil.EvaluateColorValueFromBoolean(isKickZeroSecret, normC[2], kickCDC[2])
+                bBase = C_CurveUtil.EvaluateColorValueFromBoolean(isKickZeroSecret, normC[3], kickCDC[3])
+                aBase = C_CurveUtil.EvaluateColorValueFromBoolean(isKickZeroSecret, normC[4] or 1, kickCDC[4] or 1)
+            else
+                local baseObj = C_CurveUtil.EvaluateColorFromBoolean(isKickZeroSecret, _G.CreateColor(normC[1], normC[2], normC[3], normC[4] or 1), _G.CreateColor(kickCDC[1], kickCDC[2], kickCDC[3], kickCDC[4] or 1))
+                rBase, gBase, bBase, aBase = baseObj:GetRGBA()
+            end
         else
-            bar:SetStatusBarColor(c[1], c[2], c[3], c[4])
+            local baseC = (isKickOnCD == true) and kickCDC or normC
+            rBase, gBase, bBase, aBase = baseC[1], baseC[2], baseC[3], baseC[4] or 1
         end
-        if bar.Background then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
+
+        local rFinal, gFinal, bFinal, aFinal
+        if isNotIntSecret then
+            -- notInterruptible: true = shielded -> shieldC, false = kickable -> base color
+            if C_CurveUtil.EvaluateColorValueFromBoolean then
+                rFinal = C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, shieldC[1], rBase)
+                gFinal = C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, shieldC[2], gBase)
+                bFinal = C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, shieldC[3], bBase)
+                aFinal = C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, shieldC[4] or 1, aBase)
+            else
+                local finalObj = C_CurveUtil.EvaluateColorFromBoolean(notInterruptible, _G.CreateColor(shieldC[1], shieldC[2], shieldC[3], shieldC[4] or 1), _G.CreateColor(rBase, gBase, bBase, aBase))
+                rFinal, gFinal, bFinal, aFinal = finalObj:GetRGBA()
+            end
+        elseif notInterruptible == true then
+            rFinal, gFinal, bFinal, aFinal = shieldC[1], shieldC[2], shieldC[3], shieldC[4] or 1
+        else
+            rFinal, gFinal, bFinal, aFinal = rBase, gBase, bBase, aBase
+        end
+
+        if state == "channel" then
+            bar:SetReverseFill(true)
+            bar:SetStatusBarColor(0, 0, 0, 1)
+            if bar.Background then
+                if bar.Background.SetColorTexture then
+                    bar.Background:SetColorTexture(rFinal, gFinal, bFinal, aFinal)
+                elseif bar.Background.SetVertexColor then
+                    bar.Background:SetVertexColor(rFinal, gFinal, bFinal, aFinal)
+                end
+            end
+        else
+            bar:SetReverseFill(false)
+            bar:SetStatusBarColor(rFinal, gFinal, bFinal, aFinal)
+            if bar.Background then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
+        end
+    else
+        local isShield = (not isNotIntSecret and notInterruptible == true)
+        local baseC = (isKickOnCD == true) and kickCDC or normC
+        local c = isShield and shieldC or baseC
+
+        if state == "channel" then
+            bar:SetReverseFill(true)
+            bar:SetStatusBarColor(0, 0, 0, 1)
+            if bar.Background then bar.Background:SetColorTexture(c[1], c[2], c[3], c[4] or 1) end
+        else
+            bar:SetReverseFill(false)
+            bar:SetStatusBarColor(c[1], c[2], c[3], c[4] or 1)
+            if bar.Background then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
+        end
     end
 
-    -- ------------------------------------------------------------------------
-    -- E. Latency (Requires TotalDuration)
-    -- ------------------------------------------------------------------------
+    -- Latency Ping Bar
     if bar.Latency then
-        local showLatency = false
-
-        -- Check if safe to calculate using Native Object Methods
-        -- CRITICAL: Check HasSecretValues() FIRST. If true, IsZero() might return a Secret<bool> which crashes on 'not'.
-        if not durationObj:HasSecretValues() and not durationObj:IsZero() then
-            local totalSec = durationObj:GetTotalDuration()
+        if not isTotalSecret and totalSec and totalSec > 0 then
             local latencySec = GetSafeLatency()
-
-            -- We trust totalSec is a number because HasSecretValues() is false
-            if totalSec > 0 then
+            if latencySec > 0 then
                 local width = bar:GetWidth() * (latencySec / totalSec)
                 if width > bar:GetWidth() then width = bar:GetWidth() end
-
                 bar.Latency:SetWidth(width)
                 bar.Latency:SetHeight(bar:GetHeight())
                 bar.Latency:ClearAllPoints()
-                if state == "channel" then
+                if isChannel then
                     bar.Latency:SetPoint("LEFT", bar, "LEFT", 0, 0)
                 else
                     bar.Latency:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
                 end
-                showLatency = true
+                bar.Latency:Show()
+            else
+                bar.Latency:Hide()
             end
-        end
-
-        if showLatency then
-            bar.Latency:Show()
         else
             bar.Latency:Hide()
         end
     end
 
+    if bar.SetTimerDuration then
+        local dir = isChannel and (_G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarTimerDirection.RemainingTime or 1) or (_G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarTimerDirection.ElapsedTime or 0)
+        local interp = _G.Enum and _G.Enum.StatusBarInterpolation and _G.Enum.StatusBarInterpolation.Immediate or 0
+        bar:SetTimerDuration(durationObj, interp, dir)
+    elseif not isTotalSecret then
+        bar:SetMinMaxValues(0, totalSec)
+        bar:SetValue(curVal)
+    end
+
+    if bar.TimeFS then
+        bar.TimeFS:SetText(FormatDuration(remSec))
+    end
+
+    bar:SetScript("OnUpdate", OnCastbarUpdate)
     bar:Show()
-
-    -- ------------------------------------------------------------------------
-    -- F. OnUpdate (Text Only)
-    -- ------------------------------------------------------------------------
-    -- SetTimerDuration handles progress. We only need to update the text.
-    bar:SetScript("OnUpdate", function(self, elapsed)
-        -- We do NOT call SetValue here anymore.
-
-        if self.TimeFS and self.durationObj then
-            local textVal = ""
-            if self.durationObj.GetRemainingDuration then
-                local rem = self.durationObj:GetRemainingDuration()
-                textVal = FormatDuration(rem)
-            end
-            self.TimeFS:SetText(textVal)
-        end
-
-        if self.isEmpower and ns.OnEmpowerUpdate then
-            ns.OnEmpowerUpdate(self)
-        end
-    end)
 end
 
 function ns.HandleInterrupt(bar)
@@ -368,13 +530,6 @@ function ns.HandleInterrupt(bar)
     bar.isInterrupted = true; bar:SetScript("OnUpdate", nil)
     local frozenVal = bar:GetValue()
     bar:SetValue(frozenVal) -- Explicitly freeze visual state
-
-    -- 3. FIX CRASH: Stop Native Animation Safely (12.0)
-    if bar.SetTimerDuration then
-        -- Use pcall to prevent crashes if API is strict about arguments
-        -- Pass 0 instead of nil if that helps, or just swallow the error
-        pcall(bar.SetTimerDuration, bar, 0)
-    end
 
     -- 4. Vanish after 1 second
     C_Timer.After(1.0, function()

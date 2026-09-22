@@ -1,5 +1,32 @@
-local L = LibStub("AceLocale-3.0"):NewLocale("RoithiUI", "enUS", true)
+local L = LibStub("AceLocale-3.0"):NewLocale("RoithiUI", "enUS", true, true)
 if not L then return end
+
+-- Castbars
+L["Player Castbar"] = "Player Castbar"
+L["Target Castbar"] = "Target Castbar"
+L["Focus Castbar"] = "Focus Castbar"
+L["Pet Castbar"] = "Pet Castbar"
+L["Target of Target Castbar"] = "Target of Target Castbar"
+L["Focus Target Castbar"] = "Focus Target Castbar"
+L["Boss 1 Castbar"] = "Boss 1 Castbar"
+L["Boss 2 Castbar"] = "Boss 2 Castbar"
+L["Boss 3 Castbar"] = "Boss 3 Castbar"
+L["Boss 4 Castbar"] = "Boss 4 Castbar"
+L["Boss 5 Castbar"] = "Boss 5 Castbar"
+L["Show Spell Icon"] = "Show Spell Icon"
+
+-- Unit Names
+L["Player"] = "Player"
+L["Target"] = "Target"
+L["Target of Target"] = "Target of Target"
+L["Focus"] = "Focus"
+L["Focus Target"] = "Focus Target"
+L["Pet"] = "Pet"
+L["Boss 1"] = "Boss 1"
+L["Boss 2"] = "Boss 2"
+L["Boss 3"] = "Boss 3"
+L["Boss 4"] = "Boss 4"
+L["Boss 5"] = "Boss 5"
 
 -- Base English
 L["> Auras"] = "> Auras"
@@ -16,6 +43,13 @@ L["Auras"] = "Auras"
 L["Base Filters"] = "Base Filters"
 L["Boss Frames"] = "Boss Frames"
 L["Boss Frames Test Mode"] = "Boss Frames Test Mode"
+L["Max Auras"] = "Max Auras"
+L["Icons Per Row"] = "Icons Per Row"
+L["Max Rows"] = "Max Rows"
+L["Maximum number of total aura icons to display."] = "Maximum number of total aura icons to display."
+L["Number of aura icons per row before line wrapping."] = "Number of aura icons per row before line wrapping."
+L["Maximum number of icons to display before wrapping to a new line."] = "Maximum number of icons to display before wrapping to a new line."
+L["Maximum number of rows to display."] = "Maximum number of rows to display."
 L["Buffs Bar Settings"] = "Buffs Bar Settings"
 L["Castbars"] = "Castbars"
 L["Configure text, auras, and indicators for Unit Frames."] = "Configure text, auras, and indicators for Unit Frames."
@@ -24,6 +58,14 @@ L["Create New Frame (ID)"] = "Create New Frame (ID)"
 L["Crowd Control"] = "Crowd Control"
 L["Custom Frames"] = "Custom Frames"
 L["Debuffs Bar Settings"] = "Debuffs Bar Settings"
+L["Hide Icon"] = "Hide Icon"
+L["Hide Aura Icon"] = "Hide Aura Icon"
+L["Hide Timer"] = "Hide Timer"
+L["Hide Duration Timer"] = "Hide Duration Timer"
+L["Hide Stack Count"] = "Hide Stack Count"
+L["Hide the aura icon texture and cooldown swipe."] = "Hide the aura icon texture and cooldown swipe."
+L["Hide the remaining duration text."] = "Hide the remaining duration text."
+L["Hide the stack/application count text."] = "Hide the stack/application count text."
 L["Defensives"] = "Defensives"
 L["Delete Frame"] = "Delete Frame"
 L["Detach (Move in Edit Mode)"] = "Detach (Move in Edit Mode)"
@@ -53,6 +95,9 @@ L["Force show all enabled indicators for easier configuration."] =
 L["General"] = "General"
 L["General settings for RoithiUI modules."] = "General settings for RoithiUI modules."
 L["Global Visibility & Layout"] = "Global Visibility & Layout"
+L["Global Visibility & Container Settings"] = "Global Visibility & Container Settings"
+L["Helpful Aura Filters (Buffs)"] = "Helpful Aura Filters (Buffs)"
+L["Harmful Aura Filters (Debuffs)"] = "Harmful Aura Filters (Debuffs)"
 L["Grow Direction"] = "Grow Direction"
 L["Hide Timeless Auras"] = "Hide Timeless Auras"
 L["Hides passive auras with no duration."] = "Hides passive auras with no duration."
@@ -77,6 +122,13 @@ L["Overrides Smart Filters to show every active Debuff on the unit."] =
 L["Paste Import String"] = "Paste Import String"
 L["Paste a RoithiUI profile string here and click Import."] = "Paste a RoithiUI profile string here and click Import."
 L["Player Auras"] = "Player Auras"
+L["Player Auras (Stackable)"] = "Player Auras (Stackable)"
+L["Mechanics & Warnings (Stackable)"] = "Mechanics & Warnings (Stackable)"
+L["Defensives (Stackable)"] = "Defensives (Stackable)"
+L["Shows every active Buff on the unit. Overrides specific buff sub-filters below."] =
+"Shows every active Buff on the unit. Overrides specific buff sub-filters below."
+L["Shows every active Debuff on the unit. Overrides specific debuff sub-filters below."] =
+"Shows every active Debuff on the unit. Overrides specific debuff sub-filters below."
 L["Quick Links"] = "Quick Links"
 L["Request Buffs From Unit"] = "Request Buffs From Unit"
 L["Reset all settings to default values and reload the UI. Cannot be undone."] =
@@ -85,6 +137,7 @@ L["Reset to Defaults"] = "Reset to Defaults"
 L["RoithiUI Settings"] = "RoithiUI Settings"
 L["Safely shows your HoTs while in combat (bypassing native combat hiding restrictions)."] =
 "Safely shows your HoTs while in combat (bypassing native combat hiding restrictions)."
+L["Safely shows your HoTs while in combat."] = "Safely shows your HoTs while in combat."
 L["Select Indicator"] = "Select Indicator"
 L["Separate Buffs & Debuffs"] = "Separate Buffs & Debuffs"
 L["Settings"] = "Settings"
@@ -118,6 +171,9 @@ L["When checked, Buffs and Debuffs will anchor separately instead of flowing con
 "When checked, Buffs and Debuffs will anchor separately instead of flowing consecutively."
 L["X Offset"] = "X Offset"
 L["X Offset (Attached)"] = "X Offset (Attached)"
+L["Y Offset (Attached)"] = "Y Offset (Attached)"
+L["X Position (Detached)"] = "X Position (Detached)"
+L["Y Position (Detached)"] = "Y Position (Detached)"
 L["X Offset (from Screen Center)"] = "X Offset (from Screen Center)"
 L["Y Offset"] = "Y Offset"
 L["Y Offset (Attached)"] = "Y Offset (Attached)"
@@ -327,3 +383,100 @@ L["Right-Click: Open Stopwatch"] = "Right-Click: Open Stopwatch"
 L["Left-Click: Open World Map"] = "Left-Click: Open World Map"
 L["Enable or disable the custom Minimap module. Disabling it leaves Blizzard's default minimap and buttons untouched."] = "Enable or disable the custom Minimap module. Disabling it leaves Blizzard's default minimap and buttons untouched."
 L["Enable or disable the custom Action Bars module. Disabling it leaves Blizzard's default action bars untouched."] = "Enable or disable the custom Action Bars module. Disabling it leaves Blizzard's default action bars untouched."
+L["Action Bar 1"] = "Action Bar 1"
+L["Action Bar 2"] = "Action Bar 2"
+L["Action Bar 3"] = "Action Bar 3"
+L["Action Bar 4"] = "Action Bar 4"
+L["Action Bar 5"] = "Action Bar 5"
+L["Pet Action Bar"] = "Pet Action Bar"
+L["Stance / Shapeshift Bar"] = "Stance / Shapeshift Bar"
+L["Buttons Per Row"] = "Buttons Per Row"
+L["Show Keybind Text"] = "Show Keybind Text"
+L["Show Macro Text"] = "Show Macro Text"
+
+-- Whitelist / Blacklist Mode & Notices
+L["Show Only Whitelisted Buffs"] = "Show Only Whitelisted Buffs"
+L["Hides all Buffs except those explicitly added to the Spell Whitelist."] = "Hides all Buffs except those explicitly added to the Spell Whitelist."
+L["Include Whitelisted Buffs"] = "Include Whitelisted Buffs"
+L["Displays spells from the Spell Whitelist in addition to the filtered Buffs above."] = "Displays spells from the Spell Whitelist in addition to the filtered Buffs above."
+L["Show Only Whitelisted Debuffs"] = "Show Only Whitelisted Debuffs"
+L["Hides all Debuffs except those explicitly added to the Spell Whitelist."] = "Hides all Debuffs except those explicitly added to the Spell Whitelist."
+L["Include Whitelisted Debuffs"] = "Include Whitelisted Debuffs"
+L["Displays spells from the Spell Whitelist in addition to the filtered Debuffs above."] = "Displays spells from the Spell Whitelist in addition to the filtered Debuffs above."
+L["|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted' or 'Include Whitelisted' is enabled above."] =
+"|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted' or 'Include Whitelisted' is enabled above."
+L["|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted Buffs' or 'Show Only Whitelisted Debuffs' is checked above."] =
+"|cffff8800Note:|r The Spell Whitelist is only active when 'Show Only Whitelisted' or 'Include Whitelisted' is enabled above."
+L["|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID blacklisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be hidden by spell ID."] =
+"|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID blacklisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be hidden by spell ID."
+L["|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID whitelisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be whitelisted by spell ID."] =
+"|cffff8800Note:|r Blizzard's 12.1.0 engine permits spell ID whitelisting on helpful buffs and enemy debuffs. Harmful debuffs on friendly units (e.g. Stagger on player/party) are protected by Blizzard anti-automation rules and cannot be whitelisted by spell ID."
+
+-- Quick Links (castbar / boss)
+L["> Auras (Boss 1)"] = "> Auras (Boss 1)"
+L["> Boss Castbars"] = "> Boss Castbars"
+
+-- Frame & Layout sub-group
+L["Frame & Layout"] = "Frame & Layout"
+L["Scale"] = "Scale"
+L["X Position"] = "X Position"
+L["Y Position"] = "Y Position"
+L["Aura X"] = "Aura X"
+L["Aura Y"] = "Aura Y"
+
+-- Power Bar sub-group
+L["Power Bar"] = "Power Bar"
+L["Enable Power"] = "Enable Power"
+L["Power Height"] = "Power Height"
+L["Power Width"] = "Power Width"
+L["Detached"] = "Detached"
+
+-- Aura toggles
+L["Enable Auras"] = "Enable Auras"
+L["Show Only My Auras"] = "Show Only My Auras"
+
+-- Castbar colors & empower
+L["Boss Castbars"] = "Boss Castbars"
+L["Cast Color"] = "Cast Color"
+L["Channel Color"] = "Channel Color"
+L["Interrupted Color"] = "Interrupted Color"
+L["Shield Color"] = "Shield Color"
+L["Interrupt on Cooldown Color"] = "Interrupt on Cooldown Color"
+L["Interrupt on CD"] = "Interrupt on CD"
+L["Color when Interrupt on Cooldown"] = "Color when Interrupt on Cooldown"
+L["Change the castbar color if the cast is interruptible but your interrupt ability is currently on cooldown."] = "Change the castbar color if the cast is interruptible but your interrupt ability is currently on cooldown."
+L["Colors"] = "Colors"
+L["Empower Stage Colors"] = "Empower Stage Colors"
+L["Empower Stage 1"] = "Empower Stage 1"
+L["Empower Stage 2"] = "Empower Stage 2"
+L["Empower Stage 3"] = "Empower Stage 3"
+L["Empower Stage 4"] = "Empower Stage 4"
+L["Stage 1"] = "Stage 1"
+L["Stage 2"] = "Stage 2"
+L["Stage 3"] = "Stage 3"
+L["Stage 4"] = "Stage 4"
+
+-- Global Blacklist (Auras tab)
+L["Global Spell Blacklist"] = "Global Spell Blacklist"
+L["|cffff8800Note:|r Spells added here are hidden on ALL aura containers. Use the per-frame blacklist (inside each unit's Auras > Filters) for frame-specific overrides."] =
+"|cffff8800Note:|r Spells added here are hidden on ALL aura containers. Use the per-frame blacklist (inside each unit's Auras > Filters) for frame-specific overrides."
+L["Enter a Spell ID to globally blacklist (hide on all frames)."] = "Enter a Spell ID to globally blacklist (hide on all frames)."
+L["Globally Blacklisted Spell IDs"] = "Globally Blacklisted Spell IDs"
+L["Uncheck a Spell ID to remove it from the global blacklist."] = "Uncheck a Spell ID to remove it from the global blacklist."
+
+-- Per-frame Blacklist
+L["Enter a Spell ID to blacklist it on this frame only."] = "Enter a Spell ID to blacklist it on this frame only."
+L["Frame Blacklisted Spell IDs"] = "Frame Blacklisted Spell IDs"
+L["Uncheck a Spell ID to remove it from this frame's blacklist. Globally blacklisted spells are managed in the Auras tab."] =
+"Uncheck a Spell ID to remove it from this frame's blacklist. Globally blacklisted spells are managed in the Auras tab."
+L["|cff00ccff%d spell(s) are already hidden by the Global Blacklist|r (Auras tab). They are not shown here — manage them there."] =
+"|cff00ccff%d spell(s) are already hidden by the Global Blacklist|r (Auras tab). They are not shown here — manage them there."
+
+-- Profile Sharing (Profiles tab)
+L["Profile Sharing"] = "Profile Sharing"
+
+-- Subpower Bars (Class Power & Additional Power)
+L["Class Power"] = "Class Power"
+L["Enable Class Power"] = "Enable Class Power"
+L["Additional Power"] = "Additional Power"
+L["Enable Additional Power"] = "Enable Additional Power"

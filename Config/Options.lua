@@ -1,1890 +1,56 @@
+--[[
+===============================================================================
+RoithiUI Unified Options & LibEditMode Architecture
+===============================================================================
+Central configuration coordinator integrating AceConfig-3.0 (Settings GUI) and
+LibEditMode-Roithi (Edit Mode Right-Click Popups).
+
+Option Schema Fields:
+-------------------------------------------------------------------------------
+- type        : string  - AceConfig option type ("toggle", "range", "select", "group", "execute", "header", "description")
+- name        : string  - Human-readable label displayed in settings UI
+- desc        : string  - Tooltip/description text (optional)
+- order       : number  - Sorting order index (optional)
+- scope       : string  - Target delivery context: "ace" (AceConfig only), "lem" (Edit Mode only), or "both" (default)
+- get         : function(info) -> val - Getter returning the current DB value
+- set         : function(info, val)  - Setter updating DB and refreshing UI state
+- min / max   : number  - Minimum/Maximum for "range" (Slider) options
+- step        : number  - Step value for "range" (Slider) options
+- values      : table|function - Key-value map or function returning key-value map for "select" (Dropdown) options
+- hidden      : boolean|function - Visibility condition for AceConfig & LEM
+- formatter   : function(val) -> str - Number formatter function for LEM sliders (e.g. string.format("%.1f", v))
+
+LEM Structural Extensions (OptionsEngine):
+-------------------------------------------------------------------------------
+- lemKind     : string  - LEM widget type override:
+                          - "expander" / "collapsible" : Section collapsible header in Edit Mode
+                          - "divider"                : Horizontal separator bar in Edit Mode
+                          - "checkbox" / "slider" / "dropdown" / "colorpicker" / "colorrow"
+- lemName     : string  - Display name override for Edit Mode if different from AceConfig name
+- lemGet      : function(unit) -> val - Getter override for LEM context
+- lemSet      : function(unit, val)  - Setter override for LEM context
+- lemSubFrame : string  - Target sub-frame key on the unit frame (e.g. "Power", "ClassPower", "AdditionalPower")
+===============================================================================
+--]]
+
 local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local Config = RoithiUI.Config or {}
 RoithiUI.Config = Config
-local LSM = LibStub("LibSharedMedia-3.0")
-local AL = ns.AttachmentLogic
-local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
+local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
 
-local function RequestReload()
-    if not StaticPopupDialogs["ROITHIUI_RELOAD"] then
-        StaticPopupDialogs["ROITHIUI_RELOAD"] = {
-            text = L["Changing these settings requires a UI Reload. Reload now?"],
-            button1 = L["Reload"],
-            button2 = L["Cancel"],
-            OnAccept = function()
-                ReloadUI()
-            end,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-        }
+--- Safe number parser for secret values
+local SafeNum = function(val, default)
+    if val == nil or (issecretvalue and issecretvalue(val)) then
+        return default or 0
     end
-    StaticPopup_Show("ROITHIUI_RELOAD")
+    local num = tonumber(val)
+    return num or default or 0
 end
+ns.SafeNum = SafeNum
 
-
--- ----------------------------------------------------------------------------
--- AceConfig Table Definition
--- ----------------------------------------------------------------------------
-local function GetLSMKeys(mediaType)
-    local list = LSM:List(mediaType)
-    local out = {}
-    for _, name in ipairs(list) do
-        out[name] = name
-    end
-    return out
-end
-
-local function GenerateAuraFilters(GetDB, RefreshFunc)
-    return {
-        group1_global = {
-            type = "group",
-            name = L["Global Visibility & Layout"],
-            order = 1,
-            inline = true,
-            args = {
-                showBuffs = {
-                    type  = "toggle",
-                    name  = L["Show Buffs"],
-                    desc  = L["Enable rendering of helpful auras."],
-                    order = 1,
-                    get   = function() return GetDB().showBuffs ~= false end,
-                    set   = function(_, v)
-                        GetDB().showBuffs = v; RefreshFunc()
-                    end,
-                },
-                showDebuffs = {
-                    type  = "toggle",
-                    name  = L["Show Debuffs"],
-                    desc  = L["Enable rendering of harmful auras."],
-                    order = 2,
-                    get   = function() return GetDB().showDebuffs ~= false end,
-                    set   = function(_, v)
-                        GetDB().showDebuffs = v; RefreshFunc()
-                    end,
-                },
-                separateAuras = {
-                    type   = "toggle",
-                    name   = L["Separate Buffs & Debuffs"],
-                    desc   = L
-                    ["When checked, Buffs and Debuffs will anchor separately instead of flowing consecutively."],
-                    order  = 3,
-                    get    = function() return GetDB().separateAuras end,
-                    set    = function(_, v)
-                        GetDB().separateAuras = v; RefreshFunc()
-                    end,
-                    hidden = function() return GetDB().isStandaloneCustom end,
-                },
-            },
-        },
-        group2_base = {
-            type = "group",
-            name = L["Base Filters"],
-            order = 2,
-            inline = true,
-            args = {
-                showAllBuffs = {
-                    type  = "toggle",
-                    name  = L["All Buffs"],
-                    desc  = L["Overrides Smart Filters to show every active Buff on the unit."],
-                    order = 1,
-                    get   = function() return GetDB().showAllBuffs end,
-                    set   = function(_, v)
-                        GetDB().showAllBuffs = v; RefreshFunc()
-                    end,
-                },
-                showAllDebuffs = {
-                    type  = "toggle",
-                    name  = L["All Debuffs"],
-                    desc  = L["Overrides Smart Filters to show every active Debuff on the unit."],
-                    order = 2,
-                    get   = function() return GetDB().showAllDebuffs end,
-                    set   = function(_, v)
-                        GetDB().showAllDebuffs = v; RefreshFunc()
-                    end,
-                },
-                hideTimeless = {
-                    type  = "toggle",
-                    name  = L["Hide Timeless Auras"],
-                    desc  = L["Hides passive auras with no duration."],
-                    order = 3,
-                    get   = function() return GetDB().hideTimeless == true end,
-                    set   = function(_, v)
-                        GetDB().hideTimeless = v; RefreshFunc()
-                    end,
-                },
-            },
-        },
-        group3_player = {
-            type = "group",
-            name = L["Player Auras"],
-            order = 3,
-            inline = true,
-            args = {
-                playerBuffs = {
-                    type  = "toggle",
-                    name  = L["My Buffs"],
-                    desc  = L["Shows generic helpful auras cast by you."],
-                    order = 1,
-                    get   = function() return GetDB().playerBuffs ~= false end,
-                    set   = function(_, v)
-                        GetDB().playerBuffs = v; RefreshFunc()
-                    end,
-                },
-                playerDebuffs = {
-                    type  = "toggle",
-                    name  = L["My Debuffs"],
-                    desc  = L["Shows generic harmful auras (like DoTs) cast by you."],
-                    order = 2,
-                    get   = function() return GetDB().playerDebuffs ~= false end,
-                    set   = function(_, v)
-                        GetDB().playerDebuffs = v; RefreshFunc()
-                    end,
-                },
-                raidInCombat = {
-                    type  = "toggle",
-                    name  = L["My Raid HoTs/Buffs"],
-                    desc  = L["Safely shows your HoTs while in combat (bypassing native combat hiding restrictions)."],
-                    order = 3,
-                    get   = function() return GetDB().raidInCombat ~= false end,
-                    set   = function(_, v)
-                        GetDB().raidInCombat = v; RefreshFunc()
-                    end,
-                },
-            },
-        },
-        group4_mechanics = {
-            type = "group",
-            name = L["Mechanics & Warnings"],
-            order = 4,
-            inline = true,
-            args = {
-                importantBuffs = {
-                    type  = "toggle",
-                    name  = L["Important Buffs"],
-                    desc  = L["Shows Buffs explicitly flagged by Blizzard developers as critical for the encounter."],
-                    order = 1,
-                    get   = function() return GetDB().importantBuffs ~= false end,
-                    set   = function(_, v)
-                        GetDB().importantBuffs = v; RefreshFunc()
-                    end,
-                },
-                importantDebuffs = {
-                    type  = "toggle",
-                    name  = L["Important Debuffs"],
-                    desc  = L["Shows Debuffs explicitly flagged by Blizzard developers as critical for the encounter."],
-                    order = 2,
-                    get   = function() return GetDB().importantDebuffs ~= false end,
-                    set   = function(_, v)
-                        GetDB().importantDebuffs = v; RefreshFunc()
-                    end,
-                },
-                cc = {
-                    type  = "toggle",
-                    name  = L["Crowd Control"],
-                    desc  = L["Shows Debuffs that restrict character control (Stuns, Fears, Roots, etc)."],
-                    order = 3,
-                    get   = function() return GetDB().cc ~= false end,
-                    set   = function(_, v)
-                        GetDB().cc = v; RefreshFunc()
-                    end,
-                },
-                dispellable = {
-                    type  = "toggle",
-                    name  = L["Dispellable"],
-                    desc  = L["Shows Debuffs that your current Class/Spec is physically capable of dispelling."],
-                    order = 4,
-                    get   = function() return GetDB().dispellable ~= false end,
-                    set   = function(_, v)
-                        GetDB().dispellable = v; RefreshFunc()
-                    end,
-                },
-            },
-        },
-        group5_defensives = {
-            type = "group",
-            name = L["Defensives"],
-            order = 5,
-            inline = true,
-            args = {
-                majorDefensivesBuffs = {
-                    type  = "toggle",
-                    name  = L["Major Defensives (Tanks)"],
-                    desc  = L["Shows major defensive cooldowns (Buffs) on the unit (e.g. Shield Wall, Barkskin)."],
-                    order = 1,
-                    get   = function() return GetDB().majorDefensivesBuffs ~= false end,
-                    set   = function(_, v)
-                        GetDB().majorDefensivesBuffs = v; RefreshFunc()
-                    end,
-                },
-                majorDefensivesDebuffs = {
-                    type  = "toggle",
-                    name  = L["Major Defensives (Debuffs)"],
-                    desc  = L
-                    ["Shows major defensive restrictions (Debuffs) on the unit (e.g. Forbearance, Weakened Soul)."],
-                    order = 2,
-                    get   = function() return GetDB().majorDefensivesDebuffs ~= false end,
-                    set   = function(_, v)
-                        GetDB().majorDefensivesDebuffs = v; RefreshFunc()
-                    end,
-                },
-                externalDefensives = {
-                    type  = "toggle",
-                    name  = L["External Defensives"],
-                    desc  = L["Shows major defensive buffs cast on the unit by OTHER players (e.g. Pain Suppression)."],
-                    order = 3,
-                    get   = function() return GetDB().externalDefensives ~= false end,
-                    set   = function(_, v)
-                        GetDB().externalDefensives = v; RefreshFunc()
-                    end,
-                },
-            },
-        },
-        group6_blacklist = {
-            type = "group",
-            name = L["Spell Blacklist"],
-            order = 6,
-            inline = true,
-            args = {
-                addSpell = {
-                    type  = "input",
-                    name  = L["Add Spell ID"],
-                    desc  = L["Enter a Spell ID to blacklist it (hide)."],
-                    order = 1,
-                    get   = function() return "" end,
-                    set   = function(_, v)
-                        local id = tonumber(v)
-                        if id then
-                            local db = GetDB()
-                            if not db.Blacklist then db.Blacklist = {} end
-                            db.Blacklist[id] = true
-                            RefreshFunc()
-                        end
-                    end,
-                },
-                removeSpell = {
-                    type   = "multiselect",
-                    name   = L["Blacklisted Spell IDs"],
-                    desc   = L["Uncheck a Spell ID to remove it from the blacklist."],
-                    order  = 2,
-                    values = function()
-                        local db = GetDB()
-                        local out = {}
-
-                        -- 1. Default blacklist
-                        local defaultBlacklist = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Auras and
-                        RoithiUI.db.profile.Auras.Blacklist
-                        if defaultBlacklist then
-                            for id, active in pairs(defaultBlacklist) do
-                                if active then
-                                    out[id] = true
-                                end
-                            end
-                        end
-
-                        -- 2. Local overrides
-                        if db and db.Blacklist then
-                            for id, active in pairs(db.Blacklist) do
-                                if active then
-                                    out[id] = true
-                                elseif active == false then
-                                    out[id] = nil
-                                end
-                            end
-                        end
-
-                        -- 3. Resolve names
-                        local displayList = {}
-                        for id in pairs(out) do
-                            local success, name = pcall(function()
-                                return C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)
-                            end)
-                            if success and name and name ~= "" then
-                                displayList[id] = string.format("%s (%d)", name, id)
-                            else
-                                displayList[id] = tostring(id)
-                            end
-                        end
-                        return displayList
-                    end,
-                    get    = function(_, key)
-                        local db = GetDB()
-                        local id = tonumber(key) or key
-                        if db and db.Blacklist and db.Blacklist[id] ~= nil then
-                            return db.Blacklist[id]
-                        end
-                        local defaultBlacklist = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Auras and
-                        RoithiUI.db.profile.Auras.Blacklist
-                        if defaultBlacklist and defaultBlacklist[id] ~= nil then
-                            return defaultBlacklist[id]
-                        end
-                        return false
-                    end,
-                    set    = function(_, key, value)
-                        local db = GetDB()
-                        if db then
-                            local id = tonumber(key) or key
-                            if not db.Blacklist then db.Blacklist = {} end
-                            db.Blacklist[id] = value
-                            RefreshFunc()
-                        end
-                    end,
-                },
-            },
-        },
-        group7_whitelist = {
-            type = "group",
-            name = L["Spell Whitelist"],
-            order = 7,
-            inline = true,
-            args = {
-                addSpell = {
-                    type  = "input",
-                    name  = L["Add Spell ID"],
-                    desc  = L["Enter a Spell ID to whitelist it (always show)."],
-                    order = 1,
-                    get   = function() return "" end,
-                    set   = function(_, v)
-                        local id = tonumber(v)
-                        if id then
-                            local db = GetDB()
-                            if not db.Whitelist then db.Whitelist = {} end
-                            db.Whitelist[id] = true
-                            RefreshFunc()
-                        end
-                    end,
-                },
-                removeSpell = {
-                    type    = "multiselect",
-                    name    = L["Whitelisted Spell IDs"],
-                    desc    = L["Uncheck a Spell ID to remove it from the whitelist."],
-                    order   = 2,
-                    values  = function()
-                        local db = GetDB()
-                        local out = {}
-                        if db and db.Whitelist then
-                            for id, active in pairs(db.Whitelist) do
-                                if active then
-                                    local success, name = pcall(function()
-                                        return C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)
-                                    end)
-                                    if success and name and name ~= "" then
-                                        out[id] = string.format("%s (%d)", name, id)
-                                    else
-                                        out[id] = tostring(id)
-                                    end
-                                end
-                            end
-                        end
-                        return out
-                    end,
-                    get     = function(_, key) return true end,
-                    set     = function(_, key, value)
-                        if not value then
-                            local db = GetDB()
-                            if db and db.Whitelist then
-                                db.Whitelist[key] = nil
-                                RefreshFunc()
-                            end
-                        end
-                    end,
-                    confirm = true,
-                    hidden  = function()
-                        local db = GetDB()
-                        return not db or not db.Whitelist or next(db.Whitelist) == nil
-                    end,
-                },
-            },
-        }
-    }
-end
-
-local function GetGlobalAuraOptions()
-    local group = {
-        type = "group",
-        name = L["Auras"],
-        order = 4,
-        args = {
-            intro = {
-                type = "description",
-                name = L["Manage Smart Filters (12.0.1) and Custom Aura Frames."],
-                order = 0,
-            },
-            custom = {
-                type = "group",
-                name = L["Custom Frames"],
-                order = 2,
-                args = {
-                    addName = {
-                        type  = "input",
-                        name  = L["Create New Frame (ID)"],
-                        desc  = L["Enter a unique name for the new custom aura frame and press Enter."],
-                        order = 1,
-                        get   = function() return "" end,
-                        set   = function(_, v)
-                            if v and v:match("%S") then
-                                v = v:gsub("%s+", "")
-                                RoithiUI.db.profile.CustomAuraFrames = RoithiUI.db.profile.CustomAuraFrames or {}
-                                if not RoithiUI.db.profile.CustomAuraFrames[v] then
-                                    RoithiUI.db.profile.CustomAuraFrames[v] = {
-                                        unit = "player",
-                                        enabled = true,
-                                        auraSize = 30,
-                                        maxAuras = 4,
-                                        showBuffs = true,
-                                        showDebuffs = true,
-                                        separateAuras = false,
-                                        auraAnchor = "BOTTOM",
-                                        auraGrowDirection = "RIGHT",
-                                        detached = true,
-                                        debuffSize = 30,
-                                        debuffSpacing = 4,
-                                        debuffAnchor = "BOTTOM",
-                                        debuffGrowDirection = "RIGHT",
-                                        debuffDetached = true,
-                                        stackFontSize = 10,
-                                        stackAnchor = "BOTTOMRIGHT",
-                                        stackX = 2,
-                                        stackY = -2,
-                                        hideBorder = true,
-                                        zoomPercent = 15,
-                                    }
-                                    ns.RefreshAllUnitFrames()
-                                end
-                            end
-                        end,
-                    },
-                }
-            },
-            units = {
-                type = "group",
-                name = L["Unit Aura Settings"],
-                order = 3,
-                args = {}
-            }
-        }
-    }
-
-    if RoithiUI.db.profile.CustomAuraFrames then
-        local i = 10
-        local unitsList = {
-            player = "Player",
-            target = "Target",
-            focus = "Focus",
-            pet = "Pet",
-            targettarget = "Target of Target",
-            focustarget = "Focus Target"
-        }
-
-        for id, conf in pairs(RoithiUI.db.profile.CustomAuraFrames) do
-            local function GetDB()
-                return RoithiUI.db.profile.CustomAuraFrames[id]
-            end
-
-            group.args.custom.args[id] = {
-                type = "group",
-                name = id,
-                order = i,
-                args = {
-                    layoutGroup = {
-                        type = "group",
-                        name = L["General Layout Settings"],
-                        order = 1,
-                        inline = true,
-                        args = {
-                            enabled = {
-                                type = "toggle",
-                                name = L["Enable"],
-                                order = 1,
-                                get = function() return GetDB().enabled == true end,
-                                set = function(_, v)
-                                    GetDB().enabled = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            unit = {
-                                type = "select",
-                                name = L["Request Buffs From Unit"],
-                                order = 2,
-                                values = unitsList,
-                                get = function() return GetDB().unit or "player" end,
-                                set = function(_, v)
-                                    GetDB().unit = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            size = {
-                                type = "range",
-                                name = L["Aura Size"],
-                                order = 3,
-                                min = 10,
-                                max = 100,
-                                step = 1,
-                                get = function() return GetDB().auraSize or 30 end,
-                                set = function(_, v)
-                                    GetDB().auraSize = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            max = {
-                                type = "range",
-                                name = L["Max Auras"],
-                                order = 4,
-                                min = 1,
-                                max = 40,
-                                step = 1,
-                                get = function() return GetDB().maxAuras or 4 end,
-                                set = function(_, v)
-                                    GetDB().maxAuras = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            spacing = {
-                                type = "range",
-                                name = L["Spacing"],
-                                order = 5,
-                                min = 0,
-                                max = 40,
-                                step = 1,
-                                get = function() return GetDB().auraSpacing or 4 end,
-                                set = function(_, v)
-                                    GetDB().auraSpacing = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            grow = {
-                                type = "select",
-                                name = L["Grow Direction"],
-                                order = 6,
-                                values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["CENTER_VERTICAL"] = "Centered Vertical" },
-                                get = function() return GetDB().auraGrowDirection or "RIGHT" end,
-                                set = function(_, v)
-                                    GetDB().auraGrowDirection = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            hideBorder = {
-                                type = "toggle",
-                                name = L["Hide Border"],
-                                order = 7,
-                                get = function() return GetDB().hideBorder ~= false end,
-                                set = function(_, v)
-                                    GetDB().hideBorder = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            zoom = {
-                                type = "range",
-                                name = L["Icon Zoom (%)"],
-                                order = 8,
-                                min = 0,
-                                max = 50,
-                                step = 1,
-                                get = function() return GetDB().zoomPercent ~= nil and GetDB().zoomPercent or 15 end,
-                                set = function(_, v)
-                                    GetDB().zoomPercent = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            delete = {
-                                type = "execute",
-                                name = L["Delete Frame"],
-                                order = 9,
-                                confirm = true,
-                                func = function()
-                                    RoithiUI.db.profile.CustomAuraFrames[id] = nil
-                                    ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                        }
-                    },
-                    positionGroup = {
-                        type = "group",
-                        name = L["Screen Position Settings"],
-                        order = 2,
-                        inline = true,
-                        args = {
-                            x = {
-                                type = "range",
-                                name = L["X Offset (from Screen Center)"],
-                                order = 1,
-                                min = -2000,
-                                max = 2000,
-                                step = 1,
-                                get = function() return GetDB().screenX or 0 end,
-                                set = function(_, v)
-                                    GetDB().screenX = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            y = {
-                                type = "range",
-                                name = L["Y Offset (from Screen Center)"],
-                                order = 2,
-                                min = -2000,
-                                max = 2000,
-                                step = 1,
-                                get = function() return GetDB().screenY or -50 end,
-                                set = function(_, v)
-                                    GetDB().screenY = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                        }
-                    },
-                    timerGroup = {
-                        type = "group",
-                        name = L["Timer Text Settings"],
-                        order = 3,
-                        inline = true,
-                        args = {
-                            timerFontSize = {
-                                type = "range",
-                                name = L["Timer Font Size"],
-                                order = 1,
-                                min = 6,
-                                max = 24,
-                                step = 1,
-                                get = function() return GetDB().timerFontSize or 10 end,
-                                set = function(_, v)
-                                    GetDB().timerFontSize = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            timerAnchor = {
-                                type = "select",
-                                name = L["Timer Anchor"],
-                                order = 2,
-                                values = {
-                                    ["TOPLEFT"] = "Top Left",
-                                    ["TOP"] = "Top",
-                                    ["TOPRIGHT"] = "Top Right",
-                                    ["LEFT"] = "Left",
-                                    ["CENTER"] = "Center",
-                                    ["RIGHT"] = "Right",
-                                    ["BOTTOMLEFT"] = "Bottom Left",
-                                    ["BOTTOM"] = "Bottom",
-                                    ["BOTTOMRIGHT"] = "Bottom Right"
-                                },
-                                get = function() return GetDB().timerAnchor or "CENTER" end,
-                                set = function(_, v)
-                                    GetDB().timerAnchor = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            timerX = {
-                                type = "range",
-                                name = L["Timer X Offset"],
-                                order = 3,
-                                min = -50,
-                                max = 50,
-                                step = 1,
-                                get = function() return GetDB().timerX or 0 end,
-                                set = function(_, v)
-                                    GetDB().timerX = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            timerY = {
-                                type = "range",
-                                name = L["Timer Y Offset"],
-                                order = 4,
-                                min = -50,
-                                max = 50,
-                                step = 1,
-                                get = function() return GetDB().timerY or 0 end,
-                                set = function(_, v)
-                                    GetDB().timerY = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                        }
-                    },
-                    stackGroup = {
-                        type = "group",
-                        name = L["Stack Count Settings"],
-                        order = 4,
-                        inline = true,
-                        args = {
-                            stackFontSize = {
-                                type = "range",
-                                name = L["Stack Font Size"],
-                                order = 1,
-                                min = 6,
-                                max = 24,
-                                step = 1,
-                                get = function() return GetDB().stackFontSize or 10 end,
-                                set = function(_, v)
-                                    GetDB().stackFontSize = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            stackAnchor = {
-                                type = "select",
-                                name = L["Stack Anchor"],
-                                order = 2,
-                                values = {
-                                    ["TOPLEFT"] = "Top Left",
-                                    ["TOP"] = "Top",
-                                    ["TOPRIGHT"] = "Top Right",
-                                    ["LEFT"] = "Left",
-                                    ["CENTER"] = "Center",
-                                    ["RIGHT"] = "Right",
-                                    ["BOTTOMLEFT"] = "Bottom Left",
-                                    ["BOTTOM"] = "Bottom",
-                                    ["BOTTOMRIGHT"] = "Bottom Right"
-                                },
-                                get = function() return GetDB().stackAnchor or "BOTTOMRIGHT" end,
-                                set = function(_, v)
-                                    GetDB().stackAnchor = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            stackX = {
-                                type = "range",
-                                name = L["Stack X Offset"],
-                                order = 3,
-                                min = -50,
-                                max = 50,
-                                step = 1,
-                                get = function() return GetDB().stackX or 2 end,
-                                set = function(_, v)
-                                    GetDB().stackX = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            stackY = {
-                                type = "range",
-                                name = L["Stack Y Offset"],
-                                order = 4,
-                                min = -50,
-                                max = 50,
-                                step = 1,
-                                get = function() return GetDB().stackY or -2 end,
-                                set = function(_, v)
-                                    GetDB().stackY = v; ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                        }
-                    },
-                    filtersGroup = {
-                        type = "group",
-                        name = L["Filters & Visibility"],
-                        order = 20,
-                        args = GenerateAuraFilters(function()
-                            local db = GetDB()
-                            db.isStandaloneCustom = true
-                            return db
-                        end, function() ns.RefreshAllUnitFrames() end),
-                    },
-                }
-            }
-            i = i + 1
-        end
-    end
-
-    return group
-end
-local unitframesOptions = {
-    type = "group",
-    name = L["Unit Frames"],
-    order = 2,
-    args = {
-        intro = {
-            type = "description",
-            name = L["Configure text, auras, and indicators for Unit Frames."],
-            order = 1,
-        },
-    },
-}
-
-local castbarsOptions = {
-    type = "group",
-    name = L["Castbars"],
-    order = 3,
-    hidden = function()
-        local db = RoithiUI.db.profile
-        return not db.EnabledModules or db.EnabledModules.Castbar == false
-    end,
-    args = {},
-}
-
-local function GetOptions()
-    local profileOptions = LibStub("AceDBOptions-3.0"):GetOptionsTable(RoithiUI.db)
-    profileOptions.order = 8
-    profileOptions.args.sharing = {
-        type = "group",
-        name = L["Sharing"],
-        order = 100,
-        args = {
-            intro = {
-                type = "description",
-                name = L["Export or Import your RoithiUI profile settings as a compressed string."],
-                order = 1,
-            },
-            exportGroup = {
-                type = "group",
-                name = L["Export"],
-                order = 10,
-                inline = true,
-                args = {
-                    exportString = {
-                        type      = "input",
-                        name      = L["Your Export String"],
-                        desc      = L["Copy this string to share your profile with others."],
-                        order     = 1,
-                        width     = "full",
-                        multiline = 5,
-                        get       = function()
-                            local PS = RoithiUI:GetModule("ProfileSharing")
-                            return PS and PS:ExportProfile() or ""
-                        end,
-                        set       = function() end, -- Read-only
-                    },
-                },
-            },
-            importGroup = {
-                type = "group",
-                name = L["Import"],
-                order = 20,
-                inline = true,
-                args = {
-                    importString = {
-                        type      = "input",
-                        name      = L["Paste Import String"],
-                        desc      = L["Paste a RoithiUI profile string here and click Import."],
-                        order     = 1,
-                        width     = "full",
-                        multiline = 5,
-                        get       = function() return RoithiUI.db.profile.tempImportString or "" end,
-                        set       = function(_, v) RoithiUI.db.profile.tempImportString = v end,
-                    },
-                    importBtn = {
-                        type    = "execute",
-                        name    = L["Import Profile"],
-                        desc    = L
-                        ["Applying an imported profile will overwrite your current settings and reload the UI."],
-                        order   = 2,
-                        confirm = true,
-                        func    = function()
-                            local PS = RoithiUI:GetModule("ProfileSharing")
-                            if PS then
-                                local success, msg = PS:ImportProfile(RoithiUI.db.profile.tempImportString)
-                                if success then
-                                    RoithiUI.db.profile.tempImportString = nil
-                                    ReloadUI()
-                                else
-                                    print("|cffff0000RoithiUI Import Error:|r " .. tostring(msg))
-                                end
-                            end
-                        end,
-                    },
-                },
-            },
-        },
-    }
-
-    local options = {
-        type = "group",
-        name = L["RoithiUI Settings"],
-        args = {
-            modules = {
-                type = "group",
-                name = L["Modules"],
-                order = 2,
-                args = {
-                    intro = {
-                        type = "description",
-                        name = L["Enable or disable RoithiUI modules. Disabling a module restores the default Blizzard UI."],
-                        order = 1,
-                    },
-                }
-            },
-            general = {
-                type = "group",
-                name = L["General"],
-                order = 1,
-                args = {
-                    -- Moved from General.lua or new items ca go here
-                    intro = {
-                        type = "description",
-                        name = L["General settings for RoithiUI modules."],
-                        order = 1,
-                    },
-                    media = {
-                        type = "group",
-                        name = L["Media"],
-                        order = 5,
-                        inline = true,
-                        args = {
-                            ufHeader = {
-                                type = "header",
-                                name = L["Unit Frames"],
-                                order = 1,
-                            },
-                            ufFont = {
-                                type = "select",
-                                dialogControl = "LSM30_Font",
-                                name = L["Font"],
-                                order = 2,
-                                values = function() return GetLSMKeys("font") end,
-                                get = function() return RoithiUI.db.profile.General.unitFrameFont end,
-                                set = function(_, v)
-                                    RoithiUI.db.profile.General.unitFrameFont = v
-                                    ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            ufBar = {
-                                type = "select",
-                                dialogControl = "LSM30_Statusbar",
-                                name = L["Status Bar"],
-                                order = 3,
-                                values = function() return GetLSMKeys("statusbar") end,
-                                get = function() return RoithiUI.db.profile.General.unitFrameBar end,
-                                set = function(_, v)
-                                    RoithiUI.db.profile.General.unitFrameBar = v
-                                    ns.RefreshAllUnitFrames()
-                                end,
-                            },
-                            cbHeader = {
-                                type = "header",
-                                name = L["Castbars"],
-                                order = 10,
-                            },
-                            cbFont = {
-                                type = "select",
-                                dialogControl = "LSM30_Font",
-                                name = L["Font"],
-                                order = 11,
-                                values = function() return GetLSMKeys("font") end,
-                                get = function() return RoithiUI.db.profile.General.castbarFont end,
-                                set = function(_, v)
-                                    RoithiUI.db.profile.General.castbarFont = v
-                                    -- Add RefreshAllCastbars call here once implemented
-                                    if ns.RefreshAllCastbars then ns.RefreshAllCastbars() end
-                                end,
-                            },
-                            cbBar = {
-                                type = "select",
-                                dialogControl = "LSM30_Statusbar",
-                                name = L["Status Bar"],
-                                order = 12,
-                                values = function() return GetLSMKeys("statusbar") end,
-                                get = function() return RoithiUI.db.profile.General.castbarBar end,
-                                set = function(_, v)
-                                    RoithiUI.db.profile.General.castbarBar = v
-                                    if ns.RefreshAllCastbars then ns.RefreshAllCastbars() end
-                                end,
-                            },
-                        },
-                    },
-                    reset = {
-                        type  = "execute",
-                        name  = L["Reset to Defaults"],
-                        desc  = L["Reset all settings to default values and reload the UI. Cannot be undone."],
-                        order = 10,
-                        func  = function() RoithiUI:ResetSettings() end,
-                        width = "full",
-                    },
-                    testBoss = {
-                        type  = "toggle",
-                        name  = L["Boss Frames Test Mode"],
-                        desc  = L["Toggle dummy boss frames for positioning."],
-                        order = 11,
-                        get   = function()
-                            local UF = RoithiUI:GetModule("UnitFrames")
-                            return UF and UF.BossTestMode
-                        end,
-                        set   = function(_, v)
-                            local UF = RoithiUI:GetModule("UnitFrames")
-                            if UF and UF.ToggleBossTestMode then UF:ToggleBossTestMode() end
-                        end,
-                        width = "full",
-                    },
-
-                    debugMode = {
-                        type  = "toggle",
-                        name  = L["|cffff0000Debug Mode|r"],
-                        desc  = L["Enable debug logging to the chat window."],
-                        order = 50,
-                        get   = function() return RoithiUI.db.profile.General.debugMode end,
-                        set   = function(_, v) RoithiUI.db.profile.General.debugMode = v end,
-                        width = "full",
-                    },
-                },
-            },
-            customtags = (function()
-                local opt = RoithiUI.Config.GetCustomTagsOptions and RoithiUI.Config.GetCustomTagsOptions()
-                if opt then opt.order = 6 end
-                return opt
-            end)(),
-            auras = GetGlobalAuraOptions(),
-            profiles = profileOptions,
-        },
-    }
-
-    -- Populate dynamic modules list and options
-    for name, module in RoithiUI:IterateModules() do
-        if name ~= "ProfileSharing" then
-            local key = string.lower(name)
-            options.args.modules.args[key] = {
-                type = "toggle",
-                name = module.displayName or name,
-                desc = module.description or string.format(L["Enables the custom RoithiUI %s module."], name),
-                order = module.order or 10,
-                get = function()
-                    return RoithiUI.db.profile.EnabledModules[name] ~= false
-                end,
-                set = function(_, v)
-                    RoithiUI.db.profile.EnabledModules[name] = v
-                    RequestReload()
-                end,
-            }
-
-            if module.GetOptions then
-                local optKey = key
-                if optKey == "castbar" then optKey = "castbars" end
-                options.args[optKey] = module:GetOptions()
-            end
-        end
-    end
-
-    -- Populate Unit Frame Options
-    local units = {
-        { "player",       "Player" },
-        { "target",       "Target" },
-        { "targettarget", "Target of Target" },
-        { "focus",        "Focus" },
-        { "focustarget",  "Focus Target" },
-        { "pet",          "Pet" },
-        { "boss1",        "Boss 1" },
-        { "boss2",        "Boss 2" },
-        { "boss3",        "Boss 3" },
-        { "boss4",        "Boss 4" },
-        { "boss5",        "Boss 5" },
-    }
-
-    for i, u in ipairs(units) do
-        local unit, label = u[1], u[2]
-
-        -- Helper to get DB
-        local function GetDB()
-            if not RoithiUI.db.profile.UnitFrames[unit] then RoithiUI.db.profile.UnitFrames[unit] = {} end
-            return RoithiUI.db.profile.UnitFrames[unit]
-        end
-
-        local function CreateQuickLinks(currentContext)
-            local args = {}
-            local order = 1
-            local ufUnit = (unit:match("^boss%d$")) and "boss" or unit
-            if currentContext ~= "unitframes" then
-                args.unitframes = {
-                    type = "execute",
-                    name = L["> Unit Frames"],
-                    order = order,
-                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", ufUnit) end,
-                }
-                order = order + 1
-            end
-            if currentContext ~= "castbars" and not unit:match("^boss%d$") then
-                args.castbars = {
-                    type = "execute",
-                    name = L["> Castbars"],
-                    order = order,
-                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "castbars", unit) end,
-                }
-                order = order + 1
-            end
-            if currentContext ~= "auras" then
-                local isBoss = unit:match("^boss%d$")
-                args.auras = {
-                    type = "execute",
-                    name = L["> Auras"],
-                    order = order,
-                    func = function()
-                        if isBoss then
-                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", "bossFrames", unit)
-                        else
-                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", unit)
-                        end
-                    end,
-                }
-                order = order + 1
-            end
-            if RoithiUI.Config.GetCustomTagsOptions and currentContext ~= "customtags" then
-                args.customtags = {
-                    type = "execute",
-                    name = L["> Custom Tags"],
-                    order = order,
-                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "customtags", unit) end,
-                }
-            end
-            return {
-                type = "group",
-                name = L["Quick Links"],
-                inline = true,
-                order = 2,
-                args = args
-            }
-        end
-
-        if not unit:match("^boss%d$") then
-            unitframesOptions.args[unit] = {
-                type = "group",
-                name = label,
-                order = 10 + i,
-                args = {
-                    enable = {
-                        type = "toggle",
-                        name = L["Enable Unit Frame"],
-                        order = 1,
-                        get = function()
-                            if not RoithiUI.db.profile.UnitFrames then return true end
-                            if not RoithiUI.db.profile.UnitFrames[unit] then return true end
-                            return RoithiUI.db.profile.UnitFrames[unit].enabled ~= false
-                        end,
-                        set = function(_, v)
-                            if not RoithiUI.db.profile.UnitFrames then RoithiUI.db.profile.UnitFrames = {} end
-                            if not RoithiUI.db.profile.UnitFrames[unit] then RoithiUI.db.profile.UnitFrames[unit] = {} end
-                            RoithiUI.db.profile.UnitFrames[unit].enabled = v
-                            RequestReload()
-                        end,
-                    },
-                    quickLinks = CreateQuickLinks("unitframes"),
-
-                    -- Tab: Indicators
-                    indicators = {
-                        type = "group",
-                        name = L["Indicators"],
-                        order = 2,
-                        inline = true,
-                        args = {
-                            testMode = {
-                                type  = "toggle",
-                                name  = L["|cffffd100Test Mode|r"],
-                                desc  = L["Force show all enabled indicators for easier configuration."],
-                                order = 0,
-                                get   = function() return RoithiUI.db.profile.IndicatorTestMode end,
-                                set   = function(_, v)
-                                    RoithiUI.db.profile.IndicatorTestMode = v
-                                    ns.RefreshUnitFrame(unit)
-                                end,
-                                width = "full",
-                            },
-                            selectIndicator = {
-                                type = "select",
-                                name = L["Select Indicator"],
-                                order = 1,
-                                values = function()
-                                    local v = {
-                                        combat = "Combat",
-                                        leader = "Leader",
-                                        raidicon = "Raid Icon",
-                                        role = "Role",
-                                        readycheck = "Ready Check",
-                                        phase = "Phase",
-                                        resurrect = "Resurrect",
-                                        pvp = "PvP",
-                                        tankassist = "Main Tank / Assist",
-                                        resting = "Resting",
-                                    }
-                                    if unit == "target" or unit == "focus" then
-                                        v.quest = "Quest"
-                                    end
-                                    return v
-                                end,
-                                get = function() return RoithiUI.db.profile.tempIndicatorSelect end,
-                                set = function(_, v) RoithiUI.db.profile.tempIndicatorSelect = v end,
-                            },
-                            -- Details Group (Only shown if selection made)
-                            details = {
-                                type = "group",
-                                name = L["Settings"],
-                                order = 2,
-                                inline = true,
-                                hidden = function() return not RoithiUI.db.profile.tempIndicatorSelect end,
-                                args = {
-                                    enabled = {
-                                        type = "toggle",
-                                        name = L["Enable"],
-                                        order = 1,
-                                        get = function()
-                                            local k = RoithiUI.db.profile.tempIndicatorSelect
-                                            local db = GetDB().indicators and GetDB().indicators[k]
-                                            return db and db.enabled
-                                        end,
-                                        set = function(_, v)
-                                            local k = RoithiUI.db.profile.tempIndicatorSelect
-                                            if not GetDB().indicators then GetDB().indicators = {} end
-                                            if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
-                                            GetDB().indicators[k].enabled = v
-                                            ns.RefreshUnitFrame(unit)
-                                        end,
-                                    },
-                                    size = {
-                                        type = "range",
-                                        name = L["Size"],
-                                        order = 2,
-                                        min = 8,
-                                        max = 64,
-                                        step = 1,
-                                        get = function()
-                                            local k = RoithiUI.db.profile.tempIndicatorSelect
-                                            local db = GetDB().indicators and GetDB().indicators[k]
-                                            return db and db.size or 20
-                                        end,
-                                        set = function(_, v)
-                                            local k = RoithiUI.db.profile.tempIndicatorSelect
-                                            if not GetDB().indicators then GetDB().indicators = {} end
-                                            if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
-                                            GetDB().indicators[k].size = v
-                                            ns.RefreshUnitFrame(unit)
-                                        end,
-                                    },
-                                    point = {
-                                        type = "select",
-                                        name = L["Anchor Point"],
-                                        order = 3,
-                                        values = {
-                                            ["CENTER"] = "Center",
-                                            ["TOP"] = "Top",
-                                            ["BOTTOM"] = "Bottom",
-                                            ["LEFT"] = "Left",
-                                            ["RIGHT"] = "Right",
-                                            ["TOPLEFT"] = "Top Left",
-                                            ["TOPRIGHT"] = "Top Right",
-                                            ["BOTTOMLEFT"] = "Bottom Left",
-                                            ["BOTTOMRIGHT"] = "Bottom Right"
-                                        },
-                                        get = function()
-                                            local k = RoithiUI.db.profile.tempIndicatorSelect
-                                            local db = GetDB().indicators and GetDB().indicators[k]
-                                            return db and db.point or "CENTER"
-                                        end,
-                                        set = function(_, v)
-                                            local k = RoithiUI.db.profile.tempIndicatorSelect
-                                            if not GetDB().indicators then GetDB().indicators = {} end
-                                            if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
-                                            GetDB().indicators[k].point = v
-                                            ns.RefreshUnitFrame(unit)
-                                        end,
-                                    },
-                                    x = {
-                                        type = "range",
-                                        name = L["X Offset"],
-                                        order = 4,
-                                        min = -100,
-                                        max = 100,
-                                        step = 1,
-                                        get = function()
-                                            local k = RoithiUI.db.profile.tempIndicatorSelect
-                                            local db = GetDB().indicators and GetDB().indicators[k]
-                                            return db and db.x or 0
-                                        end,
-                                        set = function(_, v)
-                                            local k = RoithiUI.db.profile.tempIndicatorSelect
-                                            if not GetDB().indicators then GetDB().indicators = {} end
-                                            if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
-                                            GetDB().indicators[k].x = v
-                                            ns.RefreshUnitFrame(unit)
-                                        end,
-                                    },
-                                    y = {
-                                        type = "range",
-                                        name = L["Y Offset"],
-                                        order = 5,
-                                        min = -100,
-                                        max = 100,
-                                        step = 1,
-                                        get = function()
-                                            local k = RoithiUI.db.profile.tempIndicatorSelect
-                                            local db = GetDB().indicators and GetDB().indicators[k]
-                                            return db and db.y or 0
-                                        end,
-                                        set = function(_, v)
-                                            local k = RoithiUI.db.profile.tempIndicatorSelect
-                                            if not GetDB().indicators then GetDB().indicators = {} end
-                                            if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
-                                            GetDB().indicators[k].y = v
-                                            ns.RefreshUnitFrame(unit)
-                                        end,
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            }
-        end
-
-        -- Populate the Global > Auras > Units table
-        local targetArgs = options.args.auras.args.units.args
-        if unit:match("^boss%d$") then
-            if not targetArgs.bossFrames then
-                targetArgs.bossFrames = {
-                    type = "group",
-                    name = L["Boss Frames"],
-                    order = 30,
-                    args = {}
-                }
-            end
-            targetArgs = targetArgs.bossFrames.args
-        end
-
-        targetArgs[unit] = {
-            type = "group",
-            name = label,
-            order = i,
-            args = {
-                enable = {
-                    type = "toggle",
-                    name = L["Enable"],
-                    order = 1,
-                    get = function() return GetDB().aurasEnabled ~= false end,
-                    set = function(_, v)
-                        GetDB().aurasEnabled = v; ns.RefreshUnitFrame(unit)
-                    end,
-                },
-                quickLinks = CreateQuickLinks("auras"),
-
-                size = {
-                    type = "range",
-                    name = L["Size"],
-                    order = 3,
-                    min = 10,
-                    max = 100,
-                    step = 1,
-                    get = function() return GetDB().auraSize or 20 end,
-                    set = function(_, v)
-                        GetDB().auraSize = v; ns.RefreshUnitFrame(unit)
-                    end,
-                    hidden = function() return GetDB().separateAuras end,
-                },
-                spacing = {
-                    type = "range",
-                    name = L["Spacing"],
-                    order = 3.5,
-                    min = 0,
-                    max = 40,
-                    step = 1,
-                    get = function() return GetDB().auraSpacing or 4 end,
-                    set = function(_, v)
-                        GetDB().auraSpacing = v; ns.RefreshUnitFrame(unit)
-                    end,
-                    hidden = function() return GetDB().separateAuras end,
-                },
-                max = {
-                    type = "range",
-                    name = L["Max Auras"],
-                    order = 4,
-                    min = 1,
-                    max = 40,
-                    step = 1,
-                    get = function() return GetDB().maxAuras or 8 end,
-                    set = function(_, v)
-                        GetDB().maxAuras = v; ns.RefreshUnitFrame(unit)
-                    end,
-                    hidden = function() return GetDB().separateAuras end,
-                },
-                anchor = {
-                    type = "select",
-                    name = L["Anchor Point"],
-                    order = 5,
-                    values = { ["TOP"] = "Top", ["BOTTOM"] = "Bottom", ["LEFT"] = "Left", ["RIGHT"] = "Right", ["TOPLEFT"] = "Top Left", ["TOPRIGHT"] = "Top Right", ["BOTTOMLEFT"] = "Bottom Left", ["BOTTOMRIGHT"] = "Bottom Right", ["CENTER"] = "Center" },
-                    get = function() return GetDB().auraAnchor or "BOTTOM" end,
-                    set = function(_, v)
-                        GetDB().auraAnchor = v; ns.RefreshUnitFrame(unit)
-                    end,
-                    hidden = function() return GetDB().separateAuras end,
-                },
-                grow = {
-                    type = "select",
-                    name = L["Grow Direction"],
-                    order = 6,
-                    values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_VERTICAL"] = "Centered Vertical" },
-                    get = function() return GetDB().auraGrowDirection or "RIGHT" end,
-                    set = function(_, v)
-                        GetDB().auraGrowDirection = v; ns.RefreshUnitFrame(unit)
-                    end,
-                    hidden = function() return GetDB().separateAuras end,
-                },
-                x = {
-                    type = "range",
-                    name = L["X Offset (Attached)"],
-                    order = 7,
-                    min = -1000,
-                    max = 1000,
-                    step = 1,
-                    get = function() return GetDB().auraX or 0 end,
-                    set = function(_, v)
-                        GetDB().auraX = v; ns.RefreshUnitFrame(unit)
-                    end,
-                    hidden = function() return GetDB().separateAuras end,
-                },
-                y = {
-                    type = "range",
-                    name = L["Y Offset (Attached)"],
-                    order = 8,
-                    min = -1000,
-                    max = 1000,
-                    step = 1,
-                    get = function() return GetDB().auraY or 4 end,
-                    set = function(_, v)
-                        GetDB().auraY = v; ns.RefreshUnitFrame(unit)
-                    end,
-                    hidden = function() return GetDB().separateAuras end,
-                },
-                detached = {
-                    type   = "toggle",
-                    name   = L["Detach (Satellite Mode)"],
-                    desc   = L["Detach aura frame to move it independently via Edit Mode."],
-                    order  = 9,
-                    get    = function() return AL:IsDetached(unit, "Auras") end,
-                    set    = function(_, v)
-                        GetDB().auraDetached = v
-                        ns.RefreshUnitFrame(unit)
-                    end,
-                    hidden = function() return GetDB().separateAuras end,
-                },
-                buffGroup = {
-                    type = "group",
-                    name = L["Buffs Bar Settings"],
-                    order = 9.1,
-                    hidden = function() return not GetDB().separateAuras end,
-                    args = {
-                        size = {
-                            type = "range",
-                            name = L["Size"],
-                            order = 1,
-                            min = 10,
-                            max = 100,
-                            step = 1,
-                            get = function() return GetDB().buffSize or GetDB().auraSize or 20 end,
-                            set = function(_, v)
-                                GetDB().buffSize = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        max = {
-                            type = "range",
-                            name = L["Max Auras"],
-                            order = 2,
-                            min = 1,
-                            max = 40,
-                            step = 1,
-                            get = function() return GetDB().buffMaxAuras or GetDB().maxAuras or 8 end,
-                            set = function(_, v)
-                                GetDB().buffMaxAuras = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        spacing = {
-                            type = "range",
-                            name = L["Spacing"],
-                            order = 3,
-                            min = 0,
-                            max = 40,
-                            step = 1,
-                            get = function() return GetDB().buffSpacing or GetDB().auraSpacing or 4 end,
-                            set = function(_, v)
-                                GetDB().buffSpacing = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        anchor = {
-                            type = "select",
-                            name = L["Anchor Point"],
-                            order = 4,
-                            values = { ["TOP"] = "Top", ["BOTTOM"] = "Bottom", ["LEFT"] = "Left", ["RIGHT"] = "Right", ["TOPLEFT"] = "Top Left", ["TOPRIGHT"] = "Top Right", ["BOTTOMLEFT"] = "Bottom Left", ["BOTTOMRIGHT"] = "Bottom Right", ["CENTER"] = "Center" },
-                            get = function() return GetDB().buffAnchor or GetDB().auraAnchor or "BOTTOM" end,
-                            set = function(_, v)
-                                GetDB().buffAnchor = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        grow = {
-                            type = "select",
-                            name = L["Grow Direction"],
-                            order = 5,
-                            values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_VERTICAL"] = "Centered Vertical" },
-                            get = function() return GetDB().buffGrowDirection or GetDB().auraGrowDirection or "RIGHT" end,
-                            set = function(_, v)
-                                GetDB().buffGrowDirection = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        detached = {
-                            type = "toggle",
-                            name = L["Detach (Move in Edit Mode)"],
-                            order = 6,
-                            get = function() return GetDB().buffDetached == true end,
-                            set = function(_, v)
-                                GetDB().buffDetached = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        x = {
-                            type = "range",
-                            name = L["X Offset (Attached)"],
-                            order = 7,
-                            min = -1000,
-                            max = 1000,
-                            step = 1,
-                            get = function() return GetDB().buffXOffset or GetDB().auraX or 0 end,
-                            set = function(_, v)
-                                GetDB().buffXOffset = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        y = {
-                            type = "range",
-                            name = L["Y Offset (Attached)"],
-                            order = 8,
-                            min = -1000,
-                            max = 1000,
-                            step = 1,
-                            get = function() return GetDB().buffYOffset or GetDB().auraY or 4 end,
-                            set = function(_, v)
-                                GetDB().buffYOffset = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                    }
-                },
-                debuffGroup = {
-                    type = "group",
-                    name = L["Debuffs Bar Settings"],
-                    order = 9.2,
-                    hidden = function() return not GetDB().separateAuras end,
-                    args = {
-                        size = {
-                            type = "range",
-                            name = L["Size"],
-                            order = 1,
-                            min = 10,
-                            max = 100,
-                            step = 1,
-                            get = function() return GetDB().debuffSize or GetDB().auraSize or 20 end,
-                            set = function(_, v)
-                                GetDB().debuffSize = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        max = {
-                            type = "range",
-                            name = L["Max Auras"],
-                            order = 2,
-                            min = 1,
-                            max = 40,
-                            step = 1,
-                            get = function() return GetDB().debuffMaxAuras or GetDB().maxAuras or 8 end,
-                            set = function(_, v)
-                                GetDB().debuffMaxAuras = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        spacing = {
-                            type = "range",
-                            name = L["Spacing"],
-                            order = 3,
-                            min = 0,
-                            max = 40,
-                            step = 1,
-                            get = function() return GetDB().debuffSpacing or GetDB().auraSpacing or 4 end,
-                            set = function(_, v)
-                                GetDB().debuffSpacing = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        anchor = {
-                            type = "select",
-                            name = L["Anchor Point"],
-                            order = 4,
-                            values = { ["TOP"] = "Top", ["BOTTOM"] = "Bottom", ["LEFT"] = "Left", ["RIGHT"] = "Right", ["TOPLEFT"] = "Top Left", ["TOPRIGHT"] = "Top Right", ["BOTTOMLEFT"] = "Bottom Left", ["BOTTOMRIGHT"] = "Bottom Right", ["CENTER"] = "Center" },
-                            get = function() return GetDB().debuffAnchor or GetDB().auraAnchor or "BOTTOM" end,
-                            set = function(_, v)
-                                GetDB().debuffAnchor = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        grow = {
-                            type = "select",
-                            name = L["Grow Direction"],
-                            order = 5,
-                            values = { ["RIGHT"] = "Left to Right", ["LEFT"] = "Right to Left", ["CENTER_HORIZONTAL"] = "Centered Horizontal", ["UP"] = "Bottom to Top", ["DOWN"] = "Top to Bottom", ["CENTER_VERTICAL"] = "Centered Vertical" },
-                            get = function() return GetDB().debuffGrowDirection or GetDB().auraGrowDirection or "RIGHT" end,
-                            set = function(_, v)
-                                GetDB().debuffGrowDirection = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        detached = {
-                            type = "toggle",
-                            name = L["Detach (Move in Edit Mode)"],
-                            order = 6,
-                            get = function() return GetDB().debuffDetached == true end,
-                            set = function(_, v)
-                                GetDB().debuffDetached = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        x = {
-                            type = "range",
-                            name = L["X Offset (Attached)"],
-                            order = 7,
-                            min = -1000,
-                            max = 1000,
-                            step = 1,
-                            get = function() return GetDB().debuffXOffset or GetDB().auraX or 0 end,
-                            set = function(_, v)
-                                GetDB().debuffXOffset = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        y = {
-                            type = "range",
-                            name = L["Y Offset (Attached)"],
-                            order = 8,
-                            min = -1000,
-                            max = 1000,
-                            step = 1,
-                            get = function() return GetDB().debuffYOffset or GetDB().auraY or 4 end,
-                            set = function(_, v)
-                                GetDB().debuffYOffset = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                    }
-                },
-                styling = {
-                    type = "group",
-                    name = L["Styling & Texts"],
-                    order = 9.5,
-                    inline = true,
-                    args = {
-                        hideBorder = {
-                            type = "toggle",
-                            name = L["Hide Border"],
-                            order = 1,
-                            get = function() return GetDB().hideBorder ~= false end,
-                            set = function(_, v)
-                                GetDB().hideBorder = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        zoom = {
-                            type = "range",
-                            name = L["Icon Zoom (%)"],
-                            order = 2,
-                            min = 0,
-                            max = 50,
-                            step = 1,
-                            get = function() return GetDB().zoomPercent ~= nil and GetDB().zoomPercent or 15 end,
-                            set = function(_, v)
-                                GetDB().zoomPercent = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        -- Timer Settings:
-                        timerFontSize = {
-                            type = "range",
-                            name = L["Timer Font Size"],
-                            order = 10,
-                            min = 6,
-                            max = 24,
-                            step = 1,
-                            get = function() return GetDB().timerFontSize or 10 end,
-                            set = function(_, v)
-                                GetDB().timerFontSize = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        timerAnchor = {
-                            type = "select",
-                            name = L["Timer Anchor"],
-                            order = 11,
-                            values = {
-                                ["TOPLEFT"] = "Top Left",
-                                ["TOP"] = "Top",
-                                ["TOPRIGHT"] = "Top Right",
-                                ["LEFT"] = "Left",
-                                ["CENTER"] = "Center",
-                                ["RIGHT"] = "Right",
-                                ["BOTTOMLEFT"] = "Bottom Left",
-                                ["BOTTOM"] = "Bottom",
-                                ["BOTTOMRIGHT"] = "Bottom Right"
-                            },
-                            get = function() return GetDB().timerAnchor or "CENTER" end,
-                            set = function(_, v)
-                                GetDB().timerAnchor = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        timerX = {
-                            type = "range",
-                            name = L["Timer X Offset"],
-                            order = 12,
-                            min = -50,
-                            max = 50,
-                            step = 1,
-                            get = function() return GetDB().timerX or 0 end,
-                            set = function(_, v)
-                                GetDB().timerX = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        timerY = {
-                            type = "range",
-                            name = L["Timer Y Offset"],
-                            order = 13,
-                            min = -50,
-                            max = 50,
-                            step = 1,
-                            get = function() return GetDB().timerY or 0 end,
-                            set = function(_, v)
-                                GetDB().timerY = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        -- Stack Settings:
-                        stackFontSize = {
-                            type = "range",
-                            name = L["Stack Font Size"],
-                            order = 20,
-                            min = 6,
-                            max = 24,
-                            step = 1,
-                            get = function() return GetDB().stackFontSize or 10 end,
-                            set = function(_, v)
-                                GetDB().stackFontSize = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        stackAnchor = {
-                            type = "select",
-                            name = L["Stack Anchor"],
-                            order = 21,
-                            values = {
-                                ["TOPLEFT"] = "Top Left",
-                                ["TOP"] = "Top",
-                                ["TOPRIGHT"] = "Top Right",
-                                ["LEFT"] = "Left",
-                                ["CENTER"] = "Center",
-                                ["RIGHT"] = "Right",
-                                ["BOTTOMLEFT"] = "Bottom Left",
-                                ["BOTTOM"] = "Bottom",
-                                ["BOTTOMRIGHT"] = "Bottom Right"
-                            },
-                            get = function() return GetDB().stackAnchor or "BOTTOMRIGHT" end,
-                            set = function(_, v)
-                                GetDB().stackAnchor = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        stackX = {
-                            type = "range",
-                            name = L["Stack X Offset"],
-                            order = 22,
-                            min = -50,
-                            max = 50,
-                            step = 1,
-                            get = function() return GetDB().stackX or 2 end,
-                            set = function(_, v)
-                                GetDB().stackX = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                        stackY = {
-                            type = "range",
-                            name = L["Stack Y Offset"],
-                            order = 23,
-                            min = -50,
-                            max = 50,
-                            step = 1,
-                            get = function() return GetDB().stackY or -2 end,
-                            set = function(_, v)
-                                GetDB().stackY = v; ns.RefreshUnitFrame(unit)
-                            end,
-                        },
-                    }
-                },
-                filtersAndVisibility = {
-                    type = "group",
-                    name = L["Filters & Layout"],
-                    order = 10,
-                    args = GenerateAuraFilters(GetDB, function() ns.RefreshUnitFrame(unit) end),
-                }
-            }
-        }
-
-        if not unit:match("^boss%d$") then
-            castbarsOptions.args[unit] = {
-                type = "group",
-                name = label,
-                order = 10 + i,
-                args = {
-                    enable = {
-                        type = "toggle",
-                        name = L["Enable Castbar"],
-                        order = 1,
-                        get = function()
-                            if not RoithiUI.db.profile.Castbar then return true end
-                            if not RoithiUI.db.profile.Castbar[unit] then return true end
-                            return RoithiUI.db.profile.Castbar[unit].enabled ~= false
-                        end,
-                        set = function(_, v)
-                            if not RoithiUI.db.profile.Castbar then RoithiUI.db.profile.Castbar = {} end
-                            if not RoithiUI.db.profile.Castbar[unit] then RoithiUI.db.profile.Castbar[unit] = {} end
-                            RoithiUI.db.profile.Castbar[unit].enabled = v
-                            if ns.UpdateCast and ns.bars and ns.bars[unit] then ns.UpdateCast(ns.bars[unit]) end
-                            if EditModeManagerFrame and EditModeManagerFrame:IsShown() and ns.UpdateBlizzardVisibility then
-                                ns.UpdateBlizzardVisibility()
-                            end
-                        end,
-                    },
-                    quickLinks = CreateQuickLinks("castbars"),
-                }
-            }
-        end
-    end
-
-    -- Add Boss Frames settings to Unit Frames group
-    unitframesOptions.args["boss"] = {
-        type = "group",
-        name = L["Boss Frames"],
-        order = 30,
-        args = {
-            enable = {
-                type = "toggle",
-                name = L["Enable Boss Frames"],
-                order = 1,
-                get = function()
-                    if not RoithiUI.db.profile.UnitFrames then return true end
-                    if not RoithiUI.db.profile.UnitFrames["boss1"] then return true end
-                    return RoithiUI.db.profile.UnitFrames["boss1"].enabled ~= false
-                end,
-                set = function(_, v)
-                    if not RoithiUI.db.profile.UnitFrames then RoithiUI.db.profile.UnitFrames = {} end
-                    for i = 1, 5 do
-                        local bUnit = "boss" .. i
-                        if not RoithiUI.db.profile.UnitFrames[bUnit] then RoithiUI.db.profile.UnitFrames[bUnit] = {} end
-                        RoithiUI.db.profile.UnitFrames[bUnit].enabled = v
-                    end
-                    RequestReload()
-                end,
-            },
-            quickLinks = {
-                type = "group",
-                name = L["Quick Links"],
-                inline = true,
-                order = 2,
-                args = {
-                    auras = {
-                        type = "execute",
-                        name = L["> Auras"],
-                        order = 1,
-                        func = function()
-                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units",
-                                "boss1")
-                        end,
-                    },
-                    customtags = {
-                        type = "execute",
-                        name = L["> Custom Tags"],
-                        order = 2,
-                        func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "customtags", "boss1") end,
-                    },
-                }
-            },
-        }
-    }
-
-    return options
-end
-
-function Config:RegisterOptions()
-    -- Safety check for AceConfig
-    local AC = LibStub("AceConfig-3.0", true)
-    local ACD = LibStub("AceConfigDialog-3.0", true)
-
-    if AC and ACD then
-        AC:RegisterOptionsTable("RoithiUI", GetOptions)
-        if not self.optionsFrame then
-            -- AceConfigDialog's AddToBlizOptions can error if already registered in Blizzard Settings
-            local success, frame, categoryID = pcall(ACD.AddToBlizOptions, ACD, "RoithiUI", "RoithiUI")
-            if success then
-                self.optionsFrame = frame
-                RoithiUI.SettingsCategoryID = categoryID
-            end
-        end
-    else
-        -- If AceConfig is missing, we just don't register this table.
-        -- The standalone config (if loaded) or just the lack of options is better than a crash.
-        print("RoithiUI: AceConfig-3.0 not found. Detailed options disabled.")
-    end
-end
-
--- Refresh Helper (can be moved to Core/UnitFrames if scope issues arise)
+--- Refresh Helpers
 function ns.RefreshUnitFrame(unit)
     local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
     if UF and UF.UpdateFrameFromSettings then
@@ -1904,10 +70,187 @@ function ns.RefreshAllUnitFrames()
     end
 end
 
+local ACE_WHITELIST = {
+    type = true, name = true, desc = true, order = true, width = true,
+    hidden = true, disabled = true, get = true, set = true, icon = true,
+    iconCoords = true, control = true, dialogControl = true, min = true,
+    max = true, step = true, bigStep = true, isPercent = true, values = true,
+    sorting = true, style = true, cmdHidden = true, guiHidden = true,
+    dropdownHidden = true, cmdName = true, guiName = true, confirm = true,
+    confirmText = true, func = true, args = true, pattern = true,
+    multiline = true, tristate = true, image = true, imageWidth = true,
+    imageHeight = true, imageCoords = true, inline = true, handler = true,
+}
+
+local function DeepCopyTable(tbl)
+    if type(tbl) ~= "table" then return tbl end
+    local copy = {}
+    for k, v in pairs(tbl) do
+        if type(v) == "table" then
+            copy[k] = DeepCopyTable(v)
+        else
+            copy[k] = v
+        end
+    end
+    return copy
+end
+
+local function CleanOptionsTableForAceConfig(tbl)
+    if type(tbl) ~= "table" then return end
+    for _, item in pairs(tbl) do
+        if type(item) == "table" then
+            for prop in pairs(item) do
+                if not ACE_WHITELIST[prop] then
+                    item[prop] = nil
+                end
+            end
+            if item.args and type(item.args) == "table" then
+                CleanOptionsTableForAceConfig(item.args)
+            end
+        end
+    end
+end
+
+local function GetOptions()
+    local profileOptions = LibStub("AceDBOptions-3.0"):GetOptionsTable(RoithiUI.db)
+    if profileOptions and profileOptions.args and ns.GetProfileSharingOptions then
+        profileOptions.args.sharing = ns.GetProfileSharingOptions()
+    end
+
+    local generalOptions = ns.GetGeneralOptions and ns.GetGeneralOptions() or {
+        type = "group",
+        name = L["General"],
+        order = 1,
+        args = {},
+    }
+
+    -- Add Module Enable/Disable toggles into General options if available
+    if generalOptions.args then
+        generalOptions.args.modules = {
+            type = "group",
+            name = L["Enabled Modules"] or "Enabled Modules",
+            order = 2,
+            inline = true,
+            args = {},
+        }
+        for name, module in RoithiUI:IterateModules() do
+            if name ~= "ProfileSharing" then
+                local key = string.lower(name)
+                generalOptions.args.modules.args[key] = {
+                    type = "toggle",
+                    name = module.displayName or name,
+                    desc = module.description or string.format(L["Enables the custom RoithiUI %s module."], name),
+                    order = module.order or 10,
+                    get = function()
+                        if not RoithiUI.db.profile.EnabledModules then RoithiUI.db.profile.EnabledModules = {} end
+                        return RoithiUI.db.profile.EnabledModules[name] ~= false
+                    end,
+                    set = function(_, v)
+                        if not RoithiUI.db.profile.EnabledModules then RoithiUI.db.profile.EnabledModules = {} end
+                        RoithiUI.db.profile.EnabledModules[name] = v
+                        if RoithiUI.ModuleManager and RoithiUI.ModuleManager.SetModuleEnabled then
+                            RoithiUI.ModuleManager:SetModuleEnabled(name, v)
+                        end
+                        if StaticPopup_Show then
+                            StaticPopup_Show("ROITHI_RELOAD")
+                        end
+                    end,
+                }
+            end
+        end
+    end
+
+    local rawOptions = {
+        type = "group",
+        name = L["RoithiUI Settings"],
+        args = {
+            general = generalOptions,
+            unitframes = {
+                type = "group",
+                name = L["Unit Frames"],
+                order = 2,
+                args = {
+                    intro = {
+                        type = "description",
+                        name = L["Configure text, auras, and indicators for Unit Frames."],
+                        order = 1,
+                    },
+                },
+            },
+            customtags = RoithiUI.Config.GetCustomTagsOptions and RoithiUI.Config.GetCustomTagsOptions() or nil,
+            castbars = {
+                type = "group",
+                name = L["Castbars"],
+                order = 3,
+                args = ns.GetCastbarOptions and ns.GetCastbarOptions() or {},
+            },
+            auras = ns.GetAurasOptions and ns.GetAurasOptions() or {
+                type = "group",
+                name = L["Auras"],
+                order = 4,
+                args = {},
+            },
+            encounterbar = ns.GetEncounterBarOptions and (ns.GetEncounterBarOptions().encounterbar or ns.GetEncounterBarOptions()) or nil,
+        }
+    }
+
+    if ns.BuildUnitAndCastbarOptions then
+        ns.BuildUnitAndCastbarOptions(rawOptions)
+    end
+
+    -- Dynamically attach module options if defined (e.g. Minimap, Actionbars)
+    for name, module in RoithiUI:IterateModules() do
+        if module.GetOptions then
+            local optKey = string.lower(name)
+            if optKey == "castbar" then optKey = "castbars" end
+            if not rawOptions.args[optKey] then
+                rawOptions.args[optKey] = module:GetOptions()
+            end
+        end
+    end
+
+    if ns.OptionsEngine and ns.OptionsEngine.CompileAceConfig then
+        local compiled = ns.OptionsEngine:CompileAceConfig()
+        for k, v in pairs(compiled) do
+            if not rawOptions.args[k] then
+                rawOptions.args[k] = v
+            end
+        end
+    end
+
+    local options = DeepCopyTable(rawOptions)
+    CleanOptionsTableForAceConfig(options.args)
+    options.args.profiles = profileOptions
+    return options
+end
+
 function Config:GetUnitFramesOptions()
-    return unitframesOptions
+    local opts = GetOptions()
+    return opts and opts.args and opts.args.unitframes
 end
 
 function Config:GetCastbarsOptions()
-    return castbarsOptions
+    local opts = GetOptions()
+    return opts and opts.args and opts.args.castbars
+end
+
+function Config:RegisterOptions()
+    -- Build options early to populate OptionsEngine schemas for Edit Mode
+    pcall(GetOptions)
+
+    local AC = LibStub("AceConfig-3.0", true)
+    local ACD = LibStub("AceConfigDialog-3.0", true)
+
+    if AC and ACD then
+        AC:RegisterOptionsTable("RoithiUI", GetOptions)
+        if not self.optionsFrame then
+            local success, frame, categoryID = pcall(ACD.AddToBlizOptions, ACD, "RoithiUI", "RoithiUI")
+            if success then
+                self.optionsFrame = frame
+                RoithiUI.SettingsCategoryID = categoryID
+            end
+        end
+    else
+        print("RoithiUI: AceConfig-3.0 not found. Detailed options disabled.")
+    end
 end

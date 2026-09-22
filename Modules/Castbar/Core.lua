@@ -16,6 +16,7 @@ local DEFAULT_COLORS = {
     channel = { 0, 0.98, 1, 1 },     -- 00F9FF
     interrupted = { 1, 0, 0, 1 },    -- FF0000
     shield = { 0.5, 0.5, 0.5, 1 },   -- 808080
+    interruptOnCD = { 0.9, 0.5, 0.1, 1 }, -- E6801A (Amber-Orange)
     empower1 = { 0.8, 0.5, 0.1, 1 }, -- CC801A
     empower2 = { 0.9, 0.9, 0.2, 1 }, -- E6E633
     empower3 = { 0.2, 0.7, 0.2, 1 }, -- 33B333
@@ -38,6 +39,7 @@ ns.DEFAULTS = {
     },
     target = {
         enabled = true,
+        colorOnInterruptCD = false,
         point = "CENTER",
         relPoint = "CENTER",
         x = 0,
@@ -51,6 +53,7 @@ ns.DEFAULTS = {
     },
     focus = {
         enabled = true,
+        colorOnInterruptCD = false,
         point = "CENTER",
         relPoint = "CENTER",
         x = -200,
@@ -64,6 +67,7 @@ ns.DEFAULTS = {
     },
     pet = {
         enabled = true,
+        colorOnInterruptCD = false,
         point = "CENTER",
         relPoint = "CENTER",
         x = 0,
@@ -77,6 +81,7 @@ ns.DEFAULTS = {
     },
     targettarget = {
         enabled = true,
+        colorOnInterruptCD = false,
         point = "CENTER",
         relPoint = "CENTER",
         x = 0,
@@ -90,6 +95,7 @@ ns.DEFAULTS = {
     },
     focustarget = {
         enabled = true,
+        colorOnInterruptCD = false,
         point = "CENTER",
         relPoint = "CENTER",
         x = -200,
@@ -107,6 +113,7 @@ ns.DEFAULTS = {
 for i = 1, 5 do
     ns.DEFAULTS["boss" .. i] = {
         enabled = true,
+        colorOnInterruptCD = false,
         detached = false,
         point = "TOP",
         relPoint = "BOTTOM",
@@ -156,6 +163,26 @@ function ns.UpdateBlizzardVisibility()
                         self:Hide()
                     end
                 end)
+                if frame.GetHeight then
+                    local origGetHeight = frame.GetHeight
+                    frame.GetHeight = function(self, ...)
+                        local h = origGetHeight(self, ...)
+                        if (issecretvalue and issecretvalue(h)) or (canaccessvalue and not canaccessvalue(h)) then
+                            return 20
+                        end
+                        return h
+                    end
+                end
+                if frame.GetWidth then
+                    local origGetWidth = frame.GetWidth
+                    frame.GetWidth = function(self, ...)
+                        local w = origGetWidth(self, ...)
+                        if (issecretvalue and issecretvalue(w)) or (canaccessvalue and not canaccessvalue(w)) then
+                            return 150
+                        end
+                        return w
+                    end
+                end
                 frame.RoithiHooked = true
             end
             frame.shouldBeHiddenRoithi = true
@@ -270,7 +297,9 @@ function Castbar:OnEnable()
 
     if not self.initialized then
         ns.InitializeBars()          -- Defined in Castbar.lua
-        ns.InitializeCastbarConfig() -- Defined in Config/Castbars.lua
+        if ns.InitializeCastbarConfig then
+            ns.InitializeCastbarConfig()
+        end
         self.initialized = true
     end
 
@@ -301,10 +330,22 @@ function Castbar:OnEnable()
                 local cbDB = RoithiUI.db.profile.Castbar["pet"]
                 local isDetached = cbDB and cbDB.detached
                 ns.SetCastbarAttachment("pet", not isDetached)
+            elseif event == "SPELL_UPDATE_COOLDOWN" then
+                if ns.bars then
+                    for u, bar in pairs(ns.bars) do
+                        if u ~= "player" and bar:IsShown() and (bar.casting or bar.channeling) then
+                            ns.UpdateCast(bar, u)
+                        end
+                    end
+                end
+            elseif event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
+                if ns.UpdatePlayerInterruptSpell then
+                    ns.UpdatePlayerInterruptSpell()
+                end
             else
                 local unit = ...
                 local targetBar = ns.bars[unit]
-
+                
                 -- Vehicle Aliasing: Map vehicle/pet casts to player bar if needed
                 if unit == "vehicle" then
                     targetBar = ns.bars["player"]
@@ -314,7 +355,14 @@ function Castbar:OnEnable()
                     if event == "UNIT_SPELLCAST_INTERRUPTED" then
                         ns.HandleInterrupt(targetBar)
                     elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
+                        local _, castGUID = ...
+                        local isSecretID = (issecretvalue and (issecretvalue(targetBar.castID) or issecretvalue(castGUID))) or (canaccessvalue and (not canaccessvalue(targetBar.castID) or not canaccessvalue(castGUID)))
+                        if not isSecretID and targetBar.castID and castGUID and targetBar.castID ~= castGUID then
+                            return
+                        end
                         if not targetBar.isInterrupted and not targetBar.isInEditMode then
+                            targetBar.casting = false
+                            targetBar.channeling = false
                             targetBar:Hide(); targetBar:SetScript("OnUpdate", nil)
                         end
                     else
@@ -330,12 +378,18 @@ function Castbar:OnEnable()
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_UPDATE")
+    f:RegisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
+    f:RegisterEvent("UNIT_SPELLCAST_NOT_INTERRUPTIBLE")
     f:RegisterEvent("UNIT_SPELLCAST_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
     f:RegisterEvent("PLAYER_TARGET_CHANGED")
     f:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    f:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    f:RegisterEvent("SPELLS_CHANGED")
+    f:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    f:RegisterEvent("PLAYER_ENTERING_WORLD")
 end
 
 function Castbar:OnDisable()
@@ -351,6 +405,7 @@ end
 
 -- Slash Command
 _G.SLASH_MIDNIGHTCB1 = "/mcb"
+_G.SlashCmdList = _G.SlashCmdList or {}
 SlashCmdList["MIDNIGHTCB"] = function(msg)
     if EditModeManagerFrame then
         if not EditModeManagerFrame:IsVisible() then

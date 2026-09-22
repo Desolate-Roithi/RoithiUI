@@ -1,6 +1,7 @@
 local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
+local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
 local Config = RoithiUI.Config or {}
 RoithiUI.Config = Config
 
@@ -120,14 +121,14 @@ function RoithiUI.Config.GetCustomTagsOptions()
                 type = "group",
                 name = "Quick Links",
                 inline = true,
-                order = 0.5,
+                order = 999,
                 args = args
             }
         end
 
         local unitGroup = {
             type = "group",
-            name = label,
+            name = L[label] or label,
             order = i,
             args = {
                 quickLinks = CreateQuickLinks(),
@@ -166,7 +167,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
                         type = "execute",
                         name = "Delete Tag",
                         desc = "Remove this tag.",
-                        order = 0,
+                        order = 100,
                         confirm = true,
                         func = function()
                             table.remove(tags, idx)

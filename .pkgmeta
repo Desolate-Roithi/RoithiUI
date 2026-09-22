@@ -20,6 +20,8 @@ ignore:
   - README.md
   - .github
   - .vscode
+  - Tests
+  - Modules/TestSuite
 
 changelog:
   line-label: "-"

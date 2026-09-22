@@ -74,6 +74,8 @@ function UF:InitializeBossFrames()
 
             f:ClearAllPoints()
             f:SetPoint(point, UIParent, point, x, y)
+            if self and self.UpdateBossAnchors then self:UpdateBossAnchors() end
+            if LEM then LEM:RefreshFrameSettings(f) end
         end
 
         -- Register Frame
@@ -169,6 +171,69 @@ function UF:InitializeBossFrames()
     end
 
     self:UpdateBossAnchors()
+end
+
+function UF:RefreshBossEditMode()
+    local driver = self.units and self.units["boss1"]
+    if not driver then return end
+
+    self:UpdateBossAnchors()
+
+    -- Load Driver Position from DB
+    local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames["boss1"]
+    if db and db.point then
+        driver:ClearAllPoints()
+        driver:SetPoint(db.point, UIParent, db.point, db.x or 0, db.y or 0)
+        self:UpdateBossAnchors()
+    end
+
+    local isEditMode = false
+    if LEM and LEM.IsInEditMode and LEM:IsInEditMode() then
+        isEditMode = true
+    elseif EditModeManagerFrame and EditModeManagerFrame:IsShown() then
+        isEditMode = true
+    end
+
+    if not isEditMode then return end
+
+    driver.isInEditMode = true
+
+    for i = 1, 5 do
+        local f = self.units["boss" .. i]
+        if f then
+            if f.EditModeOverlay then f.EditModeOverlay:Show() end
+
+            if self:IsUnitEnabled("boss" .. i) and not InCombatLockdown() then
+                f.forceShowEditMode = true
+                UnregisterUnitWatch(f)
+                f:Show()
+                if f.Health then
+                    f.Health:SetMinMaxValues(0, 100)
+                    f.Health:SetValue(100 - (i * 10))
+                    f.Health:SetStatusBarColor(0.9, 0.1, 0.1)
+                end
+                if f.Power then
+                    f.Power:SetMinMaxValues(0, 100)
+                    f.Power:SetValue(50)
+                    f.Power:SetStatusBarColor(0.1, 0.1, 0.9)
+                end
+                if f.Name then
+                    f.Name:SetText("Boss " .. i)
+                end
+            elseif not InCombatLockdown() then
+                f.forceShowEditMode = nil
+                f:Hide()
+                UnregisterUnitWatch(f)
+            end
+
+            if f.UpdatePowerLayout then f.UpdatePowerLayout() end
+            if f.UpdateAuras then f.UpdateAuras() end
+        end
+    end
+
+    if LEM and LEM.RefreshFrameSettings then
+        LEM:RefreshFrameSettings(driver)
+    end
 end
 
 function UF:UpdateBossAnchors()

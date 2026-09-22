@@ -12,16 +12,17 @@ ns.Defaults = {
                 [95809] = true,  -- Insanity (Ancient Hysteria)
                 [264689] = true, -- Fatigued (Primal Rage)
                 [390435] = true, -- Allied Ether (Fury of the Aspects debuff)
-                [124275] = true, -- Light Stagger
-                [124274] = true, -- Moderate Stagger
-                [124273] = true, -- Heavy Stagger
             },
             ShowOnlyPlayer = false,
             UseLibCustomGlow = true,
             Whitelist = {
             },
+            hideIcon = false,
+            hideTimer = false,
+            hideCount = false,
         },
         CustomAuraFrames = {},
+        LEMDialogPosition = false,
         SmartFilters = {
             showAll = false,
             showCrowdControl = true,
@@ -1288,8 +1289,8 @@ ns.Defaults = {
                 additionalPowerWidth = 230,
                 additionalPowerX = 106.99920654297,
                 additionalPowerY = -255.00018310547,
-                auraAnchor = "TOP",
-                auraGrowDirection = "LEFT",
+                auraAnchor = "BOTTOM",
+                auraGrowDirection = "RIGHT_DOWN",
                 aurasEnabled = true,
                 classPowerDetached = false,
                 classPowerEnabled = true,

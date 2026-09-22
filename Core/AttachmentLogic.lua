@@ -2,6 +2,20 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 
+local function SafeVal(val, default)
+    if val == nil then return default end
+    if type(val) == "table" and val.val ~= nil then val = val.val end
+    if _G.issecretvalue and _G.issecretvalue(val) then return default end
+    if default == 0 then
+        local num = tonumber(val)
+        return num or 0
+    elseif type(default) == "string" then
+        if type(val) == "string" and val ~= "" then return val end
+        return default
+    end
+    return val ~= nil and val or default
+end
+
 ---@class AttachmentLogic
 local AL = {}
 ns.AttachmentLogic = AL
@@ -21,9 +35,12 @@ ns.AttachmentLogic = AL
 AL.BarHierarchies = {
     ["Power"] = { "UnitFrame" },
     ["ClassPower"] = { "Power" },                                                -- Falls back to UnitFrame if Power detached
-    ["AdditionalPower"] = { "UnitFrame", { "Power", "ClassPower" } },            -- Group requires both Attached
-    ["Castbar"] = { "UnitFrame", { "Power", "ClassPower" }, "AdditionalPower" }, -- Priority: Add -> Group -> UF
-    ["Auras"] = { "UnitFrame" }                                                  -- Auras always attach to UnitFrame (Satellite)
+    ["AdditionalPower"] = { "UnitFrame", "Power", "ClassPower" },                -- Priority: ClassPower -> Power -> UnitFrame (prevents overlap)
+    ["Castbar"] = { "UnitFrame", "Power", "ClassPower", "AdditionalPower" },     -- Checks AddPower -> ClassPower -> Power -> UnitFrame
+    ["Auras"] = { "UnitFrame" },
+    ["Buffs"] = { "UnitFrame" },
+    ["Debuffs"] = { "UnitFrame" },
+    ["Combined"] = { "UnitFrame" },
 }
 
 -- Mapping of internal names to unit frame element keys
@@ -34,6 +51,9 @@ local ElementMap = {
     ["AdditionalPower"] = "AdditionalPower",
     ["Auras"] = "RoithiAuras",
     ["RoithiAuras_Debuffs"] = "RoithiAuras_Debuffs",
+    ["Buffs"] = "RoithiAuraContainer_Buffs",
+    ["Debuffs"] = "RoithiAuraContainer_Debuffs",
+    ["Combined"] = "RoithiAuraContainer_Combined",
 }
 
 -- Mapping of internal names to DB keys
@@ -43,11 +63,16 @@ local DBKeyMap = {
     ["AdditionalPower"] = "additionalPower",
     ["Castbar"] = "castbar",
     ["Auras"] = "aura",
+    ["Buffs"] = "aura",
+    ["Debuffs"] = "aura",
+    ["Combined"] = "aura",
 }
 
 -- ----------------------------------------------------------------------------
 -- 2. State Helpers
 -- ----------------------------------------------------------------------------
+
+
 
 function AL:GetLookupUnit(unit)
     if unit == "vehicle" then return "player" end
@@ -195,9 +220,11 @@ function AL:GetValidAnchor(unit, frameType)
             return uFrame
         else
             -- [SINGLE ENTRY] (e.g. "Power")
-            -- LOOSE: Valid even if parent is DETACHED.
-            -- User Rule: "Even if Power is detached it should stay with power" (for ClassPower)
-            if self:IsActive(unit, entry) then
+            -- ClassPower follows Power even if Power is detached.
+            -- AdditionalPower & Castbar require the target entry to be active AND attached (not detached).
+            local isDetached = self:IsDetached(unit, entry)
+            local isParentValid = not isDetached or (frameType == "ClassPower")
+            if isParentValid and self:IsActive(unit, entry) then
                 local elementKey = ElementMap[entry]
                 if frameType == "Castbar" and entry == "AdditionalPower" then
                     -- Special case: Castbar anchoring to AdditionalPower frame
@@ -258,54 +285,6 @@ function AL:ApplyLayout(unit, frameType)
     -- Force detached if no unit frame exists to anchor to
     if not uFrame then isDetached = true end
 
-    if frameType == "AdditionalPower" and RoithiUI.db.profile.General.debugMode then
-        RoithiUI:Log(string.format("AL Debug: ApplyLayout %s | Detached: %s", frameType, tostring(isDetached)))
-    end
-
-    -- Save-on-Transition Logic:
-    -- If we are switching to Attached (isDetached == false), but the frame is currently Detached (IsMovable == true),
-    -- then the user just unchecked "Detached". We must save the current manual position before it gets wiped/snapped.
-    if not isDetached and frame:IsMovable() then
-        local p, _, _, x, y = frame:GetPoint()
-        if p then
-            if frameType == "Castbar" then
-                db.point, db.x, db.y = p, x, y
-            elseif frameType == "Auras" then
-                if db.separateAuras then
-                    db.buffAnchor = p
-                    db.buffXOffset = x
-                    db.buffYOffset = y
-                else
-                    db.auraAnchor = p
-                    db.auraX = x
-                    db.auraY = y
-                end
-            elseif frameType == "RoithiAuras_Debuffs" then
-                db.debuffAnchor = p
-                db.debuffXOffset = x
-                db.debuffYOffset = y
-            elseif frameType:match("^CustomAura_Debuffs_") then
-                db.debuffAnchor = p
-                db.debuffXOffset = x
-                db.debuffYOffset = y
-            elseif frameType:match("^CustomAura_") then
-                db.anchorPoint = p
-                db.xOffset = x
-                db.yOffset = y
-            else
-                local prefix = DBKeyMap[frameType]
-                if prefix then
-                    db[prefix .. "Point"] = p
-                    db[prefix .. "X"] = x
-                    db[prefix .. "Y"] = y
-                end
-            end
-            if RoithiUI.db.profile.General.debugMode then
-                RoithiUI:Log(string.format("AL Debug: Transition to Attached -> Saved Manual Pos for %s", frameType))
-            end
-        end
-    end
-
     frame:ClearAllPoints()
 
     if isDetached then
@@ -316,12 +295,15 @@ function AL:ApplyLayout(unit, frameType)
             point = db.point or "CENTER"
             x, y = db.x or 0, db.y or 0
             width = db.width or 250
-        elseif frameType == "Auras" or frameType:match("^CustomAura_") or frameType:match("^RoithiAuras_") then
+        elseif frameType == "Auras" or frameType == "Buffs" or frameType == "Debuffs" or frameType == "Combined" or frameType:match("^CustomAura_") or frameType:match("^RoithiAuras_") then
             -- Use specialized Screen Coordinates keys for Auras to preserve Satellite offsets
-            if frameType == "Auras" then
+            if frameType == "Auras" or frameType == "Combined" then
                 point = db.auraScreenPoint or "CENTER"
                 x, y = db.auraScreenX or 0, db.auraScreenY or 0
-            elseif frameType == "RoithiAuras_Debuffs" then
+            elseif frameType == "Buffs" then
+                point = db.buffScreenPoint or db.auraScreenPoint or "CENTER"
+                x, y = db.buffScreenX or db.auraScreenX or 0, db.buffScreenY or db.auraScreenY or 0
+            elseif frameType == "Debuffs" or frameType == "RoithiAuras_Debuffs" then
                 point = db.debuffScreenPoint or db.auraScreenPoint or "CENTER"
                 x, y = db.debuffScreenX or db.auraScreenX or 0, db.debuffScreenY or db.auraScreenY or -50
             else
@@ -383,20 +365,28 @@ function AL:ApplyLayout(unit, frameType)
                     anchorX = db.xOffset or 0
                     anchorY = db.yOffset or 0
                 end
+                anchorPt = SafeVal(anchorPt, "BOTTOM")
+                anchorX = SafeVal(anchorX, 0)
+                anchorY = SafeVal(anchorY, 0)
                 frame:ClearAllPoints()
                 frame:SetPoint(anchorPt, anchor, anchorPt, anchorX, anchorY)
                 -- Width is auto-calculated by icons usually
             else
                 -- STACKED MODE (Bars)
+                local parentW = anchor:GetWidth()
+                if not parentW or parentW <= 0 or (issecretvalue and issecretvalue(parentW)) then
+                    parentW = (uFrame and uFrame.GetWidth and uFrame:GetWidth()) or 200
+                end
+
                 frame:SetPoint("TOP", anchor, "BOTTOM", 0, -1)
-                frame:SetWidth(anchor:GetWidth())
+                frame:SetWidth(parentW)
 
                 -- Dynamic Width & Offset deduction for Castbars (fixes 0-start icon alignment)
                 if frameType == "Castbar" then
                     local cbDB = RoithiUI.db.profile.Castbar[unit]
                     if cbDB and cbDB.showIcon and not cbDB.detached then
                         local iconSize = (cbDB.height or 20) * (cbDB.iconScale or 1.0)
-                        local w = anchor:GetWidth() - iconSize
+                        local w = parentW - iconSize
                         if w < 1 then w = 1 end
                         frame:SetWidth(w)
                         -- Shift right by half the icon size so the icon's left edge perfectly aligns with the UI parent's left edge

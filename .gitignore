@@ -3,11 +3,15 @@
 .agent/
 .DS_Store
 Thumbs.db
+task.md
 
 # --- Development Tools ---
 .luacheckrc
 Tests/
+Modules/TestSuite/
+Documentation/
 RoithiUI-Dev.toc
+task.md
 
 # --- Libraries (Externals) ---
 Libs/Ace3/
