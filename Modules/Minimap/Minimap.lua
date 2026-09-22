@@ -20,9 +20,43 @@ local date = _G.date or os.date
 MinimapMod.displayName = L["Minimap"]
 MinimapMod.description = L["Enables the custom RoithiUI Minimap and Addon Button Bar module."]
 MinimapMod.order = 80
+MinimapMod.dbKey = "Minimap"
+MinimapMod.defaultSettings = {
+    enabled = true,
+    shape = "SQUARE",
+    width = 200,
+    height = 200,
+    scale = 1.0,
+    borderSize = 1,
+    borderColor = { r = 0.2, g = 0.2, b = 0.2, a = 1.0 },
+    showZoneText = true,
+    showCalendar = false,
+    showZoom = false,
+    showDataTextBar = true,
+    dataTextPosition = "OUTSIDE",
+    dataTextTimeFormat = "24H",
+    dataTextTimeType = "LOCAL",
+    dataTextBgColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.6 },
+    dataTextLeftType = "FPS_MS",
+    dataTextLeftFontSize = 11,
+    dataTextMiddleType = "Time",
+    dataTextMiddleFontSize = 11,
+    dataTextRightType = "Social",
+    dataTextRightFontSize = 11,
+    showAddonBar = true,
+    addonBarAttached = true,
+    addonBarSnap = true,
+    addonBarSnapEdge = "AUTO",
+    addonBarExpanded = false,
+    addonBarVisibleCount = 3,
+    addonBarButtonSize = 30,
+    addonBarSpacing = 4,
+    addonBarColumns = 1,
+    offsets = {},
+}
 
 function MinimapMod:OnInitialize()
-    self.db = RoithiUI.db.profile.Minimap
+    self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap or self.defaultSettings
     self.scannedButtons = {}
     self.activeButtons = {}
     self:RegisterEvent("ADDON_LOADED")
@@ -169,6 +203,10 @@ end
 function MinimapMod:OnEnable()
     if self.db.enabled == false then return end
 
+    if self.container then
+        self.container:Show()
+    end
+
     -- Apply styling
     self:StyleMinimap()
 
@@ -282,6 +320,50 @@ function MinimapMod:OnEnable()
     end
 end
 
+function MinimapMod:OnDisable()
+    -- Restore original Minimap parent and position
+    if Minimap and self.originalMinimapParent then
+        Minimap:SetParent(self.originalMinimapParent)
+        Minimap:ClearAllPoints()
+        Minimap:SetPoint("CENTER", self.originalMinimapParent, "CENTER", 0, 0)
+    end
+
+    -- Restore mask to round
+    if Minimap and Minimap.SetMaskTexture then
+        Minimap:SetMaskTexture("Interface\\Masks\\MinimapMask")
+    end
+
+    -- Hide RoithiUI container and custom frames
+    if self.container then self.container:Hide() end
+    if self.borderFrame then self.borderFrame:Hide() end
+    if self.dataTextBar then self.dataTextBar:Hide() end
+    if self.addonBar then self.addonBar:Hide() end
+    if self.ReleaseAllAddonButtons then
+        self:ReleaseAllAddonButtons()
+    end
+
+    -- Restore Blizzard frames
+    if Minimap_ZoomIn then Minimap_ZoomIn:Show() end
+    if Minimap_ZoomOut then Minimap_ZoomOut:Show() end
+    if GameTimeFrame then GameTimeFrame:Show() end
+    if MiniMapTracking then MiniMapTracking:Show() end
+    if MinimapCluster then
+        MinimapCluster:Show()
+        MinimapCluster:SetAlpha(1)
+        if MinimapCluster.BorderTop then
+            MinimapCluster.BorderTop:Show()
+            MinimapCluster.BorderTop:SetAlpha(1)
+        end
+        local backdrop = MinimapCluster.MinimapBackdrop or _G.MinimapBackdrop
+        if backdrop then backdrop:Show() end
+    end
+
+    if self.lfgHookTicker then
+        self.lfgHookTicker:Cancel()
+        self.lfgHookTicker = nil
+    end
+end
+
 function MinimapMod:StyleMinimap()
     -- 1. Setup Minimap Container
     if not self.container then
@@ -292,11 +374,16 @@ function MinimapMod:StyleMinimap()
         self.container.editModeName = L["Minimap"]
 
         -- Parent the default Minimap to our container
-        Minimap:SetParent(self.container)
-        Minimap:ClearAllPoints()
-        Minimap:SetPoint("TOPLEFT", self.container, "TOPLEFT", 0, 0)
-        Minimap:SetPoint("BOTTOMRIGHT", self.container, "BOTTOMRIGHT", 0, 0)
-        Minimap:Show()
+        if Minimap then
+            if Minimap.GetParent and not self.originalMinimapParent then
+                self.originalMinimapParent = Minimap:GetParent()
+            end
+            Minimap:SetParent(self.container)
+            Minimap:ClearAllPoints()
+            Minimap:SetPoint("TOPLEFT", self.container, "TOPLEFT", 0, 0)
+            Minimap:SetPoint("BOTTOMRIGHT", self.container, "BOTTOMRIGHT", 0, 0)
+            Minimap:Show()
+        end
 
         self.container:ClearAllPoints()
         local defaults = { point = "TOPRIGHT", x = -10, y = -10 }
@@ -311,6 +398,15 @@ function MinimapMod:StyleMinimap()
             self.db.offsets = self.db.offsets or {}
             self.db.offsets["container"] = { point = point, x = x, y = y }
         end, defaults)
+    else
+        self.container:Show()
+        if Minimap then
+            Minimap:SetParent(self.container)
+            Minimap:ClearAllPoints()
+            Minimap:SetPoint("TOPLEFT", self.container, "TOPLEFT", 0, 0)
+            Minimap:SetPoint("BOTTOMRIGHT", self.container, "BOTTOMRIGHT", 0, 0)
+            Minimap:Show()
+        end
     end
 
     -- Register Edit Mode settings for self.container
@@ -514,14 +610,18 @@ function MinimapMod:StyleMinimap()
     if Minimap.ZoomHitArea then Minimap.ZoomHitArea:Hide() end
 
     -- 4. Mouse Wheel Zoom
-    Minimap:EnableMouseWheel(true)
-    Minimap:SetScript("OnMouseWheel", function(_, delta)
-        if delta > 0 then
-            Minimap_ZoomIn()
-        else
-            Minimap_ZoomOut()
-        end
-    end)
+    if Minimap.EnableMouseWheel then
+        Minimap:EnableMouseWheel(true)
+    end
+    if Minimap.SetScript then
+        Minimap:SetScript("OnMouseWheel", function(_, delta)
+            if delta > 0 then
+                if Minimap_ZoomIn then Minimap_ZoomIn() end
+            else
+                if Minimap_ZoomOut then Minimap_ZoomOut() end
+            end
+        end)
+    end
 
     -- 5. Right Click for Tracking Menu
     Minimap:SetScript("OnMouseUp", function(s, button)
@@ -580,7 +680,7 @@ function MinimapMod:UpdateMinimapShape()
         if self.borderFrame then self.borderFrame:Hide() end
     end
     self:LayoutDefaultButtons()
-    if LEM then
+    if LEM and LEM.RefreshFrameSettings and self.container then
         LEM:RefreshFrameSettings(self.container)
     end
 end
@@ -601,12 +701,14 @@ function MinimapMod:UpdateMinimapSize()
     Minimap:SetPoint("BOTTOMRIGHT", self.container, "BOTTOMRIGHT", 0, 0)
 
     -- Force a C-level redraw of the minimap 3D render to ensure size/scale update immediately
-    local zoom = Minimap:GetZoom()
-    Minimap:SetZoom(zoom == 0 and 1 or 0)
-    Minimap:SetZoom(zoom)
+    if Minimap.GetZoom and Minimap.SetZoom then
+        local zoom = Minimap:GetZoom()
+        Minimap:SetZoom(zoom == 0 and 1 or 0)
+        Minimap:SetZoom(zoom)
+    end
 
     self:UpdateMinimapBorder()
-    if LEM then
+    if LEM and LEM.RefreshFrameSettings and self.container then
         LEM:RefreshFrameSettings(self.container)
     end
 end
@@ -1111,50 +1213,157 @@ end
 -- ----------------------------------------------------------------------------
 -- Minimap Data Text Bar
 -- ----------------------------------------------------------------------------
+local function GetSocialStats()
+    local guildOnline = 0
+    local guildTotal = 0
+    local guildName = ""
+    pcall(function()
+        if _G.IsInGuild and _G.IsInGuild() then
+            if _G.GetGuildInfo then
+                guildName = _G.GetGuildInfo("player") or ""
+            end
+            if _G.GetNumGuildMembers then
+                local total, online = _G.GetNumGuildMembers()
+                guildTotal = total or 0
+                guildOnline = online or 0
+            end
+        end
+    end)
+
+    local bnetTotal = 0
+    local bnetOnline = 0
+    local bnetInWoW = 0
+    local bnetSameVersion = 0
+    local myProjectID = _G.WOW_PROJECT_ID
+
+    pcall(function()
+        if _G.C_BattleNet and _G.C_BattleNet.GetFriendAccountInfo then
+            local numBNet = _G.C_BattleNet.GetFriendNumOnline and _G.C_BattleNet.GetFriendNumOnline() or 0
+            bnetOnline = numBNet
+            local totalBNet = _G.BNGetNumFriends and _G.BNGetNumFriends() or numBNet
+            bnetTotal = totalBNet
+            for i = 1, numBNet do
+                local accountInfo = _G.C_BattleNet.GetFriendAccountInfo(i)
+                if accountInfo and accountInfo.gameAccountInfo then
+                    local gai = accountInfo.gameAccountInfo
+                    if gai.clientProgram == "WoW" or gai.clientProgram == _G.BNET_CLIENT_WOW then
+                        bnetInWoW = bnetInWoW + 1
+                        if myProjectID and gai.wowProjectID == myProjectID then
+                            bnetSameVersion = bnetSameVersion + 1
+                        end
+                    end
+                end
+            end
+        elseif _G.BNGetNumFriends then
+            local total, online = _G.BNGetNumFriends()
+            bnetTotal = total or 0
+            bnetOnline = online or 0
+            for i = 1, bnetOnline do
+                if _G.BNGetFriendInfo then
+                    local _, _, _, _, _, _, client, isOnline = _G.BNGetFriendInfo(i)
+                    if isOnline and (client == "WoW" or client == _G.BNET_CLIENT_WOW) then
+                        bnetInWoW = bnetInWoW + 1
+                    end
+                end
+            end
+        end
+    end)
+
+    local charFriendsTotal = 0
+    local charFriendsOnline = 0
+    pcall(function()
+        if _G.C_FriendList and _G.C_FriendList.GetNumFriends then
+            local num = _G.C_FriendList.GetNumFriends() or 0
+            charFriendsTotal = num
+            for i = 1, num do
+                local info = _G.C_FriendList.GetFriendInfoByIndex(i)
+                if info and info.connected then
+                    charFriendsOnline = charFriendsOnline + 1
+                end
+            end
+        elseif _G.GetNumFriends then
+            local total, online = _G.GetNumFriends()
+            charFriendsTotal = total or 0
+            charFriendsOnline = online or 0
+        end
+    end)
+
+    return {
+        guildOnline = guildOnline,
+        guildTotal = guildTotal,
+        guildName = guildName,
+        bnetOnline = bnetOnline,
+        bnetTotal = bnetTotal,
+        bnetInWoW = bnetInWoW,
+        bnetSameVersion = bnetSameVersion,
+        charFriendsOnline = charFriendsOnline,
+        charFriendsTotal = charFriendsTotal,
+        totalFriendsOnline = bnetOnline + charFriendsOnline,
+    }
+end
+
 local function GetSectionText(dataType)
     if not dataType or dataType == "None" then
         return ""
     end
-    if dataType == "Friends" then
-        local onlineBNet = 0
-        local onlineChar = 0
-        pcall(function()
-            if C_BattleNet and C_BattleNet.GetFriendNumOnline then
-                onlineBNet = C_BattleNet.GetFriendNumOnline() or 0
-            end
-        end)
-        pcall(function()
-            if C_FriendList and C_FriendList.GetNumFriends then
-                local numFriends = C_FriendList.GetNumFriends() or 0
-                for i = 1, numFriends do
-                    local info = C_FriendList.GetFriendInfoByIndex(i)
-                    if info and info.connected then
-                        onlineChar = onlineChar + 1
-                    end
-                end
-            end
-        end)
-        return string.format("Friends: |cff00ff00%d|r", onlineBNet + onlineChar)
+    if dataType == "Social" then
+        local stats = GetSocialStats()
+        return string.format("F: |cff00ff00%d|r G: |cff00ff00%d|r", stats.totalFriendsOnline, stats.guildOnline)
+    elseif dataType == "Friends" then
+        local stats = GetSocialStats()
+        return string.format("Friends: |cff00ff00%d|r", stats.totalFriendsOnline)
+    elseif dataType == "Guild" then
+        local stats = GetSocialStats()
+        return string.format("Guild: |cff00ff00%d|r", stats.guildOnline)
     elseif dataType == "Time" then
-        local formatStr = (MinimapMod.db and MinimapMod.db.dataTextTimeFormat == "24H") and "%H:%M" or "%I:%M %p"
-        return date(formatStr)
+        local useRealm = MinimapMod.db and MinimapMod.db.dataTextTimeType == "REALM"
+        local is24 = (MinimapMod.db and MinimapMod.db.dataTextTimeFormat == "24H")
+        if useRealm and _G.GetGameTime then
+            local hours, minutes = _G.GetGameTime()
+            if is24 then
+                return string.format("%02d:%02d", hours, minutes)
+            else
+                local ampm = hours >= 12 and "PM" or "AM"
+                local h12 = hours % 12
+                if h12 == 0 then h12 = 12 end
+                return string.format("%d:%02d %s", h12, minutes, ampm)
+            end
+        else
+            local formatStr = is24 and "%H:%M" or "%I:%M %p"
+            return date(formatStr)
+        end
     elseif dataType == "Date" then
         return date("%a, %b %d")
     elseif dataType == "FPS" then
-        return string.format("%d FPS", math.floor(GetFramerate()))
+        local fps = _G.GetFramerate and _G.GetFramerate() or 60
+        return string.format("%d FPS", math.floor(fps))
+    elseif dataType == "Latency" then
+        local latencyHome = 0
+        if _G.GetNetStats then
+            local _, _, lh = _G.GetNetStats()
+            latencyHome = lh or 0
+        end
+        return string.format("%d ms", latencyHome)
+    elseif dataType == "FPS_MS" then
+        local fps = _G.GetFramerate and _G.GetFramerate() or 60
+        local latencyHome = 0
+        if _G.GetNetStats then
+            local _, _, lh = _G.GetNetStats()
+            latencyHome = lh or 0
+        end
+        return string.format("%d FPS %d ms", math.floor(fps), latencyHome)
     elseif dataType == "Zone" then
         return GetZoneText() or ""
-    elseif dataType == "Latency" then
-        local _, _, latencyHome = GetNetStats()
-        return string.format("%d ms", latencyHome or 0)
     elseif dataType == "Coordinates" then
-        local mapID = C_Map.GetBestMapForUnit("player")
-        if mapID then
-            local pos = C_Map.GetPlayerMapPosition(mapID, "player")
-            if pos then
-                local x, y = pos:GetXY()
-                if x and y and x > 0 and y > 0 then
-                    return string.format("%.1f, %.1f", x * 100, y * 100)
+        if _G.C_Map and _G.C_Map.GetBestMapForUnit then
+            local mapID = _G.C_Map.GetBestMapForUnit("player")
+            if mapID and _G.C_Map.GetPlayerMapPosition then
+                local pos = _G.C_Map.GetPlayerMapPosition(mapID, "player")
+                if pos and pos.GetXY then
+                    local x, y = pos:GetXY()
+                    if x and y and x > 0 and y > 0 then
+                        return string.format("%.1f, %.1f", x * 100, y * 100)
+                    end
                 end
             end
         end
@@ -1168,37 +1377,89 @@ UpdateDataText = function(bar)
     if not db.showDataTextBar then return end
 
     if bar.textLeft then
-        bar.textLeft:SetText(GetSectionText(db.dataTextLeftType or "None"))
+        bar.textLeft:SetText(GetSectionText(db.dataTextLeftType or "FPS_MS"))
     end
     if bar.textMiddle then
         bar.textMiddle:SetText(GetSectionText(db.dataTextMiddleType or "Time"))
     end
     if bar.textRight then
-        bar.textRight:SetText(GetSectionText(db.dataTextRightType or "None"))
+        bar.textRight:SetText(GetSectionText(db.dataTextRightType or "Social"))
     end
 end
 
-local function OnDataTextClick(self, button)
-    local db = MinimapMod.db
-    local types = {
-        db.dataTextMiddleType or "Time",
-        db.dataTextLeftType or "None",
-        db.dataTextRightType or "None"
-    }
-    for _, dataType in ipairs(types) do
-        if dataType == "Friends" then
-            ToggleFriendsFrame()
-            break
-        elseif dataType == "Time" then
-            Stopwatch_Toggle()
-            break
-        elseif dataType == "Date" then
-            ToggleCalendar()
-            break
-        elseif dataType == "Zone" then
-            ToggleWorldMap()
-            break
+local function HandleSectionClick(secType, mouseBtn)
+    if secType == "Friends" or secType == "Guild" or secType == "Social" then
+        if mouseBtn == "RightButton" and _G.ToggleGuildFrame then
+            _G.ToggleGuildFrame()
+        elseif _G.ToggleFriendsFrame then
+            _G.ToggleFriendsFrame()
         end
+    elseif secType == "Time" or secType == "Date" then
+        if mouseBtn == "RightButton" and _G.Stopwatch_Toggle then
+            _G.Stopwatch_Toggle()
+        elseif _G.ToggleCalendar then
+            _G.ToggleCalendar()
+        end
+    elseif secType == "Zone" or secType == "Coordinates" then
+        if _G.ToggleWorldMap then
+            _G.ToggleWorldMap()
+        end
+    end
+end
+
+local function ShowSectionTooltip(anchorFrame, secType)
+    if not _G.GameTooltip then return end
+    _G.GameTooltip:SetOwner(anchorFrame, "ANCHOR_BOTTOMLEFT")
+    _G.GameTooltip:ClearLines()
+
+    if secType == "Friends" or secType == "Guild" or secType == "Social" then
+        local stats = GetSocialStats()
+        _G.GameTooltip:AddLine(L["Social Status"], 1, 1, 1)
+        _G.GameTooltip:AddLine(" ")
+        if stats.guildName ~= "" then
+            _G.GameTooltip:AddDoubleLine(stats.guildName, string.format("%d / %d Online", stats.guildOnline, stats.guildTotal), 0.3, 1, 0.3, 1, 1, 1)
+        end
+        _G.GameTooltip:AddDoubleLine("Battle.net", string.format("%d Online", stats.bnetOnline), 0.3, 0.7, 1, 1, 1, 1)
+        if stats.bnetInWoW > 0 then
+            _G.GameTooltip:AddDoubleLine("  In World of Warcraft", string.format("%d", stats.bnetInWoW), 0.8, 0.8, 0.8, 1, 1, 1)
+        end
+        if stats.bnetSameVersion > 0 then
+            _G.GameTooltip:AddDoubleLine("  Same WoW Version", string.format("%d", stats.bnetSameVersion), 0.6, 0.9, 0.6, 1, 1, 1)
+        end
+        if stats.charFriendsOnline > 0 then
+            _G.GameTooltip:AddDoubleLine("Character Friends", string.format("%d / %d Online", stats.charFriendsOnline, stats.charFriendsTotal), 1, 0.8, 0, 1, 1, 1)
+        end
+        _G.GameTooltip:AddLine(" ")
+        _G.GameTooltip:AddLine(L["Left-Click: Open Friends List"], 0.7, 0.7, 0.7)
+        _G.GameTooltip:AddLine(L["Right-Click: Open Guild Pane"], 0.7, 0.7, 0.7)
+        _G.GameTooltip:Show()
+    elseif secType == "Time" or secType == "Date" then
+        _G.GameTooltip:AddLine(L["Time"], 1, 1, 1)
+        _G.GameTooltip:AddLine(" ")
+        if _G.GetGameTime then
+            local rh, rm = _G.GetGameTime()
+            _G.GameTooltip:AddDoubleLine(L["Realm Time"], string.format("%02d:%02d", rh, rm), 0.8, 0.8, 0.8, 1, 1, 1)
+        end
+        _G.GameTooltip:AddDoubleLine(L["Local Time"], date("%H:%M"), 0.8, 0.8, 0.8, 1, 1, 1)
+        _G.GameTooltip:AddDoubleLine(L["Date"], date("%A, %B %d, %Y"), 0.8, 0.8, 0.8, 1, 1, 1)
+        _G.GameTooltip:AddLine(" ")
+        _G.GameTooltip:AddLine(L["Left-Click: Open Calendar"], 0.7, 0.7, 0.7)
+        _G.GameTooltip:AddLine(L["Right-Click: Open Stopwatch"], 0.7, 0.7, 0.7)
+        _G.GameTooltip:Show()
+    elseif secType == "FPS" or secType == "Latency" or secType == "FPS_MS" then
+        local latencyHome, latencyWorld = 0, 0
+        if _G.GetNetStats then
+            local _, _, lh, lw = _G.GetNetStats()
+            latencyHome = lh or 0
+            latencyWorld = lw or 0
+        end
+        local fps = _G.GetFramerate and _G.GetFramerate() or 60
+        _G.GameTooltip:AddLine("System", 1, 1, 1)
+        _G.GameTooltip:AddLine(" ")
+        _G.GameTooltip:AddDoubleLine("Framerate", string.format("%d FPS", math.floor(fps)), 0.8, 0.8, 0.8, 1, 1, 1)
+        _G.GameTooltip:AddDoubleLine("Latency (Home)", string.format("%d ms", latencyHome), 0.8, 0.8, 0.8, 1, 1, 1)
+        _G.GameTooltip:AddDoubleLine("Latency (World)", string.format("%d ms", latencyWorld), 0.8, 0.8, 0.8, 1, 1, 1)
+        _G.GameTooltip:Show()
     end
 end
 
@@ -1228,18 +1489,19 @@ function MinimapMod:UpdateDataTextBarLayout()
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = 1,
     })
-    bar:SetBackdropColor(bg.r, bg.g, bg.b, bg.a)
 
     if self.db.dataTextPosition == "OUTSIDE" then
         -- State 2: outside bottom with semi transparent border
         bar:SetPoint("TOPLEFT", container, "BOTTOMLEFT", 0, -2)
         bar:SetPoint("TOPRIGHT", container, "BOTTOMRIGHT", 0, -2)
-        bar:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.5)
+        bar:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.7)
+        bar:SetBackdropColor(bg.r, bg.g, bg.b, bg.a)
     else
         -- State 1: inside bottom with transparent border
         bar:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", 0, 0)
         bar:SetPoint("BOTTOMRIGHT", container, "BOTTOMRIGHT", 0, 0)
         bar:SetBackdropBorderColor(0, 0, 0, 0)
+        bar:SetBackdropColor(0, 0, 0, 0.35)
         bar:SetFrameLevel(Minimap:GetFrameLevel() + 5)
     end
 
@@ -1258,18 +1520,36 @@ function MinimapMod:UpdateDataTextBarLayout()
 
     -- Left Section
     bar.textLeft:ClearAllPoints()
-    bar.textLeft:SetPoint("LEFT", bar, "LEFT", self.db.dataTextLeftX or 0, self.db.dataTextLeftY or 0)
-    LibRoithi.mixins:SetFont(bar.textLeft, font, self.db.dataTextLeftFontSize or 12, "OUTLINE")
+    bar.textLeft:SetPoint("LEFT", bar, "LEFT", self.db.dataTextLeftX or 4, self.db.dataTextLeftY or 0)
+    LibRoithi.mixins:SetFont(bar.textLeft, font, self.db.dataTextLeftFontSize or 11, "OUTLINE")
 
     -- Middle Section
     bar.textMiddle:ClearAllPoints()
     bar.textMiddle:SetPoint("CENTER", bar, "CENTER", self.db.dataTextMiddleX or 0, self.db.dataTextMiddleY or 0)
-    LibRoithi.mixins:SetFont(bar.textMiddle, font, self.db.dataTextMiddleFontSize or 12, "OUTLINE")
+    LibRoithi.mixins:SetFont(bar.textMiddle, font, self.db.dataTextMiddleFontSize or 11, "OUTLINE")
 
     -- Right Section
     bar.textRight:ClearAllPoints()
-    bar.textRight:SetPoint("RIGHT", bar, "RIGHT", self.db.dataTextRightX or 0, self.db.dataTextRightY or 0)
-    LibRoithi.mixins:SetFont(bar.textRight, font, self.db.dataTextRightFontSize or 12, "OUTLINE")
+    bar.textRight:SetPoint("RIGHT", bar, "RIGHT", self.db.dataTextRightX or -4, self.db.dataTextRightY or 0)
+    LibRoithi.mixins:SetFont(bar.textRight, font, self.db.dataTextRightFontSize or 11, "OUTLINE")
+
+    -- Section Buttons for precise hover & click
+    local secW = width / 3
+    if bar.btnLeft then
+        bar.btnLeft:SetSize(secW, 20)
+        bar.btnLeft:ClearAllPoints()
+        bar.btnLeft:SetPoint("LEFT", bar, "LEFT", 0, 0)
+    end
+    if bar.btnMiddle then
+        bar.btnMiddle:SetSize(secW, 20)
+        bar.btnMiddle:ClearAllPoints()
+        bar.btnMiddle:SetPoint("CENTER", bar, "CENTER", 0, 0)
+    end
+    if bar.btnRight then
+        bar.btnRight:SetSize(secW, 20)
+        bar.btnRight:ClearAllPoints()
+        bar.btnRight:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+    end
 
     UpdateDataText(bar)
 end
@@ -1286,7 +1566,28 @@ function MinimapMod:CreateDataTextBar()
 
     self.dataTextBar = bar
 
-    bar:SetScript("OnMouseUp", OnDataTextClick)
+    local function CreateSectionButton(getSectionType)
+        local btn = CreateFrame("Button", nil, bar)
+        if btn.RegisterForClicks then
+            btn:RegisterForClicks("AnyUp")
+        end
+        btn:SetScript("OnClick", function(_, mouseBtn)
+            local secType = getSectionType()
+            HandleSectionClick(secType, mouseBtn)
+        end)
+        btn:SetScript("OnEnter", function(s)
+            local secType = getSectionType()
+            ShowSectionTooltip(s, secType)
+        end)
+        btn:SetScript("OnLeave", function()
+            if _G.GameTooltip then _G.GameTooltip:Hide() end
+        end)
+        return btn
+    end
+
+    bar.btnLeft = CreateSectionButton(function() return self.db and self.db.dataTextLeftType or "FPS_MS" end)
+    bar.btnMiddle = CreateSectionButton(function() return self.db and self.db.dataTextMiddleType or "Time" end)
+    bar.btnRight = CreateSectionButton(function() return self.db and self.db.dataTextRightType or "Social" end)
 
     local elapsed = 0
     bar:SetScript("OnUpdate", function(f, elap)
@@ -1490,6 +1791,21 @@ function MinimapMod:GetOptions()
                         end,
                         disabled = function() return not self.db.showDataTextBar end,
                     },
+                    dataTextTimeType = {
+                        type = "select",
+                        name = L["Time Source"],
+                        order = 2.6,
+                        values = {
+                            ["LOCAL"] = L["Local Time"],
+                            ["REALM"] = L["Realm Time"],
+                        },
+                        get = function() return self.db.dataTextTimeType or "LOCAL" end,
+                        set = function(_, val)
+                            self.db.dataTextTimeType = val
+                            self:UpdateDataTextBarVisibility()
+                        end,
+                        disabled = function() return not self.db.showDataTextBar end,
+                    },
                     dataTextBgColor = {
                         type = "color",
                         name = L["Bar Background Color"],
@@ -1517,13 +1833,16 @@ function MinimapMod:GetOptions()
                                 name = L["Data Text Type"],
                                 order = 1,
                                 values = {
-                                    ["Friends"] = L["Friends"],
+                                    ["FPS_MS"] = L["FPS & Latency"],
+                                    ["FPS"] = L["FPS"],
+                                    ["Latency"] = L["Latency"],
                                     ["Time"] = L["Time"],
                                     ["Date"] = L["Date"],
-                                    ["FPS"] = L["FPS"],
-                                    ["Zone"] = L["Zone"],
-                                    ["Latency"] = L["Latency"],
+                                    ["Social"] = L["Social (Friends & Guild)"],
+                                    ["Friends"] = L["Friends"],
+                                    ["Guild"] = L["Guild"],
                                     ["Coordinates"] = L["Coordinates"],
+                                    ["Zone"] = L["Zone"],
                                     ["None"] = L["None"],
                                 },
                                 get = function() return self.db.dataTextLeftType or "None" end,
@@ -1585,13 +1904,16 @@ function MinimapMod:GetOptions()
                                 name = L["Data Text Type"],
                                 order = 1,
                                 values = {
-                                    ["Friends"] = L["Friends"],
+                                    ["FPS_MS"] = L["FPS & Latency"],
+                                    ["FPS"] = L["FPS"],
+                                    ["Latency"] = L["Latency"],
                                     ["Time"] = L["Time"],
                                     ["Date"] = L["Date"],
-                                    ["FPS"] = L["FPS"],
-                                    ["Zone"] = L["Zone"],
-                                    ["Latency"] = L["Latency"],
+                                    ["Social"] = L["Social (Friends & Guild)"],
+                                    ["Friends"] = L["Friends"],
+                                    ["Guild"] = L["Guild"],
                                     ["Coordinates"] = L["Coordinates"],
+                                    ["Zone"] = L["Zone"],
                                     ["None"] = L["None"],
                                 },
                                 get = function() return self.db.dataTextMiddleType or "Time" end,
@@ -1653,13 +1975,16 @@ function MinimapMod:GetOptions()
                                 name = L["Data Text Type"],
                                 order = 1,
                                 values = {
-                                    ["Friends"] = L["Friends"],
+                                    ["FPS_MS"] = L["FPS & Latency"],
+                                    ["FPS"] = L["FPS"],
+                                    ["Latency"] = L["Latency"],
                                     ["Time"] = L["Time"],
                                     ["Date"] = L["Date"],
-                                    ["FPS"] = L["FPS"],
-                                    ["Zone"] = L["Zone"],
-                                    ["Latency"] = L["Latency"],
+                                    ["Social"] = L["Social (Friends & Guild)"],
+                                    ["Friends"] = L["Friends"],
+                                    ["Guild"] = L["Guild"],
                                     ["Coordinates"] = L["Coordinates"],
+                                    ["Zone"] = L["Zone"],
                                     ["None"] = L["None"],
                                 },
                                 get = function() return self.db.dataTextRightType or "None" end,
