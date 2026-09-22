@@ -1724,50 +1724,52 @@ _G.GetMinimapShape = function()
     return MinimapMod.db and MinimapMod.db.shape or "SQUARE"
 end
 
-_G.SlashCmdList["ROITHIDEBUG"] = function()
-    local debugFrames = {
-        { name = "QueueStatusMinimapButton", ref = _G.QueueStatusMinimapButton },
-        { name = "QueueStatusButton", ref = _G.QueueStatusButton },
-        { name = "ExpansionLandingPageMinimapButton", ref = _G.ExpansionLandingPageMinimapButton },
-        { name = "GarrisonLandingPageMinimapButton", ref = _G.GarrisonLandingPageMinimapButton }
-    }
-    for _, item in ipairs(debugFrames) do
-        local lfg = item.ref
-        print(string.format("|cff00ff00[RoithiUI Debug]|r %s state:", item.name))
-        if not lfg then
-            print(string.format("  %s is nil!", item.name))
-        else
-            print(string.format("  %s exists!", item.name))
-            print("    Shown:", lfg:IsShown())
-            print("    Visible:", lfg:IsVisible())
-            local parent = lfg:GetParent()
-            print("    Parent:", parent and (parent.GetName and parent:GetName() or tostring(parent)) or "nil")
-            local numPoints = lfg:GetNumPoints()
-            print("    NumPoints:", numPoints)
-            for i = 1, numPoints do
-                local point, relTo, relPoint, x, y = lfg:GetPoint(i)
-                print(string.format("      Point %d: %s -> %s (%s) @ %d, %d", i, point, relTo and (relTo.GetName and relTo:GetName() or tostring(relTo)) or "nil", relPoint, x, y))
-            end
-            print("    Scale:", lfg:GetScale())
-            print("    Alpha:", lfg:GetAlpha())
-            print("    isRoithiHooked:", lfg.isRoithiHooked)
-            if lfg.SetFrameStrata then
-                print("    Strata:", lfg:GetFrameStrata())
-                print("    Level:", lfg:GetFrameLevel())
+if _G.SlashCmdList then
+    _G.SlashCmdList["ROITHIDEBUG"] = function()
+        local debugFrames = {
+            { name = "QueueStatusMinimapButton", ref = _G.QueueStatusMinimapButton },
+            { name = "QueueStatusButton", ref = _G.QueueStatusButton },
+            { name = "ExpansionLandingPageMinimapButton", ref = _G.ExpansionLandingPageMinimapButton },
+            { name = "GarrisonLandingPageMinimapButton", ref = _G.GarrisonLandingPageMinimapButton }
+        }
+        for _, item in ipairs(debugFrames) do
+            local lfg = item.ref
+            print(string.format("|cff00ff00[RoithiUI Debug]|r %s state:", item.name))
+            if not lfg then
+                print(string.format("  %s is nil!", item.name))
+            else
+                print(string.format("  %s exists!", item.name))
+                print("    Shown:", lfg:IsShown())
+                print("    Visible:", lfg:IsVisible())
+                local parent = lfg:GetParent()
+                print("    Parent:", parent and (parent.GetName and parent:GetName() or tostring(parent)) or "nil")
+                local numPoints = lfg:GetNumPoints()
+                print("    NumPoints:", numPoints)
+                for i = 1, numPoints do
+                    local point, relTo, relPoint, x, y = lfg:GetPoint(i)
+                    print(string.format("      Point %d: %s -> %s (%s) @ %d, %d", i, point, relTo and (relTo.GetName and relTo:GetName() or tostring(relTo)) or "nil", relPoint, x, y))
+                end
+                print("    Scale:", lfg:GetScale())
+                print("    Alpha:", lfg:GetAlpha())
+                print("    isRoithiHooked:", lfg.isRoithiHooked)
+                if lfg.SetFrameStrata then
+                    print("    Strata:", lfg:GetFrameStrata())
+                    print("    Level:", lfg:GetFrameLevel())
+                end
             end
         end
+        local anchor = _G.RoithiLFGAnchor
+        if not anchor then
+            print("  RoithiLFGAnchor is nil!")
+        else
+            print("  RoithiLFGAnchor state:")
+            print("    Shown:", anchor:IsShown())
+            print("    Visible:", anchor:IsVisible())
+            local parent = anchor:GetParent()
+            print("    Parent:", parent and (parent.GetName and parent:GetName() or tostring(parent)) or "nil")
+            print("    Scale:", anchor:GetScale())
+            print("    Alpha:", anchor:GetAlpha())
+        end
     end
-    local anchor = _G.RoithiLFGAnchor
-    if not anchor then
-        print("  RoithiLFGAnchor is nil!")
-    else
-        print("  RoithiLFGAnchor state:")
-        print("    Shown:", anchor:IsShown())
-        print("    Visible:", anchor:IsVisible())
-        local parent = anchor:GetParent()
-        print("    Parent:", parent and (parent.GetName and parent:GetName() or tostring(parent)) or "nil")
-        print("    Scale:", anchor:GetScale())
-        print("    Alpha:", anchor:GetAlpha())
-    end
+    _G.SLASH_ROITHIDEBUG1 = "/roithidebug"
 end
-_G.SLASH_ROITHIDEBUG1 = "/roithidebug"

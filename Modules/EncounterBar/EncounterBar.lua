@@ -127,6 +127,14 @@ function EB:Toggle(enabled)
     end
 end
 
+function EB:OnEnable()
+    self:Toggle(true)
+end
+
+function EB:OnDisable()
+    self:Toggle(false)
+end
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- UIWidget power bar path
 -- Handles 12.0.5+ world encounter bars (e.g. Oxygen for Abyss Angling).

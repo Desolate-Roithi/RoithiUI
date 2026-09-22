@@ -78,9 +78,9 @@ local function SnapFrameToEdge(f)
     if isSnapping then return end
     isSnapping = true
 
-    local sLeft, sBottom
+    local sLeft, sBottom, sW, sH
     if f.GetRect then
-        sLeft, sBottom = f:GetRect()
+        sLeft, sBottom, sW, sH = f:GetRect()
     end
     if sLeft and sBottom then
         local screenW = _G.GetScreenWidth and _G.GetScreenWidth() or 1920
@@ -88,35 +88,50 @@ local function SnapFrameToEdge(f)
         local localScale = f:GetScale() or 1.0
         if localScale == 0 then localScale = 1.0 end
 
-        -- GetRect returns layout coordinates directly in modern WoW
         local x = sLeft
         local y = sBottom
         local targetX
         local targetY
 
         local w, h = f:GetSize()
+        w = (w and w > 0) and w or (sW or 0)
+        h = (h and h > 0) and h or (sH or 0)
         local wLayout = w * localScale
         local hLayout = h * localScale
 
-        -- Exclusive Snapping Logic:
-        -- 1. If in the top 10% or bottom 10% of screen height, snap vertically only, keeping dragged X.
-        -- 2. Otherwise (middle 80%), snap horizontally only to left/right edges (always snap to the closer one), keeping dragged Y.
-        local inBottom10 = y < (screenH * 0.10)
-        local inTop10 = (y + hLayout) > (screenH * 0.90)
+        local snapEdge = MinimapMod.db and MinimapMod.db.addonBarSnapEdge or "AUTO"
 
-        if inBottom10 then
-            targetY = 0
-            targetX = x
-        elseif inTop10 then
+        if snapEdge == "TOP" then
             targetY = screenH - hLayout
             targetX = x
-        else
+        elseif snapEdge == "BOTTOM" then
+            targetY = 0
+            targetX = x
+        elseif snapEdge == "LEFT" then
+            targetX = 0
             targetY = y
-            local centerX = (screenW - wLayout) / 2
-            if x < centerX then
+        elseif snapEdge == "RIGHT" then
+            targetX = screenW - wLayout
+            targetY = y
+        else -- "AUTO"
+            local distLeft = x
+            local distRight = screenW - (x + wLayout)
+            local distBottom = y
+            local distTop = screenH - (y + hLayout)
+
+            local minDist = math.min(distLeft, distRight, distBottom, distTop)
+            if minDist == distLeft then
                 targetX = 0
-            else
+                targetY = y
+            elseif minDist == distRight then
                 targetX = screenW - wLayout
+                targetY = y
+            elseif minDist == distTop then
+                targetY = screenH - hLayout
+                targetX = x
+            else
+                targetY = 0
+                targetX = x
             end
         end
 
@@ -125,6 +140,12 @@ local function SnapFrameToEdge(f)
     end
 
     isSnapping = false
+end
+
+function MinimapMod:SnapAddonBarToEdge()
+    if self.addonBar and self.db.addonBarSnap ~= false then
+        SnapFrameToEdge(self.addonBar)
+    end
 end
 
 local function ProtectButton(button)
@@ -323,6 +344,105 @@ function MinimapMod:UpdateAddonBarAutohide()
     end
 end
 
+function MinimapMod:CreateAddonBarExpander()
+    if self.expanderButton or not self.addonBar then return end
+
+    local expander = CreateFrame("Button", "RoithiAddonBarExpander", self.addonBar, "BackdropTemplate")
+    expander:SetSize(30, 14)
+    if expander.SetBackdrop then
+        expander:SetBackdrop({
+            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeSize = 1,
+        })
+        expander:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+        expander:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+    end
+
+    local text = expander:CreateFontString(nil, "OVERLAY")
+    LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 9, "OUTLINE")
+    text:SetPoint("CENTER", expander, "CENTER", 0, 0)
+    if text.SetTextColor then
+        text:SetTextColor(0.8, 0.8, 0.8, 1)
+    end
+    text:SetText(self.db.addonBarExpanded and "▲" or "▼")
+    expander.arrow = text
+
+    expander:SetScript("OnClick", function()
+        self.db.addonBarExpanded = not self.db.addonBarExpanded
+        if expander.arrow then
+            expander.arrow:SetText(self.db.addonBarExpanded and "▲" or "▼")
+        end
+        self:UpdateAddonBarLayout()
+    end)
+
+    expander:SetScript("OnEnter", function()
+        self:OnBarEnter()
+        if _G.GameTooltip then
+            _G.GameTooltip:SetOwner(expander, "ANCHOR_LEFT")
+            _G.GameTooltip:SetText(self.db.addonBarExpanded and L["Click to collapse addon buttons"] or L["Click to expand addon buttons"], 1, 1, 1)
+            _G.GameTooltip:Show()
+        end
+    end)
+    expander:SetScript("OnLeave", function()
+        self:OnBarLeave()
+        if _G.GameTooltip then
+            _G.GameTooltip:Hide()
+        end
+    end)
+
+    self.expanderButton = expander
+end
+
+function MinimapMod:UpdateAddonBarAttachment()
+    local bar = self.addonBar
+    if not bar then return end
+
+    local key = "addonBar"
+    local defaults = { point = "TOPRIGHT", x = -10, y = -220 }
+
+    if self.db.addonBarAttached ~= false then
+        local parent = self.container or Minimap
+        bar:SetParent(parent)
+        if bar.SetFrameStrata then bar:SetFrameStrata("HIGH") end
+        if bar.SetFrameLevel then bar:SetFrameLevel(25) end
+        bar:ClearAllPoints()
+        local spacing = self.db.addonBarAttachedSpacing or 4
+        bar:SetPoint("TOPRIGHT", parent, "TOPLEFT", -spacing, 0)
+    else
+        bar:SetParent(UIParent)
+        if bar.SetFrameStrata then bar:SetFrameStrata("HIGH") end
+        if bar.SetFrameLevel then bar:SetFrameLevel(20) end
+        bar:ClearAllPoints()
+        local offset = self.db.offsets and self.db.offsets[key] or defaults
+        bar:SetPoint(offset.point or defaults.point, UIParent, offset.point or defaults.point, offset.x, offset.y)
+    end
+end
+
+function MinimapMod:ReleaseAllAddonButtons()
+    if not self.scannedButtons then return end
+    for name, btn in pairs(self.scannedButtons) do
+        btn.isAligning = true
+        btn.RoithiAlphaHooked = false
+        if btn.originalParent then
+            btn:SetParent(btn.originalParent)
+        else
+            btn:SetParent(Minimap)
+        end
+        btn:ClearAllPoints()
+        for _, pt in ipairs(btn.originalPoints or {}) do
+            btn:SetPoint(unpack(pt))
+        end
+        btn:SetAlpha(1)
+        btn:Show()
+        btn.isAligning = nil
+
+        if self.customButtons and self.customButtons[name] then
+            self.customButtons[name]:Hide()
+        end
+    end
+end
+
 function MinimapMod:CreateAddonBar()
     if self.addonBar then return end
 
@@ -349,59 +469,139 @@ function MinimapMod:CreateAddonBar()
         self.hiddenFrame:Hide()
     end
 
+    self:CreateAddonBarExpander()
+    self:UpdateAddonBarAttachment()
+
     local defaults = { point = "TOPRIGHT", x = -10, y = -220 }
 
     if LEM then
         bar.editModeName = L["Addon Button Bar"]
-        bar:SetParent(UIParent)
-        bar:SetFrameStrata("HIGH")
-        bar:SetFrameLevel(20)
-
-        bar:ClearAllPoints()
-        local offset = self.db.offsets and self.db.offsets[key] or defaults
-        bar:SetPoint(offset.point or defaults.point, UIParent, offset.point or defaults.point, offset.x, offset.y)
-        bar:Show()
 
         local function OnPositionChanged(f, _, point, x, y)
             local inEditMode = LEM and LEM:IsInEditMode()
 
             if inEditMode then
-                f:SetParent(UIParent)
-                f:SetFrameStrata("HIGH")
-                f:SetFrameLevel(20)
-                f:ClearAllPoints()
-                f:SetPoint(point, UIParent, point, x, y)
+                if not self.db.addonBarAttached then
+                    f:SetParent(UIParent)
+                    f:SetFrameStrata("HIGH")
+                    f:SetFrameLevel(20)
+                    f:ClearAllPoints()
+                    f:SetPoint(point, UIParent, point, x, y)
 
-                self.db.offsets = self.db.offsets or {}
-                self.db.offsets[key] = { point = point, x = x, y = y }
+                    self.db.offsets = self.db.offsets or {}
+                    self.db.offsets[key] = { point = point, x = x, y = y }
 
-                if self.db.addonBarSnap then
-                    SnapFrameToEdge(f)
-                    local sPoint, _, _, sX, sY = f:GetPoint(1)
-                    if sPoint then
-                        self.db.offsets[key] = { point = sPoint, x = sX, y = sY }
+                    if self.db.addonBarSnap then
+                        SnapFrameToEdge(f)
+                        local sPoint, _, _, sX, sY = f:GetPoint(1)
+                        if sPoint then
+                            self.db.offsets[key] = { point = sPoint, x = sX, y = sY }
+                        end
                     end
+                else
+                    self:UpdateAddonBarAttachment()
                 end
                 return
             end
 
-            -- Outside Edit Mode (normal load / options refresh)
-            f:SetParent(UIParent)
-            f:SetFrameStrata("HIGH")
-            f:SetFrameLevel(20)
-            f:ClearAllPoints()
-            local off = self.db.offsets and self.db.offsets[key] or defaults
-            f:SetPoint(off.point or defaults.point, UIParent, off.point or defaults.point, off.x, off.y)
-
+            -- Outside Edit Mode
+            self:UpdateAddonBarAttachment()
             self:UpdateAddonBarAutohide()
         end
 
         LEM:AddFrame(bar, OnPositionChanged, defaults)
-    else
-        bar:ClearAllPoints()
-        local offset = self.db.offsets and self.db.offsets[key] or defaults
-        bar:SetPoint(offset.point or "TOPRIGHT", UIParent, offset.point or "TOPRIGHT", offset.x, offset.y)
-        bar:Show()
+
+        local settings = {
+            {
+                name = L["Attached to Minimap"],
+                kind = LEM.SettingType.Checkbox,
+                default = true,
+                get = function() return self.db.addonBarAttached ~= false end,
+                set = function(_, val)
+                    self.db.addonBarAttached = val
+                    self:UpdateAddonBarAttachment()
+                    LEM:RefreshFrameSettings(bar)
+                end,
+            },
+            {
+                name = L["Snap Edge"],
+                kind = LEM.SettingType.Dropdown,
+                default = "AUTO",
+                options = {
+                    ["AUTO"] = L["Auto"],
+                    ["TOP"] = L["Top"],
+                    ["BOTTOM"] = L["Bottom"],
+                    ["LEFT"] = L["Left"],
+                    ["RIGHT"] = L["Right"],
+                },
+                get = function() return self.db.addonBarSnapEdge or "AUTO" end,
+                set = function(_, val)
+                    self.db.addonBarSnapEdge = val
+                    if not self.db.addonBarAttached then
+                        SnapFrameToEdge(bar)
+                    end
+                end,
+            },
+            {
+                name = L["Visible Buttons"],
+                kind = LEM.SettingType.Slider,
+                default = 4,
+                minValue = 0,
+                maxValue = 20,
+                valueStep = 1,
+                formatter = function(v) return string.format("%.0f", v) end,
+                get = function() return self.db.addonBarVisibleCount or 4 end,
+                set = function(_, val)
+                    self.db.addonBarVisibleCount = val
+                    self:UpdateAddonBarLayout()
+                end,
+            },
+            {
+                name = L["Button Size"],
+                kind = LEM.SettingType.Slider,
+                default = 30,
+                minValue = 16,
+                maxValue = 48,
+                valueStep = 1,
+                formatter = function(v) return string.format("%.0f", v) end,
+                get = function() return self.db.addonBarButtonSize or 30 end,
+                set = function(_, val)
+                    self.db.addonBarButtonSize = val
+                    self:ScanAddonButtons()
+                end,
+            },
+            {
+                name = L["Button Spacing"],
+                kind = LEM.SettingType.Slider,
+                default = 4,
+                minValue = 0,
+                maxValue = 20,
+                valueStep = 1,
+                formatter = function(v) return string.format("%.0f", v) end,
+                get = function() return self.db.addonBarSpacing or 4 end,
+                set = function(_, val)
+                    self.db.addonBarSpacing = val
+                    self:UpdateAddonBarLayout()
+                end,
+            },
+            {
+                name = L["Addon Bar Columns"],
+                kind = LEM.SettingType.Slider,
+                default = 1,
+                minValue = 1,
+                maxValue = 6,
+                valueStep = 1,
+                formatter = function(v) return string.format("%.0f", v) end,
+                get = function() return self.db.addonBarColumns or 1 end,
+                set = function(_, val)
+                    self.db.addonBarColumns = val
+                    self:UpdateAddonBarLayout()
+                end,
+            },
+        }
+        if LEM.AddFrameSettings then
+            LEM:AddFrameSettings(bar, settings)
+        end
     end
 
     bar:SetScript("OnEnter", function() self:OnBarEnter() end)
@@ -634,6 +834,7 @@ function MinimapMod:UpdateAddonBarLayout()
 
     local count = #self.activeButtons
     if count == 0 then
+        if self.expanderButton then self.expanderButton:Hide() end
         self.addonBar:SetSize(40, 40)
         self.addonBar:SetAlpha(LEM and LEM:IsInEditMode() and 1 or 0)
         return
@@ -643,26 +844,52 @@ function MinimapMod:UpdateAddonBarLayout()
     local spacing = self.db.addonBarSpacing or 4
     local scale = self.db.addonBarScale or 1.0
     local btnSize = self.db.addonBarButtonSize or 30
+    local visibleCount = self.db.addonBarVisibleCount or 4
+    local isExpanded = self.db.addonBarExpanded == true
+
+    local shownCount = isExpanded and count or math.min(count, visibleCount)
 
     self.addonBar:SetScale(scale)
 
-    local rows = math.ceil(count / cols)
+    local rows = math.max(1, math.ceil(shownCount / cols))
     local width = cols * btnSize + (cols + 1) * spacing
-    local height = rows * btnSize + (rows + 1) * spacing
+    local buttonsHeight = shownCount > 0 and (rows * btnSize + (rows + 1) * spacing) or spacing
+    local expanderHeight = 14
+    local totalHeight = buttonsHeight + expanderHeight + spacing
 
-    self.addonBar:SetSize(width, height)
+    self.addonBar:SetSize(width, totalHeight)
 
     for idx, btn in ipairs(self.activeButtons) do
-        local col = (idx - 1) % cols
-        local row = math.floor((idx - 1) / cols)
+        if idx <= shownCount then
+            local col = (idx - 1) % cols
+            local row = math.floor((idx - 1) / cols)
 
-        local x = spacing + col * (btnSize + spacing)
-        local y = -(spacing + row * (btnSize + spacing))
+            local x = spacing + col * (btnSize + spacing)
+            local y = -(spacing + row * (btnSize + spacing))
 
-        btn:ClearAllPoints()
-        btn:SetPoint("TOPLEFT", self.addonBar, "TOPLEFT", x, y)
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", self.addonBar, "TOPLEFT", x, y)
+            btn:Show()
+        else
+            btn:Hide()
+        end
     end
 
+    if not self.expanderButton then
+        self:CreateAddonBarExpander()
+    end
+
+    if self.expanderButton then
+        self.expanderButton:ClearAllPoints()
+        self.expanderButton:SetPoint("TOPLEFT", self.addonBar, "TOPLEFT", spacing, -buttonsHeight)
+        self.expanderButton:SetSize(width - spacing * 2, expanderHeight)
+        if self.expanderButton.arrow then
+            self.expanderButton.arrow:SetText(isExpanded and "▲" or "▼")
+        end
+        self.expanderButton:Show()
+    end
+
+    self:UpdateAddonBarAttachment()
     self:UpdateAddonBarAutohide()
 end
 
@@ -682,11 +909,23 @@ function MinimapMod:GetAddonBarOptions()
                     self:UpdateAddonBarVisibility()
                 end,
             },
+            addonBarAttached = {
+                type = "toggle",
+                name = L["Attached to Minimap"],
+                desc = L["Attach the addon bar directly to the left of the Minimap."],
+                order = 2,
+                get = function() return self.db.addonBarAttached ~= false end,
+                set = function(_, val)
+                    self.db.addonBarAttached = val
+                    self:UpdateAddonBarAttachment()
+                end,
+                disabled = function() return not self.db.showAddonBar end,
+            },
             addonBarAutohide = {
                 type = "toggle",
                 name = L["Autohide Addon Bar"],
                 desc = L["Attaches to nearest screen corner as a white line and shows on hover."],
-                order = 2,
+                order = 3,
                 get = function() return self.db.addonBarAutohide end,
                 set = function(_, val)
                     self.db.addonBarAutohide = val
@@ -698,14 +937,50 @@ function MinimapMod:GetAddonBarOptions()
                 type = "toggle",
                 name = L["Snap to Screen Edge"],
                 desc = L["Snaps the addon button bar to the nearest screen edge or corner when dragging."],
-                order = 3,
+                order = 4,
                 get = function() return self.db.addonBarSnap end,
                 set = function(_, val)
                     self.db.addonBarSnap = val
-                    if val and self.addonBar then
+                    if val and self.addonBar and not self.db.addonBarAttached then
                         SnapFrameToEdge(self.addonBar)
                     end
                     self:UpdateAddonBarAutohide()
+                end,
+                disabled = function() return not self.db.showAddonBar or self.db.addonBarAttached end,
+            },
+            addonBarSnapEdge = {
+                type = "select",
+                name = L["Snap Edge"],
+                desc = L["Select which screen edge or corner the detached bar snaps to."],
+                order = 5,
+                values = {
+                    ["AUTO"] = L["Auto"],
+                    ["TOP"] = L["Top"],
+                    ["BOTTOM"] = L["Bottom"],
+                    ["LEFT"] = L["Left"],
+                    ["RIGHT"] = L["Right"],
+                },
+                get = function() return self.db.addonBarSnapEdge or "AUTO" end,
+                set = function(_, val)
+                    self.db.addonBarSnapEdge = val
+                    if self.addonBar and not self.db.addonBarAttached then
+                        SnapFrameToEdge(self.addonBar)
+                    end
+                end,
+                disabled = function() return not self.db.showAddonBar or self.db.addonBarAttached end,
+            },
+            addonBarVisibleCount = {
+                type = "range",
+                name = L["Visible Buttons"],
+                desc = L["Number of buttons displayed before expanding via the toggle button."],
+                order = 6,
+                min = 0,
+                max = 20,
+                step = 1,
+                get = function() return self.db.addonBarVisibleCount or 4 end,
+                set = function(_, val)
+                    self.db.addonBarVisibleCount = val
+                    self:UpdateAddonBarLayout()
                 end,
                 disabled = function() return not self.db.showAddonBar end,
             },

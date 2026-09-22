@@ -333,11 +333,28 @@ function UF:InitializeUnits()
     self:InitializeBossFrames()
 end
 
--- Hook OnEnable to run initialization
--- We do this here so Elements.lua and Core.lua are already loaded
+-- Hook OnEnable and OnDisable to run lifecycle management
 local baseEnable = UF.OnEnable
 function UF:OnEnable()
     if baseEnable then baseEnable(self) end
-    self:InitializeUnits()
+    if not self.units or not next(self.units) then
+        self:InitializeUnits()
+    else
+        for unit, _ in pairs(self.units) do
+            self:ToggleFrame(unit, self:IsUnitEnabled(unit))
+            if self:IsUnitEnabled(unit) and self.UpdateFrameFromSettings then
+                self:UpdateFrameFromSettings(unit)
+            end
+        end
+    end
     if ns.InitializeUnitFrameConfig then ns.InitializeUnitFrameConfig() end
 end
+
+function UF:OnDisable()
+    if self.units then
+        for unit, _ in pairs(self.units) do
+            self:ToggleFrame(unit, false)
+        end
+    end
+end
+
