@@ -161,6 +161,33 @@ function BagsMod:GetOptions()
                 inline = true,
                 args = {},
             },
+            searchHelp = {
+                type = "group",
+                name = L["Search Engine & Filter Sets Guide"] or "Search Engine & Filter Sets Guide",
+                order = 5,
+                inline = true,
+                args = {
+                    intro = {
+                        type = "description",
+                        name = "|cffffd100" .. (L["Bag Search Engine Syntax"] or "Bag Search Engine Syntax") .. ":|r\n" ..
+                            (L["The search bar supports non-destructive highlighting with multi-token AND logic. Non-matching items are dimmed while matching items pop out."] or "The search bar supports non-destructive highlighting with multi-token AND logic. Non-matching items are dimmed while matching items pop out.") .. "\n\n" ..
+                            "• |cffffcc00name:<text>|r or |cffffcc00<text>|r - " .. (L["Partial item name match (e.g. flask, potion, sword)"] or "Partial item name match (e.g. flask, potion, sword)") .. "\n" ..
+                            "• |cffffcc00type:<val>|r - " .. (L["Item type/slot (gear, weapon, armor, consumable, reagent, trinket, etc.)"] or "Item type/slot (gear, weapon, armor, consumable, reagent, trinket, etc.)") .. "\n" ..
+                            "• |cffffcc00bind:<val>|r - " .. (L["Bind status (bop, boe, bou, account/boa)"] or "Bind status (bop, boe, bou, account/boa)") .. "\n" ..
+                            "• |cffffcc00reagent:<yes|no>|r - " .. (L["Matches crafting reagents (or simply 'reagents')"] or "Matches crafting reagents (or simply 'reagents')") .. "\n" ..
+                            "• |cffffcc00exp:<val>|r - " .. (L["Expansion filter (tww, df, sl, bfa, classic)"] or "Expansion filter (tww, df, sl, bfa, classic)") .. "\n" ..
+                            "• |cffffcc00quality:<val>|r - " .. (L["Quality name or index (epic, rare, uncommon, poor, or q:4)"] or "Quality name or index (epic, rare, uncommon, poor, or q:4)") .. "\n" ..
+                            "• |cffffcc00ilvl:<expr>|r - " .. (L["Item level comparison (ilvl:>600, ilvl:<550, ilvl:600-630)"] or "Item level comparison (ilvl:>600, ilvl:<550, ilvl:600-630)") .. "\n" ..
+                            "• |cffffcc00boss:<name>|r - " .. (L["Drop source boss from item tooltip (e.g. boss:ansurek)"] or "Drop source boss from item tooltip (e.g. boss:ansurek)") .. "\n" ..
+                            "• |cffffcc00zone:<name>|r - " .. (L["Drop source zone from item tooltip (e.g. zone:nerub-ar)"] or "Drop source zone from item tooltip (e.g. zone:nerub-ar)") .. "\n" ..
+                            "• |cffffcc00junk|r, |cffffcc00new|r, |cffffcc00fav|r - " .. (L["Shorthand flags"] or "Shorthand flags") .. "\n\n" ..
+                            "|cff00ff00" .. (L["Combined Example:"] or "Combined Example:") .. "|r |cfffffffftype:gear quality:epic ilvl:>600|r\n" ..
+                            "|cff00ff00" .. (L["Custom Filter Tabs:"] or "Custom Filter Tabs:") .. "|r " .. (L["Click the [+] button next to the search box to save the current query as a custom category tab. Right-click the tab to delete it."] or "Click the [+] button next to the search box to save the current query as a custom category tab. Right-click the tab to delete it."),
+                        order = 1,
+                        fontSize = "medium",
+                    },
+                },
+            },
         },
     }
 

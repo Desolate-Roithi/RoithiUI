@@ -395,11 +395,64 @@ function BagsMod:CreateHeaderBar()
         self:SaveCurrentSearchFilter()
     end)
 
+    -- Search Info / Guide Button (?)
+    local infoBtn = CreateFrame("Button", nil, header, "BackdropTemplate")
+    infoBtn:SetSize(20, 20)
+    infoBtn:SetPoint("RIGHT", saveFilterBtn, "LEFT", -4, 0)
+    if infoBtn.SetBackdrop then
+        infoBtn:SetBackdrop({
+            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        infoBtn:SetBackdropColor(0.12, 0.12, 0.12, 0.9)
+        infoBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1.0)
+    end
+    local infoText = infoBtn:CreateFontString(nil, "OVERLAY")
+    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        LibRoithi.mixins:SetFont(infoText, "Friz Quadrata TT", 11, "OUTLINE")
+    else
+        infoText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    end
+    infoText:SetPoint("CENTER", infoBtn, "CENTER", 0, 0)
+    infoText:SetText("?")
+    infoText:SetTextColor(1, 0.82, 0.0, 1)
+
+    local function ShowSearchGuide(owner)
+        if not _G.GameTooltip then return end
+        _G.GameTooltip:SetOwner(owner, "ANCHOR_TOPLEFT")
+        _G.GameTooltip:SetText(L["Bag Search Syntax Guide"] or "Bag Search Syntax Guide", 1, 0.82, 0)
+        _G.GameTooltip:AddLine(L["Combine any tokens with spaces (AND logic):"] or "Combine any tokens with spaces (AND logic):", 1, 1, 1)
+        _G.GameTooltip:AddLine(" ")
+        _G.GameTooltip:AddLine("• |cffffd100name:text|r or |cffffd100text|r - " .. (L["Item name match"] or "Item name match"), 0.9, 0.9, 0.9)
+        _G.GameTooltip:AddLine("• |cffffd100type:gear|weapon|armor|consumable|reagent|r", 0.9, 0.9, 0.9)
+        _G.GameTooltip:AddLine("• |cffffd100bind:bop|boe|bou|account|r - " .. (L["Bind status"] or "Bind status"), 0.9, 0.9, 0.9)
+        _G.GameTooltip:AddLine("• |cffffd100reagent:yes|no|r or |cffffd100reagents|r", 0.9, 0.9, 0.9)
+        _G.GameTooltip:AddLine("• |cffffd100exp:tww|df|sl|bfa|classic|r - " .. (L["Expansion"] or "Expansion"), 0.9, 0.9, 0.9)
+        _G.GameTooltip:AddLine("• |cffffd100quality:epic|rare|uncommon|poor|r or |cffffd100q:4|r", 0.9, 0.9, 0.9)
+        _G.GameTooltip:AddLine("• |cffffd100ilvl:>600|r, |cffffd100ilvl:<550|r, |cffffd100ilvl:600-630|r", 0.9, 0.9, 0.9)
+        _G.GameTooltip:AddLine("• |cffffd100boss:name|r, |cffffd100zone:name|r - " .. (L["Drop source"] or "Drop source"), 0.9, 0.9, 0.9)
+        _G.GameTooltip:AddLine("• |cffffd100junk|r, |cffffd100new|r, |cffffd100fav|r - " .. (L["Shorthand flags"] or "Shorthand flags"), 0.9, 0.9, 0.9)
+        _G.GameTooltip:AddLine(" ")
+        _G.GameTooltip:AddLine("|cff00ff00" .. (L["Example:"] or "Example:") .. "|r |cfffffffftype:gear quality:epic ilvl:>600|r", 0.8, 0.8, 0.8)
+        _G.GameTooltip:AddLine("|cff00ff00" .. (L["Save:"] or "Save:") .. "|r |cffaaaaaa" .. (L["Click [+] to save as a custom category tab"] or "Click [+] to save as a custom category tab") .. "|r", 0.8, 0.8, 0.8)
+        _G.GameTooltip:Show()
+    end
+
+    infoBtn:SetScript("OnEnter", function(s)
+        infoBtn:SetBackdropBorderColor(1, 0.82, 0.0, 1.0)
+        ShowSearchGuide(s)
+    end)
+    infoBtn:SetScript("OnLeave", function()
+        infoBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1.0)
+        if _G.GameTooltip then _G.GameTooltip:Hide() end
+    end)
+
     -- Search Box
     local search = CreateFrame("EditBox", "RoithiBagSearchBox", header, "BackdropTemplate")
     search:SetHeight(20)
     search:SetPoint("LEFT", header, "LEFT", 0, 0)
-    search:SetPoint("RIGHT", saveFilterBtn, "LEFT", -6, 0)
+    search:SetPoint("RIGHT", infoBtn, "LEFT", -6, 0)
     if search.SetAutoFocus then search:SetAutoFocus(false) end
     if search.SetBackdrop then
         search:SetBackdrop({
