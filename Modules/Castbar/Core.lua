@@ -376,6 +376,8 @@ function Castbar:OnEnable()
     local f = self.eventFrame
     f:RegisterEvent("UNIT_SPELLCAST_START")
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+    f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE")
+    f:RegisterEvent("UNIT_SPELLCAST_DELAYED")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_UPDATE")
     f:RegisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")

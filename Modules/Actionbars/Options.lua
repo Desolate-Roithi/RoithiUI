@@ -16,6 +16,30 @@ function AB:GetOptions()
                 order = 1,
                 inline = true,
                 args = {
+                    enabled = {
+                        type = "toggle",
+                        name = L["Enable Action Bars"],
+                        order = 0,
+                        get = function()
+                            local mmEnabled = true
+                            if RoithiUI.ModuleManager and RoithiUI.ModuleManager.IsModuleEnabled then
+                                mmEnabled = RoithiUI.ModuleManager:IsModuleEnabled("Actionbars")
+                            end
+                            return mmEnabled and self.db.enabled ~= false
+                        end,
+                        set = function(_, val)
+                            self.db.enabled = val
+                            if RoithiUI.ModuleManager and RoithiUI.ModuleManager.SetModuleEnabled then
+                                RoithiUI.ModuleManager:SetModuleEnabled("Actionbars", val)
+                            else
+                                if val then
+                                    self:Enable()
+                                else
+                                    self:Disable()
+                                end
+                            end
+                        end,
+                    },
                     showHotkeys = {
                         type = "toggle",
                         name = L["Show Keybind Text"],
@@ -36,10 +60,35 @@ function AB:GetOptions()
                             self:StyleAllBars()
                         end,
                     },
+                    showCount = {
+                        type = "toggle",
+                        name = L["Show Item / Charge Count"],
+                        order = 3,
+                        get = function() return self.db.showCount ~= false end,
+                        set = function(_, val)
+                            self.db.showCount = val
+                            self:StyleAllBars()
+                        end,
+                    },
+                    iconZoom = {
+                        type = "range",
+                        name = L["Icon Zoom"],
+                        desc = L["Crop / zoom button icons for a borderless square style."],
+                        order = 4,
+                        min = 0,
+                        max = 0.20,
+                        step = 0.01,
+                        isPercent = true,
+                        get = function() return self.db.iconZoom or 0.07 end,
+                        set = function(_, val)
+                            self.db.iconZoom = val
+                            self:StyleAllBars()
+                        end,
+                    },
                     fontSize = {
                         type = "range",
                         name = L["Font Size"],
-                        order = 3,
+                        order = 5,
                         min = 8,
                         max = 20,
                         step = 1,
@@ -52,7 +101,7 @@ function AB:GetOptions()
                     borderColor = {
                         type = "color",
                         name = L["Border Color"],
-                        order = 4,
+                        order = 6,
                         hasAlpha = true,
                         get = function()
                             local c = self.db.borderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
@@ -97,10 +146,66 @@ function AB:GetOptions()
                         self:LayoutBar(barKey)
                     end,
                 },
+                hideEmpty = {
+                    type = "toggle",
+                    name = L["Hide Empty Buttons"],
+                    desc = L["Hide empty button slots when not dragging an action."],
+                    order = 2,
+                    get = function() return self.db[barKey] and self.db[barKey].hideEmpty == true end,
+                    set = function(_, val)
+                        self.db[barKey] = self.db[barKey] or {}
+                        self.db[barKey].hideEmpty = val
+                        self:UpdateEmptyButtons(barKey)
+                    end,
+                },
+                mouseover = {
+                    type = "toggle",
+                    name = L["Mouseover Fade"],
+                    desc = L["Only show the bar when hovering over it with the cursor."],
+                    order = 3,
+                    get = function() return self.db[barKey] and self.db[barKey].mouseover == true end,
+                    set = function(_, val)
+                        self.db[barKey] = self.db[barKey] or {}
+                        self.db[barKey].mouseover = val
+                        self:UpdateBarMouseover(barKey)
+                    end,
+                },
+                mouseoverAlpha = {
+                    type = "range",
+                    name = L["Mouseover Min Opacity"],
+                    desc = L["Opacity of the bar when the cursor is NOT hovering over it."],
+                    order = 4,
+                    min = 0,
+                    max = 0.9,
+                    step = 0.05,
+                    isPercent = true,
+                    disabled = function() return not (self.db[barKey] and self.db[barKey].mouseover) end,
+                    get = function() return self.db[barKey] and self.db[barKey].mouseoverAlpha or 0.0 end,
+                    set = function(_, val)
+                        self.db[barKey] = self.db[barKey] or {}
+                        self.db[barKey].mouseoverAlpha = val
+                        self:UpdateBarMouseover(barKey)
+                    end,
+                },
+                alpha = {
+                    type = "range",
+                    name = L["Bar Opacity"],
+                    order = 5,
+                    min = 0.1,
+                    max = 1.0,
+                    step = 0.05,
+                    isPercent = true,
+                    get = function() return self.db[barKey] and self.db[barKey].alpha or 1.0 end,
+                    set = function(_, val)
+                        self.db[barKey] = self.db[barKey] or {}
+                        self.db[barKey].alpha = val
+                        self:UpdateBarMouseover(barKey)
+                    end,
+                },
                 buttonSize = {
                     type = "range",
                     name = L["Button Size"],
-                    order = 2,
+                    order = 6,
                     min = 20,
                     max = 60,
                     step = 1,
@@ -114,7 +219,7 @@ function AB:GetOptions()
                 spacing = {
                     type = "range",
                     name = L["Button Spacing"],
-                    order = 3,
+                    order = 7,
                     min = 0,
                     max = 20,
                     step = 1,
@@ -128,7 +233,7 @@ function AB:GetOptions()
                 buttonsPerRow = {
                     type = "range",
                     name = L["Buttons Per Row"],
-                    order = 4,
+                    order = 8,
                     min = 1,
                     max = 12,
                     step = 1,

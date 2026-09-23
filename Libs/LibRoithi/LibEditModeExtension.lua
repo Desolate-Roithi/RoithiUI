@@ -111,8 +111,50 @@ if not lib.internal.IsHealed then
             if callback then callback(f, layoutName, point, x, y) end
         end
 
-        return oldAddFrame(self, frame, safeCallback, default, name)
+        local ret = oldAddFrame(self, frame, safeCallback, default, name)
+
+        -- Protect against "Frame is not movable" error in LibEditMode onDragStart
+        local selection = lib.frameSelections and lib.frameSelections[frame]
+        if selection and not selection.isDragStartProtected then
+            selection.isDragStartProtected = true
+            local oldDragStart = selection:GetScript("OnDragStart")
+            selection:SetScript("OnDragStart", function(s)
+                if s.parent and s.parent.SetMovable then
+                    local okMovable, isMovable = pcall(function() return s.parent:IsMovable() end)
+                    if not okMovable or not isMovable then
+                        s.parent:SetMovable(true)
+                    end
+                end
+                if oldDragStart then
+                    oldDragStart(s)
+                end
+            end)
+        end
+
+        return ret
     end
+
+    -- Also protect any pre-existing frameSelections
+    if lib.frameSelections then
+        for _, selection in pairs(lib.frameSelections) do
+            if selection and not selection.isDragStartProtected and selection.GetScript and selection.SetScript then
+                selection.isDragStartProtected = true
+                local oldDragStart = selection:GetScript("OnDragStart")
+                selection:SetScript("OnDragStart", function(s)
+                    if s.parent and s.parent.SetMovable then
+                        local okMovable, isMovable = pcall(function() return s.parent:IsMovable() end)
+                        if not okMovable or not isMovable then
+                            s.parent:SetMovable(true)
+                        end
+                    end
+                    if oldDragStart then
+                        oldDragStart(s)
+                    end
+                end)
+            end
+        end
+    end
+
     lib.internal.IsHealed = true
 end
 

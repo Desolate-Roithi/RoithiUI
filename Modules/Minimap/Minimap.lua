@@ -47,16 +47,27 @@ MinimapMod.defaultSettings = {
     addonBarAttached = true,
     addonBarSnap = true,
     addonBarSnapEdge = "AUTO",
-    addonBarExpanded = false,
+    addonBarExpanded = true,
+    addonBarExpansionMode = "STANDARD",
     addonBarVisibleCount = 3,
     addonBarButtonSize = 30,
+    addonBarExpanderSize = 16,
     addonBarSpacing = 4,
     addonBarColumns = 1,
+    addonBarGrowDirection = "UP_LEFT",
+    addonBarBreakpoint = 5,
+    addonBarButtons = {},
+    addonBarButtonOrder = {},
+    displaceBuffs = true,
+    showDiel = true,
     offsets = {},
 }
 
 function MinimapMod:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap or self.defaultSettings
+    if self.db then
+        self.db.addonBarButtons = self.db.addonBarButtons or {}
+    end
     self.scannedButtons = {}
     self.activeButtons = {}
     self:RegisterEvent("ADDON_LOADED")
@@ -124,13 +135,14 @@ function MinimapMod:PrepareFramesForEditMode()
         { key = "zoomInAnchor", frame = self.zoomInAnchor },
         { key = "zoomOutAnchor", frame = self.zoomOutAnchor },
         { key = "calendarAnchor", frame = self.calendarAnchor },
+        { key = "dielAnchor", frame = self.dielAnchor },
         { key = "addonBar", frame = self.addonBar },
     }
 
     for _, entry in ipairs(frames) do
         local f = entry.frame
         if f then
-            local isDetached = (entry.key == "addonBar") or (self.db.detached and self.db.detached[entry.key])
+            local isDetached = (entry.key == "addonBar" and self.db.addonBarAttached == false) or (self.db.detached and self.db.detached[entry.key])
             if isDetached then
                 f:SetParent(UIParent)
                 f:SetScale(1.0)
@@ -151,21 +163,22 @@ function MinimapMod:ReparentFramesAfterEditMode()
     if not container then return end
 
     local frames = {
-        { key = "zoneTextAnchor", frame = self.zoneTextAnchor, default = { point = "TOPRIGHT", x = -80, y = -10 } },
-        { key = "mailAnchor", frame = self.mailAnchor, default = { point = "TOPRIGHT", x = -180, y = -30 } },
-        { key = "trackingAnchor", frame = self.trackingAnchor, default = { point = "TOPRIGHT", x = -30, y = -30 } },
-        { key = "lfgAnchor", frame = self.lfgAnchor, default = { point = "CENTER", x = 0, y = 0 } },
-        { key = "landingAnchor", frame = self.landingAnchor, default = { point = "TOPRIGHT", x = -30, y = -180 } },
-        { key = "zoomInAnchor", frame = self.zoomInAnchor, default = { point = "TOPRIGHT", x = -130, y = -30 } },
-        { key = "zoomOutAnchor", frame = self.zoomOutAnchor, default = { point = "TOPRIGHT", x = -130, y = -65 } },
-        { key = "calendarAnchor", frame = self.calendarAnchor, default = { point = "TOPRIGHT", x = -65, y = -30 } },
-        { key = "addonBar", frame = self.addonBar, default = { point = "TOPRIGHT", x = -10, y = -220 } },
+        { key = "zoneTextAnchor", frame = self.zoneTextAnchor, default = { point = "TOP", x = 0, y = -10 } },
+        { key = "mailAnchor", frame = self.mailAnchor, default = { point = "TOPRIGHT", x = 0, y = 0 } },
+        { key = "trackingAnchor", frame = self.trackingAnchor, default = { point = "TOPLEFT", x = 0, y = -38 } },
+        { key = "lfgAnchor", frame = self.lfgAnchor, default = { point = "BOTTOMLEFT", x = 0, y = 0 } },
+        { key = "landingAnchor", frame = self.landingAnchor, default = { point = "BOTTOMLEFT", x = 0, y = 32 } },
+        { key = "zoomInAnchor", frame = self.zoomInAnchor, default = { point = "TOPRIGHT", x = 0, y = -34 } },
+        { key = "zoomOutAnchor", frame = self.zoomOutAnchor, default = { point = "TOPRIGHT", x = 0, y = -68 } },
+        { key = "calendarAnchor", frame = self.calendarAnchor, default = { point = "TOPLEFT", x = 0, y = 0 } },
+        { key = "dielAnchor", frame = self.dielAnchor, default = { point = "BOTTOMRIGHT", x = 0, y = 0 } },
+        { key = "addonBar", frame = self.addonBar, default = { point = "BOTTOMLEFT", x = 10, y = 100 } },
     }
 
     for _, entry in ipairs(frames) do
         local f = entry.frame
         if f then
-            local isDetached = (entry.key == "addonBar") or (self.db.detached and self.db.detached[entry.key])
+            local isDetached = (entry.key == "addonBar" and self.db.addonBarAttached == false) or (self.db.detached and self.db.detached[entry.key])
             if isDetached then
                 f:SetParent(UIParent)
                 f:SetScale(1.0)
@@ -181,18 +194,22 @@ function MinimapMod:ReparentFramesAfterEditMode()
                     self.db.offsets[entry.key] = { point = point, x = x, y = y }
                 end
             else
-                f:SetParent(container)
-                f:SetScale(1.0)
-                if f.SetFrameStrata then
-                    f:SetFrameStrata("HIGH")
+                if entry.key == "addonBar" then
+                    self:UpdateAddonBarAttachment()
+                else
+                    f:SetParent(container)
+                    f:SetScale(1.0)
+                    if f.SetFrameStrata then
+                        f:SetFrameStrata("HIGH")
+                    end
+                    if f.SetFrameLevel then
+                        f:SetFrameLevel(20)
+                    end
+                    local offset = self.db.offsets and self.db.offsets[entry.key] or entry.default
+                    f:ClearAllPoints()
+                    local pt = offset.point or entry.default.point or "BOTTOMLEFT"
+                    f:SetPoint(pt, container, pt, offset.x, offset.y)
                 end
-                if f.SetFrameLevel then
-                    f:SetFrameLevel(20)
-                end
-                local offset = self.db.offsets and self.db.offsets[entry.key] or entry.default
-                f:ClearAllPoints()
-                local pt = offset.point or "BOTTOMLEFT"
-                f:SetPoint(pt, container, pt, offset.x, offset.y)
             end
         end
     end
@@ -217,6 +234,12 @@ function MinimapMod:OnEnable()
     -- Create Minimap Data Text Bar
     self:CreateDataTextBar()
     self:UpdateDataTextBarVisibility()
+    if self.UpdateAddonBarAttachment then
+        self:UpdateAddonBarAttachment()
+    end
+    if self.HookBuffFrameStyling then
+        self:HookBuffFrameStyling()
+    end
 
     -- Initial scan, then repeat after delay to let late addons load
     self:ScanAddonButtons()
@@ -591,11 +614,52 @@ function MinimapMod:StyleMinimap()
             end
         end
 
+        -- Issue 1: Hide Blizzard TimeManagerClockButton if present on Minimap
+        local clockBtn = _G.TimeManagerClockButton
+        if clockBtn then
+            clockBtn:Hide()
+            clockBtn:SetAlpha(0)
+            if not self.isClockHooked then
+                hooksecurefunc(clockBtn, "Show", function(s) s:Hide() end)
+                self.isClockHooked = true
+            end
+        end
+
+        -- Issue 2: Day/Night indicator in Classic / Forever
+        local classicDayNight = _G.MinimapNightTexture or (Minimap and Minimap.DayNightAnchor)
+        if classicDayNight then
+            classicDayNight:Hide()
+            classicDayNight:SetAlpha(0)
+            if not self.isDayNightHooked then
+                hooksecurefunc(classicDayNight, "Show", function(s) s:Hide() end)
+                self.isDayNightHooked = true
+            end
+        end
+
         if MinimapCluster.Selection then
             MinimapCluster.Selection:Hide()
             if not self.isSelectionHooked then
                 hooksecurefunc(MinimapCluster.Selection, "Show", function(s) s:Hide() end)
                 self.isSelectionHooked = true
+            end
+        end
+
+        -- Suppress default PlayerCoordinates on MinimapContainer
+        if MinimapCluster.MinimapContainer and MinimapCluster.MinimapContainer.PlayerCoordinates then
+            local coords = MinimapCluster.MinimapContainer.PlayerCoordinates
+            coords:Hide()
+            coords:SetAlpha(0)
+            if not self.isCoordsHooked then
+                hooksecurefunc(coords, "Show", function(s) s:Hide() end)
+                self.isCoordsHooked = true
+            end
+        end
+
+        -- Suppress default MinimapContainer borders
+        if MinimapCluster.MinimapContainer and MinimapCluster.MinimapContainer ~= self.container then
+            if MinimapCluster.MinimapContainer.Border then
+                MinimapCluster.MinimapContainer.Border:Hide()
+                MinimapCluster.MinimapContainer.Border:SetAlpha(0)
             end
         end
     end
@@ -676,7 +740,7 @@ function MinimapMod:UpdateMinimapShape()
         end
     else
         -- Restore default circular shape mask in Retail
-        Minimap:SetMaskTexture("Interface\\Masks\\MinimapMask")
+        Minimap:SetMaskTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
         if self.borderFrame then self.borderFrame:Hide() end
     end
     self:LayoutDefaultButtons()
@@ -708,21 +772,25 @@ function MinimapMod:UpdateMinimapSize()
     end
 
     self:UpdateMinimapBorder()
+    if self.UpdateDataTextBarLayout then
+        self:UpdateDataTextBarLayout()
+    end
     if LEM and LEM.RefreshFrameSettings and self.container then
         LEM:RefreshFrameSettings(self.container)
     end
 end
 
 MinimapMod.defaultAnchorPositions = {
-    zoneTextAnchor = { point = "TOPRIGHT", x = -80, y = -10 },
-    mailAnchor = { point = "TOPRIGHT", x = -180, y = -30 },
-    trackingAnchor = { point = "TOPRIGHT", x = -30, y = -30 },
-    lfgAnchor = { point = "CENTER", x = 0, y = 0 },
-    landingAnchor = { point = "TOPRIGHT", x = -30, y = -180 },
-    zoomInAnchor = { point = "TOPRIGHT", x = -130, y = -30 },
-    zoomOutAnchor = { point = "TOPRIGHT", x = -130, y = -65 },
-    calendarAnchor = { point = "TOPRIGHT", x = -65, y = -30 },
-    addonBar = { point = "TOPRIGHT", x = -10, y = -220 },
+    zoneTextAnchor = { point = "TOP", x = 0, y = -10 },
+    mailAnchor = { point = "TOPRIGHT", x = 0, y = 0 },
+    trackingAnchor = { point = "TOPLEFT", x = 0, y = -38 },
+    lfgAnchor = { point = "BOTTOMLEFT", x = 0, y = 0 },
+    landingAnchor = { point = "BOTTOMLEFT", x = 0, y = 32 },
+    zoomInAnchor = { point = "TOPRIGHT", x = 0, y = -34 },
+    zoomOutAnchor = { point = "TOPRIGHT", x = 0, y = -68 },
+    calendarAnchor = { point = "TOPLEFT", x = 0, y = 0 },
+    dielAnchor = { point = "BOTTOMRIGHT", x = 0, y = 0 },
+    addonBar = { point = "BOTTOMLEFT", x = 10, y = 100 },
 }
 
 function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
@@ -752,7 +820,7 @@ function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
             self.db.offsets = self.db.offsets or {}
             self.db.offsets[key] = { point = "BOTTOMLEFT", x = dx, y = dy }
         else
-            local defaultPos = self.defaultAnchorPositions[key] or { point = "TOPRIGHT", x = -10, y = -220 }
+            local defaultPos = self.defaultAnchorPositions[key] or { point = "BOTTOMLEFT", x = 10, y = 100 }
             f:SetPoint(defaultPos.point, UIParent, defaultPos.point, defaultPos.x, defaultPos.y)
             self.db.offsets = self.db.offsets or {}
             self.db.offsets[key] = { point = defaultPos.point, x = defaultPos.x, y = defaultPos.y }
@@ -779,7 +847,7 @@ function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
             self.db.offsets[key] = { point = "BOTTOMLEFT", x = dx, y = dy }
             f:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", dx, dy)
         else
-            local defaultPos = self.defaultAnchorPositions[key] or { point = "TOPRIGHT", x = -10, y = -220 }
+            local defaultPos = self.defaultAnchorPositions[key] or { point = "BOTTOMLEFT", x = 10, y = 100 }
             f:SetPoint(defaultPos.point, container, defaultPos.point, defaultPos.x, defaultPos.y)
         end
     end
@@ -789,15 +857,16 @@ function MinimapMod:RegisterAnchorSettings(f, key)
     if not LEM then return end
 
     local configMap = {
-        zoneTextAnchor = { toggle = "showZoneText", default = { point = "TOPRIGHT", x = -80, y = -10 }, updateVis = "UpdateZoneTextVisibility" },
-        mailAnchor = { toggle = "showMail", default = { point = "TOPRIGHT", x = -180, y = -30 }, updateVis = "UpdateMailVisibility" },
-        trackingAnchor = { toggle = "showTracking", default = { point = "TOPRIGHT", x = -30, y = -30 }, updateVis = "UpdateTrackingVisibility" },
-        lfgAnchor = { toggle = "showLFG", default = { point = "CENTER", x = 0, y = 0 }, updateVis = "UpdateLFGVisibility" },
-        landingAnchor = { toggle = "showLanding", default = { point = "TOPRIGHT", x = -30, y = -180 }, updateVis = "UpdateLandingVisibility" },
-        zoomInAnchor = { toggle = "showZoomIn", default = { point = "TOPRIGHT", x = -130, y = -30 }, updateVis = "UpdateZoomVisibility" },
-        zoomOutAnchor = { toggle = "showZoomOut", default = { point = "TOPRIGHT", x = -130, y = -65 }, updateVis = "UpdateZoomVisibility" },
-        calendarAnchor = { toggle = "showCalendar", default = { point = "TOPRIGHT", x = -65, y = -30 }, updateVis = "UpdateCalendarVisibility" },
-        addonBar = { toggle = "showAddonBar", default = { point = "TOPRIGHT", x = -10, y = -220 }, updateVis = "UpdateAddonBarVisibility" },
+        zoneTextAnchor = { toggle = "showZoneText", default = { point = "TOP", x = 0, y = -10 }, updateVis = "UpdateZoneTextVisibility" },
+        mailAnchor = { toggle = "showMail", default = { point = "TOPRIGHT", x = 0, y = 0 }, updateVis = "UpdateMailVisibility" },
+        trackingAnchor = { toggle = "showTracking", default = { point = "TOPLEFT", x = 0, y = -38 }, updateVis = "UpdateTrackingVisibility" },
+        lfgAnchor = { toggle = "showLFG", default = { point = "BOTTOMLEFT", x = 0, y = 0 }, updateVis = "UpdateLFGVisibility" },
+        landingAnchor = { toggle = "showLanding", default = { point = "BOTTOMLEFT", x = 0, y = 32 }, updateVis = "UpdateLandingVisibility" },
+        zoomInAnchor = { toggle = "showZoomIn", default = { point = "TOPRIGHT", x = 0, y = -34 }, updateVis = "UpdateZoomVisibility" },
+        zoomOutAnchor = { toggle = "showZoomOut", default = { point = "TOPRIGHT", x = 0, y = -68 }, updateVis = "UpdateZoomVisibility" },
+        calendarAnchor = { toggle = "showCalendar", default = { point = "TOPLEFT", x = 0, y = 0 }, updateVis = "UpdateCalendarVisibility" },
+        dielAnchor = { toggle = "showDiel", default = { point = "BOTTOMRIGHT", x = 0, y = 0 }, updateVis = "UpdateDielVisibility" },
+        addonBar = { toggle = "showAddonBar", default = { point = "BOTTOMLEFT", x = 10, y = 100 }, updateVis = "UpdateAddonBarVisibility" },
     }
 
     local cfg = configMap[key]
@@ -847,6 +916,31 @@ function MinimapMod:RegisterAnchorSettings(f, key)
                 if self[updateVis] then
                     self[updateVis](self)
                 end
+            end,
+        },
+        {
+            name = L["Anchor Point"] or "Anchor Point",
+            kind = LEM.SettingType.Dropdown,
+            values = {
+                { text = L["Top Left"] or "Top Left", value = "TOPLEFT" },
+                { text = L["Top"] or "Top", value = "TOP" },
+                { text = L["Top Right"] or "Top Right", value = "TOPRIGHT" },
+                { text = L["Left"] or "Left", value = "LEFT" },
+                { text = L["Center"] or "Center", value = "CENTER" },
+                { text = L["Right"] or "Right", value = "RIGHT" },
+                { text = L["Bottom Left"] or "Bottom Left", value = "BOTTOMLEFT" },
+                { text = L["Bottom"] or "Bottom", value = "BOTTOM" },
+                { text = L["Bottom Right"] or "Bottom Right", value = "BOTTOMRIGHT" },
+            },
+            get = function()
+                local offset = self.db.offsets and self.db.offsets[key]
+                return offset and offset.point or default.point
+            end,
+            set = function(_, val)
+                self.db.offsets = self.db.offsets or {}
+                self.db.offsets[key] = self.db.offsets[key] or { point = default.point, x = default.x, y = default.y }
+                self.db.offsets[key].point = val
+                self:UpdateAnchorPosition(key)
             end,
         },
         {
@@ -1010,7 +1104,7 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Zone Text Anchor
-    local zoneTextAnchor = CreateAnchorFrame(self, "zoneTextAnchor", "RoithiZoneTextAnchor", L["Minimap Zone Text"], 130, 20, { point = "TOPRIGHT", x = -80, y = -10 })
+    local zoneTextAnchor = CreateAnchorFrame(self, "zoneTextAnchor", "RoithiZoneTextAnchor", L["Minimap Zone Text"], 130, 20, { point = "TOP", x = 0, y = -10 })
     local zoneText = MinimapCluster.ZoneTextButton or MinimapCluster.ZoneTextFrame or _G.MinimapZoneTextButton
     if zoneText then
         zoneText:SetParent(zoneTextAnchor)
@@ -1019,21 +1113,21 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Mail Anchor
-    local mailAnchor = CreateAnchorFrame(self, "mailAnchor", "RoithiMailAnchor", L["Minimap Mail Frame"], 32, 32, { point = "TOPRIGHT", x = -180, y = -30 })
+    local mailAnchor = CreateAnchorFrame(self, "mailAnchor", "RoithiMailAnchor", L["Minimap Mail Frame"], 32, 32, { point = "TOPRIGHT", x = 0, y = 0 })
     local mail = MiniMapMailFrame or (MinimapCluster.IndicatorFrame and MinimapCluster.IndicatorFrame.MailFrame)
     if mail then
         HookBlizzardButton(mail, mailAnchor)
     end
 
     -- Setup Tracking Anchor
-    local trackingAnchor = CreateAnchorFrame(self, "trackingAnchor", "RoithiTrackingAnchor", L["Minimap Tracking Frame"], 32, 32, { point = "TOPRIGHT", x = -30, y = -30 })
+    local trackingAnchor = CreateAnchorFrame(self, "trackingAnchor", "RoithiTrackingAnchor", L["Minimap Tracking Frame"], 32, 32, { point = "TOPLEFT", x = 0, y = -38 })
     local tracking = MinimapCluster.Tracking or MinimapCluster.TrackingFrame or MiniMapTracking
     if tracking then
         HookBlizzardButton(tracking, trackingAnchor)
     end
 
     -- Setup LFG Anchor
-    local lfgAnchor = CreateAnchorFrame(self, "lfgAnchor", "RoithiLFGAnchor", L["Minimap LFG Frame"], 32, 32, { point = "CENTER", x = 0, y = 0 })
+    local lfgAnchor = CreateAnchorFrame(self, "lfgAnchor", "RoithiLFGAnchor", L["Minimap LFG Frame"], 32, 32, { point = "BOTTOMLEFT", x = 0, y = 0 })
     local lfgs = {}
     if _G.QueueStatusMinimapButton then table.insert(lfgs, _G.QueueStatusMinimapButton) end
     if _G.QueueStatusButton then table.insert(lfgs, _G.QueueStatusButton) end
@@ -1047,7 +1141,7 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Landing Anchor
-    local landingAnchor = CreateAnchorFrame(self, "landingAnchor", "RoithiLandingAnchor", L["Minimap Landing Button"], 36, 36, { point = "TOPRIGHT", x = -30, y = -180 })
+    local landingAnchor = CreateAnchorFrame(self, "landingAnchor", "RoithiLandingAnchor", L["Minimap Landing Button"], 36, 36, { point = "BOTTOMLEFT", x = 0, y = 32 })
     local landings = {}
     if _G.GarrisonLandingPageMinimapButton then table.insert(landings, _G.GarrisonLandingPageMinimapButton) end
     if _G.ExpansionLandingPageMinimapButton then table.insert(landings, _G.ExpansionLandingPageMinimapButton) end
@@ -1068,7 +1162,7 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Zoom In Anchor
-    local zoomInAnchor = CreateAnchorFrame(self, "zoomInAnchor", "RoithiZoomInAnchor", L["Minimap Zoom In"], 32, 32, { point = "TOPRIGHT", x = -130, y = -30 })
+    local zoomInAnchor = CreateAnchorFrame(self, "zoomInAnchor", "RoithiZoomInAnchor", L["Minimap Zoom In"], 32, 32, { point = "TOPRIGHT", x = 0, y = -34 })
     local zoomIn = Minimap.ZoomIn or _G.MinimapZoomIn
     if zoomIn then
         zoomIn:SetParent(zoomInAnchor)
@@ -1077,7 +1171,7 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Zoom Out Anchor
-    local zoomOutAnchor = CreateAnchorFrame(self, "zoomOutAnchor", "RoithiZoomOutAnchor", L["Minimap Zoom Out"], 32, 32, { point = "TOPRIGHT", x = -130, y = -65 })
+    local zoomOutAnchor = CreateAnchorFrame(self, "zoomOutAnchor", "RoithiZoomOutAnchor", L["Minimap Zoom Out"], 32, 32, { point = "TOPRIGHT", x = 0, y = -68 })
     local zoomOut = Minimap.ZoomOut or _G.MinimapZoomOut
     if zoomOut then
         zoomOut:SetParent(zoomOutAnchor)
@@ -1086,7 +1180,7 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Calendar Anchor
-    local calendarAnchor = CreateAnchorFrame(self, "calendarAnchor", "RoithiCalendarAnchor", L["Minimap Calendar Button"], 36, 36, { point = "TOPRIGHT", x = -65, y = -30 })
+    local calendarAnchor = CreateAnchorFrame(self, "calendarAnchor", "RoithiCalendarAnchor", L["Minimap Calendar Button"], 36, 36, { point = "TOPLEFT", x = 0, y = 0 })
     if GameTimeFrame then
         GameTimeFrame:SetParent(calendarAnchor)
         GameTimeFrame:ClearAllPoints()
@@ -1100,6 +1194,13 @@ function MinimapMod:LayoutDefaultButtons()
             end)
             self.isCalendarHooked = true
         end
+    end
+
+    -- Setup Diel/Dial Anchor
+    local dielAnchor = CreateAnchorFrame(self, "dielAnchor", "RoithiDielAnchor", L["Minimap Daytime Dial"] or "Minimap Daytime Dial", 32, 32, { point = "BOTTOMRIGHT", x = 0, y = 0 })
+    local diel = (MinimapCluster and (MinimapCluster.DielFrame or MinimapCluster.DialFrame)) or _G.DielFrame or _G.DialFrame
+    if diel then
+        HookBlizzardButton(diel, dielAnchor)
     end
 end
 
@@ -1158,6 +1259,17 @@ function MinimapMod:UpdateLandingVisibility()
     end
 end
 
+function MinimapMod:UpdateDielVisibility()
+    local show = (self.db.showDiel ~= false)
+    if self.dielAnchor then
+        self.dielAnchor:SetShown(show)
+    end
+    local diel = (MinimapCluster and (MinimapCluster.DielFrame or MinimapCluster.DialFrame)) or _G.DielFrame or _G.DialFrame
+    if diel then
+        diel:SetShown(show)
+    end
+end
+
 function MinimapMod:UpdateAllElementVisibilities()
     self:UpdateZoneTextVisibility()
     self:UpdateCalendarVisibility()
@@ -1166,6 +1278,7 @@ function MinimapMod:UpdateAllElementVisibilities()
     self:UpdateTrackingVisibility()
     self:UpdateLFGVisibility()
     self:UpdateLandingVisibility()
+    self:UpdateDielVisibility()
 end
 
 function MinimapMod:UpdateZoomVisibility()
@@ -1472,6 +1585,9 @@ function MinimapMod:UpdateDataTextBarLayout()
 
     if not self.db.showDataTextBar then
         bar:Hide()
+        if self.UpdateAddonBarAttachment then
+            self:UpdateAddonBarAttachment()
+        end
         return
     end
     bar:Show()
@@ -1552,6 +1668,9 @@ function MinimapMod:UpdateDataTextBarLayout()
     end
 
     UpdateDataText(bar)
+    if self.UpdateAddonBarAttachment then
+        self:UpdateAddonBarAttachment()
+    end
 end
 
 function MinimapMod:CreateDataTextBar()
@@ -1769,7 +1888,7 @@ function MinimapMod:GetOptions()
                             ["INSIDE"] = L["Inside Minimap"],
                             ["OUTSIDE"] = L["Outside Minimap"],
                         },
-                        get = function() return self.db.dataTextPosition or "INSIDE" end,
+                        get = function() return self.db.dataTextPosition or "OUTSIDE" end,
                         set = function(_, val)
                             self.db.dataTextPosition = val
                             self:UpdateDataTextBarVisibility()
@@ -1784,7 +1903,7 @@ function MinimapMod:GetOptions()
                             ["12H"] = L["12-hour (AM/PM)"],
                             ["24H"] = L["24-hour"],
                         },
-                        get = function() return self.db.dataTextTimeFormat or "12H" end,
+                        get = function() return self.db.dataTextTimeFormat or "24H" end,
                         set = function(_, val)
                             self.db.dataTextTimeFormat = val
                             self:UpdateDataTextBarVisibility()
@@ -2033,6 +2152,71 @@ function MinimapMod:GetOptions()
                                 end,
                             },
                         },
+                    },
+                },
+            },
+            buffsStyling = {
+                type = "group",
+                name = L["Default Auras Styling"] or "Default Auras Styling",
+                order = 5,
+                inline = true,
+                args = {
+                    displaceBuffs = {
+                        type = "toggle",
+                        name = L["Displace Buffs when Addon Bar Expands"] or "Displace Buffs when Addon Bar Expands",
+                        order = 1,
+                        get = function() return self.db.displaceBuffs ~= false end,
+                        set = function(_, val)
+                            self.db.displaceBuffs = val
+                            if self.UpdateBuffFrameDisplacement then
+                                self:UpdateBuffFrameDisplacement()
+                            end
+                        end,
+                    },
+                    buffFrameShowBorder = {
+                        type = "toggle",
+                        name = L["Show Aura Border"] or "Show Aura Border",
+                        desc = L["Toggle 1px pixel border around default Buff and Debuff icons."] or "Toggle border around default aura icons.",
+                        order = 2,
+                        get = function() return self.db.buffFrameShowBorder == true end,
+                        set = function(_, val)
+                            self.db.buffFrameShowBorder = val
+                            if _G.BuffFrame and _G.BuffFrame.UpdateAuraButtons then
+                                _G.BuffFrame:UpdateAuraButtons()
+                            end
+                            if _G.DebuffFrame and _G.DebuffFrame.UpdateAuraButtons then
+                                _G.DebuffFrame:UpdateAuraButtons()
+                            end
+                        end,
+                    },
+                    buffFrameBorderSize = {
+                        type = "range",
+                        name = L["Aura Border Size"] or "Aura Border Size",
+                        order = 3,
+                        min = 1,
+                        max = 4,
+                        step = 1,
+                        get = function() return self.db.buffFrameBorderSize or 1 end,
+                        set = function(_, val)
+                            self.db.buffFrameBorderSize = val
+                            if _G.BuffFrame and _G.BuffFrame.UpdateAuraButtons then
+                                _G.BuffFrame:UpdateAuraButtons()
+                            end
+                        end,
+                        disabled = function() return not self.db.buffFrameShowBorder end,
+                    },
+                    buffFrameZoomIcons = {
+                        type = "toggle",
+                        name = L["Zoom Aura Icons"] or "Zoom Aura Icons",
+                        desc = L["Remove default Blizzard icon edges."] or "Zoom aura icon textures.",
+                        order = 4,
+                        get = function() return self.db.buffFrameZoomIcons ~= false end,
+                        set = function(_, val)
+                            self.db.buffFrameZoomIcons = val
+                            if _G.BuffFrame and _G.BuffFrame.UpdateAuraButtons then
+                                _G.BuffFrame:UpdateAuraButtons()
+                            end
+                        end,
                     },
                 },
             },

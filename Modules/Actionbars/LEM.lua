@@ -89,3 +89,13 @@ function AB:SetupLEM()
         end
     end
 end
+
+function AB:TeardownLEM()
+    if not LEM or not LEM.frameSelections then return end
+    for _, container in pairs(self.bars) do
+        local sel = LEM.frameSelections[container]
+        if sel and sel.Hide then
+            sel:Hide()
+        end
+    end
+end

@@ -30,10 +30,22 @@
     <!-- Minimap -->
     <Script file="Modules/Minimap/Minimap.lua"/>
     <Script file="Modules/Minimap/AddonBar.lua"/>
+    <Script file="Modules/Minimap/ButtonConfigurator.lua"/>
+    <Script file="Modules/Minimap/BuffFrame.lua"/>
 
     <!-- Actionbars -->
     <Script file="Modules/Actionbars/Core.lua"/>
     <Script file="Modules/Actionbars/Bars.lua"/>
     <Script file="Modules/Actionbars/LEM.lua"/>
     <Script file="Modules/Actionbars/Options.lua"/>
+
+    <!-- Menu -->
+    <Script file="Modules/Menu/Menu.lua"/>
+    <Script file="Modules/Menu/Options.lua"/>
+
+    <!-- Bags -->
+    <Script file="Modules/Bags/Filters.lua"/>
+    <Script file="Modules/Bags/BagBar.lua"/>
+    <Script file="Modules/Bags/Bags.lua"/>
+    <Script file="Modules/Bags/Options.lua"/>
 </Ui>

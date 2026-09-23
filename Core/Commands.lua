@@ -81,8 +81,11 @@ function RoithiUI:ChatCommand(input)
         print("  |cff00ccff/rl|r - Quick reload UI")
         return
     elseif cmd == "testsuite" or cmd == "dev" or cmd == "tests" then
+        local UI = RoithiUI:GetModule("UI_TestSuite", true)
         local TS = RoithiUI:GetModule("TestSuite", true)
-        if TS and TS.ToggleWindow then
+        if UI and UI.ToggleWindow then
+            UI:ToggleWindow()
+        elseif TS and TS.ToggleWindow then
             TS:ToggleWindow()
         else
             self:Print("TestSuite is only available in local development mode.")

@@ -1,0 +1,195 @@
+local addonName, ns = ...
+if ns.skipLoad then return end
+local RoithiUI = _G.RoithiUI
+local BagsMod = RoithiUI:GetModule("Bags")
+local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
+
+function BagsMod:GetOptions()
+    local options = {
+        type = "group",
+        name = L["Bags"],
+        order = 80,
+        args = {
+            general = {
+                type = "group",
+                name = L["General"],
+                order = 1,
+                inline = true,
+                args = {
+                    enabled = {
+                        type = "toggle",
+                        name = L["Enable Modern Bags"],
+                        order = 1,
+                        get = function() return self.db.enabled ~= false end,
+                        set = function(_, val)
+                            self.db.enabled = val
+                            if val then self:Enable() else self:Disable() end
+                        end,
+                    },
+                    autoSellJunk = {
+                        type = "toggle",
+                        name = L["Auto-Sell Junk"],
+                        desc = L["Automatically sell poor quality (grey) items when visiting a vendor."],
+                        order = 2,
+                        get = function() return self.db.autoSellJunk == true end,
+                        set = function(_, val)
+                            self.db.autoSellJunk = val
+                        end,
+                    },
+                },
+            },
+            bagBar = {
+                type = "group",
+                name = L["Bag Bar"],
+                order = 2,
+                inline = true,
+                args = {
+                    enabled = {
+                        type = "toggle",
+                        name = L["Enable Bag Bar"],
+                        order = 1,
+                        get = function() return self.db.bagBar and self.db.bagBar.enabled ~= false end,
+                        set = function(_, val)
+                            self.db.bagBar = self.db.bagBar or {}
+                            self.db.bagBar.enabled = val
+                            if self.bagBarFrame then
+                                self.bagBarFrame:SetShown(val)
+                            end
+                        end,
+                    },
+                    buttonSize = {
+                        type = "range",
+                        name = L["Button Size"],
+                        order = 2,
+                        min = 20,
+                        max = 48,
+                        step = 1,
+                        get = function() return self.db.bagBar and self.db.bagBar.buttonSize or 30 end,
+                        set = function(_, val)
+                            self.db.bagBar = self.db.bagBar or {}
+                            self.db.bagBar.buttonSize = val
+                            self:UpdateBagBarLayout()
+                        end,
+                    },
+                    spacing = {
+                        type = "range",
+                        name = L["Button Spacing"],
+                        order = 3,
+                        min = 0,
+                        max = 12,
+                        step = 1,
+                        get = function() return self.db.bagBar and self.db.bagBar.spacing or 4 end,
+                        set = function(_, val)
+                            self.db.bagBar = self.db.bagBar or {}
+                            self.db.bagBar.spacing = val
+                            self:UpdateBagBarLayout()
+                        end,
+                    },
+                },
+            },
+            window = {
+                type = "group",
+                name = L["Bag Window"],
+                order = 3,
+                inline = true,
+                args = {
+                    slotSize = {
+                        type = "range",
+                        name = L["Slot Size"],
+                        order = 1,
+                        min = 24,
+                        max = 48,
+                        step = 1,
+                        get = function() return self.db.slotSize or 36 end,
+                        set = function(_, val)
+                            self.db.slotSize = val
+                            self:UpdateInventory()
+                        end,
+                    },
+                    columns = {
+                        type = "range",
+                        name = L["Columns"],
+                        order = 2,
+                        min = 6,
+                        max = 18,
+                        step = 1,
+                        get = function() return self.db.columns or 10 end,
+                        set = function(_, val)
+                            self.db.columns = val
+                            self:UpdateInventory()
+                        end,
+                    },
+                    spacing = {
+                        type = "range",
+                        name = L["Slot Spacing"],
+                        order = 3,
+                        min = 1,
+                        max = 10,
+                        step = 1,
+                        get = function() return self.db.spacing or 4 end,
+                        set = function(_, val)
+                            self.db.spacing = val
+                            self:UpdateInventory()
+                        end,
+                    },
+                    qualityBorders = {
+                        type = "toggle",
+                        name = L["Color Borders by Quality"],
+                        order = 4,
+                        get = function() return self.db.qualityBorders ~= false end,
+                        set = function(_, val)
+                            self.db.qualityBorders = val
+                            self:UpdateInventory()
+                        end,
+                    },
+                    showEmptySlots = {
+                        type = "toggle",
+                        name = L["Show Empty Slots in All View"],
+                        order = 5,
+                        get = function() return self.db.showEmptySlots ~= false end,
+                        set = function(_, val)
+                            self.db.showEmptySlots = val
+                            self:UpdateInventory()
+                        end,
+                    },
+                },
+            },
+            categories = {
+                type = "group",
+                name = L["Category Filter Buttons"],
+                order = 4,
+                inline = true,
+                args = {},
+            },
+        },
+    }
+
+    local catArgs = options.args.categories.args
+    local catList = self.CATEGORIES or {}
+    for idx, cat in ipairs(catList) do
+        local catId = cat.id
+        catArgs[catId] = {
+            type = "toggle",
+            name = cat.name,
+            order = idx,
+            get = function()
+                return not self.db.enabledCategories or self.db.enabledCategories[catId] ~= false
+            end,
+            set = function(_, val)
+                self.db.enabledCategories = self.db.enabledCategories or {}
+                self.db.enabledCategories[catId] = val
+                if self.mainFrame then
+                    -- Recreate category buttons
+                    if self.catContainer then
+                        self.catContainer:Hide()
+                        self.catContainer = nil
+                        self:CreateCategoryButtons()
+                    end
+                    self:UpdateInventory()
+                end
+            end,
+        }
+    end
+
+    return options
+end

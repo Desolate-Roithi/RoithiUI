@@ -47,13 +47,19 @@ end
 -- @param flags Optional flags (OUTLINE, MONOCHROME, etc.)
 function lib.mixins:SetFont(obj, fontName, size, flags)
     local fontPath = LSM:Fetch("font", fontName or "Friz Quadrata TT")
+    local fontFlags = flags
+    if fontFlags == "NONE" or fontFlags == "none" then
+        fontFlags = ""
+    elseif fontFlags == nil then
+        fontFlags = "OUTLINE"
+    end
 
     if obj.SetFont then
-        obj:SetFont(fontPath, size or 12, flags or "OUTLINE")
+        obj:SetFont(fontPath, size or 12, fontFlags)
     elseif obj.GetFontString then
         local fs = obj:GetFontString()
         if fs then
-            fs:SetFont(fontPath, size or 12, flags or "OUTLINE")
+            fs:SetFont(fontPath, size or 12, fontFlags)
         end
     end
 end
