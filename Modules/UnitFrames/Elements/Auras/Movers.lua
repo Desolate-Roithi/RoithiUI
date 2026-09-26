@@ -680,6 +680,13 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
                 end
                 RefreshAuraSettings(unit)
             end,
+            disabled = function()
+                local db = GetUnitDB(unit)
+                if not db then return false end
+                if isBuffs then return db.buffDetached == true end
+                if isDebuffs then return db.debuffDetached == true end
+                return db.auraDetached == true
+            end,
         },
         {
             kind = LEM.SettingType.Dropdown,

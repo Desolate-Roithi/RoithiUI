@@ -108,27 +108,34 @@ if not lib.internal.IsHealed then
                 end
                 return
             end
-            if callback then callback(f, layoutName, point, x, y) end
+            if type(callback) == "function" then
+                callback(f, layoutName, point, x, y)
+            end
         end
 
         local ret = oldAddFrame(self, frame, safeCallback, default, name)
 
         -- Protect against "Frame is not movable" error in LibEditMode onDragStart
         local selection = lib.frameSelections and lib.frameSelections[frame]
-        if selection and not selection.isDragStartProtected then
-            selection.isDragStartProtected = true
-            local oldDragStart = selection:GetScript("OnDragStart")
-            selection:SetScript("OnDragStart", function(s)
-                if s.parent and s.parent.SetMovable then
-                    local okMovable, isMovable = pcall(function() return s.parent:IsMovable() end)
-                    if not okMovable or not isMovable then
-                        s.parent:SetMovable(true)
+        if selection then
+            if selection.SetFrameLevel and frame.GetFrameLevel then
+                selection:SetFrameLevel(frame:GetFrameLevel() + 50)
+            end
+            if not selection.isDragStartProtected then
+                selection.isDragStartProtected = true
+                local oldDragStart = selection:GetScript("OnDragStart")
+                selection:SetScript("OnDragStart", function(s)
+                    if s.parent and s.parent.SetMovable then
+                        local okMovable, isMovable = pcall(function() return s.parent:IsMovable() end)
+                        if not okMovable or not isMovable then
+                            s.parent:SetMovable(true)
+                        end
                     end
-                end
-                if oldDragStart then
-                    oldDragStart(s)
-                end
-            end)
+                    if oldDragStart then
+                        oldDragStart(s)
+                    end
+                end)
+            end
         end
 
         return ret

@@ -10,6 +10,9 @@ local BAR_CONFIGS = {
     bar3 = { name = "RoithiActionBar3", prefix = "MultiBarBottomRightButton", count = 12 },
     bar4 = { name = "RoithiActionBar4", prefix = "MultiBarRightButton", count = 12 },
     bar5 = { name = "RoithiActionBar5", prefix = "MultiBarLeftButton", count = 12 },
+    bar6 = { name = "RoithiActionBar6", prefix = "MultiBar5Button", count = 12 },
+    bar7 = { name = "RoithiActionBar7", prefix = "MultiBar6Button", count = 12 },
+    bar8 = { name = "RoithiActionBar8", prefix = "MultiBar7Button", count = 12 },
     pet = { name = "RoithiActionPetBar", prefix = "PetActionButton", count = 10 },
     stance = { name = "RoithiActionStanceBar", prefix = "StanceButton", count = 10, altPrefix = "ShapeshiftButton" },
 }
@@ -21,9 +24,36 @@ local BLIZZARD_BAR_FRAMES = {
     bar3 = { "MultiBarBottomRight" },
     bar4 = { "MultiBarRight" },
     bar5 = { "MultiBarLeft" },
+    bar6 = { "MultiBar5" },
+    bar7 = { "MultiBar6" },
+    bar8 = { "MultiBar7" },
     pet = { "PetActionBar", "PetActionBarFrame" },
     stance = { "StanceBar", "StanceBarFrame", "ShapeshiftBarFrame" },
 }
+
+local function FormatHotkey(text)
+    if not text or text == "" then return "" end
+    if text == _G.RANGE_INDICATOR or text == "·" or text == "•" or text:find("[\194\183\226\128\162]") then
+        return ""
+    end
+    local formatted = text
+    formatted = formatted:gsub("SHIFT%-", "S")
+    formatted = formatted:gsub("Shift%-", "S")
+    formatted = formatted:gsub("s%-", "S")
+    formatted = formatted:gsub("CTRL%-", "C")
+    formatted = formatted:gsub("Ctrl%-", "C")
+    formatted = formatted:gsub("c%-", "C")
+    formatted = formatted:gsub("ALT%-", "A")
+    formatted = formatted:gsub("Alt%-", "A")
+    formatted = formatted:gsub("a%-", "A")
+    formatted = formatted:gsub("STRG%-", "C")
+    formatted = formatted:gsub("Strg%-", "C")
+    formatted = formatted:gsub("SPACE", "Sp")
+    formatted = formatted:gsub("Mouse Wheel Up", "WU")
+    formatted = formatted:gsub("Mouse Wheel Down", "WD")
+    return formatted
+end
+AB.FormatHotkey = FormatHotkey
 
 local function ButtonHasAction(btn)
     if not btn then return false end
@@ -192,6 +222,213 @@ function AB:SetupBars()
     if _G.MainMenuBarArtFrame and _G.MainMenuBarArtFrame.Hide then
         _G.MainMenuBarArtFrame:Hide()
     end
+    if ns.IsForever or ns.isTestEnvironment then
+        if _G.MainMenuBar and _G.MainMenuBar.SetAlpha then
+            _G.MainMenuBar:SetAlpha(0)
+        end
+    end
+
+    if not self.managePositionsHooked and hooksecurefunc and _G.UIParent_ManageFramePositions then
+        hooksecurefunc("UIParent_ManageFramePositions", function()
+            if self:IsEnabled() and not InCombatLockdown() then
+                self:LayoutBar("bar1")
+            end
+        end)
+        self.managePositionsHooked = true
+    end
+
+    if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.editModeRegistered then
+        _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
+            for _, bFrames in pairs(BLIZZARD_BAR_FRAMES) do
+                for _, fname in ipairs(bFrames) do
+                    local bf = _G[fname]
+                    if bf then
+                        bf.defaultHideSelection = true
+                        if bf.Selection then
+                            bf.Selection:Hide()
+                            if bf.Selection.EnableMouse then bf.Selection:EnableMouse(false) end
+                        end
+                    end
+                end
+            end
+        end, self)
+        self.editModeRegistered = true
+    end
+
+    if not self.overlayHooksRegistered and hooksecurefunc then
+        if _G.ActionButton_Update then
+            hooksecurefunc("ActionButton_Update", function(btn)
+                if (not self.IsEnabled or self:IsEnabled()) and btn then
+                    self:UpdateOverlayContainment(btn)
+                end
+            end)
+        end
+        if _G.ActionBarActionButtonMixin then
+            if _G.ActionBarActionButtonMixin.Update then
+                hooksecurefunc(_G.ActionBarActionButtonMixin, "Update", function(btn)
+                    if (not self.IsEnabled or self:IsEnabled()) and btn then
+                        self:UpdateOverlayContainment(btn)
+                    end
+                end)
+            end
+            if _G.ActionBarActionButtonMixin.UpdateState then
+                hooksecurefunc(_G.ActionBarActionButtonMixin, "UpdateState", function(btn)
+                    if (not self.IsEnabled or self:IsEnabled()) and btn then
+                        self:UpdateOverlayContainment(btn)
+                    end
+                end)
+            end
+            if _G.ActionBarActionButtonMixin.UpdateSpellHighlightMark then
+                hooksecurefunc(_G.ActionBarActionButtonMixin, "UpdateSpellHighlightMark", function(btn)
+                    if (not self.IsEnabled or self:IsEnabled()) and btn then
+                        self:UpdateOverlayContainment(btn)
+                    end
+                end)
+            end
+        end
+        if _G.SharedActionButton_RefreshSpellHighlight then
+            hooksecurefunc("SharedActionButton_RefreshSpellHighlight", function(btn)
+                if (not self.IsEnabled or self:IsEnabled()) and btn then
+                    self:UpdateOverlayContainment(btn)
+                end
+            end)
+        end
+        if _G.ActionButtonSpellAlertManager and _G.ActionButtonSpellAlertManager.ShowAlert then
+            hooksecurefunc(_G.ActionButtonSpellAlertManager, "ShowAlert", function(_, actionButton)
+                if (not self.IsEnabled or self:IsEnabled()) and actionButton and actionButton.SpellActivationAlert then
+                    local w, h = actionButton:GetSize()
+                    if w and h and w > 0 and h > 0 then
+                        actionButton.SpellActivationAlert:SetSize(w, h)
+                    end
+                end
+            end)
+        end
+        self.overlayHooksRegistered = true
+    end
+end
+
+function AB:UpdateOverlayContainment(button)
+    if not button or (self.IsEnabled and not self:IsEnabled()) then return end
+
+    -- 1. Inset and contain Icon
+    local icon = button.icon or _G[button.GetName and button:GetName() and (button:GetName() .. "Icon") or ""]
+    if icon then
+        if icon.ClearAllPoints and icon.SetPoint then
+            icon:ClearAllPoints()
+            icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+            icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        end
+        if button.IconMask and icon.RemoveMaskTexture then
+            icon:RemoveMaskTexture(button.IconMask)
+            if button.IconMask.Hide then button.IconMask:Hide() end
+        end
+    end
+
+    -- 2. Contain textures: Highlight, Pushed, Checked, Cooldown
+    local highlight = button.GetHighlightTexture and button:GetHighlightTexture()
+    if highlight and highlight.ClearAllPoints and highlight.SetPoint then
+        highlight:ClearAllPoints()
+        highlight:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+        highlight:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        if highlight.SetColorTexture then
+            highlight:SetColorTexture(1, 1, 1, 0.2)
+        end
+    end
+
+    local pushed = button.GetPushedTexture and button:GetPushedTexture()
+    if pushed and pushed.ClearAllPoints and pushed.SetPoint then
+        pushed:ClearAllPoints()
+        pushed:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+        pushed:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        if pushed.SetColorTexture then
+            pushed:SetColorTexture(1, 1, 1, 0.25)
+        end
+    end
+
+    local checked = button.GetCheckedTexture and button:GetCheckedTexture()
+    if checked and checked.ClearAllPoints and checked.SetPoint then
+        checked:ClearAllPoints()
+        checked:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+        checked:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        if checked.SetColorTexture then
+            checked:SetColorTexture(1, 1, 1, 0.25)
+        end
+    end
+
+    local normal = button.GetNormalTexture and button:GetNormalTexture()
+    if normal then
+        if normal.ClearAllPoints and normal.SetPoint then
+            normal:ClearAllPoints()
+            normal:SetAllPoints(button)
+        end
+        if normal.SetAlpha then
+            normal:SetAlpha(0)
+        end
+    end
+
+    local cd = button.cooldown or _G[button.GetName and button:GetName() and (button:GetName() .. "Cooldown") or ""]
+    if cd and cd.ClearAllPoints and cd.SetPoint then
+        cd:ClearAllPoints()
+        cd:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+        cd:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+    end
+
+    -- 3. Constrain overlays (SpellHighlight, Flash, NewAction, AutoCast, SpellFX)
+    local subOverlays = {
+        button.SpellHighlightTexture,
+        button.Flash,
+        button.NewActionTexture,
+        button.AutoCastOverlay,
+        button.SpellCastAnimFrame,
+        button.TargetReticleAnimFrame,
+        button.InterruptDisplay,
+        button.CooldownFlash,
+    }
+    for _, overlay in ipairs(subOverlays) do
+        if overlay and overlay.ClearAllPoints and overlay.SetPoint then
+            overlay:ClearAllPoints()
+            overlay:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+            overlay:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        end
+    end
+
+    if button.SlotArt and button.SlotArt.SetAlpha then button.SlotArt:SetAlpha(0) end
+    if button.SlotBackground and button.SlotBackground.SetAlpha then button.SlotBackground:SetAlpha(0) end
+
+    -- 4. Border / Active Aura / Equipped Action Containment
+    local border = button.Border or _G[button.GetName and button:GetName() and (button:GetName() .. "Border") or ""]
+    if border then
+        if border.ClearAllPoints and border.SetPoint then
+            border:ClearAllPoints()
+            border:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+            border:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        end
+        -- Always suppress Blizzard's bulky rounded 46x45 atlas
+        if border.SetAlpha then
+            border:SetAlpha(0)
+        end
+    end
+
+    -- 5. Dynamic 1px Border Color for Active Auras / Equipped Actions / Stances
+    if button.roithiBackdrop and button.roithiBackdrop.SetBackdropBorderColor then
+        local isEquipped = false
+        local action = button.action or (button.GetPagedID and button:GetPagedID()) or (button.CalculateAction and button:CalculateAction())
+        if action and _G.C_ActionBar and _G.C_ActionBar.IsEquippedAction then
+            isEquipped = _G.C_ActionBar.IsEquippedAction(action)
+        elseif border and border.IsShown and border:IsShown() then
+            isEquipped = true
+        end
+
+        local isChecked = button.GetChecked and button:GetChecked() == true
+
+        if isEquipped or isChecked then
+            -- Crisp 1px green border for equipped items and active stances/auras, perfectly fitting the frame
+            button.roithiBackdrop:SetBackdropBorderColor(0.2, 0.9, 0.2, 1.0)
+        else
+            local bc = self.db and self.db.borderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
+            button.roithiBackdrop:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
+        end
+    end
 end
 
 function AB:StyleButton(button)
@@ -205,18 +442,7 @@ function AB:StyleButton(button)
         icon:SetTexCoord(zoom, zoomMax, zoom, zoomMax)
     end
 
-    -- 2. Hide Blizzard Borders
-    local border = button.Border or _G[button.GetName and button:GetName() and (button:GetName() .. "Border") or ""]
-    if border and border.SetAlpha then
-        border:SetAlpha(0)
-    end
-
-    local normal = button.GetNormalTexture and button:GetNormalTexture()
-    if normal and normal.SetAlpha then
-        normal:SetAlpha(0)
-    end
-
-    -- 3. 1px Custom Backdrop
+    -- 2. 1px Custom Backdrop
     if not button.roithiBackdrop then
         local bg = CreateFrame("Frame", nil, button, "BackdropTemplate")
         if bg.SetAllPoints then
@@ -231,7 +457,7 @@ function AB:StyleButton(button)
                 edgeFile = "Interface\\Buttons\\WHITE8x8",
                 edgeSize = 1,
             })
-            bg:SetBackdropColor(0.05, 0.05, 0.05, 0.7)
+            bg:SetBackdropColor(0, 0, 0, 0)
             local bc = self.db.borderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
             bg:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
         end
@@ -244,7 +470,40 @@ function AB:StyleButton(button)
         end
     end
 
-    -- 4. Keybind Hotkey Styling
+    -- 3. Securely hook Border Show/Hide and Checked states
+    local border = button.Border or _G[button.GetName and button:GetName() and (button:GetName() .. "Border") or ""]
+    if border and not border.roithiBorderHooked and hooksecurefunc then
+        hooksecurefunc(border, "Show", function(b)
+            if b.SetAlpha then b:SetAlpha(0) end
+            if button.roithiBackdrop and button.roithiBackdrop.SetBackdropBorderColor then
+                button.roithiBackdrop:SetBackdropBorderColor(0.2, 0.9, 0.2, 1.0)
+            end
+        end)
+        hooksecurefunc(border, "Hide", function()
+            if button.roithiBackdrop and button.roithiBackdrop.SetBackdropBorderColor then
+                local isChecked = button.GetChecked and button:GetChecked() == true
+                if isChecked then
+                    button.roithiBackdrop:SetBackdropBorderColor(0.2, 0.9, 0.2, 1.0)
+                else
+                    local bc = AB.db and AB.db.borderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
+                    button.roithiBackdrop:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
+                end
+            end
+        end)
+        border.roithiBorderHooked = true
+    end
+
+    if button.SetChecked and not button.roithiCheckedHooked and hooksecurefunc then
+        hooksecurefunc(button, "SetChecked", function(btn)
+            AB:UpdateOverlayContainment(btn)
+        end)
+        button.roithiCheckedHooked = true
+    end
+
+    -- 4. Overlay & Aura Sizing Containment
+    self:UpdateOverlayContainment(button)
+
+    -- 5. Keybind Hotkey Styling
     local hotkey = button.HotKey or _G[button.GetName and button:GetName() and (button:GetName() .. "HotKey") or ""]
     if hotkey then
         if hotkey.SetShown then
@@ -253,9 +512,30 @@ function AB:StyleButton(button)
         if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
             LibRoithi.mixins:SetFont(hotkey, self.db.font or "Friz Quadrata TT", self.db.fontSize or 11, "OUTLINE")
         end
+        if not hotkey.roithiHooked and hooksecurefunc then
+            hooksecurefunc(hotkey, "SetText", function(s, txt)
+                if s.roithiFormatting then return end
+                local formatted = FormatHotkey(txt)
+                if formatted ~= txt then
+                    s.roithiFormatting = true
+                    s:SetText(formatted)
+                    s.roithiFormatting = false
+                end
+            end)
+            hotkey.roithiHooked = true
+        end
+        local currentText = hotkey.GetText and hotkey:GetText()
+        if currentText then
+            local formatted = FormatHotkey(currentText)
+            if formatted ~= currentText then
+                hotkey.roithiFormatting = true
+                hotkey:SetText(formatted)
+                hotkey.roithiFormatting = false
+            end
+        end
     end
 
-    -- 5. Macro Text Styling
+    -- 6. Macro Text Styling
     local name = button.Name or _G[button.GetName and button:GetName() and (button:GetName() .. "Name") or ""]
     if name then
         if name.SetShown then
@@ -266,7 +546,7 @@ function AB:StyleButton(button)
         end
     end
 
-    -- 6. Item / Charge Count Styling
+    -- 7. Item / Charge Count Styling
     local count = button.Count or _G[button.GetName and button:GetName() and (button:GetName() .. "Count") or ""]
     if count then
         if count.SetShown then
@@ -277,7 +557,7 @@ function AB:StyleButton(button)
         end
     end
 
-    -- 7. Hook Mouseover
+    -- 8. Hook Mouseover
     if not button.roithiMouseoverHooked and button.HookScript then
         button:HookScript("OnEnter", function()
             if button.barKey then
@@ -371,6 +651,44 @@ function AB:LayoutBar(barKey)
         return
     end
 
+    local isEditMode = false
+    local LEM = LibStub("LibEditMode-Roithi", true)
+    if LEM and LEM.IsInEditMode and LEM:IsInEditMode() then
+        isEditMode = true
+    elseif _G.EditModeManagerFrame and _G.EditModeManagerFrame:IsShown() then
+        isEditMode = true
+    end
+
+    -- Class & Capability check:
+    -- 1. Pet Bar: Hide if player class does not have an active pet action bar and not in Edit Mode
+    if barKey == "pet" and not isEditMode then
+        local hasPet = false
+        if _G.PetHasActionBar and _G.PetHasActionBar() then
+            hasPet = true
+        elseif _G.UnitExists and _G.UnitExists("pet") and _G.HasPetUI and _G.HasPetUI() then
+            hasPet = true
+        end
+        if not hasPet then
+            if container.Hide then container:Hide() end
+            for _, btn in ipairs(buttons) do
+                if btn.Hide then btn:Hide() end
+            end
+            return
+        end
+    end
+
+    -- 2. Stance Bar: Hide if player class does not have shapeshift/stance forms and not in Edit Mode
+    if barKey == "stance" and not isEditMode then
+        local numForms = _G.GetNumShapeshiftForms and _G.GetNumShapeshiftForms() or 0
+        if numForms == 0 then
+            if container.Hide then container:Hide() end
+            for _, btn in ipairs(buttons) do
+                if btn.Hide then btn:Hide() end
+            end
+            return
+        end
+    end
+
     if container.Show then container:Show() end
 
     -- Hide Blizzard native frames for this bar to prevent duplicate displays & Edit Mode outlines
@@ -387,9 +705,13 @@ function AB:LayoutBar(barKey)
                         bf:SetParent(hp)
                     end
                 end
+                bf.defaultHideSelection = true
                 if bf.SetAlpha then bf:SetAlpha(0) end
                 if bf.Hide then bf:Hide() end
-                if bf.Selection and bf.Selection.Hide then bf.Selection:Hide() end
+                if bf.Selection then
+                    if bf.Selection.Hide then bf.Selection:Hide() end
+                    if bf.Selection.EnableMouse then bf.Selection:EnableMouse(false) end
+                end
             end
         end
     end

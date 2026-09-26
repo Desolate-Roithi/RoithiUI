@@ -48,4 +48,18 @@
     <Script file="Modules/Bags/BagBar.lua"/>
     <Script file="Modules/Bags/Bags.lua"/>
     <Script file="Modules/Bags/Options.lua"/>
+
+    <!-- Totems -->
+    <Script file="Modules/Totems/Totems.lua"/>
+    <Script file="Modules/Totems/Keybinds.lua"/>
+    <Script file="Modules/Totems/Options.lua"/>
+
+    <!-- Cooldown Manager -->
+    <Script file="Modules/CooldownManager/Core.lua"/>
+    <Script file="Modules/CooldownManager/Style.lua"/>
+    <Script file="Modules/CooldownManager/Options.lua"/>
+
+    <!-- Swing Timer (Forever Only) -->
+    <Script file="Modules/SwingTimer/SwingTimer.lua"/>
+    <Script file="Modules/SwingTimer/Options.lua"/>
 </Ui>

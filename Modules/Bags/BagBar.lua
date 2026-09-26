@@ -16,7 +16,23 @@ local REGULAR_BAG_SLOTS = {
 function BagsMod:SetupBagBar()
     if self.bagBarFrame then return end
 
+    local function SuppressBagsBarSelection()
+        if _G.BagsBar then
+            _G.BagsBar.defaultHideSelection = true
+            if _G.BagsBar.Selection then
+                _G.BagsBar.Selection:Hide()
+                if _G.BagsBar.Selection.EnableMouse then _G.BagsBar.Selection:EnableMouse(false) end
+            end
+        end
+        if self.bagBarFrame and LEM and LEM.frameSelections and LEM.frameSelections[self.bagBarFrame] then
+            local sel = LEM.frameSelections[self.bagBarFrame]
+            if sel.SetFrameLevel then sel:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 50) end
+            if sel.EnableMouse then sel:EnableMouse(true) end
+        end
+    end
+
     if _G.BagsBar then
+        SuppressBagsBarSelection()
         if _G.BagsBar.SetAlpha then _G.BagsBar:SetAlpha(0) end
         if _G.BagsBar.EnableMouse then _G.BagsBar:EnableMouse(false) end
         for _, reg in ipairs({ _G.BagsBar:GetRegions() }) do
@@ -31,6 +47,27 @@ function BagsMod:SetupBagBar()
         end
     end
 
+    if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.bagBarEventsRegistered then
+        _G.EventRegistry:RegisterCallback("EditMode.Enter", SuppressBagsBarSelection, self)
+        _G.EventRegistry:RegisterCallback("MainMenuBarManager.OnExpandChanged", function()
+            if self.db and self.db.enabled ~= false and self.UpdateBagBarLayout then
+                self:UpdateBagBarLayout()
+            end
+        end, self)
+        self.bagBarEventsRegistered = true
+    end
+
+    if _G.MainMenuBarBagManager and not self.bagManagerHooked and hooksecurefunc then
+        if _G.MainMenuBarBagManager.OnExpandBarChanged then
+            hooksecurefunc(_G.MainMenuBarBagManager, "OnExpandBarChanged", function()
+                if self.db and self.db.enabled ~= false and self.UpdateBagBarLayout then
+                    self:UpdateBagBarLayout()
+                end
+            end)
+        end
+        self.bagManagerHooked = true
+    end
+
     if _G.BagsBar and not self.bagsBarHooked and hooksecurefunc then
         if _G.BagsBar.Layout then
             hooksecurefunc(_G.BagsBar, "Layout", function()
@@ -40,6 +77,29 @@ function BagsMod:SetupBagBar()
             end)
         end
         self.bagsBarHooked = true
+    end
+
+    if _G.UIParent_ManageFramePositions and not self.managePositionsHooked and hooksecurefunc then
+        hooksecurefunc("UIParent_ManageFramePositions", function()
+            if self.db and self.db.enabled ~= false and self.UpdateBagBarLayout then
+                self:UpdateBagBarLayout()
+            end
+        end)
+        self.managePositionsHooked = true
+    end
+
+    if not self.bagBarAddonLoadedRegistered then
+        if self.RegisterEvent then
+            self:RegisterEvent("ADDON_LOADED", function(_, loadedAddon)
+                if loadedAddon == "Blizzard_MainMenuBarBagButtons" then
+                    if self.db and self.db.enabled ~= false then
+                        self:StyleBagButtons()
+                        self:UpdateBagBarLayout()
+                    end
+                end
+            end)
+        end
+        self.bagBarAddonLoadedRegistered = true
     end
 
     local cfg = self.db.bagBar or self.defaultSettings.bagBar
@@ -64,6 +124,39 @@ function BagsMod:SetupBagBar()
             self.db.bagBar.x = newX
             self.db.bagBar.y = newY
         end, defaults)
+        if LEM.frameSelections and LEM.frameSelections[bar] then
+            local sel = LEM.frameSelections[bar]
+            if sel.SetFrameLevel then sel:SetFrameLevel(bar:GetFrameLevel() + 50) end
+            if sel.EnableMouse then sel:EnableMouse(true) end
+        end
+    end
+
+    local function SetBagButtonsMouse(enable)
+        local allButtons = {
+            _G.MainMenuBarBackpackButton,
+            _G.KeyRingButton,
+            _G.CharacterReagentBag0Slot,
+        }
+        for _, name in ipairs(REGULAR_BAG_SLOTS) do
+            table.insert(allButtons, _G[name])
+        end
+        for _, btn in ipairs(allButtons) do
+            if btn and btn.EnableMouse then
+                btn:EnableMouse(enable)
+            end
+        end
+    end
+
+    if not self.editModeBagHooked then
+        if _G.EventRegistry and _G.EventRegistry.RegisterCallback then
+            _G.EventRegistry:RegisterCallback("EditMode.Enter", function() SetBagButtonsMouse(false) end, self)
+            _G.EventRegistry:RegisterCallback("EditMode.Exit", function() SetBagButtonsMouse(true) end, self)
+        end
+        if LEM and LEM.anonCallbacksEnter and LEM.anonCallbacksExit then
+            table.insert(LEM.anonCallbacksEnter, function() SetBagButtonsMouse(false) end)
+            table.insert(LEM.anonCallbacksExit, function() SetBagButtonsMouse(true) end)
+        end
+        self.editModeBagHooked = true
     end
 
     self:CreateBagBarExpander()
@@ -96,8 +189,8 @@ function BagsMod:CreateBagBarExpander()
     text:SetPoint("CENTER", expander, "CENTER", 0, 0)
     if text.SetTextColor then text:SetTextColor(0.8, 0.8, 0.8, 1) end
 
-    local isExpanded = cfg.expanded == true
-    text:SetText(isExpanded and "▶" or "◀")
+    local isExpanded = (cfg and cfg.expanded == true) or false
+    text:SetText(isExpanded and ">" or "<")
     expander.arrow = text
 
     expander:SetScript("OnClick", function()
@@ -105,7 +198,7 @@ function BagsMod:CreateBagBarExpander()
         self.db.bagBar.expanded = not self.db.bagBar.expanded
         local expanded = self.db.bagBar.expanded
         if expander.arrow then
-            expander.arrow:SetText(expanded and "▶" or "◀")
+            expander.arrow:SetText(expanded and ">" or "<")
         end
         self:UpdateBagBarLayout()
     end)
@@ -113,7 +206,8 @@ function BagsMod:CreateBagBarExpander()
     expander:SetScript("OnEnter", function()
         if _G.GameTooltip then
             _G.GameTooltip:SetOwner(expander, "ANCHOR_LEFT")
-            _G.GameTooltip:SetText(self.db.bagBar.expanded and L["Click to collapse bags"] or L["Click to expand bags"], 1, 1, 1)
+            local isExp = self.db.bagBar and (self.db.bagBar.expanded == true)
+            _G.GameTooltip:SetText(isExp and L["Click to collapse bags"] or L["Click to expand bags"], 1, 1, 1)
             _G.GameTooltip:Show()
         end
     end)
@@ -145,6 +239,75 @@ function BagsMod:StyleExpandToggle(toggleBtn)
     end
 end
 
+function BagsMod:UpdateBagButtonVisual(btn)
+    if not btn then return end
+    local icon = btn.icon or btn.Icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "IconTexture")]
+    if not icon and btn.CreateTexture then
+        icon = btn:CreateTexture(nil, "BORDER")
+        btn.icon = icon
+    end
+    if not icon then return end
+
+    -- Strip all circular masks from icon
+    if icon.GetMaskTextures then
+        for _, mask in ipairs({ icon:GetMaskTextures() }) do
+            if icon.RemoveMaskTexture then icon:RemoveMaskTexture(mask) end
+        end
+    end
+    if btn.CircleMask and icon.RemoveMaskTexture then
+        icon:RemoveMaskTexture(btn.CircleMask)
+    end
+    if btn.CircleMask and btn.CircleMask.Hide then
+        btn.CircleMask:Hide()
+    end
+
+    if icon.ClearAllPoints then icon:ClearAllPoints() end
+    if icon.SetPoint then
+        icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+        icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+    end
+    if icon.SetTexCoord then
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    end
+
+    local btnName = btn.GetName and btn:GetName() or ""
+    if btn == _G.MainMenuBarBackpackButton or btnName == "MainMenuBarBackpackButton" then
+        if icon.SetTexture then icon:SetTexture("Interface\\Buttons\\Button-Backpack-Up") end
+        if icon.SetVertexColor then icon:SetVertexColor(1, 1, 1, 1) end
+        if icon.SetAlpha then icon:SetAlpha(1) end
+        if icon.Show then icon:Show() end
+    elseif btn == _G.KeyRingButton or btnName == "KeyRingButton" then
+        if icon.SetTexture then icon:SetTexture("Interface\\Icons\\INV_Misc_Key_03") end
+        if icon.SetVertexColor then icon:SetVertexColor(1, 1, 1, 1) end
+        if icon.SetAlpha then icon:SetAlpha(1) end
+        if icon.Show then icon:Show() end
+    elseif btn == _G.CharacterReagentBag0Slot or btnName == "CharacterReagentBag0Slot" then
+        local invID = btn.GetID and btn:GetID()
+        local hasItem = invID and _G.GetInventoryItemTexture and _G.GetInventoryItemTexture("player", invID)
+        if hasItem then
+            if icon.SetTexture then icon:SetTexture(hasItem) end
+            if icon.SetVertexColor then icon:SetVertexColor(1, 1, 1, 1) end
+        else
+            if icon.SetTexture then icon:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag") end
+            if icon.SetVertexColor then icon:SetVertexColor(0.25, 0.5, 0.6, 0.65) end
+        end
+        if icon.SetAlpha then icon:SetAlpha(1) end
+        if icon.Show then icon:Show() end
+    else
+        local invID = btn.GetID and btn:GetID()
+        local hasItem = invID and _G.GetInventoryItemTexture and _G.GetInventoryItemTexture("player", invID)
+        if hasItem then
+            if icon.SetTexture then icon:SetTexture(hasItem) end
+            if icon.SetVertexColor then icon:SetVertexColor(1, 1, 1, 1) end
+        else
+            if icon.SetTexture then icon:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag") end
+            if icon.SetVertexColor then icon:SetVertexColor(0.35, 0.35, 0.35, 0.6) end
+        end
+        if icon.SetAlpha then icon:SetAlpha(1) end
+        if icon.Show then icon:Show() end
+    end
+end
+
 function BagsMod:StyleBagButton(btn)
     if not btn then return end
 
@@ -152,52 +315,90 @@ function BagsMod:StyleBagButton(btn)
     if btn.CircleMask and btn.CircleMask.Hide then
         btn.CircleMask:Hide()
     end
-    if btn.SlotHighlightTexture and btn.SlotHighlightTexture.SetAlpha then
-        btn.SlotHighlightTexture:SetAlpha(0)
+    if btn.SlotHighlightTexture then
+        if btn.SlotHighlightTexture.SetTexture then btn.SlotHighlightTexture:SetTexture(nil) end
+        if btn.SlotHighlightTexture.SetAlpha then btn.SlotHighlightTexture:SetAlpha(0) end
+        if btn.SlotHighlightTexture.Hide then btn.SlotHighlightTexture:Hide() end
     end
 
-    -- Hide native borders and textures (both file and atlas)
+    local icon = btn.icon or btn.Icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "IconTexture")]
+    if not icon and btn.CreateTexture then
+        icon = btn:CreateTexture(nil, "BORDER")
+        btn.icon = icon
+    end
+
+    -- Remove any mask textures attached to the icon
+    if icon and icon.GetMaskTextures then
+        for _, mask in ipairs({ icon:GetMaskTextures() }) do
+            if icon.RemoveMaskTexture then icon:RemoveMaskTexture(mask) end
+        end
+    end
+    if icon and btn.CircleMask and icon.RemoveMaskTexture then
+        icon:RemoveMaskTexture(btn.CircleMask)
+    end
+
+    -- Hide native borders, circular rings, and atlases without touching icon
     for _, region in ipairs({ btn:GetRegions() }) do
-        if region.IsObjectType and region:IsObjectType("Texture") then
+        if region.IsObjectType and region:IsObjectType("Texture") and region ~= icon then
             local isStripped = false
             local tex = region.GetTexture and region:GetTexture()
             if type(tex) == "string" then
                 local texPath = tex:lower()
-                if texPath:find("border") or texPath:find("normal") or texPath:find("slot") or texPath:find("glow") or texPath:find("bag") then
+                if texPath:find("border") or texPath:find("normal") or texPath:find("slot") or texPath:find("glow") or texPath:find("ring") then
                     region:SetAlpha(0)
+                    if region.SetTexture then region:SetTexture(nil) end
                     isStripped = true
                 end
             end
             local atlas = region.GetAtlas and region:GetAtlas()
             if not isStripped and type(atlas) == "string" then
                 local atlasStr = atlas:lower()
-                if atlasStr:find("border") or atlasStr:find("normal") or atlasStr:find("slot") or atlasStr:find("glow") or atlasStr:find("bag") then
+                if atlasStr:find("border") or atlasStr:find("normal") or atlasStr:find("slot") or atlasStr:find("glow") or atlasStr:find("ring") or atlasStr:find("bag%-") or atlasStr:find("main") then
                     region:SetAlpha(0)
+                    if region.SetTexture then region:SetTexture(nil) end
                 end
             end
         end
     end
 
     local norm = btn.GetNormalTexture and btn:GetNormalTexture()
-    if norm and norm.SetAlpha then norm:SetAlpha(0) end
+    if norm then
+        if norm.SetTexture then norm:SetTexture(nil) end
+        if norm.SetAlpha then norm:SetAlpha(0) end
+    end
     local pushed = btn.GetPushedTexture and btn:GetPushedTexture()
-    if pushed and pushed.SetAlpha then pushed:SetAlpha(0) end
-
-    -- Hook UpdateTextures so Blizzard does not re-apply the atlas over our styled button
-    if not btn.roithiTexturesHooked and btn.UpdateTextures then
-        hooksecurefunc(btn, "UpdateTextures", function(selfBtn)
-            if selfBtn.GetNormalTexture and selfBtn:GetNormalTexture() then selfBtn:GetNormalTexture():SetAlpha(0) end
-            if selfBtn.GetPushedTexture and selfBtn:GetPushedTexture() then selfBtn:GetPushedTexture():SetAlpha(0) end
-            if selfBtn.SlotHighlightTexture then selfBtn.SlotHighlightTexture:SetAlpha(0) end
-            if selfBtn.CircleMask then selfBtn.CircleMask:Hide() end
-        end)
-        btn.roithiTexturesHooked = true
+    if pushed then
+        if pushed.SetTexture then pushed:SetTexture(nil) end
+        if pushed.SetAlpha then pushed:SetAlpha(0) end
+    end
+    local hl = btn.GetHighlightTexture and btn:GetHighlightTexture()
+    if hl then
+        if hl.SetColorTexture then hl:SetColorTexture(1, 1, 1, 0.2) end
+        if hl.SetAllPoints then hl:SetAllPoints(btn) end
     end
 
-    -- Zoom icon
-    local icon = btn.icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "IconTexture")] or btn.Icon
-    if icon and icon.SetTexCoord then
-        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    -- Hook UpdateTextures so Blizzard does not re-apply circular atlases over our styled square button
+    if not btn.roithiTexturesHooked and btn.UpdateTextures then
+        hooksecurefunc(btn, "UpdateTextures", function(selfBtn)
+            local n = selfBtn.GetNormalTexture and selfBtn:GetNormalTexture()
+            if n then
+                if n.SetTexture then n:SetTexture(nil) end
+                if n.SetAlpha then n:SetAlpha(0) end
+            end
+            local p = selfBtn.GetPushedTexture and selfBtn:GetPushedTexture()
+            if p then
+                if p.SetTexture then p:SetTexture(nil) end
+                if p.SetAlpha then p:SetAlpha(0) end
+            end
+            if selfBtn.SlotHighlightTexture then
+                if selfBtn.SlotHighlightTexture.SetTexture then selfBtn.SlotHighlightTexture:SetTexture(nil) end
+                if selfBtn.SlotHighlightTexture.SetAlpha then selfBtn.SlotHighlightTexture:SetAlpha(0) end
+                if selfBtn.SlotHighlightTexture.Hide then selfBtn.SlotHighlightTexture:Hide() end
+            end
+            if selfBtn.CircleMask and selfBtn.CircleMask.Hide then selfBtn.CircleMask:Hide() end
+            BagsMod:UpdateBagButtonVisual(selfBtn)
+        end)
+        btn.roithiTexturesHooked = true
     end
 
     -- 1px dark backdrop
@@ -218,7 +419,36 @@ function BagsMod:StyleBagButton(btn)
         end
         btn.roithiBackdrop = bg
     else
+        if btn.roithiBackdrop.SetBackdropColor then
+            btn.roithiBackdrop:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+            btn.roithiBackdrop:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
+        end
         if btn.roithiBackdrop.Show then btn.roithiBackdrop:Show() end
+    end
+
+    self:UpdateBagButtonVisual(btn)
+end
+
+function BagsMod:UpdateBagButtonsVisual()
+    local allButtons = {
+        _G.MainMenuBarBackpackButton,
+        _G.KeyRingButton,
+        _G.CharacterReagentBag0Slot,
+    }
+    for _, name in ipairs(REGULAR_BAG_SLOTS) do
+        table.insert(allButtons, _G[name])
+    end
+
+    if _G.MainMenuBarBagManager and _G.MainMenuBarBagManager.EnumerateBagButtons then
+        for _, btn in _G.MainMenuBarBagManager:EnumerateBagButtons() do
+            table.insert(allButtons, btn)
+        end
+    end
+
+    for _, btn in ipairs(allButtons) do
+        if btn then
+            self:UpdateBagButtonVisual(btn)
+        end
     end
 end
 
@@ -232,10 +462,25 @@ function BagsMod:StyleBagButtons()
         table.insert(allButtons, _G[name])
     end
 
+    if _G.MainMenuBarBagManager and _G.MainMenuBarBagManager.EnumerateBagButtons then
+        for _, btn in _G.MainMenuBarBagManager:EnumerateBagButtons() do
+            table.insert(allButtons, btn)
+        end
+    end
+
     for _, btn in ipairs(allButtons) do
         if btn then
             self:StyleBagButton(btn)
         end
+    end
+
+    if _G.MainMenuBarBackpackButton and not self.backpackSlotHooked and _G.MainMenuBarBackpackButton.HookScript then
+        _G.MainMenuBarBackpackButton:HookScript("OnClick", function()
+            if self.db and self.db.enabled ~= false then
+                self:ToggleBags("ALL")
+            end
+        end)
+        self.backpackSlotHooked = true
     end
 
     if _G.CharacterReagentBag0Slot and not self.reagentSlotHooked and _G.CharacterReagentBag0Slot.HookScript then
@@ -257,55 +502,79 @@ function BagsMod:StyleBagButtons()
     end
 end
 
-function BagsMod:UpdateBagBarLayout()
-    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+function BagsMod:RestoreBlizzardBagBar()
+    if _G.BagsBar then
+        if _G.BagsBar.SetAlpha then _G.BagsBar:SetAlpha(1) end
+        if _G.BagsBar.EnableMouse then _G.BagsBar:EnableMouse(true) end
+        if _G.BagsBar.Show then _G.BagsBar:Show() end
+    end
+    local allButtons = {
+        _G.MainMenuBarBackpackButton,
+        _G.KeyRingButton,
+        _G.CharacterReagentBag0Slot,
+    }
+    for _, name in ipairs(REGULAR_BAG_SLOTS) do
+        table.insert(allButtons, _G[name])
+    end
+    for _, btn in ipairs(allButtons) do
+        if btn then
+            if btn.originalParent and btn.SetParent then
+                btn:SetParent(btn.originalParent)
+            elseif _G.BagsBar and btn.SetParent then
+                btn:SetParent(_G.BagsBar)
+            end
+            if btn.Show then btn:Show() end
+        end
+    end
+    if self.bagBarFrame and self.bagBarFrame.Hide then
+        self.bagBarFrame:Hide()
+    end
+    if self.expanderButton and self.expanderButton.Hide then
+        self.expanderButton:Hide()
+    end
+    if _G.BagsBar and _G.BagsBar.Layout then
+        pcall(_G.BagsBar.Layout, _G.BagsBar)
+    end
+end
 
-    if not self.bagBarFrame then return end
+function BagsMod:UpdateBagBarLayout()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.pendingBagBarLayout = true
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnPlayerRegenEnabledBagBar")
+        return
+    end
 
     local cfg = self.db.bagBar or self.defaultSettings.bagBar
+    if not cfg or cfg.enabled == false then
+        self:RestoreBlizzardBagBar()
+        return
+    end
+
+    if not self.bagBarFrame then return end
+    if self.bagBarFrame.Show then self.bagBarFrame:Show() end
     local btnSize = cfg.buttonSize or 30
     local spacing = cfg.spacing or 4
     local isExpanded = cfg.expanded == true
 
-    local alwaysShown = {}
-    -- 1. Main backpack
-    if _G.MainMenuBarBackpackButton then
-        table.insert(alwaysShown, _G.MainMenuBarBackpackButton)
-    end
-    -- 2. Keyring (Classic/Forever)
-    if _G.KeyRingButton then
-        table.insert(alwaysShown, _G.KeyRingButton)
-    end
-    -- 3. Reagent Bag (Retail/Forever)
-    if _G.CharacterReagentBag0Slot then
-        table.insert(alwaysShown, _G.CharacterReagentBag0Slot)
-    end
-
-    local expandableButtons = {}
-    for _, name in ipairs(REGULAR_BAG_SLOTS) do
-        local btn = _G[name]
-        if btn then
-            table.insert(expandableButtons, btn)
-        end
-    end
-
-    -- Position always shown buttons first (from left to right)
     local xOffset = 0
-    for _, btn in ipairs(alwaysShown) do
-        if not btn.originalParent and btn.GetParent then
-            btn.originalParent = btn:GetParent()
+
+    -- 1. Main backpack
+    local backpack = _G.MainMenuBarBackpackButton
+    if backpack then
+        self:StyleBagButton(backpack)
+        self:UpdateBagButtonVisual(backpack)
+        if not backpack.originalParent and backpack.GetParent then
+            backpack.originalParent = backpack:GetParent()
         end
-        if btn.SetParent then btn:SetParent(self.bagBarFrame) end
-        if btn.ClearAllPoints then btn:ClearAllPoints() end
-        if btn.SetSize then btn:SetSize(btnSize, btnSize) end
-        if btn.SetPoint then
-            btn:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0)
-        end
-        if btn.Show then btn:Show() end
+        if backpack.SetParent then backpack:SetParent(self.bagBarFrame) end
+        if backpack.ClearAllPoints then backpack:ClearAllPoints() end
+        if backpack.SetSize then backpack:SetSize(btnSize, btnSize) end
+        if backpack.SetPoint then backpack:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0) end
+        if backpack.Show then backpack:Show() end
         xOffset = xOffset + btnSize + spacing
     end
 
-    -- Expander button
+    -- 2. Expander button
     if self.expanderButton then
         self.expanderButton:ClearAllPoints()
         self.expanderButton:SetSize(14, btnSize)
@@ -314,28 +583,71 @@ function BagsMod:UpdateBagBarLayout()
         xOffset = xOffset + 14 + spacing
     end
 
-    -- Position expandable regular bags if expanded, otherwise hide them
-    for _, btn in ipairs(expandableButtons) do
-        if not btn.originalParent and btn.GetParent then
-            btn.originalParent = btn:GetParent()
-        end
-        if btn.SetParent then btn:SetParent(self.bagBarFrame) end
-        if isExpanded then
-            if btn.ClearAllPoints then btn:ClearAllPoints() end
-            if btn.SetSize then btn:SetSize(btnSize, btnSize) end
-            if btn.SetPoint then
-                btn:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0)
+    -- 3. Regular expandable bag slots (Bag 1-4)
+    for _, name in ipairs(REGULAR_BAG_SLOTS) do
+        local btn = _G[name]
+        if btn then
+            self:StyleBagButton(btn)
+            self:UpdateBagButtonVisual(btn)
+            if not btn.originalParent and btn.GetParent then
+                btn.originalParent = btn:GetParent()
             end
-            if btn.Show then btn:Show() end
-            xOffset = xOffset + btnSize + spacing
-        else
-            if btn.Hide then btn:Hide() end
+            if btn.SetParent then btn:SetParent(self.bagBarFrame) end
+            if isExpanded then
+                if btn.ClearAllPoints then btn:ClearAllPoints() end
+                if btn.SetSize then btn:SetSize(btnSize, btnSize) end
+                if btn.SetPoint then btn:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0) end
+                if btn.Show then btn:Show() end
+                xOffset = xOffset + btnSize + spacing
+            else
+                if btn.Hide then btn:Hide() end
+            end
         end
+    end
+
+    -- 4. Reagent Bag (Retail/Forever)
+    local reagentBag = _G.CharacterReagentBag0Slot
+    if reagentBag then
+        self:StyleBagButton(reagentBag)
+        self:UpdateBagButtonVisual(reagentBag)
+        if not reagentBag.originalParent and reagentBag.GetParent then
+            reagentBag.originalParent = reagentBag:GetParent()
+        end
+        if reagentBag.SetParent then reagentBag:SetParent(self.bagBarFrame) end
+        if reagentBag.ClearAllPoints then reagentBag:ClearAllPoints() end
+        if reagentBag.SetSize then reagentBag:SetSize(btnSize, btnSize) end
+        if reagentBag.SetPoint then reagentBag:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0) end
+        if reagentBag.Show then reagentBag:Show() end
+        xOffset = xOffset + btnSize + spacing
+    end
+
+    -- 5. Keyring (Classic/Forever)
+    local keyring = _G.KeyRingButton
+    if keyring then
+        self:StyleBagButton(keyring)
+        self:UpdateBagButtonVisual(keyring)
+        if not keyring.originalParent and keyring.GetParent then
+            keyring.originalParent = keyring:GetParent()
+        end
+        if keyring.SetParent then keyring:SetParent(self.bagBarFrame) end
+        if keyring.ClearAllPoints then keyring:ClearAllPoints() end
+        if keyring.SetSize then keyring:SetSize(btnSize, btnSize) end
+        if keyring.SetPoint then keyring:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0) end
+        if keyring.Show then keyring:Show() end
+        xOffset = xOffset + btnSize + spacing
     end
 
     local totalW = math.max(40, xOffset - spacing)
     local totalH = btnSize
     if self.bagBarFrame.SetSize then
         self.bagBarFrame:SetSize(totalW, totalH)
+    end
+end
+
+function BagsMod:OnPlayerRegenEnabledBagBar()
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    if self.pendingBagBarLayout then
+        self.pendingBagBarLayout = nil
+        self:UpdateBagBarLayout()
     end
 end

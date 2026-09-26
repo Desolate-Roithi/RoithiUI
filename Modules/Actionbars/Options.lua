@@ -117,131 +117,207 @@ function AB:GetOptions()
         },
     }
 
-    local barList = {
-        { key = "bar1", name = L["Action Bar 1"], order = 10 },
-        { key = "bar2", name = L["Action Bar 2"], order = 11 },
-        { key = "bar3", name = L["Action Bar 3"], order = 12 },
-        { key = "bar4", name = L["Action Bar 4"], order = 13 },
-        { key = "bar5", name = L["Action Bar 5"], order = 14 },
-        { key = "pet", name = L["Pet Action Bar"], order = 15 },
-        { key = "stance", name = L["Stance / Shapeshift Bar"], order = 16 },
+    self.selectedBar = self.selectedBar or "bar1"
+
+    options.args.general.args.quickKeybind = {
+        type = "execute",
+        name = L["Quick Keybind Mode"] or "Quick Keybind Mode",
+        desc = L["Toggle quick keybinding mode to hover over action buttons and bind keys."] or "Toggle quick keybinding mode.",
+        order = 0.5,
+        func = function()
+            AB:ToggleQuickKeybind()
+        end,
     }
 
-    for _, b in ipairs(barList) do
-        local barKey = b.key
-        options.args[barKey] = {
+    local barChoices = {
+        ["bar1"] = L["Action Bar 1"] or "Action Bar 1",
+        ["bar2"] = L["Action Bar 2"] or "Action Bar 2",
+        ["bar3"] = L["Action Bar 3"] or "Action Bar 3",
+        ["bar4"] = L["Action Bar 4"] or "Action Bar 4",
+        ["bar5"] = L["Action Bar 5"] or "Action Bar 5",
+        ["bar6"] = L["Action Bar 6"] or "Action Bar 6",
+        ["bar7"] = L["Action Bar 7"] or "Action Bar 7",
+        ["bar8"] = L["Action Bar 8"] or "Action Bar 8",
+        ["pet"] = L["Pet Action Bar"] or "Pet Action Bar",
+        ["stance"] = L["Stance / Shapeshift Bar"] or "Stance / Shapeshift Bar",
+    }
+
+    options.args.barSettings = {
+        type = "group",
+        name = L["Action Bar Configuration"] or "Action Bar Configuration",
+        order = 2,
+        inline = true,
+        args = {
+            selectBar = {
+                type = "select",
+                name = L["Select Action Bar"] or "Select Action Bar",
+                order = 1,
+                values = barChoices,
+                get = function() return self.selectedBar or "bar1" end,
+                set = function(_, val) self.selectedBar = val end,
+            },
+            enabled = {
+                type = "toggle",
+                name = L["Enable"],
+                order = 2,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return self.db[bKey] and self.db[bKey].enabled ~= false
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].enabled = val
+                    self:LayoutBar(bKey)
+                end,
+            },
+            hideEmpty = {
+                type = "toggle",
+                name = L["Hide Empty Buttons"],
+                desc = L["Hide empty button slots when not dragging an action."],
+                order = 3,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return self.db[bKey] and self.db[bKey].hideEmpty == true
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].hideEmpty = val
+                    self:UpdateEmptyButtons(bKey)
+                end,
+            },
+            mouseover = {
+                type = "toggle",
+                name = L["Mouseover Fade"],
+                desc = L["Only show the bar when hovering over it with the cursor."],
+                order = 4,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return self.db[bKey] and self.db[bKey].mouseover == true
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].mouseover = val
+                    self:UpdateBarMouseover(bKey)
+                end,
+            },
+            mouseoverAlpha = {
+                type = "range",
+                name = L["Mouseover Min Opacity"],
+                desc = L["Opacity of the bar when the cursor is NOT hovering over it."],
+                order = 5,
+                min = 0,
+                max = 0.9,
+                step = 0.05,
+                isPercent = true,
+                disabled = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return not (self.db[bKey] and self.db[bKey].mouseover)
+                end,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return self.db[bKey] and self.db[bKey].mouseoverAlpha or 0.0
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].mouseoverAlpha = val
+                    self:UpdateBarMouseover(bKey)
+                end,
+            },
+            alpha = {
+                type = "range",
+                name = L["Bar Opacity"],
+                order = 6,
+                min = 0.1,
+                max = 1.0,
+                step = 0.05,
+                isPercent = true,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return self.db[bKey] and self.db[bKey].alpha or 1.0
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].alpha = val
+                    self:UpdateBarMouseover(bKey)
+                end,
+            },
+            buttonSize = {
+                type = "range",
+                name = L["Button Size"],
+                order = 7,
+                min = 20,
+                max = 60,
+                step = 1,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return self.db[bKey] and self.db[bKey].buttonSize or 36
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].buttonSize = val
+                    self:LayoutBar(bKey)
+                end,
+            },
+            spacing = {
+                type = "range",
+                name = L["Button Spacing"],
+                order = 8,
+                min = 0,
+                max = 20,
+                step = 1,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return self.db[bKey] and self.db[bKey].spacing or 4
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].spacing = val
+                    self:LayoutBar(bKey)
+                end,
+            },
+            buttonsPerRow = {
+                type = "range",
+                name = L["Buttons Per Row"],
+                order = 9,
+                min = 1,
+                max = 12,
+                step = 1,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return self.db[bKey] and self.db[bKey].buttonsPerRow or 12
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].buttonsPerRow = val
+                    self:LayoutBar(bKey)
+                end,
+            },
+        },
+    }
+
+    local legacyBars = { "bar1", "bar2", "bar3", "bar4", "bar5", "bar6", "bar7", "bar8", "pet", "stance" }
+    for _, bKey in ipairs(legacyBars) do
+        options.args[bKey] = {
             type = "group",
-            name = b.name,
-            order = b.order,
-            inline = true,
+            name = barChoices[bKey] or bKey,
+            guiHidden = true,
             args = {
                 enabled = {
                     type = "toggle",
                     name = L["Enable"],
-                    order = 1,
-                    get = function() return self.db[barKey] and self.db[barKey].enabled ~= false end,
+                    get = function() return self.db[bKey] and self.db[bKey].enabled ~= false end,
                     set = function(_, val)
-                        self.db[barKey] = self.db[barKey] or {}
-                        self.db[barKey].enabled = val
-                        self:LayoutBar(barKey)
-                    end,
-                },
-                hideEmpty = {
-                    type = "toggle",
-                    name = L["Hide Empty Buttons"],
-                    desc = L["Hide empty button slots when not dragging an action."],
-                    order = 2,
-                    get = function() return self.db[barKey] and self.db[barKey].hideEmpty == true end,
-                    set = function(_, val)
-                        self.db[barKey] = self.db[barKey] or {}
-                        self.db[barKey].hideEmpty = val
-                        self:UpdateEmptyButtons(barKey)
-                    end,
-                },
-                mouseover = {
-                    type = "toggle",
-                    name = L["Mouseover Fade"],
-                    desc = L["Only show the bar when hovering over it with the cursor."],
-                    order = 3,
-                    get = function() return self.db[barKey] and self.db[barKey].mouseover == true end,
-                    set = function(_, val)
-                        self.db[barKey] = self.db[barKey] or {}
-                        self.db[barKey].mouseover = val
-                        self:UpdateBarMouseover(barKey)
-                    end,
-                },
-                mouseoverAlpha = {
-                    type = "range",
-                    name = L["Mouseover Min Opacity"],
-                    desc = L["Opacity of the bar when the cursor is NOT hovering over it."],
-                    order = 4,
-                    min = 0,
-                    max = 0.9,
-                    step = 0.05,
-                    isPercent = true,
-                    disabled = function() return not (self.db[barKey] and self.db[barKey].mouseover) end,
-                    get = function() return self.db[barKey] and self.db[barKey].mouseoverAlpha or 0.0 end,
-                    set = function(_, val)
-                        self.db[barKey] = self.db[barKey] or {}
-                        self.db[barKey].mouseoverAlpha = val
-                        self:UpdateBarMouseover(barKey)
-                    end,
-                },
-                alpha = {
-                    type = "range",
-                    name = L["Bar Opacity"],
-                    order = 5,
-                    min = 0.1,
-                    max = 1.0,
-                    step = 0.05,
-                    isPercent = true,
-                    get = function() return self.db[barKey] and self.db[barKey].alpha or 1.0 end,
-                    set = function(_, val)
-                        self.db[barKey] = self.db[barKey] or {}
-                        self.db[barKey].alpha = val
-                        self:UpdateBarMouseover(barKey)
-                    end,
-                },
-                buttonSize = {
-                    type = "range",
-                    name = L["Button Size"],
-                    order = 6,
-                    min = 20,
-                    max = 60,
-                    step = 1,
-                    get = function() return self.db[barKey] and self.db[barKey].buttonSize or 36 end,
-                    set = function(_, val)
-                        self.db[barKey] = self.db[barKey] or {}
-                        self.db[barKey].buttonSize = val
-                        self:LayoutBar(barKey)
-                    end,
-                },
-                spacing = {
-                    type = "range",
-                    name = L["Button Spacing"],
-                    order = 7,
-                    min = 0,
-                    max = 20,
-                    step = 1,
-                    get = function() return self.db[barKey] and self.db[barKey].spacing or 4 end,
-                    set = function(_, val)
-                        self.db[barKey] = self.db[barKey] or {}
-                        self.db[barKey].spacing = val
-                        self:LayoutBar(barKey)
-                    end,
-                },
-                buttonsPerRow = {
-                    type = "range",
-                    name = L["Buttons Per Row"],
-                    order = 8,
-                    min = 1,
-                    max = 12,
-                    step = 1,
-                    get = function() return self.db[barKey] and self.db[barKey].buttonsPerRow or 12 end,
-                    set = function(_, val)
-                        self.db[barKey] = self.db[barKey] or {}
-                        self.db[barKey].buttonsPerRow = val
-                        self:LayoutBar(barKey)
+                        self.db[bKey] = self.db[bKey] or {}
+                        self.db[bKey].enabled = val
+                        self:LayoutBar(bKey)
                     end,
                 },
             },

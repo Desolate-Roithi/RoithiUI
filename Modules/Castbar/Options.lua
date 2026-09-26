@@ -69,9 +69,12 @@ local function BuildCastbarGroup(uKey, orderIdx)
                             local uScale = UIParent:GetEffectiveScale()
                             if cX and cY then
                                 local screenWidth, screenHeight = UIParent:GetSize()
-                                db.point = "CENTER"
-                                db.x = math.floor((cX / uScale) - (screenWidth / 2) + 0.5)
-                                db.y = math.floor((cY / uScale) - (screenHeight / 2) + 0.5)
+                                local rawX = math.floor((cX / uScale) - (screenWidth / 2) + 0.5)
+                                local rawY = math.floor((cY / uScale) - (screenHeight / 2) + 0.5)
+                                local safePoint, safeX, safeY = ns.Utils.SanitizeAndCenterPoint("CENTER", rawX, rawY, db.width or 200, db.height or 20, 10)
+                                db.point = safePoint
+                                db.x = safeX
+                                db.y = safeY
                             else
                                 db.point = "CENTER"
                                 db.x = 0
@@ -500,10 +503,21 @@ function UpdateBar(unit)
         end
         local AL = ns.AttachmentLogic
         if AL then AL:GlobalLayoutRefresh(unit) end
-    elseif not ns.SetCastbarAttachment and db.detached then
+    else
         if not bar.isInEditMode then
-            bar:ClearAllPoints()
-            bar:SetPoint(db.point or "CENTER", UIParent, db.point or "CENTER", db.x or 0, db.y or 0)
+            if ns.SetCastbarAttachment then
+                ns.SetCastbarAttachment(unit, false)
+            else
+                local safePoint, safeX, safeY = ns.Utils.SanitizeAndCenterPoint(db.point, db.x, db.y, finalWidth, finalHeight, 10)
+                db.point = safePoint
+                db.x = safeX
+                db.y = safeY
+                bar:ClearAllPoints()
+                bar:SetPoint(safePoint, UIParent, safePoint, safeX, safeY)
+                if ns.Utils and ns.Utils.ClampFrameToScreen then
+                    ns.Utils.ClampFrameToScreen(bar, 10)
+                end
+            end
         end
     end
 
@@ -558,9 +572,12 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
                                 local uScale = UIParent:GetEffectiveScale()
                                 if cX and cY then
                                     local screenWidth, screenHeight = UIParent:GetSize()
-                                    db.point = "CENTER"
-                                    db.x = math.floor((cX / uScale) - (screenWidth / 2) + 0.5)
-                                    db.y = math.floor((cY / uScale) - (screenHeight / 2) + 0.5)
+                                    local rawX = math.floor((cX / uScale) - (screenWidth / 2) + 0.5)
+                                    local rawY = math.floor((cY / uScale) - (screenHeight / 2) + 0.5)
+                                    local safePoint, safeX, safeY = ns.Utils.SanitizeAndCenterPoint("CENTER", rawX, rawY, db.width or 200, db.height or 20, 10)
+                                    db.point = safePoint
+                                    db.x = safeX
+                                    db.y = safeY
                                 else
                                     db.point = "CENTER"
                                     db.x = 0
@@ -804,15 +821,21 @@ function ns.InitializeCastbarConfig()
                 return
             end
 
-            x = math.floor(x * 100 + 0.5) / 100
-            y = math.floor(y * 100 + 0.5) / 100
+            local w = (movedBar.GetWidth and movedBar:GetWidth()) or posDB.width or 200
+            local h = (movedBar.GetHeight and movedBar:GetHeight()) or posDB.height or 20
+            local safePoint, safeX, safeY = ns.Utils.SanitizeAndCenterPoint(point, x, y, w, h, 10)
 
-            posDB.point = point
-            posDB.x = x
-            posDB.y = y
+            posDB.point = safePoint
+            posDB.relPoint = safePoint
+            posDB.relativeTo = "UIParent"
+            posDB.x = safeX
+            posDB.y = safeY
 
             movedBar:ClearAllPoints()
-            movedBar:SetPoint(point, UIParent, point, x, y)
+            movedBar:SetPoint(safePoint, UIParent, safePoint, safeX, safeY)
+            if ns.Utils and ns.Utils.ClampFrameToScreen then
+                ns.Utils.ClampFrameToScreen(movedBar, 10)
+            end
             LEM:RefreshFrameSettings(movedBar)
         end
 

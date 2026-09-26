@@ -133,8 +133,25 @@ function BagsMod:GetOrderedCategories()
     return result
 end
 
+function BagsMod:AssignItemCategory(itemID, catID)
+    if not itemID then return end
+    self.db.customCategoryAssignments = self.db.customCategoryAssignments or {}
+    self.db.customCategoryAssignments[itemID] = catID
+    self:UpdateInventory()
+end
+
+function BagsMod:ResetItemCategory(itemID)
+    if not itemID or not self.db.customCategoryAssignments then return end
+    self.db.customCategoryAssignments[itemID] = nil
+    self:UpdateInventory()
+end
+
 function BagsMod:ClassifyItem(itemData)
     if not itemData or not itemData.itemID then return CATEGORY_MISC end
+
+    if self.db and self.db.customCategoryAssignments and self.db.customCategoryAssignments[itemData.itemID] then
+        return self.db.customCategoryAssignments[itemData.itemID]
+    end
 
     local favs = self.db and self.db.favorites
     if favs and favs[itemData.itemID] then
@@ -171,6 +188,10 @@ function BagsMod:ItemMatchesCategory(itemData, activeCategory)
 
     if activeCategory == CATEGORY_ALL then
         return true
+    end
+
+    if self.db and self.db.customCategoryAssignments and self.db.customCategoryAssignments[itemData.itemID] then
+        return self.db.customCategoryAssignments[itemData.itemID] == activeCategory
     end
     if activeCategory == CATEGORY_NEW then
         return itemData.isNew == true

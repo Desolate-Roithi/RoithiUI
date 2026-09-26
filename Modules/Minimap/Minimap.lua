@@ -37,7 +37,7 @@ MinimapMod.defaultSettings = {
     dataTextTimeFormat = "24H",
     dataTextTimeType = "LOCAL",
     dataTextBgColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.6 },
-    dataTextLeftType = "FPS_MS",
+    dataTextLeftType = "FPS",
     dataTextLeftFontSize = 11,
     dataTextMiddleType = "Time",
     dataTextMiddleFontSize = 11,
@@ -60,6 +60,7 @@ MinimapMod.defaultSettings = {
     addonBarButtonOrder = {},
     displaceBuffs = true,
     showDiel = true,
+    showCoords = true,
     offsets = {},
 }
 
@@ -136,6 +137,7 @@ function MinimapMod:PrepareFramesForEditMode()
         { key = "zoomOutAnchor", frame = self.zoomOutAnchor },
         { key = "calendarAnchor", frame = self.calendarAnchor },
         { key = "dielAnchor", frame = self.dielAnchor },
+        { key = "coordsAnchor", frame = self.coordsAnchor },
         { key = "addonBar", frame = self.addonBar },
     }
 
@@ -163,7 +165,7 @@ function MinimapMod:ReparentFramesAfterEditMode()
     if not container then return end
 
     local frames = {
-        { key = "zoneTextAnchor", frame = self.zoneTextAnchor, default = { point = "TOP", x = 0, y = -10 } },
+        { key = "zoneTextAnchor", frame = self.zoneTextAnchor, default = { point = "TOP", x = 0, y = 0 } },
         { key = "mailAnchor", frame = self.mailAnchor, default = { point = "TOPRIGHT", x = 0, y = 0 } },
         { key = "trackingAnchor", frame = self.trackingAnchor, default = { point = "TOPLEFT", x = 0, y = -38 } },
         { key = "lfgAnchor", frame = self.lfgAnchor, default = { point = "BOTTOMLEFT", x = 0, y = 0 } },
@@ -781,7 +783,7 @@ function MinimapMod:UpdateMinimapSize()
 end
 
 MinimapMod.defaultAnchorPositions = {
-    zoneTextAnchor = { point = "TOP", x = 0, y = -10 },
+    zoneTextAnchor = { point = "TOP", x = 0, y = 0 },
     mailAnchor = { point = "TOPRIGHT", x = 0, y = 0 },
     trackingAnchor = { point = "TOPLEFT", x = 0, y = -38 },
     lfgAnchor = { point = "BOTTOMLEFT", x = 0, y = 0 },
@@ -857,7 +859,7 @@ function MinimapMod:RegisterAnchorSettings(f, key)
     if not LEM then return end
 
     local configMap = {
-        zoneTextAnchor = { toggle = "showZoneText", default = { point = "TOP", x = 0, y = -10 }, updateVis = "UpdateZoneTextVisibility" },
+        zoneTextAnchor = { toggle = "showZoneText", default = { point = "TOP", x = 0, y = 0 }, updateVis = "UpdateZoneTextVisibility" },
         mailAnchor = { toggle = "showMail", default = { point = "TOPRIGHT", x = 0, y = 0 }, updateVis = "UpdateMailVisibility" },
         trackingAnchor = { toggle = "showTracking", default = { point = "TOPLEFT", x = 0, y = -38 }, updateVis = "UpdateTrackingVisibility" },
         lfgAnchor = { toggle = "showLFG", default = { point = "BOTTOMLEFT", x = 0, y = 0 }, updateVis = "UpdateLFGVisibility" },
@@ -1104,13 +1106,42 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Zone Text Anchor
-    local zoneTextAnchor = CreateAnchorFrame(self, "zoneTextAnchor", "RoithiZoneTextAnchor", L["Minimap Zone Text"], 130, 20, { point = "TOP", x = 0, y = -10 })
+    local zoneWidth = (self.db and self.db.size) or 200
+    local zoneTextAnchor = CreateAnchorFrame(self, "zoneTextAnchor", "RoithiZoneTextAnchor", L["Minimap Zone Text"], zoneWidth, 20, { point = "TOP", x = 0, y = 0 })
     local zoneText = MinimapCluster.ZoneTextButton or MinimapCluster.ZoneTextFrame or _G.MinimapZoneTextButton
     if zoneText then
-        zoneText:SetParent(zoneTextAnchor)
-        zoneText:ClearAllPoints()
-        zoneText:SetPoint("CENTER", zoneTextAnchor, "CENTER", self.db.zoneTextX or 0, self.db.zoneTextY or 0)
+        HookBlizzardButton(zoneText, zoneTextAnchor)
+        if zoneText.SetSize then zoneText:SetSize(zoneWidth, 20) end
+        local fs = _G.MinimapZoneText or (zoneText.GetFontString and zoneText:GetFontString())
+        if fs then
+            if fs.SetJustifyH then fs:SetJustifyH("CENTER") end
+            if fs.ClearAllPoints then fs:ClearAllPoints() end
+            if fs.SetPoint then fs:SetPoint("CENTER", zoneTextAnchor, "CENTER", 0, 0) end
+            if not self.zoneTextJustifyHooked and hooksecurefunc then
+                if fs.SetText then
+                    hooksecurefunc(fs, "SetText", function()
+                        if fs.SetJustifyH then fs:SetJustifyH("CENTER") end
+                    end)
+                end
+                if fs.SetPoint then
+                    hooksecurefunc(fs, "SetPoint", function(frame)
+                        if self.isReanchoringZoneText then return end
+                        self.isReanchoringZoneText = true
+                        if frame.ClearAllPoints then frame:ClearAllPoints() end
+                        if frame.SetPoint then frame:SetPoint("CENTER", zoneTextAnchor, "CENTER", 0, 0) end
+                        if frame.SetJustifyH then frame:SetJustifyH("CENTER") end
+                        self.isReanchoringZoneText = false
+                    end)
+                end
+                self.zoneTextJustifyHooked = true
+            end
+        end
     end
+
+    -- Setup Coordinates Anchor
+    local coordsAnchor = CreateAnchorFrame(self, "coordsAnchor", "RoithiCoordsAnchor", L["Minimap Coordinates"], 90, 18, { point = "BOTTOM", x = 0, y = 0 })
+    self.coordsAnchor = coordsAnchor
+    self:SetupCoordsWidget(coordsAnchor)
 
     -- Setup Mail Anchor
     local mailAnchor = CreateAnchorFrame(self, "mailAnchor", "RoithiMailAnchor", L["Minimap Mail Frame"], 32, 32, { point = "TOPRIGHT", x = 0, y = 0 })
@@ -1320,6 +1351,53 @@ function MinimapMod:UpdateCalendarVisibility()
     end
 end
 
+function MinimapMod:SetupCoordsWidget(anchor)
+    if not anchor or self.coordsText then return end
+
+    local text = anchor:CreateFontString(nil, "OVERLAY")
+    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
+    else
+        text:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+    end
+    if text.SetJustifyH then text:SetJustifyH("CENTER") end
+    if text.SetPoint then text:SetPoint("CENTER", anchor, "CENTER", 0, 0) end
+    if text.SetTextColor then text:SetTextColor(1, 1, 1, 1) end
+    self.coordsText = text
+
+    if not self.coordsTicker and _G.C_Timer and _G.C_Timer.NewTicker then
+        self.coordsTicker = _G.C_Timer.NewTicker(0.2, function()
+            if not self.db or self.db.showCoords == false then
+                text:SetText("")
+                return
+            end
+            local ok, mapID = pcall(function()
+                return _G.C_Map and _G.C_Map.GetBestMapForUnit and _G.C_Map.GetBestMapForUnit("player")
+            end)
+            if ok and mapID then
+                local okPos, pos = pcall(function()
+                    return _G.C_Map.GetPlayerMapPosition(mapID, "player")
+                end)
+                if okPos and pos and pos.GetXY then
+                    local okXY, x, y = pcall(function() return pos:GetXY() end)
+                    if okXY and x and y and x > 0 and y > 0 then
+                        text:SetFormattedText("%.1f, %.1f", x * 100, y * 100)
+                        return
+                    end
+                end
+            end
+            text:SetText("")
+        end)
+    end
+end
+
+function MinimapMod:UpdateCoordsVisibility()
+    if self.coordsAnchor then
+        self.coordsAnchor:SetShown(self.db.showCoords ~= false)
+    end
+end
+
+
 
 
 
@@ -1430,7 +1508,7 @@ local function GetSectionText(dataType)
         return string.format("Guild: |cff00ff00%d|r", stats.guildOnline)
     elseif dataType == "Time" then
         local useRealm = MinimapMod.db and MinimapMod.db.dataTextTimeType == "REALM"
-        local is24 = (MinimapMod.db and MinimapMod.db.dataTextTimeFormat == "24H")
+        local is24 = (not MinimapMod.db) or (MinimapMod.db.dataTextTimeFormat or "24H") == "24H"
         if useRealm and _G.GetGameTime then
             local hours, minutes = _G.GetGameTime()
             if is24 then
@@ -1490,7 +1568,7 @@ UpdateDataText = function(bar)
     if not db.showDataTextBar then return end
 
     if bar.textLeft then
-        bar.textLeft:SetText(GetSectionText(db.dataTextLeftType or "FPS_MS"))
+        bar.textLeft:SetText(GetSectionText(db.dataTextLeftType or "FPS"))
     end
     if bar.textMiddle then
         bar.textMiddle:SetText(GetSectionText(db.dataTextMiddleType or "Time"))
@@ -1862,6 +1940,17 @@ function MinimapMod:GetOptions()
                             self:UpdateZoomVisibility()
                         end,
                     },
+                    showCoords = {
+                        type = "toggle",
+                        name = L["Show Coordinates"],
+                        desc = L["Toggle player map coordinates on the minimap."],
+                        order = 4,
+                        get = function() return self.db.showCoords ~= false end,
+                        set = function(_, val)
+                            self.db.showCoords = val
+                            self:UpdateCoordsVisibility()
+                        end,
+                    },
                 },
             },
             addonBar = self.GetAddonBarOptions and self:GetAddonBarOptions() or nil,
@@ -2163,7 +2252,7 @@ function MinimapMod:GetOptions()
                 args = {
                     displaceBuffs = {
                         type = "toggle",
-                        name = L["Displace Buffs when Addon Bar Expands"] or "Displace Buffs when Addon Bar Expands",
+                        name = L["Displace Auras when Addon Bar Expands"] or "Displace Auras when Addon Bar Expands",
                         order = 1,
                         get = function() return self.db.displaceBuffs ~= false end,
                         set = function(_, val)

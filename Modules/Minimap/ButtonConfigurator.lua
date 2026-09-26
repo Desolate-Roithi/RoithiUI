@@ -343,6 +343,9 @@ if AceGUI then
             SetLabel = function() end,
             SetDisabled = function() end,
             SetValue = function() end,
+            SetText = function() end,
+            GetText = function() return "" end,
+            SetNumLines = function() end,
             Refresh = function(self)
                 local h = MinimapMod:RenderButtonTiles(self.container, self.tiles)
                 self.frame:SetHeight(math.max(120, h + 30))

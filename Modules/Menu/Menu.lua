@@ -10,7 +10,8 @@ MenuMod.description = L["Enables modern borderless styling for the Micro Menu."]
 MenuMod.order = 85
 MenuMod.dbKey = "Menu"
 
-local isMainline = (_G.WOW_PROJECT_ID == _G.WOW_PROJECT_MAINLINE)
+local isForever = ns.IsForever
+local isRetail = ns.IsRetail
 
 local RETAIL_MICRO_BUTTONS = {
     "CharacterMicroButton",
@@ -24,6 +25,22 @@ local RETAIL_MICRO_BUTTONS = {
     "EJMicroButton",
     "StoreMicroButton",
     "MainMenuMicroButton",
+}
+
+local FOREVER_MICRO_BUTTONS = {
+    "CharacterMicroButton",
+    "ProfessionMicroButton",
+    "SpellbookMicroButton",
+    "TalentMicroButton",
+    "QuestLogMicroButton",
+    "GuildMicroButton",
+    "SocialsMicroButton",
+    "LFDMicroButton",
+    "CollectionsMicroButton",
+    "LegacyMicroButton",
+    "StoreMicroButton",
+    "MainMenuMicroButton",
+    "HelpMicroButton",
 }
 
 local CLASSIC_MICRO_BUTTONS = {
@@ -88,20 +105,37 @@ end
 
 function MenuMod:GetMicroButtons()
     local buttons = {}
-    local buttonNames = isMainline and RETAIL_MICRO_BUTTONS or CLASSIC_MICRO_BUTTONS
+    local buttonNames
+    if isRetail then
+        buttonNames = RETAIL_MICRO_BUTTONS
+    elseif isForever then
+        buttonNames = FOREVER_MICRO_BUTTONS
+    else
+        buttonNames = CLASSIC_MICRO_BUTTONS
+    end
+
     for _, btnName in ipairs(buttonNames) do
         local btn = _G[btnName]
         if btn then
             table.insert(buttons, btn)
         end
     end
-    if isMainline and _G.HousingMicroButton then
+    if isRetail and _G.HousingMicroButton then
         local found = false
         for _, b in ipairs(buttons) do
             if b == _G.HousingMicroButton then found = true break end
         end
         if not found then
             table.insert(buttons, _G.HousingMicroButton)
+        end
+    end
+    if _G.LegacyMicroButton then
+        local found = false
+        for _, b in ipairs(buttons) do
+            if b == _G.LegacyMicroButton then found = true break end
+        end
+        if not found then
+            table.insert(buttons, _G.LegacyMicroButton)
         end
     end
     return buttons
@@ -111,8 +145,35 @@ function MenuMod:SetupMicroMenu()
     if self.container then return end
 
     -- Hide / Suppress Blizzard's default micro menu bars and containers
+    local function SuppressMicroMenuSelection()
+        for _, f in ipairs({ _G.MicroMenu, _G.MicroMenuContainer, _G.MicroButtonAndBagsBar }) do
+            if f then
+                f.defaultHideSelection = true
+                if f.Selection then
+                    f.Selection:Hide()
+                    if f.Selection.EnableMouse then f.Selection:EnableMouse(false) end
+                end
+            end
+        end
+    end
+
+    SuppressMicroMenuSelection()
+
+    if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.editModeRegistered then
+        _G.EventRegistry:RegisterCallback("EditMode.Enter", SuppressMicroMenuSelection, self)
+        self.editModeRegistered = true
+    end
+
+    -- Explicitly hide unsupported micro buttons in Forever / Classic
+    if not isRetail then
+        if _G.HousingMicroButton and _G.HousingMicroButton.Hide then _G.HousingMicroButton:Hide() end
+        if _G.EJMicroButton and _G.EJMicroButton.Hide then _G.EJMicroButton:Hide() end
+        if isForever and _G.AchievementMicroButton and _G.AchievementMicroButton.Hide then
+            _G.AchievementMicroButton:Hide()
+        end
+    end
+
     if _G.MicroMenu then
-        if _G.MicroMenu.SetAlpha then _G.MicroMenu:SetAlpha(0) end
         if _G.MicroMenu.EnableMouse then _G.MicroMenu:EnableMouse(false) end
         for _, reg in ipairs({ _G.MicroMenu:GetRegions() }) do
             if reg.IsObjectType and reg:IsObjectType("Texture") then
@@ -121,7 +182,6 @@ function MenuMod:SetupMicroMenu()
         end
     end
     if _G.MicroMenuContainer then
-        if _G.MicroMenuContainer.SetAlpha then _G.MicroMenuContainer:SetAlpha(0) end
         if _G.MicroMenuContainer.EnableMouse then _G.MicroMenuContainer:EnableMouse(false) end
         for _, reg in ipairs({ _G.MicroMenuContainer:GetRegions() }) do
             if reg.IsObjectType and reg:IsObjectType("Texture") then
@@ -130,7 +190,6 @@ function MenuMod:SetupMicroMenu()
         end
     end
     if _G.MicroButtonAndBagsBar then
-        if _G.MicroButtonAndBagsBar.SetAlpha then _G.MicroButtonAndBagsBar:SetAlpha(0) end
         if _G.MicroButtonAndBagsBar.EnableMouse then _G.MicroButtonAndBagsBar:EnableMouse(false) end
         for _, reg in ipairs({ _G.MicroButtonAndBagsBar:GetRegions() }) do
             if reg.IsObjectType and reg:IsObjectType("Texture") then
@@ -212,34 +271,51 @@ function MenuMod:StyleMicroButton(btn)
         btn.QuickKeybindHighlightTexture:SetAlpha(0)
     end
 
-    -- Strip texture regions (both file and atlas)
-    for _, region in ipairs({ btn:GetRegions() }) do
-        if region.IsObjectType and region:IsObjectType("Texture") then
-            local isStripped = false
-            local tex = region.GetTexture and region:GetTexture()
-            if type(tex) == "string" then
-                local texPath = tex:lower()
-                if texPath:find("border") or texPath:find("shadow") or texPath:find("frame") or texPath:find("highlight") or texPath:find("buttonbg") then
-                    region:SetAlpha(0)
-                    isStripped = true
-                end
-            end
-            local atlas = region.GetAtlas and region:GetAtlas()
-            if not isStripped and type(atlas) == "string" then
-                local atlasStr = atlas:lower()
-                if atlasStr:find("border") or atlasStr:find("shadow") or atlasStr:find("frame") or atlasStr:find("highlight") or atlasStr:find("buttonbg") then
-                    region:SetAlpha(0)
-                end
-            end
+    -- Ensure normal texture and portrait are visible, fitted to button, and at full alpha
+    local norm = btn.GetNormalTexture and btn:GetNormalTexture()
+    if norm then
+        if norm.SetAlpha then norm:SetAlpha(1) end
+        if norm.ClearAllPoints then norm:ClearAllPoints() end
+        if norm.SetAllPoints then norm:SetAllPoints(btn) end
+    end
+    local pushed = btn.GetPushedTexture and btn:GetPushedTexture()
+    if pushed then
+        if pushed.ClearAllPoints then pushed:ClearAllPoints() end
+        if pushed.SetAllPoints then pushed:SetAllPoints(btn) end
+    end
+    local disabled = btn.GetDisabledTexture and btn:GetDisabledTexture()
+    if disabled then
+        if disabled.ClearAllPoints then disabled:ClearAllPoints() end
+        if disabled.SetAllPoints then disabled:SetAllPoints(btn) end
+    end
+    local highlight = btn.GetHighlightTexture and btn:GetHighlightTexture()
+    if highlight then
+        if highlight.ClearAllPoints then highlight:ClearAllPoints() end
+        if highlight.SetAllPoints then highlight:SetAllPoints(btn) end
+        if highlight.SetAlpha then highlight:SetAlpha(0) end
+    end
+    if btn.Portrait then
+        btn.Portrait:ClearAllPoints()
+        btn.Portrait:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+        btn.Portrait:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+        if btn.Portrait.SetTexCoord then
+            btn.Portrait:SetTexCoord(0.18, 0.82, 0.18, 0.82)
         end
+        if btn.Portrait.SetAlpha then btn.Portrait:SetAlpha(1) end
+        if btn.Portrait.Show then btn.Portrait:Show() end
     end
 
     -- Remove portrait mask circle if present so portrait is clean
     if btn.PortraitMask and btn.PortraitMask.Hide then
         btn.PortraitMask:Hide()
     end
-    if btn.Portrait and btn.Portrait.SetTexCoord then
-        btn.Portrait:SetTexCoord(0.15, 0.85, 0.15, 0.85)
+
+    local emblem = btn.Emblem or btn.Tabard or (btn.GetName and _G[btn:GetName() .. "Tabard"])
+    if emblem then
+        if emblem.ClearAllPoints then emblem:ClearAllPoints() end
+        if emblem.SetPoint then emblem:SetPoint("CENTER", btn, "CENTER", 0, 0) end
+        if emblem.SetSize then emblem:SetSize(btn:GetWidth() - 2, btn:GetHeight() - 2) end
+        if emblem.SetAlpha then emblem:SetAlpha(1) end
     end
 
     -- 1px Custom dark backdrop behind button (parented to container, never mutating btn)
@@ -258,7 +334,7 @@ function MenuMod:StyleMicroButton(btn)
                 edgeFile = "Interface\\Buttons\\WHITE8x8",
                 edgeSize = 1,
             })
-            bg:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+            bg:SetBackdropColor(0, 0, 0, 0)
             bg:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
         end
         self.backdrops[btn] = bg
@@ -270,8 +346,26 @@ function MenuMod:StyleMicroButton(btn)
     -- Hook mouseover events using internal tracking table (zero property mutations on secure btn)
     self.hookedButtons = self.hookedButtons or {}
     if not self.hookedButtons[btn] and btn.HookScript then
-        btn:HookScript("OnEnter", function() self:OnContainerEnter() end)
-        btn:HookScript("OnLeave", function() self:OnContainerLeave() end)
+        btn:HookScript("OnEnter", function()
+            self:OnContainerEnter()
+            local b = self.backdrops and self.backdrops[btn]
+            if b and b.SetBackdropBorderColor then
+                b:SetBackdropBorderColor(1.0, 0.82, 0.0, 1.0)
+            end
+            local n = btn.GetNormalTexture and btn:GetNormalTexture()
+            if n and n.SetAlpha then n:SetAlpha(1) end
+            local h = btn.GetHighlightTexture and btn:GetHighlightTexture()
+            if h and h.SetAlpha then h:SetAlpha(0) end
+        end)
+        btn:HookScript("OnLeave", function()
+            self:OnContainerLeave()
+            local b = self.backdrops and self.backdrops[btn]
+            if b and b.SetBackdropBorderColor then
+                b:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
+            end
+            local n = btn.GetNormalTexture and btn:GetNormalTexture()
+            if n and n.SetAlpha then n:SetAlpha(1) end
+        end)
         self.hookedButtons[btn] = true
     end
 end
@@ -289,20 +383,29 @@ function MenuMod:LayoutMicroMenu()
     if not self.container then return end
 
     local buttons = self:GetMicroButtons()
-    if #buttons == 0 then return end
+    local activeButtons = {}
+    for _, btn in ipairs(buttons) do
+        if btn and (btn.IsShown == nil or btn:IsShown()) then
+            table.insert(activeButtons, btn)
+        else
+            local bg = self.backdrops and self.backdrops[btn]
+            if bg and bg.Hide then bg:Hide() end
+        end
+    end
+    if #activeButtons == 0 then return end
 
     local btnW = self.db.buttonWidth or 24
     local btnH = self.db.buttonHeight or 32
     local spacing = self.db.spacing or 2
     local isHoriz = (self.db.orientation or "HORIZONTAL") == "HORIZONTAL"
 
-    local totalW = isHoriz and (#buttons * btnW + (#buttons - 1) * spacing) or btnW
-    local totalH = isHoriz and btnH or (#buttons * btnH + (#buttons - 1) * spacing)
+    local totalW = isHoriz and (#activeButtons * btnW + (#activeButtons - 1) * spacing) or btnW
+    local totalH = isHoriz and btnH or (#activeButtons * btnH + (#activeButtons - 1) * spacing)
     if self.container.SetSize then
         self.container:SetSize(totalW, totalH)
     end
 
-    for i, btn in ipairs(buttons) do
+    for i, btn in ipairs(activeButtons) do
         -- NOTE: We intentionally do NOT call btn:SetParent(self.container) or btn:Show()!
         -- Reparenting secure Blizzard buttons (e.g. MainMenuMicroButton) breaks their secure hierarchy
         -- and taints GameMenu / EditMode execution context.
@@ -323,6 +426,10 @@ function MenuMod:LayoutMicroMenu()
     end
 
     self:UpdateMicroMenuAlpha()
+end
+
+function MenuMod:GetBackdrop(btn)
+    return self.backdrops and self.backdrops[btn]
 end
 
 function MenuMod:RestoreMicroButtons()

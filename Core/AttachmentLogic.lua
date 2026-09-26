@@ -295,6 +295,13 @@ function AL:ApplyLayout(unit, frameType)
             point = db.point or "CENTER"
             x, y = db.x or 0, db.y or 0
             width = db.width or 250
+            local height = db.height or 20
+            if ns.Utils and ns.Utils.SanitizeAndCenterPoint then
+                point, x, y = ns.Utils.SanitizeAndCenterPoint(point, x, y, width, height, 10)
+                db.point = point
+                db.x = x
+                db.y = y
+            end
         elseif frameType == "Auras" or frameType == "Buffs" or frameType == "Debuffs" or frameType == "Combined" or frameType:match("^CustomAura_") or frameType:match("^RoithiAuras_") then
             -- Use specialized Screen Coordinates keys for Auras to preserve Satellite offsets
             if frameType == "Auras" or frameType == "Combined" then
@@ -329,6 +336,9 @@ function AL:ApplyLayout(unit, frameType)
         frame:SetParent(UIParent)
         frame:SetPoint(point, UIParent, point, x, y)
         if frameType ~= "Auras" and not frameType:match("^CustomAura_") then frame:SetWidth(width) end -- Auras manage their own width/growth
+        if ns.Utils and ns.Utils.ClampFrameToScreen then
+            ns.Utils.ClampFrameToScreen(frame, 10)
+        end
     else
         -- ATTACHED: Anchor to valid parent
         frame:SetMovable(false)

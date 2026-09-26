@@ -540,6 +540,140 @@ local function GetGlobalAuraOptions()
                 name = L["Manage Smart Filters (12.0.1) and Custom Aura Frames."],
                 order = 0,
             },
+            defaultAuras = {
+                type = "group",
+                name = L["Default Auras (Buff & Debuff Frames)"] or "Default Auras (Buff & Debuff Frames)",
+                order = 0.8,
+                inline = true,
+                args = {
+                    desc = {
+                        type = "description",
+                        name = L["Styling for Blizzard's standard player BuffFrame and DebuffFrame."],
+                        order = 0,
+                    },
+                    buffFrameShowBorder = {
+                        type = "toggle",
+                        name = L["Show 1px Pixel Border"],
+                        order = 1,
+                        get = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            return mdb and mdb.buffFrameShowBorder == true
+                        end,
+                        set = function(_, val)
+                            if RoithiUI.db and RoithiUI.db.profile then
+                                RoithiUI.db.profile.Minimap = RoithiUI.db.profile.Minimap or {}
+                                RoithiUI.db.profile.Minimap.buffFrameShowBorder = val
+                            end
+                            local MM = RoithiUI:GetModule("Minimap", true)
+                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                        end,
+                    },
+                    buffFrameBorderSize = {
+                        type = "range",
+                        name = L["Border Size"],
+                        order = 2,
+                        min = 1,
+                        max = 5,
+                        step = 1,
+                        get = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            return (mdb and mdb.buffFrameBorderSize) or 1
+                        end,
+                        set = function(_, val)
+                            if RoithiUI.db and RoithiUI.db.profile then
+                                RoithiUI.db.profile.Minimap = RoithiUI.db.profile.Minimap or {}
+                                RoithiUI.db.profile.Minimap.buffFrameBorderSize = val
+                            end
+                            local MM = RoithiUI:GetModule("Minimap", true)
+                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                        end,
+                        disabled = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            return not (mdb and mdb.buffFrameShowBorder)
+                        end,
+                    },
+                    buffFrameBorderColor = {
+                        type = "color",
+                        name = L["Border Color"],
+                        order = 3,
+                        hasAlpha = true,
+                        get = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            local c = (mdb and mdb.buffFrameBorderColor) or { r = 0, g = 0, b = 0, a = 1 }
+                            return c.r or 0, c.g or 0, c.b or 0, c.a or 1
+                        end,
+                        set = function(_, r, g, b, a)
+                            if RoithiUI.db and RoithiUI.db.profile then
+                                RoithiUI.db.profile.Minimap = RoithiUI.db.profile.Minimap or {}
+                                RoithiUI.db.profile.Minimap.buffFrameBorderColor = { r = r, g = g, b = b, a = a }
+                            end
+                            local MM = RoithiUI:GetModule("Minimap", true)
+                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                        end,
+                        disabled = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            return not (mdb and mdb.buffFrameShowBorder)
+                        end,
+                    },
+                    buffFrameZoomIcons = {
+                        type = "toggle",
+                        name = L["Zoom Icons (Square Look)"],
+                        order = 4,
+                        get = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            return mdb and mdb.buffFrameZoomIcons ~= false
+                        end,
+                        set = function(_, val)
+                            if RoithiUI.db and RoithiUI.db.profile then
+                                RoithiUI.db.profile.Minimap = RoithiUI.db.profile.Minimap or {}
+                                RoithiUI.db.profile.Minimap.buffFrameZoomIcons = val
+                            end
+                            local MM = RoithiUI:GetModule("Minimap", true)
+                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                        end,
+                    },
+                    buffFrameDurationSize = {
+                        type = "range",
+                        name = L["Duration Font Size"],
+                        order = 5,
+                        min = 6,
+                        max = 24,
+                        step = 1,
+                        get = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            return (mdb and mdb.buffFrameDurationSize) or 10
+                        end,
+                        set = function(_, val)
+                            if RoithiUI.db and RoithiUI.db.profile then
+                                RoithiUI.db.profile.Minimap = RoithiUI.db.profile.Minimap or {}
+                                RoithiUI.db.profile.Minimap.buffFrameDurationSize = val
+                            end
+                            local MM = RoithiUI:GetModule("Minimap", true)
+                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                        end,
+                    },
+                    buffFrameCountSize = {
+                        type = "range",
+                        name = L["Stack Count Font Size"],
+                        order = 6,
+                        min = 6,
+                        max = 24,
+                        step = 1,
+                        get = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            return (mdb and mdb.buffFrameCountSize) or 10
+                        end,
+                        set = function(_, val)
+                            if RoithiUI.db and RoithiUI.db.profile then
+                                RoithiUI.db.profile.Minimap = RoithiUI.db.profile.Minimap or {}
+                                RoithiUI.db.profile.Minimap.buffFrameCountSize = val
+                            end
+                            local MM = RoithiUI:GetModule("Minimap", true)
+                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                        end,
+                    },
+                },
+            },
             globalBlacklist = {
                 type = "group",
                 name = L["Global Spell Blacklist"],

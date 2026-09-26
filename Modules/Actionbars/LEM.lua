@@ -11,6 +11,9 @@ local BAR_DISPLAY_NAMES = {
     bar3 = "Action Bar 3",
     bar4 = "Action Bar 4",
     bar5 = "Action Bar 5",
+    bar6 = "Action Bar 6",
+    bar7 = "Action Bar 7",
+    bar8 = "Action Bar 8",
     pet = "Pet Action Bar",
     stance = "Stance / Shapeshift Bar",
 }

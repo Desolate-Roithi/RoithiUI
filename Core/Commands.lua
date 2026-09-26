@@ -41,6 +41,27 @@ function RoithiUI:ResetSettings()
     StaticPopup_Show("ROITHI_RESET")
 end
 
+local GROUP_PATH_MAP = {
+    unitframes = { "combat", "unitframes" },
+    castbars = { "combat", "castbars" },
+    castbar = { "combat", "castbars" },
+    auras = { "combat", "auras" },
+    customtags = { "combat", "customtags" },
+    encounterbar = { "combat", "encounterbar" },
+    cooldownmanager = { "combat", "cooldownmanager" },
+    cdm = { "combat", "cooldownmanager" },
+    actionbars = { "actionbars_group", "actionbars" },
+    actionbar = { "actionbars_group", "actionbars" },
+    totems = { "actionbars_group", "totems" },
+    totem = { "actionbars_group", "totems" },
+    minimap = { "interface_group", "minimap" },
+    bags = { "interface_group", "bags" },
+    bag = { "interface_group", "bags" },
+    menu = { "interface_group", "menu" },
+    swingtimer = { "combat", "swingtimer" },
+    swing = { "combat", "swingtimer" },
+}
+
 function RoithiUI:OpenConfigWindow(group)
     local ACD = LibStub("AceConfigDialog-3.0", true)
     if ACD then
@@ -48,27 +69,21 @@ function RoithiUI:OpenConfigWindow(group)
             ACD:Close("RoithiUI")
         else
             if group then
-                ACD:SelectGroup("RoithiUI", group)
+                local path = GROUP_PATH_MAP[string.lower(group)]
+                if path then
+                    ACD:SelectGroup("RoithiUI", unpack(path))
+                else
+                    ACD:SelectGroup("RoithiUI", group)
+                end
             end
             ACD:Open("RoithiUI")
         end
     end
 end
 
--- ----------------------------------------------------------------------------
--- Slash Command Handler (AceConsole)
--- ----------------------------------------------------------------------------
-function RoithiUI:ChatCommand(input)
-    if not input or input:trim() == "" then
-        -- Default: Open Free Flowing Addon Window
-        self:OpenConfigWindow()
-        return
-    end
-
-    local cmd, arg = self:GetArgs(input, 2)
-    cmd = cmd:lower()
-
-    if cmd == "help" or cmd == "?" then
+local commandHandlers
+commandHandlers = {
+    ["help"] = function(self)
         self:Print("Available Slash Commands:")
         print("  |cff00ccff/rui|r or |cff00ccff/roithi|r - Open free-flowing configuration window")
         print("  |cff00ccff/rui <group>|r - Open config to group (e.g. |cffffd700auras|r, |cffffd700unitframes|r, |cffffd700actionbars|r, |cffffd700minimap|r)")
@@ -79,8 +94,11 @@ function RoithiUI:ChatCommand(input)
         print("  |cff00ccff/rui debug|r (or |cff00ccff/rd|r) - Toggle debug mode")
         print("  |cff00ccff/rui test boss|r - Toggle Boss frames preview mode")
         print("  |cff00ccff/rl|r - Quick reload UI")
-        return
-    elseif cmd == "testsuite" or cmd == "dev" or cmd == "tests" then
+    end,
+    ["?"] = function(self)
+        commandHandlers["help"](self)
+    end,
+    ["testsuite"] = function(self)
         local UI = RoithiUI:GetModule("UI_TestSuite", true)
         local TS = RoithiUI:GetModule("TestSuite", true)
         if UI and UI.ToggleWindow then
@@ -90,7 +108,10 @@ function RoithiUI:ChatCommand(input)
         else
             self:Print("TestSuite is only available in local development mode.")
         end
-    elseif cmd == "bliz" or cmd == "options" then
+    end,
+    ["dev"] = function(self) commandHandlers["testsuite"](self) end,
+    ["tests"] = function(self) commandHandlers["testsuite"](self) end,
+    ["bliz"] = function(self)
         if Settings and Settings.OpenToCategory then
             local categoryID = RoithiUI.SettingsCategoryID or addonName
             local ok = pcall(Settings.OpenToCategory, categoryID)
@@ -103,19 +124,19 @@ function RoithiUI:ChatCommand(input)
         else
             self:Print("Options available in Game Menu -> Options -> AddOns")
         end
-    elseif cmd == "export" then
-        self:ExportSettings()
-    elseif cmd == "reset" then
-        self:ResetSettings()
-    elseif cmd == "secrets" then
-        self:Print("Use /rs or /roithisecrets for secrets tests.")
-    elseif cmd == "debug" or cmd == "rd" then
+    end,
+    ["options"] = function(self) commandHandlers["bliz"](self) end,
+    ["export"] = function(self) self:ExportSettings() end,
+    ["reset"] = function(self) self:ResetSettings() end,
+    ["secrets"] = function(self) self:Print("Use /rs or /roithisecrets for secrets tests.") end,
+    ["debug"] = function(self)
         self.debug = not self.debug
         self:Print("Debug: " .. (self.debug and "|cff00ff00Enabled|r" or "|cffff0000Disabled|r"))
-    elseif cmd == "test" then
-        -- Arg 1 is test type
-        local type = arg and arg:lower() or ""
-        if type == "boss" then
+    end,
+    ["rd"] = function(self) commandHandlers["debug"](self) end,
+    ["test"] = function(self, arg)
+        local testType = arg and arg:lower() or ""
+        if testType == "boss" then
             local UF = RoithiUI:GetModule("UnitFrames")
             if UF and UF.ToggleBossTestMode then
                 UF:ToggleBossTestMode()
@@ -123,6 +144,24 @@ function RoithiUI:ChatCommand(input)
         else
             self:Print("Usage: /roithi test [boss]")
         end
+    end,
+}
+
+-- ----------------------------------------------------------------------------
+-- Slash Command Handler (AceConsole)
+-- ----------------------------------------------------------------------------
+function RoithiUI:ChatCommand(input)
+    if not input or input:trim() == "" then
+        self:OpenConfigWindow()
+        return
+    end
+
+    local cmd, arg = self:GetArgs(input, 2)
+    cmd = cmd:lower()
+
+    local handler = commandHandlers[cmd]
+    if handler then
+        handler(self, arg)
     else
         self:OpenConfigWindow(cmd)
     end
@@ -163,6 +202,18 @@ end)
 -- Legacy had /rd separately.
 RoithiUI:RegisterChatCommand("rd", "ChatCommandDebug")
 RoithiUI:RegisterChatCommand("roithidebug", "ChatCommandDebug")
+RoithiUI:RegisterChatCommand("kb", function()
+    local AB = RoithiUI:GetModule("Actionbars", true)
+    if AB and AB.ToggleQuickKeybind then
+        AB:ToggleQuickKeybind()
+    end
+end)
+RoithiUI:RegisterChatCommand("roithikb", function()
+    local AB = RoithiUI:GetModule("Actionbars", true)
+    if AB and AB.ToggleQuickKeybind then
+        AB:ToggleQuickKeybind()
+    end
+end)
 StaticPopupDialogs["ROITHI_RELOAD"] = {
     text = "Changing module settings requires a UI reload. Reload now?",
     button1 = "Yes",

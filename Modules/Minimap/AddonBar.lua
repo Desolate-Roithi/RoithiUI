@@ -13,6 +13,7 @@ local wipe = _G.wipe or function(t) for k in pairs(t) do t[k] = nil end return t
 local IgnoredFrames = {
     ["Minimap"] = true,
     ["MinimapCluster"] = true,
+    ["MinimapContainer"] = true,
     ["MinimapZoomIn"] = true,
     ["MinimapZoomOut"] = true,
     ["MinimapBackdrop"] = true,
@@ -23,6 +24,7 @@ local IgnoredFrames = {
     ["QueueStatusButton"] = true,
     ["QueueStatusMinimapButton"] = true,
     ["MiniMapTracking"] = true,
+    ["MiniMapTrackingButton"] = true,
     ["MiniMapMailFrame"] = true,
     ["GarrisonLandingPageMinimapButton"] = true,
     ["MinimapZoneTextFrame"] = true,
@@ -31,7 +33,50 @@ local IgnoredFrames = {
     ["AddonCompartmentButton"] = true,
     ["RoithiMinimapBorder"] = true,
     ["TimeManagerClockButton"] = true,
+    ["MiniMapVoiceChatFrame"] = true,
+    ["MiniMapWorldMapButton"] = true,
+    ["MiniMapRecordingButton"] = true,
+    ["MiniMapLFGFrame"] = true,
+    ["RecycleBinFrame"] = true,
 }
+
+local function NormalizeAddonKey(name)
+    if not name then return "" end
+    local key = name
+    key = key:gsub("^LibDBIcon10_", "")
+    key = key:gsub("^LibDBIcon_", "")
+    key = key:gsub("MinimapButton$", "")
+    key = key:gsub("MinimapIcon$", "")
+    key = key:gsub("Button$", "")
+    key = key:gsub("Icon$", "")
+    return key:lower()
+end
+
+local function IsIgnoredButton(child)
+    if not child then return true end
+    local name = child.GetName and child:GetName()
+    if not name or name == "" then return true end
+    if IgnoredFrames[name] then return true end
+
+    -- Ignore all internal Roithi frames except the specific minimap button
+    if name:find("^Roithi") and name ~= "RoithiUIMinimapButton" then return true end
+    if name:find("^LibRoithi") then return true end
+
+    -- Ignore frames matching system or non-addon patterns
+    if name:find("MinimapCluster") or name:find("MinimapContainer") or name:find("Compass")
+        or name:find("ZoneText") or name:find("Tracking") or name:find("TimeManager")
+        or name:find("Recording") or name:find("Selection") or name:find("Backdrop")
+        or name:find("Border") or name:find("DragProxy") then
+        return true
+    end
+
+    -- Must be a Button widget
+    if not (child.IsObjectType and child:IsObjectType("Button")) then
+        return true
+    end
+
+    return false
+end
 
 local buttonOptionsGroup = {
     type = "group",
@@ -178,20 +223,35 @@ local function ProtectButton(button)
     end
 
     local oldSetPoint = button.SetPoint
+    button.oldSetPoint = oldSetPoint
     button.SetPoint = function(self, ...)
-        if self.isAligning then
+        if self.isAligning or (MinimapMod.db and MinimapMod.db.showAddonBar == false) then
             oldSetPoint(self, ...)
         end
     end
 
     local oldSetParent = button.SetParent
+    button.oldSetParent = oldSetParent
     button.SetParent = function(self, p)
-        if self.isAligning then
+        if self.isAligning or (MinimapMod.db and MinimapMod.db.showAddonBar == false) then
             oldSetParent(self, p)
         end
     end
 
     button.isProtected = true
+end
+
+local function UnprotectButton(button)
+    if not button or not button.isProtected then return end
+    if button.oldSetPoint then
+        button.SetPoint = button.oldSetPoint
+        button.oldSetPoint = nil
+    end
+    if button.oldSetParent then
+        button.SetParent = button.oldSetParent
+        button.oldSetParent = nil
+    end
+    button.isProtected = nil
 end
 
 function MinimapMod:UpdateAddonBarAutohide()
@@ -236,52 +296,44 @@ function MinimapMod:UpdateAddonBarAutohide()
                             custom.button:EnableMouse(true)
                         end
                     end
-                    bar.hoverLine:Hide()
                 end
             end
 
             local function OnLeave()
-                if self.db.addonBarAutohide and self.db.addonBarAttached == false and not (LEM and LEM:IsInEditMode()) and not bar:IsMouseOver() then
-                    local hoveringButton = false
-                    for _, custom in ipairs(self.activeButtons) do
-                        if (custom.button and custom.button:IsMouseOver()) or custom:IsMouseOver() then
-                            hoveringButton = true
-                            break
-                        end
-                    end
-                    if not hoveringButton then
-                        self.autohideHovered = false
-                        bar:SetAlpha(0)
-                        bar:EnableMouse(false)
+                if self.db.addonBarAutohide and self.db.addonBarAttached == false and not (LEM and LEM:IsInEditMode()) then
+                    C_Timer.After(0.2, function()
+                        if not self.db.addonBarAutohide or self.db.addonBarAttached ~= false or (LEM and LEM:IsInEditMode()) then return end
+                        local hoveringButton = false
                         for _, custom in ipairs(self.activeButtons) do
-                            custom:SetAlpha(0)
-                            custom:EnableMouse(false)
-                            if custom.button then
-                                custom.button:EnableMouse(false)
+                            if (custom.button and custom.button:IsMouseOver()) or custom:IsMouseOver() then
+                                hoveringButton = true
+                                break
                             end
                         end
-                        bar.hoverLine:Show()
-                        self:UpdateAddonBarLayout()
-                    end
+                        if not bar:IsMouseOver() and not hoveringButton and (not bar.hoverLine or not bar.hoverLine:IsMouseOver()) then
+                            self.autohideHovered = false
+                            bar:SetAlpha(0)
+                            bar:EnableMouse(false)
+                            for _, custom in ipairs(self.activeButtons) do
+                                custom:SetAlpha(0)
+                                custom:EnableMouse(false)
+                                if custom.button then
+                                    custom.button:EnableMouse(false)
+                                end
+                            end
+                            if bar.hoverLine then
+                                bar.hoverLine:Show()
+                            end
+                            self:UpdateAddonBarLayout()
+                        end
+                    end)
                 end
             end
 
             bar.hoverLine:SetScript("OnEnter", OnEnter)
-            bar:SetScript("OnEnter", nil)
-            bar:SetScript("OnLeave", function()
-                C_Timer.After(0.1, function()
-                    local hoveringButton = false
-                    for _, btn in ipairs(self.activeButtons) do
-                        if btn:IsMouseOver() or (btn.button and btn.button:IsMouseOver()) then
-                            hoveringButton = true
-                            break
-                        end
-                    end
-                    if not bar:IsMouseOver() and not hoveringButton and (bar.hoverLine and not bar.hoverLine:IsMouseOver()) then
-                        OnLeave()
-                    end
-                end)
-            end)
+            bar.hoverLine:SetScript("OnLeave", OnLeave)
+            bar:SetScript("OnEnter", OnEnter)
+            bar:SetScript("OnLeave", OnLeave)
         end
 
         local hc = self.db.addonBarHoverColor or { r = 1, g = 1, b = 1, a = 1 }
@@ -331,29 +383,32 @@ function MinimapMod:UpdateAddonBarAutohide()
 
             local thickness = self.db.addonBarHoverThickness or 4
             bar.hoverLine:ClearAllPoints()
+            local centerY = (sBottom + barH / 2) - screenH / 2
+            local centerX = (sLeft + barW / 2) - screenW / 2
+
             if side == "LEFT" then
-                bar.hoverLine:SetSize(thickness, h)
-                bar.hoverLine:SetPoint("LEFT", bar, "LEFT", 0, 0)
+                bar.hoverLine:SetSize(thickness, math.max(60, h))
+                bar.hoverLine:SetPoint("LEFT", UIParent, "LEFT", 0, centerY)
             elseif side == "RIGHT" then
-                bar.hoverLine:SetSize(thickness, h)
-                bar.hoverLine:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+                bar.hoverLine:SetSize(thickness, math.max(60, h))
+                bar.hoverLine:SetPoint("RIGHT", UIParent, "RIGHT", 0, centerY)
             elseif side == "BOTTOM" then
-                bar.hoverLine:SetSize(w, thickness)
-                bar.hoverLine:SetPoint("BOTTOM", bar, "BOTTOM", 0, 0)
+                bar.hoverLine:SetSize(math.max(60, w), thickness)
+                bar.hoverLine:SetPoint("BOTTOM", UIParent, "BOTTOM", centerX, 0)
             elseif side == "TOP" then
-                bar.hoverLine:SetSize(w, thickness)
-                bar.hoverLine:SetPoint("TOP", bar, "TOP", 0, 0)
+                bar.hoverLine:SetSize(math.max(60, w), thickness)
+                bar.hoverLine:SetPoint("TOP", UIParent, "TOP", centerX, 0)
             end
         end
 
         bar.hoverLine:Show()
         bar:SetAlpha(0)
         bar:EnableMouse(false)
-        for _, btn in ipairs(self.activeButtons) do
-            btn:SetAlpha(0)
-            btn:EnableMouse(false)
-            if btn.button then
-                btn.button:EnableMouse(false)
+        for _, custom in ipairs(self.activeButtons) do
+            custom:SetAlpha(0)
+            custom:EnableMouse(false)
+            if custom.button then
+                custom.button:EnableMouse(false)
             end
         end
     else
@@ -362,11 +417,11 @@ function MinimapMod:UpdateAddonBarAutohide()
         end
         bar:SetAlpha(1)
         bar:EnableMouse(true)
-        for _, btn in ipairs(self.activeButtons) do
-            btn:SetAlpha(1)
-            btn:EnableMouse(true)
-            if btn.button then
-                btn.button:EnableMouse(true)
+        for _, custom in ipairs(self.activeButtons) do
+            custom:SetAlpha(1)
+            custom:EnableMouse(false)
+            if custom.button then
+                custom.button:EnableMouse(true)
             end
         end
     end
@@ -492,7 +547,9 @@ function MinimapMod:CreateAddonBarExpander()
 
     local text = expander:CreateFontString(nil, "OVERLAY")
     LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
-    text:SetPoint("CENTER", expander, "CENTER", 0, 0)
+    if text.SetJustifyH then text:SetJustifyH("CENTER") end
+    if text.SetJustifyV then text:SetJustifyV("MIDDLE") end
+    text:SetPoint("CENTER", expander, "CENTER", 0, -1)
     if text.SetTextColor then
         text:SetTextColor(0.8, 0.8, 0.8, 1)
     end
@@ -545,7 +602,7 @@ function MinimapMod:UpdateAddonBarAttachment()
 
         bar:SetParent(parent)
         if bar.SetFrameStrata then bar:SetFrameStrata("HIGH") end
-        if bar.SetFrameLevel then bar:SetFrameLevel(25) end
+        if bar.SetFrameLevel then bar:SetFrameLevel(20) end
         bar:ClearAllPoints()
         local spacing = self.db.addonBarAttachedSpacing or 4
         bar:SetPoint("BOTTOMRIGHT", anchorTarget, "BOTTOMLEFT", -spacing, 0)
@@ -893,59 +950,91 @@ function MinimapMod:ScanAddonButtons()
     if not self.db.showAddonBar then return end
     self.scannedButtons = self.scannedButtons or {}
 
-    self:CreateRoithiUIMinimapButton()
-
-    local function TryAddButton(child)
-        if not child then return end
-        local name = child:GetName()
-        if name and not IgnoredFrames[name] and not self.scannedButtons[name] then
-            local isKnownPattern = name:find("MinimapButton") or name:find("LibDBIcon") or name:find("Button") or name:find("Icon")
-            if isKnownPattern or (child.IsObjectType and child:IsObjectType("Button")) then
-                self.scannedButtons[name] = child
-                if child.HookScript and child.HasScript and child:HasScript("OnEnter") then
-                    child:HookScript("OnEnter", function() self:OnBarEnter() end)
-                end
-                if child.HookScript and child.HasScript and child:HasScript("OnLeave") then
-                    child:HookScript("OnLeave", function() self:OnBarLeave() end)
-                end
+    -- Clean up any invalid, non-button, or ignored frames from earlier scans
+    for sName, sBtn in pairs(self.scannedButtons) do
+        if IsIgnoredButton(sBtn) then
+            self.scannedButtons[sName] = nil
+            if self.customButtons and self.customButtons[sName] then
+                self.customButtons[sName]:Hide()
+                self.customButtons[sName] = nil
             end
         end
     end
 
-    if Minimap then
+    self:CreateRoithiUIMinimapButton()
+
+    local knownKeys = {}
+    local knownButtons = {}
+
+    local function RegisterButton(btn, keyName, rawName)
+        if not btn or knownButtons[btn] then return end
+        local norm = NormalizeAddonKey(keyName or rawName)
+        if norm ~= "" and knownKeys[norm] then return end
+
+        knownButtons[btn] = true
+        if norm ~= "" then knownKeys[norm] = true end
+        self.scannedButtons[rawName] = btn
+
+        if btn.HookScript and btn.HasScript and btn:HasScript("OnEnter") and not btn.roithiEnterHooked then
+            btn:HookScript("OnEnter", function() self:OnBarEnter() end)
+            btn.roithiEnterHooked = true
+        end
+        if btn.HookScript and btn.HasScript and btn:HasScript("OnLeave") and not btn.roithiLeaveHooked then
+            btn:HookScript("OnLeave", function() self:OnBarLeave() end)
+            btn.roithiLeaveHooked = true
+        end
+    end
+
+    -- 1. Scan LibDBIcon FIRST (canonical registered addon buttons)
+    local LDBIcon = LibStub and LibStub("LibDBIcon-1.0", true)
+    if LDBIcon and LDBIcon.GetButtonList then
+        for _, btnName in ipairs(LDBIcon:GetButtonList()) do
+            local btn = LDBIcon:GetMinimapButton(btnName)
+            if btn and not IsIgnoredButton(btn) then
+                local actualName = btn:GetName() or ("LibDBIcon10_" .. btnName)
+                RegisterButton(btn, btnName, actualName)
+            end
+        end
+    end
+
+    -- 2. Scan Minimap, MinimapCluster, MinimapBackdrop for non-LibDBIcon standalone buttons
+    local function TryAddButton(child)
+        if not child or IsIgnoredButton(child) then return end
+        local name = (child.GetName and child:GetName()) or nil
+        if not name or name == "" then return end
+
+        -- Prevent scanning children of self.addonBar or custom buttons
+        local parent = child.GetParent and child:GetParent()
+        local parentName = (parent and parent.GetName and parent:GetName()) or nil
+        if parent == self.addonBar or (parentName and parentName:find("^RoithiAddonButton_")) then
+            return
+        end
+
+        -- Prevent scanning children of already-registered buttons
+        for _, existing in pairs(self.scannedButtons) do
+            if child == existing or parent == existing then
+                return
+            end
+        end
+
+        RegisterButton(child, name, name)
+    end
+
+    if Minimap and Minimap.GetChildren then
         for _, child in ipairs({ Minimap:GetChildren() }) do
             TryAddButton(child)
         end
     end
 
-    if MinimapCluster then
+    if MinimapCluster and MinimapCluster.GetChildren then
         for _, child in ipairs({ MinimapCluster:GetChildren() }) do
             TryAddButton(child)
         end
     end
 
-    if _G.MinimapBackdrop then
+    if _G.MinimapBackdrop and _G.MinimapBackdrop.GetChildren then
         for _, child in ipairs({ _G.MinimapBackdrop:GetChildren() }) do
             TryAddButton(child)
-        end
-    end
-
-    local LDBIcon = LibStub and LibStub("LibDBIcon-1.0", true)
-    if LDBIcon and LDBIcon.GetButtonList then
-        for _, btnName in ipairs(LDBIcon:GetButtonList()) do
-            local btn = LDBIcon:GetMinimapButton(btnName)
-            if btn then
-                local actualName = btn:GetName() or ("LibDBIcon10_" .. btnName)
-                if not self.scannedButtons[actualName] and not IgnoredFrames[actualName] then
-                    self.scannedButtons[actualName] = btn
-                    if btn.HookScript and btn.HasScript and btn:HasScript("OnEnter") then
-                        btn:HookScript("OnEnter", function() self:OnBarEnter() end)
-                    end
-                    if btn.HookScript and btn.HasScript and btn:HasScript("OnLeave") then
-                        btn:HookScript("OnLeave", function() self:OnBarLeave() end)
-                    end
-                end
-            end
         end
     end
 
@@ -955,6 +1044,30 @@ end
 
 function MinimapMod:UpdateAddonBarLayout()
     if not self.addonBar then return end
+
+    if self.db.showAddonBar == false then
+        if self.addonBar then self.addonBar:Hide() end
+        if self.expanderButton then self.expanderButton:Hide() end
+        if self.flyoutTrigger then self.flyoutTrigger:Hide() end
+        for _, btn in pairs(self.scannedButtons or {}) do
+            UnprotectButton(btn)
+            btn.isAligning = true
+            if btn.originalParent and btn.SetParent then
+                btn:SetParent(btn.originalParent)
+            elseif Minimap and btn.SetParent then
+                btn:SetParent(Minimap)
+            end
+            if btn.originalPoints and #btn.originalPoints > 0 and btn.ClearAllPoints and btn.SetPoint then
+                btn:ClearAllPoints()
+                for _, pt in ipairs(btn.originalPoints) do
+                    btn:SetPoint(unpack(pt))
+                end
+            end
+            btn.isAligning = nil
+            if btn.Show then btn:Show() end
+        end
+        return
+    end
 
     self.activeButtons = {}
     self.customButtons = self.customButtons or {}
@@ -1039,6 +1152,17 @@ function MinimapMod:UpdateAddonBarLayout()
                 if bIcon.SetAllPoints then bIcon:SetAllPoints(btn) end
             end
 
+            local barLevel = (self.addonBar and self.addonBar.GetFrameLevel and self.addonBar:GetFrameLevel()) or 20
+            local barStrata = (self.addonBar and self.addonBar.GetFrameStrata and self.addonBar:GetFrameStrata()) or "HIGH"
+
+            if custom.SetFrameStrata then
+                custom:SetFrameStrata(barStrata)
+            end
+            if custom.SetFrameLevel then
+                custom:SetFrameLevel(barLevel + 2)
+            end
+            custom:EnableMouse(false)
+
             btn.isAligning = true
             btn:SetParent(custom)
             if btn.SetFixedFrameStrata then
@@ -1047,11 +1171,11 @@ function MinimapMod:UpdateAddonBarLayout()
             if btn.SetFixedFrameLevel then
                 btn:SetFixedFrameLevel(false)
             end
-            if btn.SetFrameStrata and self.addonBar.GetFrameStrata then
-                btn:SetFrameStrata(self.addonBar:GetFrameStrata())
+            if btn.SetFrameStrata then
+                btn:SetFrameStrata(barStrata)
             end
-            if btn.SetFrameLevel and custom.GetFrameLevel then
-                btn:SetFrameLevel(custom:GetFrameLevel() + 5)
+            if btn.SetFrameLevel then
+                btn:SetFrameLevel(barLevel + 5)
             end
             if btn.ClearAllPoints then btn:ClearAllPoints() end
             if btn.SetAllPoints then btn:SetAllPoints(custom) end
@@ -1227,8 +1351,9 @@ function MinimapMod:UpdateAddonBarLayout()
                 if availDist > 0 then
                     maxFitPrim = math.max(1, math.floor((availDist - spacing) / cellH))
                 end
-            elseif primSign == 1 and anchorTop then
-                local availDist = screenH - anchorTop - spacing
+            elseif primSign == 1 then
+                local baseBottom = anchorBottom or (anchorTop and (anchorTop - 200))
+                local availDist = baseBottom and (screenH - baseBottom - spacing) or (screenH - (anchorTop or 0) - spacing)
                 if availDist > 0 then
                     maxFitPrim = math.max(1, math.floor((availDist - spacing) / cellH))
                 end
@@ -1261,7 +1386,7 @@ function MinimapMod:UpdateAddonBarLayout()
         end
     end
 
-    local effectiveBreakpoint = math.min(userBreakpoint, maxFitPrim)
+    local effectiveBreakpoint = isAttached and math.min(userBreakpoint, maxFitPrim) or userBreakpoint
     if effectiveBreakpoint < 1 then effectiveBreakpoint = 1 end
 
     local primCount = math.min(math.max(1, shownCount), effectiveBreakpoint)
@@ -1295,9 +1420,10 @@ function MinimapMod:UpdateAddonBarLayout()
         end
         if self.expanderButton then
             self.expanderButton:ClearAllPoints()
-            self.expanderButton:SetPoint("TOPLEFT", self.addonBar, "TOPLEFT", 1, -1)
-            self.expanderButton:SetSize(collapsedWidth - 2, collapsedHeight - 2)
+            self.expanderButton:SetAllPoints(self.addonBar)
             if self.expanderButton.arrow then
+                self.expanderButton.arrow:ClearAllPoints()
+                self.expanderButton.arrow:SetPoint("CENTER", self.expanderButton, "CENTER", 0, -1)
                 self.expanderButton.arrow:SetText("^")
             end
             self.expanderButton:Show()
@@ -1316,6 +1442,10 @@ function MinimapMod:UpdateAddonBarLayout()
             if not self.flyoutTrigger then
                 self:CreateFlyoutTrigger()
             end
+            local barLevel = (self.addonBar and self.addonBar.GetFrameLevel and self.addonBar:GetFrameLevel()) or 20
+            local barStrata = (self.addonBar and self.addonBar.GetFrameStrata and self.addonBar:GetFrameStrata()) or "HIGH"
+            if self.flyoutTrigger.SetFrameStrata then self.flyoutTrigger:SetFrameStrata(barStrata) end
+            if self.flyoutTrigger.SetFrameLevel then self.flyoutTrigger:SetFrameLevel(barLevel + 5) end
             self.flyoutTrigger:ClearAllPoints()
             self.flyoutTrigger:SetPoint("TOPLEFT", self.addonBar, "TOPLEFT", spacing, -spacing)
             self.flyoutTrigger:SetSize(width - spacing * 2, flyoutHeight)
@@ -1361,6 +1491,10 @@ function MinimapMod:UpdateAddonBarLayout()
         end
 
         if self.expanderButton then
+            local barLevel = (self.addonBar and self.addonBar.GetFrameLevel and self.addonBar:GetFrameLevel()) or 20
+            local barStrata = (self.addonBar and self.addonBar.GetFrameStrata and self.addonBar:GetFrameStrata()) or "HIGH"
+            if self.expanderButton.SetFrameStrata then self.expanderButton:SetFrameStrata(barStrata) end
+            if self.expanderButton.SetFrameLevel then self.expanderButton:SetFrameLevel(barLevel + 5) end
             self.expanderButton:ClearAllPoints()
             self.expanderButton:SetPoint("TOPLEFT", self.addonBar, "TOPLEFT", spacing, -(startY + buttonsHeight))
             self.expanderButton:SetSize(width - spacing * 2, expanderHeight)
@@ -1431,8 +1565,8 @@ function MinimapMod:GetAddonBarOptions()
             },
             displaceBuffs = {
                 type = "toggle",
-                name = L["Displace Buffs"] or "Displace Buffs",
-                desc = L["Automatically shift player buffs to the left when the addon bar expands."] or "Automatically shift player buffs when expanding.",
+                name = L["Displace Auras"] or "Displace Auras",
+                desc = L["Displace Auras when Addon Bar Expands"] or "Automatically shift player auras when expanding.",
                 order = 2.8,
                 get = function() return self.db.displaceBuffs ~= false end,
                 set = function(_, val)
@@ -1453,7 +1587,7 @@ function MinimapMod:GetAddonBarOptions()
                     self.db.addonBarAutohide = val
                     self:UpdateAddonBarAutohide()
                 end,
-                disabled = function() return not self.db.showAddonBar end,
+                disabled = function() return not self.db.showAddonBar or self.db.addonBarAttached end,
             },
             addonBarSnap = {
                 type = "toggle",
@@ -1615,7 +1749,7 @@ function MinimapMod:GetAddonBarOptions()
                     self.db.addonBarHoverColor = { r = r, g = g, b = b, a = a }
                     self:UpdateAddonBarAutohide()
                 end,
-                disabled = function() return not self.db.showAddonBar end,
+                disabled = function() return not self.db.showAddonBar or self.db.addonBarAttached or not self.db.addonBarAutohide end,
             },
             addonBarHoverThickness = {
                 type = "range",
@@ -1629,7 +1763,7 @@ function MinimapMod:GetAddonBarOptions()
                     self.db.addonBarHoverThickness = val
                     self:UpdateAddonBarAutohide()
                 end,
-                disabled = function() return not self.db.showAddonBar or not self.db.addonBarAutohide end,
+                disabled = function() return not self.db.showAddonBar or self.db.addonBarAttached or not self.db.addonBarAutohide end,
             },
             buttonsGroup = buttonOptionsGroup,
         },

@@ -13,22 +13,32 @@ function OptionsEngine:RegisterModuleOptions(moduleKey, schema)
     self.modules[moduleKey] = schema
 end
 
+--- Filter a single option table for AceConfig
+local function FilterAceOption(opt, filterFn)
+    local scope = opt.scope or "both"
+    if scope ~= "ace" and scope ~= "both" then
+        return nil
+    end
+
+    local copy = {}
+    for k, v in pairs(opt) do
+        if k ~= "scope" then
+            copy[k] = v
+        end
+    end
+    if copy.type == "group" and copy.args then
+        copy.args = filterFn(copy.args)
+    end
+    return copy
+end
+
 --- Recursively filter an options tree for AceConfig
 local function FilterAceArgs(argsTable)
     local result = {}
     for key, opt in pairs(argsTable) do
-        local scope = opt.scope or "both"
-        if scope == "ace" or scope == "both" then
-            local copy = {}
-            for k, v in pairs(opt) do
-                if k ~= "scope" then
-                    copy[k] = v
-                end
-            end
-            if copy.type == "group" and copy.args then
-                copy.args = FilterAceArgs(copy.args)
-            end
-            result[key] = copy
+        local filtered = FilterAceOption(opt, FilterAceArgs)
+        if filtered then
+            result[key] = filtered
         end
     end
     return result

@@ -42,6 +42,23 @@ function UF:InitializeBossFrames()
         self:CreateStandardLayout(unit, "Boss " .. i, true) -- Skip EditMode
     end
 
+    -- Apply screenshot 2 combined aura defaults to all 5 boss frames
+    for i = 1, 5 do
+        local bUnit = "boss" .. i
+        local bDb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[bUnit]
+        if bDb then
+            if bDb.aurasEnabled == nil then bDb.aurasEnabled = true end
+            if bDb.auraDetached == nil then bDb.auraDetached = false end
+            bDb.auraSize = 30
+            bDb.aurasPerRow = 10
+            bDb.maxAuras = 10
+            bDb.auraAnchor = "TOPRIGHT"
+            bDb.auraGrowDirection = "RIGHT_DOWN"
+            bDb.auraX = bDb.auraX or 0
+            bDb.auraY = bDb.auraY or 0
+        end
+    end
+
     -- Edit Mode for Driver (Controls All)
     if LEM then
         driver.editModeName = "Boss Frames" -- Label as plural for the user

@@ -23,12 +23,45 @@ AB.defaultSettings = {
     bar3 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "BOTTOM", x = 0, y = 110, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
     bar4 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "RIGHT", x = -40, y = 0, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
     bar5 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "RIGHT", x = 0, y = 0, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    bar6 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "BOTTOM", x = 0, y = 230, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    bar7 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "BOTTOM", x = 0, y = 270, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    bar8 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "BOTTOM", x = 0, y = 310, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
     pet = { enabled = true, buttonSize = 30, spacing = 4, buttonsPerRow = 10, point = "BOTTOM", x = 0, y = 150, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
     stance = { enabled = true, buttonSize = 30, spacing = 4, buttonsPerRow = 10, point = "BOTTOM", x = 0, y = 190, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
 }
 
+function AB:ToggleQuickKeybind()
+    if _G.QuickKeybindFrame then
+        if _G.QuickKeybindFrame:IsShown() then
+            _G.QuickKeybindFrame:Hide()
+        else
+            _G.QuickKeybindFrame:Show()
+        end
+    elseif _G.KeyBindingFrame_LoadUI then
+        _G.KeyBindingFrame_LoadUI()
+        if _G.KeyBindingFrame then
+            if _G.KeyBindingFrame:IsShown() then _G.KeyBindingFrame:Hide() else _G.KeyBindingFrame:Show() end
+        end
+    end
+end
+
+local function SafeCopyTable(src)
+    if _G.CopyTable then return _G.CopyTable(src) end
+    if type(src) ~= "table" then return src end
+    local dest = {}
+    for k, v in pairs(src) do
+        dest[k] = type(v) == "table" and SafeCopyTable(v) or v
+    end
+    return dest
+end
+
 function AB:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Actionbars or self.defaultSettings
+    for k, v in pairs(self.defaultSettings) do
+        if type(v) == "table" and not self.db[k] then
+            self.db[k] = SafeCopyTable(v)
+        end
+    end
     self.bars = {}
     self.queuedLayout = false
     self.showingGrid = false
@@ -45,6 +78,8 @@ function AB:OnEnable()
     self:RegisterEvent("ACTIONBAR_HIDEGRID", "OnHideGrid")
     self:RegisterEvent("PET_BAR_UPDATE", "OnPetBarUpdate")
     self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS", "OnStanceUpdate")
+    self:RegisterEvent("ACTIONBAR_PAGE_CHANGED", "OnPageChanged")
+    self:RegisterEvent("UPDATE_BONUS_ACTIONBAR", "OnPageChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
 
     self:SetupBars()
@@ -94,16 +129,34 @@ function AB:OnSlotChanged()
 end
 
 function AB:OnPetBarUpdate()
+    if self.LayoutBar then
+        self:LayoutBar("pet")
+    end
     if self.UpdateEmptyButtons then
         self:UpdateEmptyButtons("pet")
     end
 end
 
 function AB:OnStanceUpdate()
+    if self.LayoutBar then
+        self:LayoutBar("stance")
+    end
     if self.UpdateEmptyButtons then
         self:UpdateEmptyButtons("stance")
     end
 end
+
+function AB:OnPageChanged()
+    if self.LayoutBar then
+        if _G.InCombatLockdown and _G.InCombatLockdown() then
+            self.queuedLayout = true
+        else
+            self:LayoutBar("bar1")
+        end
+    end
+end
+
+AB.UpdateBarLayout = AB.LayoutBar
 
 function AB:OnEnteringWorld()
     if self.UpdateAllEmptyButtons then

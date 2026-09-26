@@ -134,7 +134,7 @@ local function GetOptions()
             args = {},
         }
         for name, module in RoithiUI:IterateModules() do
-            if name ~= "ProfileSharing" then
+            if name ~= "ProfileSharing" and not name:lower():find("testsuite") then
                 local key = string.lower(name)
                 generalOptions.args.modules.args[key] = {
                     type = "toggle",
@@ -218,7 +218,51 @@ local function GetOptions()
         end
     end
 
-    local options = DeepCopyTable(rawOptions)
+    local organizedOptions = {
+        type = "group",
+        name = L["RoithiUI Settings"] or "RoithiUI Settings",
+        args = {
+            general = rawOptions.args.general,
+            combat = {
+                type = "group",
+                name = L["Combat & Unit Frames"] or "Combat & Unit Frames",
+                order = 10,
+                childGroups = "tab",
+                args = {
+                    unitframes = rawOptions.args.unitframes,
+                    castbars = rawOptions.args.castbars,
+                    auras = rawOptions.args.auras,
+                    customtags = rawOptions.args.customtags,
+                    encounterbar = rawOptions.args.encounterbar,
+                    cooldownmanager = rawOptions.args.cooldownmanager,
+                    swingtimer = (ns.IsForever or ns.isTestEnvironment) and rawOptions.args.swingtimer or nil,
+                },
+            },
+            actionbars_group = {
+                type = "group",
+                name = L["Action Bars & Totems"] or "Action Bars & Totems",
+                order = 20,
+                childGroups = "tab",
+                args = {
+                    actionbars = rawOptions.args.actionbars,
+                    totems = rawOptions.args.totems,
+                },
+            },
+            interface_group = {
+                type = "group",
+                name = L["Interface & Quality of Life"] or "Interface & Quality of Life",
+                order = 30,
+                childGroups = "tab",
+                args = {
+                    minimap = rawOptions.args.minimap,
+                    bags = rawOptions.args.bags,
+                    menu = rawOptions.args.menu,
+                },
+            },
+        },
+    }
+
+    local options = DeepCopyTable(organizedOptions)
     CleanOptionsTableForAceConfig(options.args)
     options.args.profiles = profileOptions
     return options
@@ -226,12 +270,12 @@ end
 
 function Config:GetUnitFramesOptions()
     local opts = GetOptions()
-    return opts and opts.args and opts.args.unitframes
+    return opts and opts.args and (opts.args.unitframes or (opts.args.combat and opts.args.combat.args and opts.args.combat.args.unitframes))
 end
 
 function Config:GetCastbarsOptions()
     local opts = GetOptions()
-    return opts and opts.args and opts.args.castbars
+    return opts and opts.args and (opts.args.castbars or (opts.args.combat and opts.args.combat.args and opts.args.combat.args.castbars))
 end
 
 function Config:RegisterOptions()

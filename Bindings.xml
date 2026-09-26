@@ -1,0 +1,27 @@
+<Bindings>
+    <!-- Totem Navigation (Non-Secure Cycling) -->
+    <Binding name="ROITHI_TOTEM_CYCLE_TYPE" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false">
+        local mod = RoithiUI and RoithiUI:GetModule("Totems", true)
+        if mod and mod.CycleCategory then mod:CycleCategory(1) end
+    </Binding>
+    <Binding name="ROITHI_TOTEM_CYCLE_SPELL" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false">
+        local mod = RoithiUI and RoithiUI:GetModule("Totems", true)
+        if mod and mod.CycleSpell then mod:CycleSpell(1) end
+    </Binding>
+
+    <!-- Secure Totem Placement (Combat-Safe C-Engine Click) -->
+    <Binding name="CLICK RoithiTotemButton_current:LeftButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+    <Binding name="CLICK RoithiTotemButton_earth:LeftButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+    <Binding name="CLICK RoithiTotemButton_fire:LeftButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+    <Binding name="CLICK RoithiTotemButton_water:LeftButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+    <Binding name="CLICK RoithiTotemButton_air:LeftButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+    <Binding name="CLICK RoithiTotemButton_shield:LeftButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+    <Binding name="CLICK RoithiTotemButton_weapon:LeftButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+
+    <!-- Secure Totem Removal (Combat-Safe C-Engine Click) -->
+    <Binding name="CLICK RoithiTotemRecallButton:LeftButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+    <Binding name="CLICK RoithiTotemButton_earth:RightButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+    <Binding name="CLICK RoithiTotemButton_fire:RightButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+    <Binding name="CLICK RoithiTotemButton_water:RightButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+    <Binding name="CLICK RoithiTotemButton_air:RightButton" category="BINDING_HEADER_ROITHI_TOTEMS" runOnUp="false"/>
+</Bindings>

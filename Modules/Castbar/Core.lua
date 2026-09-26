@@ -338,9 +338,16 @@ function Castbar:OnEnable()
                         end
                     end
                 end
-            elseif event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
+            elseif event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" or event == "UI_SCALE_CHANGED" then
                 if ns.UpdatePlayerInterruptSpell then
                     ns.UpdatePlayerInterruptSpell()
+                end
+                if (event == "PLAYER_ENTERING_WORLD" or event == "UI_SCALE_CHANGED") and ns.bars then
+                    for _, b in pairs(ns.bars) do
+                        if ns.Utils and ns.Utils.ClampFrameToScreen then
+                            ns.Utils.ClampFrameToScreen(b, 10)
+                        end
+                    end
                 end
             else
                 local unit = ...
@@ -392,6 +399,7 @@ function Castbar:OnEnable()
     f:RegisterEvent("SPELLS_CHANGED")
     f:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
+    f:RegisterEvent("UI_SCALE_CHANGED")
 end
 
 function Castbar:OnDisable()
@@ -441,5 +449,8 @@ function ns.SetCastbarAttachment(unit, attached)
         bar:ClearAllPoints()
         bar:SetParent(UIParent)
         bar:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    end
+    if ns.Utils and ns.Utils.ClampFrameToScreen then
+        ns.Utils.ClampFrameToScreen(bar, 10)
     end
 end
