@@ -116,3 +116,99 @@ function ns.Utils.ShowExportWindow(exportString)
     f.EditBox:HighlightText()
     f:Show()
 end
+
+-- -------------------------------------------------------------------------
+-- Screen Clamping & Coordinate Sanitization Helpers
+-- -------------------------------------------------------------------------
+function ns.Utils.SanitizeAndCenterPoint(point, x, y, width, height, padding, extraLeft)
+    point = point or "CENTER"
+    x = tonumber(x) or 0
+    y = tonumber(y) or 0
+    width = tonumber(width) or 200
+    height = tonumber(height) or 20
+    padding = tonumber(padding) or 10
+    extraLeft = tonumber(extraLeft) or 0
+
+    local sw = UIParent and UIParent:GetWidth() or 1920
+    local sh = UIParent and UIParent:GetHeight() or 1080
+    if not sw or sw <= 0 then sw = 1920 end
+    if not sh or sh <= 0 then sh = 1080 end
+
+    local centerX, centerY = x, y
+    if point == "BOTTOM" then
+        centerY = y - (sh / 2) + (height / 2)
+    elseif point == "TOP" then
+        centerY = y + (sh / 2) - (height / 2)
+    elseif point == "LEFT" then
+        centerX = x - (sw / 2) + (width / 2)
+    elseif point == "RIGHT" then
+        centerX = x + (sw / 2) - (width / 2)
+    elseif point == "TOPLEFT" then
+        centerX = x - (sw / 2) + (width / 2)
+        centerY = y + (sh / 2) - (height / 2)
+    elseif point == "BOTTOMLEFT" then
+        centerX = x - (sw / 2) + (width / 2)
+        centerY = y - (sh / 2) + (height / 2)
+    elseif point == "TOPRIGHT" then
+        centerX = x + (sw / 2) - (width / 2)
+        centerY = y + (sh / 2) - (height / 2)
+    elseif point == "BOTTOMRIGHT" then
+        centerX = x + (sw / 2) - (width / 2)
+        centerY = y - (sh / 2) + (height / 2)
+    end
+
+    local maxX = (sw / 2) - (width / 2) - padding
+    local minX = -((sw / 2) - (width / 2) - padding - extraLeft)
+    if minX > maxX then minX = maxX end
+    centerX = math.max(minX, math.min(maxX, centerX))
+
+    local maxY = (sh / 2) - (height / 2) - padding
+    local minY = -maxY
+    if minY > maxY then minY, maxY = maxY, minY end
+    centerY = math.max(minY, math.min(maxY, centerY))
+
+    return "CENTER", math.floor(centerX * 100 + 0.5) / 100, math.floor(centerY * 100 + 0.5) / 100
+end
+
+function ns.Utils.ClampFrameToScreen(frame, padding)
+    if not frame or not frame.GetPoint then return end
+    padding = padding or 10
+
+    local sw = UIParent and UIParent:GetWidth() or 1920
+    local sh = UIParent and UIParent:GetHeight() or 1080
+    if not sw or sw <= 0 then sw = 1920 end
+    if not sh or sh <= 0 then sh = 1080 end
+
+    local left = frame.GetLeft and frame:GetLeft()
+    local right = frame.GetRight and frame:GetRight()
+    local top = frame.GetTop and frame:GetTop()
+    local bottom = frame.GetBottom and frame:GetBottom()
+
+    if not left or not right or not top or not bottom then return end
+    if (_G.issecretvalue and (_G.issecretvalue(left) or _G.issecretvalue(right) or _G.issecretvalue(top) or _G.issecretvalue(bottom))) then return end
+
+    local shiftX = 0
+    local shiftY = 0
+
+    if left < padding then
+        shiftX = padding - left
+    elseif right > (sw - padding) then
+        shiftX = (sw - padding) - right
+    end
+
+    if bottom < padding then
+        shiftY = padding - bottom
+    elseif top > (sh - padding) then
+        shiftY = (sh - padding) - top
+    end
+
+    if shiftX ~= 0 or shiftY ~= 0 then
+        local p, relTo, relP, curX, curY = frame:GetPoint(1)
+        p = p or "CENTER"
+        curX = (curX or 0) + shiftX
+        curY = (curY or 0) + shiftY
+        frame:ClearAllPoints()
+        frame:SetPoint(p, relTo or UIParent, relP or p, curX, curY)
+    end
+end
+

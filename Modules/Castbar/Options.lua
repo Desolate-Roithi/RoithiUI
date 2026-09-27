@@ -62,20 +62,25 @@ local function BuildCastbarGroup(uKey, orderIdx)
                 get = function() return GetCastbarDB(uKey).detached == true end,
                 set = function(_, v)
                     local db = GetCastbarDB(uKey)
-                    if v and (db.x == nil or db.y == nil) then
+                    if v and not db.detached then
                         local bar = ns.bars and ns.bars[uKey]
                         if bar then
                             local cX, cY = bar:GetCenter()
-                            local uScale = UIParent:GetEffectiveScale()
                             if cX and cY then
                                 local screenWidth, screenHeight = UIParent:GetSize()
                                 db.point = "CENTER"
-                                db.x = math.floor((cX / uScale) - (screenWidth / 2) + 0.5)
-                                db.y = math.floor((cY / uScale) - (screenHeight / 2) + 0.5)
+                                db.x = math.floor(cX - (screenWidth / 2) + 0.5)
+                                db.y = math.floor(cY - (screenHeight / 2) + 0.5)
                             else
                                 db.point = "CENTER"
                                 db.x = 0
                                 db.y = 0
+                            end
+                            if ns.ClampCastbarCoordinates then
+                                local pt, cx, cy = ns.ClampCastbarCoordinates(bar, db.point, db.x, db.y, db)
+                                db.point = pt
+                                db.x = cx
+                                db.y = cy
                             end
                         end
                     end
@@ -478,16 +483,35 @@ function UpdateBar(unit)
     local bar = ns.bars and ns.bars[unit]
     if not bar or not db then return end
 
-    if ns.SetCastbarAttachment then
-        ns.SetCastbarAttachment(unit, not db.detached)
-    end
-
     local finalWidth = db.width or 200
     local finalHeight = db.height or 20
     local iconScale = db.iconScale or 1.0
     local iconSize = finalHeight * iconScale
 
-    if not db.detached then
+    if db.detached then
+        bar:SetParent(UIParent)
+        bar:SetMovable(true)
+        bar:SetClampedToScreen(true)
+        local iconExtra = (db.showIcon ~= false) and iconSize or 0
+        bar:SetClampRectInsets(-iconExtra - 5, 0, 0, 0)
+
+        local point, x, y = db.point or "CENTER", db.x or 0, db.y or 0
+        if ns.ClampCastbarCoordinates then
+            point, x, y = ns.ClampCastbarCoordinates(bar, point, x, y, db)
+            db.point = point
+            db.x = x
+            db.y = y
+        end
+
+        if not bar.isInEditMode then
+            bar:ClearAllPoints()
+            bar:SetPoint(point, UIParent, point, x, y)
+        end
+    else
+        if ns.SetCastbarAttachment then
+            ns.SetCastbarAttachment(unit, true)
+        end
+
         local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
         ---@diagnostic disable-next-line: undefined-field
         local uFrame = UF and UF.units and UF.units[unit]
@@ -500,11 +524,6 @@ function UpdateBar(unit)
         end
         local AL = ns.AttachmentLogic
         if AL then AL:GlobalLayoutRefresh(unit) end
-    elseif not ns.SetCastbarAttachment and db.detached then
-        if not bar.isInEditMode then
-            bar:ClearAllPoints()
-            bar:SetPoint(db.point or "CENTER", UIParent, db.point or "CENTER", db.x or 0, db.y or 0)
-        end
     end
 
     bar:SetSize(finalWidth, finalHeight)
@@ -552,20 +571,23 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
                 get = function() return db.detached end,
                 set = function(_, value)
                     if value == true and not db.detached then
-                        if db.x == nil or db.y == nil then
-                            if bar then
-                                local cX, cY = bar:GetCenter()
-                                local uScale = UIParent:GetEffectiveScale()
-                                if cX and cY then
-                                    local screenWidth, screenHeight = UIParent:GetSize()
-                                    db.point = "CENTER"
-                                    db.x = math.floor((cX / uScale) - (screenWidth / 2) + 0.5)
-                                    db.y = math.floor((cY / uScale) - (screenHeight / 2) + 0.5)
-                                else
-                                    db.point = "CENTER"
-                                    db.x = 0
-                                    db.y = 0
-                                end
+                        if bar then
+                            local cX, cY = bar:GetCenter()
+                            if cX and cY then
+                                local screenWidth, screenHeight = UIParent:GetSize()
+                                db.point = "CENTER"
+                                db.x = math.floor(cX - (screenWidth / 2) + 0.5)
+                                db.y = math.floor(cY - (screenHeight / 2) + 0.5)
+                            else
+                                db.point = "CENTER"
+                                db.x = 0
+                                db.y = 0
+                            end
+                            if ns.ClampCastbarCoordinates then
+                                local pt, cx, cy = ns.ClampCastbarCoordinates(bar, db.point, db.x, db.y, db)
+                                db.point = pt
+                                db.x = cx
+                                db.y = cy
                             end
                         end
                     end
@@ -800,12 +822,15 @@ function ns.InitializeCastbarConfig()
         local function OnPositionChanged(movedBar, _, point, x, y)
             local posDB = GetCastbarDB(unit)
             if not posDB.detached then
-                UpdateBar(unit)
-                return
+                posDB.detached = true
             end
 
             x = math.floor(x * 100 + 0.5) / 100
             y = math.floor(y * 100 + 0.5) / 100
+
+            if ns.ClampCastbarCoordinates then
+                point, x, y = ns.ClampCastbarCoordinates(movedBar, point, x, y, posDB)
+            end
 
             posDB.point = point
             posDB.x = x
@@ -829,6 +854,8 @@ if LEM then
             local db = GetCastbarDB(unit)
             if db and db.enabled then
                 bar.isInEditMode = true
+                bar:SetParent(UIParent)
+                bar:SetMovable(true)
                 bar:Show()
                 bar:SetAlpha(1)
                 bar:SetMinMaxValues(0, 1)
@@ -850,8 +877,14 @@ if LEM then
 
     LEM:RegisterCallback('exit', function()
         if not ns.bars then return end
-        for _, bar in pairs(ns.bars) do
+        for unit, bar in pairs(ns.bars) do
             bar.isInEditMode = false
+            local db = GetCastbarDB(unit)
+            if db and not db.detached then
+                if ns.SetCastbarAttachment then
+                    ns.SetCastbarAttachment(unit, true)
+                end
+            end
             bar:Hide()
         end
     end)

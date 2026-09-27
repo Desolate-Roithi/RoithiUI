@@ -2,15 +2,16 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v1.7.2  
-**Last Updated:** 2026-09-21  
+**Latest Version:** v1.7.3  
+**Last Updated:** 2026-09-27  
 **Compatibility:** WoW 12.1.0 (Midnight) & WoW Forever (16001)
 
-## 🆕 Recent Updates (v1.7.2)
+## 🆕 Recent Updates (v1.7.3)
 
-* **Unit Frame Native Ping Integration**: Re-architected unit frame pinging to inherit Blizzard's native `PingableUnitFrameTemplate`. Resolves `securecopy()` secret-string engine crashes when pinging enemy targets and bosses during combat in Patch 12.0.7 / 12.1.0.
-* **Player HP / Resource Pinging**: Pinging the player unit frame now reports your current health and resource status (`isPlayerResource`) with instant radial wheel bypass, matching default Blizzard PlayerFrame behavior.
-* **WoW Forever (16001) & Multi-Version Support**: Full compatibility added for WoW Forever / Classic, including nil-safe specialization guards in TagManager, combo point target synchronization in ClassPower, and Classic kick spell IDs in Castbars.
+* **Castbar Screen Clamping & Boundary Enforcement**: Implemented coordinate sanitization and screen clamping across all castbars and attachment states. Bars can no longer drift or spawn off-screen, taking spell icon offsets and UI scale into account.
+* **Anchor & Reload Stability**: Resolved module load order race where castbars initialized before unit frames, eliminating issues where unmoved bars shifted or detached on `/reload`. Attached castbars now maintain hierarchy and re-anchor seamlessly upon unit frame creation.
+* **Edit Mode Coordinate Normalization**: Fixed parent re-anchoring in Edit Mode to prevent screen coordinate inflation and double UI scale division when toggling detached state.
+* **Combat & Secret Timing Robustness**: Added pushback event listeners (`UNIT_SPELLCAST_DELAYED`, `UNIT_SPELLCAST_CHANNEL_UPDATE`) and hardened secret duration handling against arithmetic operations in combat.
 
 ## 🚀 Key Features
 

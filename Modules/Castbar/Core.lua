@@ -195,19 +195,19 @@ function ns.UpdateBlizzardVisibility()
 
     -- Target
     -- Check both legacy global and new key
-    local targetBar = TargetFrame.spellbar or TargetFrameSpellBar
+    local targetBar = (TargetFrame and TargetFrame.spellbar) or _G.TargetFrameSpellBar
     if targetBar then
         ToggleBlizzBar(targetBar, db.target and db.target.enabled)
     end
 
     -- Focus
-    local focusBar = FocusFrame.spellbar or FocusFrameSpellBar
+    local focusBar = (FocusFrame and FocusFrame.spellbar) or _G.FocusFrameSpellBar
     if focusBar then
         ToggleBlizzBar(focusBar, db.focus and db.focus.enabled)
     end
 
     -- Player
-    local playerBar = PlayerFrame.Spellbar or PlayerCastingBarFrame
+    local playerBar = (PlayerFrame and PlayerFrame.Spellbar) or _G.PlayerCastingBarFrame
     if playerBar then
         ToggleBlizzBar(playerBar, db.player and db.player.enabled)
     end
@@ -289,9 +289,21 @@ function Castbar:OnEnable()
 
     f:SetScript("OnEvent", function(_, event, ...)
         if event == "PLAYER_TARGET_CHANGED" then
+            if ns.bars and ns.bars["target"] and not (InCombatLockdown and InCombatLockdown()) then
+                local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar["target"]
+                if cbDB and not cbDB.detached and ns.SetCastbarAttachment then
+                    ns.SetCastbarAttachment("target", true)
+                end
+            end
             ns.UpdateCast(ns.bars["target"])
             ns.UpdateCast(ns.bars["targettarget"])
         elseif event == "PLAYER_FOCUS_CHANGED" then
+            if ns.bars and ns.bars["focus"] and not (InCombatLockdown and InCombatLockdown()) then
+                local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar["focus"]
+                if cbDB and not cbDB.detached and ns.SetCastbarAttachment then
+                    ns.SetCastbarAttachment("focus", true)
+                end
+            end
             ns.UpdateCast(ns.bars["focus"])
             ns.UpdateCast(ns.bars["focustarget"])
         elseif event == "UNIT_TARGET" then
@@ -318,6 +330,11 @@ function Castbar:OnEnable()
         elseif event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
             if ns.UpdatePlayerInterruptSpell then
                 ns.UpdatePlayerInterruptSpell()
+            end
+            if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" then
+                if ns.RefreshAllCastbars then
+                    ns.RefreshAllCastbars()
+                end
             end
         else
             local unit = ...
@@ -355,6 +372,8 @@ function Castbar:OnEnable()
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_UPDATE")
     f:RegisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
     f:RegisterEvent("UNIT_SPELLCAST_NOT_INTERRUPTIBLE")
+    f:RegisterEvent("UNIT_SPELLCAST_DELAYED")
+    f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE")
     f:RegisterEvent("UNIT_SPELLCAST_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
@@ -370,15 +389,17 @@ end
 
 -- Slash Command
 _G.SLASH_MIDNIGHTCB1 = "/mcb"
-SlashCmdList["MIDNIGHTCB"] = function(msg)
-    if EditModeManagerFrame then
-        if not EditModeManagerFrame:IsVisible() then
-            ShowUIPanel(EditModeManagerFrame)
+if SlashCmdList then
+    SlashCmdList["MIDNIGHTCB"] = function(msg)
+        if EditModeManagerFrame then
+            if not EditModeManagerFrame:IsVisible() then
+                ShowUIPanel(EditModeManagerFrame)
+            else
+                HideUIPanel(EditModeManagerFrame)
+            end
         else
-            HideUIPanel(EditModeManagerFrame)
+            RoithiUI:Log("MidnightCastbars: Edit Mode not available.")
         end
-    else
-        RoithiUI:Log("MidnightCastbars: Edit Mode not available.")
     end
 end
 
@@ -386,18 +407,19 @@ end
 -- 4. Attachment Logic
 -- ----------------------------------------------------------------------------
 function ns.SetCastbarAttachment(unit, attached)
-    local bar = ns.bars[unit]
+    local bar = ns.bars and ns.bars[unit]
     if not bar then return end
 
-    local db = RoithiUI.db.profile.Castbar[unit]
+    local db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit]
     if not db then return end
+
+    if attached ~= nil then
+        db.detached = not attached
+    end
 
     local AL = ns.AttachmentLogic
     if AL then
         AL:ApplyLayout(unit, "Castbar")
-
-        -- Special horizontal offset for Castbar Icon removed to allow perfect centering with unit frames
-        -- The icon will now simply stick out to the left instead of pushing the bar's text off-center
     else
         -- Fallback fallback
         bar:ClearAllPoints()
