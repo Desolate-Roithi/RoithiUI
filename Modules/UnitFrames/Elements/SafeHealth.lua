@@ -7,6 +7,9 @@ local _, ns = ...
 local oUF = ns.oUF or _G.oUF
 
 local function Update(self, event, unit)
+    if event == "PLAYER_TARGET_CHANGED" or (event == "UNIT_TARGET" and self.unit == "targettarget") or event == "ForceUpdate" then
+        unit = self.unit
+    end
     if (not unit or self.unit ~= unit) then return end
     local element = self.SafeHealth
 
@@ -21,9 +24,6 @@ local function Update(self, event, unit)
     -- UnitHealthPercent(unit, exact, curve) -> safe number 0-100
     -- CurveConstants.ScaleTo100 is required for 0-100 scale
     local per = UnitHealthPercent(unit, false, CurveConstants.ScaleTo100) or 100
-    -- Convert to 0-1 ratio if needed, but usually we handle 0-100 or 0-1.
-    -- oUF usually expects 0-1 for some internal color math, but we should be careful.
-    -- Let's assume per is 0-100.
 
     -- 3. Update StatusBar
     -- SetMinMaxValues and SetValue are SAFE to call with Secrets (Blizzard allow-list)
@@ -43,6 +43,13 @@ local function Update(self, event, unit)
         end
     end
 
+    if not isPlayer and UnitGUID and unit == "targettarget" then
+        local guid = UnitGUID(unit)
+        if guid and (guid:find("^Player%-") or guid:find("^Item%-")) then
+            isPlayer = true
+        end
+    end
+
     if ((element.safeColorTapping or element.colorTapping) and not UnitPlayerControlled(unit) and UnitIsTapDenied(unit)) then
         local t = element.colors.tapped
         element:SetStatusBarColor(t.r, t.g, t.b)
@@ -51,6 +58,23 @@ local function Update(self, event, unit)
         element:SetStatusBarColor(t.r, t.g, t.b)
     elseif ((element.safeColorClass or element.colorClass) and isPlayer and not UnitHasVehicleUI(unit)) then
         local _, class = UnitClass(unit)
+        if not class and UnitGUID then
+            local guid = UnitGUID(unit)
+            if guid and _G.GetPlayerInfoByGUID then
+                local _, guidClass = _G.GetPlayerInfoByGUID(guid)
+                class = guidClass
+            end
+        end
+        if not class and UnitIsUnit then
+            if UnitIsUnit(unit, "player") then
+                local _, pClass = UnitClass("player")
+                class = pClass
+            elseif UnitIsUnit(unit, "target") then
+                local _, tClass = UnitClass("target")
+                class = tClass
+            end
+        end
+
         local isClassSecret = (issecretvalue and issecretvalue(class)) or (canaccessvalue and not canaccessvalue(class))
         local colorsClass = (element.colors and element.colors.class) or _G.RAID_CLASS_COLORS
         local t = (class and not isClassSecret and colorsClass) and colorsClass[class] or nil
@@ -102,7 +126,10 @@ local function Enable(self)
         self:RegisterEvent("UNIT_HEALTH", Path)
         self:RegisterEvent("UNIT_MAXHEALTH", Path)
         self:RegisterEvent("UNIT_CONNECTION", Path)
-        -- self:RegisterEvent("UNIT_FACTION", Path) -- If needed for tapping
+        if self.unit == "targettarget" then
+            self:RegisterEvent("UNIT_TARGET", Path)
+            self:RegisterEvent("PLAYER_TARGET_CHANGED", Path)
+        end
 
         if (element.colorSmooth) then
             element.smoothGradient = {
@@ -125,6 +152,10 @@ local function Disable(self)
         self:UnregisterEvent("UNIT_HEALTH", Path)
         self:UnregisterEvent("UNIT_MAXHEALTH", Path)
         self:UnregisterEvent("UNIT_CONNECTION", Path)
+        if self.unit == "targettarget" then
+            self:UnregisterEvent("UNIT_TARGET", Path)
+            self:UnregisterEvent("PLAYER_TARGET_CHANGED", Path)
+        end
     end
 end
 

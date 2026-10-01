@@ -140,6 +140,8 @@ function AB:GetOptions()
         ["bar8"] = L["Action Bar 8"] or "Action Bar 8",
         ["pet"] = L["Pet Action Bar"] or "Pet Action Bar",
         ["stance"] = L["Stance / Shapeshift Bar"] or "Stance / Shapeshift Bar",
+        ["extraAction"] = L["Extra Action Button"] or "Extra Action Button",
+        ["zoneAction"] = L["Zone Ability Button"] or "Zone Ability Button",
     }
 
     options.args.barSettings = {
@@ -282,6 +284,25 @@ function AB:GetOptions()
                     self:LayoutBar(bKey)
                 end,
             },
+            orientation = {
+                type = "select",
+                name = L["Orientation"] or "Orientation",
+                order = 8.5,
+                values = {
+                    ["HORIZONTAL"] = L["Horizontal"] or "Horizontal",
+                    ["VERTICAL"] = L["Vertical"] or "Vertical",
+                },
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return self.db[bKey] and self.db[bKey].orientation or "HORIZONTAL"
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].orientation = val
+                    self:LayoutBar(bKey)
+                end,
+            },
             buttonsPerRow = {
                 type = "range",
                 name = L["Buttons Per Row"],
@@ -303,7 +324,7 @@ function AB:GetOptions()
         },
     }
 
-    local legacyBars = { "bar1", "bar2", "bar3", "bar4", "bar5", "bar6", "bar7", "bar8", "pet", "stance" }
+    local legacyBars = { "bar1", "bar2", "bar3", "bar4", "bar5", "bar6", "bar7", "bar8", "pet", "stance", "extraAction", "zoneAction" }
     for _, bKey in ipairs(legacyBars) do
         options.args[bKey] = {
             type = "group",

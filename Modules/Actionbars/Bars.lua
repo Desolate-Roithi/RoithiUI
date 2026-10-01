@@ -15,6 +15,8 @@ local BAR_CONFIGS = {
     bar8 = { name = "RoithiActionBar8", prefix = "MultiBar7Button", count = 12 },
     pet = { name = "RoithiActionPetBar", prefix = "PetActionButton", count = 10 },
     stance = { name = "RoithiActionStanceBar", prefix = "StanceButton", count = 10, altPrefix = "ShapeshiftButton" },
+    extraAction = { name = "RoithiExtraActionBar", prefix = "ExtraActionButton", count = 1 },
+    zoneAction = { name = "RoithiZoneActionBar", count = 1 },
 }
 AB.BAR_CONFIGS = BAR_CONFIGS
 
@@ -29,6 +31,8 @@ local BLIZZARD_BAR_FRAMES = {
     bar8 = { "MultiBar7" },
     pet = { "PetActionBar", "PetActionBarFrame" },
     stance = { "StanceBar", "StanceBarFrame", "ShapeshiftBarFrame" },
+    extraAction = { "ExtraActionBarFrame" },
+    zoneAction = { "ZoneAbilityFrame" },
 }
 
 local function FormatHotkey(text)
@@ -89,6 +93,11 @@ end
 function AB:GetBarButtons(barKey)
     local cfg = BAR_CONFIGS[barKey]
     if not cfg then return {} end
+
+    if barKey == "zoneAction" then
+        local btn = (_G.ZoneAbilityFrame and _G.ZoneAbilityFrame.SpellButton) or _G.ZoneAbilityFrame or _G.ZoneAbilityButton1
+        return btn and { btn } or {}
+    end
 
     local buttons = {}
     for i = 1, cfg.count do
@@ -218,14 +227,14 @@ function AB:SetupBars()
         end
     end
 
-    -- Hide Blizzard Art Frames in Classic/Forever
-    if _G.MainMenuBarArtFrame and _G.MainMenuBarArtFrame.Hide then
-        _G.MainMenuBarArtFrame:Hide()
+    -- Hide Blizzard Art Frames in Classic/Forever & prevent mouse blocking
+    if _G.MainMenuBarArtFrame then
+        if _G.MainMenuBarArtFrame.Hide then _G.MainMenuBarArtFrame:Hide() end
+        if _G.MainMenuBarArtFrame.EnableMouse then _G.MainMenuBarArtFrame:EnableMouse(false) end
     end
-    if ns.IsForever or ns.isTestEnvironment then
-        if _G.MainMenuBar and _G.MainMenuBar.SetAlpha then
-            _G.MainMenuBar:SetAlpha(0)
-        end
+    if _G.MainMenuBar then
+        if _G.MainMenuBar.SetAlpha then _G.MainMenuBar:SetAlpha(0) end
+        if _G.MainMenuBar.EnableMouse then _G.MainMenuBar:EnableMouse(false) end
     end
 
     if not self.managePositionsHooked and hooksecurefunc and _G.UIParent_ManageFramePositions then
@@ -720,11 +729,18 @@ function AB:LayoutBar(barKey)
 
     local btnSize = db.buttonSize or 36
     local spacing = db.spacing or 4
-    local perRow = db.buttonsPerRow or #buttons
-    if perRow < 1 then perRow = 1 end
+    local isVertical = (db.orientation == "VERTICAL")
+    local perLine = db.buttonsPerRow or #buttons
+    if perLine < 1 then perLine = 1 end
 
-    local numCols = math.min(#buttons, perRow)
-    local numRows = math.ceil(#buttons / perRow)
+    local numCols, numRows
+    if isVertical then
+        numRows = math.min(#buttons, perLine)
+        numCols = math.ceil(#buttons / perLine)
+    else
+        numCols = math.min(#buttons, perLine)
+        numRows = math.ceil(#buttons / perLine)
+    end
 
     local totalW = (numCols * btnSize) + math.max(0, (numCols - 1) * spacing)
     local totalH = (numRows * btnSize) + math.max(0, (numRows - 1) * spacing)
@@ -750,11 +766,21 @@ function AB:LayoutBar(barKey)
         if btn.SetParent then
             btn:SetParent(container)
         end
+        if container.GetFrameLevel and btn.SetFrameLevel then
+            btn:SetFrameLevel(container:GetFrameLevel() + 10)
+        end
         if btn.SetAlpha then btn:SetAlpha(1) end
         if btn.Show then btn:Show() end
         if btn.ClearAllPoints then btn:ClearAllPoints() end
-        local col = (i - 1) % perRow
-        local row = math.floor((i - 1) / perRow)
+
+        local col, row
+        if isVertical then
+            row = (i - 1) % perLine
+            col = math.floor((i - 1) / perLine)
+        else
+            col = (i - 1) % perLine
+            row = math.floor((i - 1) / perLine)
+        end
         local x = col * (btnSize + spacing)
         local y = -row * (btnSize + spacing)
 

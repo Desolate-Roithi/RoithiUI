@@ -138,6 +138,32 @@ function MenuMod:GetOptions()
                             self:UpdateMicroMenuAlpha()
                         end,
                     },
+                    showBackground = {
+                        type = "toggle",
+                        name = L["Show Background"] or "Show Background",
+                        desc = L["Display a solid background frame behind the menu."] or "Display a solid background frame.",
+                        order = 8,
+                        get = function() return self.db.showBackground == true end,
+                        set = function(_, val)
+                            self.db.showBackground = val
+                            self:UpdateContainerBackdrop()
+                        end,
+                    },
+                    backgroundColor = {
+                        type = "color",
+                        name = L["Background Color"] or "Background Color",
+                        order = 9,
+                        hasAlpha = true,
+                        disabled = function() return not self.db.showBackground end,
+                        get = function()
+                            local c = self.db.backgroundColor or { r = 0.05, g = 0.05, b = 0.05, a = 0.85 }
+                            return c.r, c.g, c.b, c.a or 0.85
+                        end,
+                        set = function(_, r, g, b, a)
+                            self.db.backgroundColor = { r = r, g = g, b = b, a = a }
+                            self:UpdateContainerBackdrop()
+                        end,
+                    },
                 },
             },
         },

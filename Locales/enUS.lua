@@ -668,3 +668,12 @@ L["Cooldown Manager"] = "Cooldown Manager"
 L["Crop / zoom button icons for a borderless square style."] = "Crop / zoom button icons for a borderless square style."
 L["Crop Icons (Square)"] = "Crop Icons (Square)"
 L["Crops icon textures for a clean, modern square look."] = "Crops icon textures for a clean, modern square look."
+
+-- Menu & Actionbars Extensions
+L["Background Color"] = "Background Color"
+L["Display a solid background frame behind the menu."] = "Display a solid background frame behind the menu."
+L["Extra Action Button"] = "Extra Action Button"
+L["Show Background"] = "Show Background"
+L["Vertical Orientation"] = "Vertical Orientation"
+L["Zone Ability Button"] = "Zone Ability Button"
+

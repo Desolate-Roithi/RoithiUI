@@ -226,7 +226,7 @@ function MenuMod:SetupMicroMenu()
         self.updateMicroButtonsHooked = true
     end
 
-    local container = CreateFrame("Frame", "RoithiMicroMenu", UIParent)
+    local container = CreateFrame("Frame", "RoithiMicroMenu", UIParent, "BackdropTemplate")
     if container.SetClampedToScreen then container:SetClampedToScreen(true) end
     if container.SetMovable then container:SetMovable(true) end
     if container.EnableMouse then container:EnableMouse(true) end
@@ -425,11 +425,29 @@ function MenuMod:LayoutMicroMenu()
         self:StyleMicroButton(btn)
     end
 
+    self:UpdateContainerBackdrop()
     self:UpdateMicroMenuAlpha()
 end
 
-function MenuMod:GetBackdrop(btn)
-    return self.backdrops and self.backdrops[btn]
+function MenuMod:UpdateContainerBackdrop()
+    if not self.container then return end
+    if self.db and self.db.showBackground then
+        if self.container.SetBackdrop then
+            self.container:SetBackdrop({
+                bgFile = "Interface\\Buttons\\WHITE8X8",
+                edgeFile = "Interface\\Buttons\\WHITE8X8",
+                edgeSize = 1,
+            })
+            local c = self.db.backgroundColor or { r = 0.05, g = 0.05, b = 0.05, a = 0.85 }
+            self.container:SetBackdropColor(c.r, c.g, c.b, c.a or 0.85)
+            local bc = self.db.borderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
+            self.container:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a or 1.0)
+        end
+    else
+        if self.container.SetBackdrop then
+            self.container:SetBackdrop(nil)
+        end
+    end
 end
 
 function MenuMod:RestoreMicroButtons()

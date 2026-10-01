@@ -1191,7 +1191,7 @@ function BagsMod:AcquireItemSlot(index)
     slot.newOverlay = newOverlay
 
     -- Click & Drag handling
-    if slot.RegisterForClicks then slot:RegisterForClicks("AnyUp", "AnyDown") end
+    if slot.RegisterForClicks then slot:RegisterForClicks("AnyUp") end
     if slot.RegisterForDrag then slot:RegisterForDrag("LeftButton") end
 
     local function HandlePickup(s)
@@ -1233,7 +1233,11 @@ function BagsMod:AcquireItemSlot(index)
                     s:SetAttribute("item", nil)
                 end
             end
-        elseif button == "LeftButton" then
+        end
+    end)
+
+    slot:SetScript("OnClick", function(s, button)
+        if button == "LeftButton" then
             HandlePickup(s)
         end
     end)

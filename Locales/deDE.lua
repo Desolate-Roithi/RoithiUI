@@ -555,3 +555,12 @@ L["Cooldown Manager"] = "Abklingzeit-Manager"
 L["Crop / zoom button icons for a borderless square style."] = "Symbole zuschneiden/zoomen für einen rahmenlosen quadratischen Stil."
 L["Crop Icons (Square)"] = "Symbole zuschneiden (Quadratisch)"
 L["Crops icon textures for a clean, modern square look."] = "Schneidet Symboltexturen für einen sauberen, modernen quadratischen Look zu."
+
+-- Menu & Actionbars Extensions
+L["Background Color"] = "Hintergrundfarbe"
+L["Display a solid background frame behind the menu."] = "Zeigt einen soliden Hintergrundrahmen hinter dem Menü an."
+L["Extra Action Button"] = "Extra-Aktionsbutton"
+L["Show Background"] = "Hintergrund anzeigen"
+L["Vertical Orientation"] = "Vertikale Ausrichtung"
+L["Zone Ability Button"] = "Zonenfähigkeit-Schaltfläche"
+

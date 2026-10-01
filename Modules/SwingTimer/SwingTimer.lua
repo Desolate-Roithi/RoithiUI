@@ -83,6 +83,8 @@ function SwingTimer:OnEnable()
     self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnEnterCombat")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnLeaveCombat")
+    self:RegisterEvent("PLAYER_ENTER_COMBAT", "OnEnterCombat")
+    self:RegisterEvent("PLAYER_LEAVE_COMBAT", "OnLeaveCombat")
 
     self:SetupEditMode()
 end
@@ -130,7 +132,7 @@ local function CreateBarWidget(parent, name)
     spark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
     spark:SetBlendMode("ADD")
     spark:SetSize(12, 24)
-    spark:SetPoint("CENTER", bar:GetStatusBarTexture(), "RIGHT", 0, 0)
+    spark:SetPoint("CENTER", bar, "LEFT", 0, 0)
     bar.spark = spark
 
     bar:SetMinMaxValues(0, 1)
@@ -147,6 +149,8 @@ function SwingTimer:CreateFrames()
     local pFrame = CreateFrame("Frame", "RoithiSwingTimer_Player", UIParent)
     pFrame:SetClampedToScreen(true)
     pFrame:SetMovable(true)
+    pFrame:SetFrameStrata("HIGH")
+    pFrame:SetFrameLevel(50)
 
     pFrame.mainBar = CreateBarWidget(pFrame, "RoithiSwingTimer_Player_Main")
     pFrame.offBar = CreateBarWidget(pFrame, "RoithiSwingTimer_Player_Off")
@@ -161,6 +165,8 @@ function SwingTimer:CreateFrames()
     local tFrame = CreateFrame("Frame", "RoithiSwingTimer_Target", UIParent)
     tFrame:SetClampedToScreen(true)
     tFrame:SetMovable(true)
+    tFrame:SetFrameStrata("HIGH")
+    tFrame:SetFrameLevel(50)
 
     tFrame.mainBar = CreateBarWidget(tFrame, "RoithiSwingTimer_Target_Main")
 
@@ -406,7 +412,10 @@ function SwingTimer:OnUpdatePlayer(_)
             bar:SetValue(elapsed)
             bar.timeText:SetText(string.format("%.1fs", remain))
             if bar.spark then
-                bar.spark:SetPoint("CENTER", bar:GetStatusBarTexture(), "RIGHT", 0, 0)
+                local w = bar:GetWidth() or 200
+                local prog = (mh.duration > 0) and math.min(1, math.max(0, elapsed / mh.duration)) or 0
+                bar.spark:ClearAllPoints()
+                bar.spark:SetPoint("CENTER", bar, "LEFT", prog * w, 0)
             end
         else
             mh.active = false
@@ -425,7 +434,10 @@ function SwingTimer:OnUpdatePlayer(_)
             bar:SetValue(elapsed)
             bar.timeText:SetText(string.format("%.1fs", remain))
             if bar.spark then
-                bar.spark:SetPoint("CENTER", bar:GetStatusBarTexture(), "RIGHT", 0, 0)
+                local w = bar:GetWidth() or 200
+                local prog = (oh.duration > 0) and math.min(1, math.max(0, elapsed / oh.duration)) or 0
+                bar.spark:ClearAllPoints()
+                bar.spark:SetPoint("CENTER", bar, "LEFT", prog * w, 0)
             end
         else
             oh.active = false
@@ -444,7 +456,10 @@ function SwingTimer:OnUpdatePlayer(_)
             bar:SetValue(elapsed)
             bar.timeText:SetText(string.format("%.1fs", remain))
             if bar.spark then
-                bar.spark:SetPoint("CENTER", bar:GetStatusBarTexture(), "RIGHT", 0, 0)
+                local w = bar:GetWidth() or 200
+                local prog = (rg.duration > 0) and math.min(1, math.max(0, elapsed / rg.duration)) or 0
+                bar.spark:ClearAllPoints()
+                bar.spark:SetPoint("CENTER", bar, "LEFT", prog * w, 0)
             end
         else
             rg.active = false
@@ -470,7 +485,10 @@ function SwingTimer:OnUpdateTarget(_)
             bar:SetValue(elapsed)
             bar.timeText:SetText(string.format("%.1fs", remain))
             if bar.spark then
-                bar.spark:SetPoint("CENTER", bar:GetStatusBarTexture(), "RIGHT", 0, 0)
+                local w = bar:GetWidth() or 200
+                local prog = (tm.duration > 0) and math.min(1, math.max(0, elapsed / tm.duration)) or 0
+                bar.spark:ClearAllPoints()
+                bar.spark:SetPoint("CENTER", bar, "LEFT", prog * w, 0)
             end
         else
             tm.active = false
@@ -486,9 +504,16 @@ end
 -- Event Handlers
 -- ----------------------------------------------------------------------------
 
-function SwingTimer:OnCombatLog()
-    local info = CombatLogGetCurrentEventInfo and { CombatLogGetCurrentEventInfo() } or nil
-    if not info then return end
+function SwingTimer:OnCombatLog(event, ...)
+    local info
+    if _G.C_CombatLog and _G.C_CombatLog.GetCurrentEventInfo then
+        info = { _G.C_CombatLog.GetCurrentEventInfo() }
+    elseif _G.CombatLogGetCurrentEventInfo then
+        info = { _G.CombatLogGetCurrentEventInfo() }
+    elseif ... then
+        info = { ... }
+    end
+    if not info or #info < 2 then return end
 
     local subevent = info[2]
     local sourceGUID = info[4]
@@ -516,6 +541,12 @@ function SwingTimer:OnCombatLog()
                 self:StartSwing("player", "off", offSpeed)
             else
                 self:StartSwing("player", "main", mainSpeed or 2.0)
+            end
+        elseif subevent == "SPELL_DAMAGE" or subevent == "SPELL_MISSED" then
+            local spellId = info[12]
+            if spellId and SWING_RESET_SPELLS[spellId] then
+                local mainSpeed = UnitAttackSpeed and UnitAttackSpeed("player") or 2.0
+                self:StartSwing("player", "main", mainSpeed)
             end
         elseif subevent == "RANGE_DAMAGE" or subevent == "RANGE_MISSED" then
             local speed = (UnitRangedDamage and UnitRangedDamage("player")) or 2.5
@@ -619,7 +650,8 @@ function SwingTimer:OnTargetChanged()
 end
 
 function SwingTimer:OnEnterCombat()
-    -- Ready state when entering combat
+    local mainSpeed = (UnitAttackSpeed and UnitAttackSpeed("player")) or 2.0
+    self:StartSwing("player", "main", mainSpeed)
 end
 
 function SwingTimer:OnLeaveCombat()

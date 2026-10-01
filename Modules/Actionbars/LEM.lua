@@ -16,6 +16,8 @@ local BAR_DISPLAY_NAMES = {
     bar8 = "Action Bar 8",
     pet = "Pet Action Bar",
     stance = "Stance / Shapeshift Bar",
+    extraAction = "Extra Action Button",
+    zoneAction = "Zone Ability Button",
 }
 
 function AB:SetupLEM()
@@ -28,10 +30,15 @@ function AB:SetupLEM()
         local defaults = { point = "BOTTOM", x = 0, y = 30 }
         if barKey == "bar2" then defaults.y = 70
         elseif barKey == "bar3" then defaults.y = 110
-        elseif barKey == "bar4" then defaults.point = "RIGHT"; defaults.x = -40; defaults.y = 0
-        elseif barKey == "bar5" then defaults.point = "RIGHT"; defaults.x = 0; defaults.y = 0
-        elseif barKey == "pet" then defaults.y = 150
-        elseif barKey == "stance" then defaults.y = 190
+        elseif barKey == "bar4" then defaults.y = 150
+        elseif barKey == "bar5" then defaults.y = 190
+        elseif barKey == "bar6" then defaults.y = 230
+        elseif barKey == "bar7" then defaults.y = 270
+        elseif barKey == "bar8" then defaults.y = 310
+        elseif barKey == "pet" then defaults.y = 230
+        elseif barKey == "stance" then defaults.y = 265
+        elseif barKey == "extraAction" then defaults.point = "CENTER"; defaults.x = 0; defaults.y = -100
+        elseif barKey == "zoneAction" then defaults.point = "CENTER"; defaults.x = 0; defaults.y = -160
         end
 
         LEM:AddFrame(container, function(f, _, point, x, y)
@@ -84,6 +91,16 @@ function AB:SetupLEM()
                     set = function(_, val)
                         self.db[barKey] = self.db[barKey] or {}
                         self.db[barKey].buttonsPerRow = val
+                        self:LayoutBar(barKey)
+                    end,
+                },
+                {
+                    name = L["Vertical Orientation"] or "Vertical Orientation",
+                    kind = LEM.SettingType.Checkbox,
+                    get = function() return self.db[barKey] and self.db[barKey].orientation == "VERTICAL" end,
+                    set = function(_, val)
+                        self.db[barKey] = self.db[barKey] or {}
+                        self.db[barKey].orientation = val and "VERTICAL" or "HORIZONTAL"
                         self:LayoutBar(barKey)
                     end,
                 },

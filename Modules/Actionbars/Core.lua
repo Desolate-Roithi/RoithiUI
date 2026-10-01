@@ -18,19 +18,24 @@ AB.defaultSettings = {
     font = "Friz Quadrata TT",
     fontSize = 11,
     borderColor = { r = 0.2, g = 0.2, b = 0.2, a = 1.0 },
-    bar1 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "BOTTOM", x = 0, y = 30, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar2 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "BOTTOM", x = 0, y = 70, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar3 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "BOTTOM", x = 0, y = 110, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar4 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "RIGHT", x = -40, y = 0, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar5 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "RIGHT", x = 0, y = 0, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar6 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "BOTTOM", x = 0, y = 230, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar7 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "BOTTOM", x = 0, y = 270, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar8 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, point = "BOTTOM", x = 0, y = 310, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    pet = { enabled = true, buttonSize = 30, spacing = 4, buttonsPerRow = 10, point = "BOTTOM", x = 0, y = 150, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    stance = { enabled = true, buttonSize = 30, spacing = 4, buttonsPerRow = 10, point = "BOTTOM", x = 0, y = 190, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    bar1 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 30, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    bar2 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 70, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    bar3 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 110, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    bar4 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 150, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    bar5 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 190, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    bar6 = { enabled = false, buttonSize = 36, spacing = 4, buttonsPerRow = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 230, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    bar7 = { enabled = false, buttonSize = 36, spacing = 4, buttonsPerRow = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 270, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    bar8 = { enabled = false, buttonSize = 36, spacing = 4, buttonsPerRow = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 310, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    pet = { enabled = true, buttonSize = 30, spacing = 4, buttonsPerRow = 10, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 230, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    stance = { enabled = true, buttonSize = 30, spacing = 4, buttonsPerRow = 10, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 265, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
+    extraAction = { enabled = true, buttonSize = 52, point = "CENTER", x = 0, y = -100, alpha = 1.0 },
+    zoneAction = { enabled = true, buttonSize = 52, point = "CENTER", x = 0, y = -160, alpha = 1.0 },
 }
 
 function AB:ToggleQuickKeybind()
+    if not _G.QuickKeybindFrame and _G.C_AddOns and _G.C_AddOns.LoadAddOn then
+        pcall(_G.C_AddOns.LoadAddOn, "Blizzard_QuickKeybind")
+    end
     if _G.QuickKeybindFrame then
         if _G.QuickKeybindFrame:IsShown() then
             _G.QuickKeybindFrame:Hide()
@@ -42,6 +47,8 @@ function AB:ToggleQuickKeybind()
         if _G.KeyBindingFrame then
             if _G.KeyBindingFrame:IsShown() then _G.KeyBindingFrame:Hide() else _G.KeyBindingFrame:Show() end
         end
+    elseif _G.Settings and _G.Settings.OpenToCategory then
+        pcall(_G.Settings.OpenToCategory, "Keybindings")
     end
 end
 
