@@ -23,7 +23,13 @@ function BagsMod:GetOptions()
                         get = function() return self.db.enabled ~= false end,
                         set = function(_, val)
                             self.db.enabled = val
-                            if val then self:Enable() else self:Disable() end
+                            if val then
+                                self:Enable()
+                            else
+                                self:Disable()
+                                if self.RestoreBlizzardBags then self:RestoreBlizzardBags() end
+                                if self.RestoreBlizzardBagBar then self:RestoreBlizzardBagBar() end
+                            end
                         end,
                     },
                     autoSellJunk = {
@@ -83,6 +89,70 @@ function BagsMod:GetOptions()
                             self.db.bagBar = self.db.bagBar or {}
                             self.db.bagBar.spacing = val
                             self:UpdateBagBarLayout()
+                        end,
+                    },
+                    point = {
+                        type = "select",
+                        name = L["Anchor Point"],
+                        order = 4,
+                        values = {
+                            ["TOPLEFT"] = "TOPLEFT",
+                            ["TOP"] = "TOP",
+                            ["TOPRIGHT"] = "TOPRIGHT",
+                            ["LEFT"] = "LEFT",
+                            ["CENTER"] = "CENTER",
+                            ["RIGHT"] = "RIGHT",
+                            ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                            ["BOTTOM"] = "BOTTOM",
+                            ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                        },
+                        get = function() return self.db.bagBar and self.db.bagBar.point or "BOTTOMRIGHT" end,
+                        set = function(_, val)
+                            self.db.bagBar = self.db.bagBar or {}
+                            self.db.bagBar.point = val
+                            if self.bagBarFrame then
+                                self.bagBarFrame:ClearAllPoints()
+                                self.bagBarFrame:SetPoint(val, UIParent, val, self.db.bagBar.x or -10, self.db.bagBar.y or 40)
+                                self:UpdateBagBarLayout()
+                            end
+                        end,
+                    },
+                    x = {
+                        type = "range",
+                        name = L["X Position"],
+                        order = 5,
+                        min = -2500,
+                        max = 2500,
+                        step = 1,
+                        get = function() return self.db.bagBar and self.db.bagBar.x or -10 end,
+                        set = function(_, val)
+                            self.db.bagBar = self.db.bagBar or {}
+                            self.db.bagBar.x = val
+                            if self.bagBarFrame then
+                                local pt = self.db.bagBar.point or "BOTTOMRIGHT"
+                                self.bagBarFrame:ClearAllPoints()
+                                self.bagBarFrame:SetPoint(pt, UIParent, pt, val, self.db.bagBar.y or 40)
+                                self:UpdateBagBarLayout()
+                            end
+                        end,
+                    },
+                    y = {
+                        type = "range",
+                        name = L["Y Position"],
+                        order = 6,
+                        min = -1500,
+                        max = 1500,
+                        step = 1,
+                        get = function() return self.db.bagBar and self.db.bagBar.y or 40 end,
+                        set = function(_, val)
+                            self.db.bagBar = self.db.bagBar or {}
+                            self.db.bagBar.y = val
+                            if self.bagBarFrame then
+                                local pt = self.db.bagBar.point or "BOTTOMRIGHT"
+                                self.bagBarFrame:ClearAllPoints()
+                                self.bagBarFrame:SetPoint(pt, UIParent, pt, self.db.bagBar.x or -10, val)
+                                self:UpdateBagBarLayout()
+                            end
                         end,
                     },
                 },
@@ -150,6 +220,67 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.showEmptySlots = val
                             self:UpdateInventory()
+                        end,
+                    },
+                    point = {
+                        type = "select",
+                        name = L["Anchor Point"],
+                        order = 6,
+                        values = {
+                            ["TOPLEFT"] = "TOPLEFT",
+                            ["TOP"] = "TOP",
+                            ["TOPRIGHT"] = "TOPRIGHT",
+                            ["LEFT"] = "LEFT",
+                            ["CENTER"] = "CENTER",
+                            ["RIGHT"] = "RIGHT",
+                            ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                            ["BOTTOM"] = "BOTTOM",
+                            ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                        },
+                        get = function() return self.db.bagWindow and self.db.bagWindow.point or "BOTTOMRIGHT" end,
+                        set = function(_, val)
+                            self.db.bagWindow = self.db.bagWindow or {}
+                            self.db.bagWindow.point = val
+                            if self.mainFrame then
+                                self.mainFrame:ClearAllPoints()
+                                self.mainFrame:SetPoint(val, UIParent, val, self.db.bagWindow.x or -10, self.db.bagWindow.y or 80)
+                            end
+                        end,
+                    },
+                    x = {
+                        type = "range",
+                        name = L["X Position"],
+                        order = 7,
+                        min = -2500,
+                        max = 2500,
+                        step = 1,
+                        get = function() return self.db.bagWindow and self.db.bagWindow.x or -10 end,
+                        set = function(_, val)
+                            self.db.bagWindow = self.db.bagWindow or {}
+                            self.db.bagWindow.x = val
+                            if self.mainFrame then
+                                local pt = self.db.bagWindow.point or "BOTTOMRIGHT"
+                                self.mainFrame:ClearAllPoints()
+                                self.mainFrame:SetPoint(pt, UIParent, pt, val, self.db.bagWindow.y or 80)
+                            end
+                        end,
+                    },
+                    y = {
+                        type = "range",
+                        name = L["Y Position"],
+                        order = 8,
+                        min = -1500,
+                        max = 1500,
+                        step = 1,
+                        get = function() return self.db.bagWindow and self.db.bagWindow.y or 80 end,
+                        set = function(_, val)
+                            self.db.bagWindow = self.db.bagWindow or {}
+                            self.db.bagWindow.y = val
+                            if self.mainFrame then
+                                local pt = self.db.bagWindow.point or "BOTTOMRIGHT"
+                                self.mainFrame:ClearAllPoints()
+                                self.mainFrame:SetPoint(pt, UIParent, pt, self.db.bagWindow.x or -10, val)
+                            end
                         end,
                     },
                 },

@@ -238,8 +238,10 @@ local function GetOrCreateAuraMover(container, unit, containerSuffix)
                     {
                         text = "Open Full Settings",
                         click = function()
-                            if LibStub("AceConfigDialog-3.0", true) then
-                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "custom", customID)
+                            if RoithiUI and RoithiUI.OpenSettings then
+                                RoithiUI:OpenSettings("auras", "custom", customID)
+                            elseif LibStub("AceConfigDialog-3.0", true) then
+                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "auras", "custom", customID)
                                 LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
                             end
                         end
@@ -251,8 +253,10 @@ local function GetOrCreateAuraMover(container, unit, containerSuffix)
                     {
                         text = "Open Full Settings",
                         click = function()
-                            if LibStub("AceConfigDialog-3.0", true) then
-                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", unit)
+                            if RoithiUI and RoithiUI.OpenSettings then
+                                RoithiUI:OpenSettings("auras", "units", unit)
+                            elseif LibStub("AceConfigDialog-3.0", true) then
+                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "auras", "units", unit)
                                 LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
                             end
                         end

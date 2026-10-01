@@ -197,6 +197,8 @@ L["Timer Text Settings"] = "Timer-Texteinstellungen"
 L["Stack Count Settings"] = "Stapelanzeige-Einstellungen"
 L["Hide Stack Count"] = "Stapelzahl ausblenden"
 L["Styling & Texts"] = "Stil & Texte"
+L["Buttons Per Row"] = "Schaltflächen pro Zeile"
+L["Max Buttons"] = "Maximale Schaltflächen"
 
 -- Whitelist / Blacklist Mode & Notices
 L["Show Only Whitelisted Buffs"] = "Nur Stärkungszauber der Positivliste anzeigen"
@@ -563,4 +565,5 @@ L["Extra Action Button"] = "Extra-Aktionsbutton"
 L["Show Background"] = "Hintergrund anzeigen"
 L["Vertical Orientation"] = "Vertikale Ausrichtung"
 L["Zone Ability Button"] = "Zonenfähigkeit-Schaltfläche"
+L["Open Full Settings"] = "Vollständige Einstellungen öffnen"
 

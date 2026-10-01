@@ -1,4 +1,5 @@
 local addonName, AT = ...
+if AT.skipLoad then return end
 local RoithiUI = AT.RoithiUI or _G.RoithiUI
 local MinimapMod = RoithiUI:GetModule("Minimap")
 local LibRoithi = LibStub("LibRoithi-1.0")
@@ -42,21 +43,60 @@ local function StyleAuraButton(button)
         end
     end
 
+    if db and db.buffFrameEnableSkinning == false then return end
+
     local duration = button.Duration or button.duration
-    if duration and LibRoithi and LibRoithi.mixins then
-        local font = (db and db.buffFrameFont) or "Friz Quadrata TT"
-        local size = (db and db.buffFrameDurationSize) or 10
-        LibRoithi.mixins:SetFont(duration, font, size, "OUTLINE")
+    local count = button.Count or button.count
+    local font = (db and db.buffFrameFont) or "Friz Quadrata TT"
+    local outline = (db and db.buffFrameFontOutline) or "OUTLINE"
+    local showShadow = db and db.buffFrameShowShadow == true
+
+    if duration then
+        if LibRoithi and LibRoithi.mixins then
+            local size = (db and db.buffFrameDurationSize) or 10
+            LibRoithi.mixins:SetFont(duration, font, size, outline)
+        end
+        if duration.SetShadowOffset then
+            if showShadow then
+                duration:SetShadowOffset(1, -1)
+                duration:SetShadowColor(0, 0, 0, 1)
+            else
+                duration:SetShadowOffset(0, 0)
+                duration:SetShadowColor(0, 0, 0, 0)
+            end
+        end
     end
 
-    local count = button.Count or button.count
-    if count and LibRoithi and LibRoithi.mixins then
-        local font = (db and db.buffFrameFont) or "Friz Quadrata TT"
-        local size = (db and db.buffFrameCountSize) or 10
-        LibRoithi.mixins:SetFont(count, font, size, "OUTLINE")
+    if count then
+        if LibRoithi and LibRoithi.mixins then
+            local size = (db and db.buffFrameCountSize) or 10
+            LibRoithi.mixins:SetFont(count, font, size, outline)
+        end
+        if count.SetShadowOffset then
+            if showShadow then
+                count:SetShadowOffset(1, -1)
+                count:SetShadowColor(0, 0, 0, 1)
+            else
+                count:SetShadowOffset(0, 0)
+                count:SetShadowColor(0, 0, 0, 0)
+            end
+        end
     end
 
     button.roithiStyled = true
+end
+
+function MinimapMod:RefreshBuffFrameStyling()
+    if _G.BuffFrame and _G.BuffFrame.auraFrames then
+        for _, auraFrame in ipairs(_G.BuffFrame.auraFrames) do
+            StyleAuraButton(auraFrame)
+        end
+    end
+    if _G.DebuffFrame and _G.DebuffFrame.auraFrames then
+        for _, auraFrame in ipairs(_G.DebuffFrame.auraFrames) do
+            StyleAuraButton(auraFrame)
+        end
+    end
 end
 
 function MinimapMod:HookBuffFrameStyling()

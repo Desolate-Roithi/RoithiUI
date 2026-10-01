@@ -339,8 +339,10 @@ function ns.InitEncounterBarLEM()
         {
             text = "Open Full Settings",
             click = function()
-                if LibStub("AceConfigDialog-3.0") then
-                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "encounterbar")
+                if RoithiUI and RoithiUI.OpenSettings then
+                    RoithiUI:OpenSettings("encounterbar")
+                elseif LibStub("AceConfigDialog-3.0") then
+                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "encounterbar")
                     LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
                 end
             end

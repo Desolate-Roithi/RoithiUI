@@ -164,6 +164,67 @@ function MenuMod:GetOptions()
                             self:UpdateContainerBackdrop()
                         end,
                     },
+                    point = {
+                        type = "select",
+                        name = L["Anchor Point"],
+                        order = 10,
+                        values = {
+                            ["TOPLEFT"] = "TOPLEFT",
+                            ["TOP"] = "TOP",
+                            ["TOPRIGHT"] = "TOPRIGHT",
+                            ["LEFT"] = "LEFT",
+                            ["CENTER"] = "CENTER",
+                            ["RIGHT"] = "RIGHT",
+                            ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                            ["BOTTOM"] = "BOTTOM",
+                            ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                        },
+                        get = function() return self.db.point or "BOTTOMRIGHT" end,
+                        set = function(_, val)
+                            self.db.point = val
+                            if self.container then
+                                self.container:ClearAllPoints()
+                                self.container:SetPoint(val, UIParent, val, self.db.x or -280, self.db.y or 0)
+                                self:LayoutMicroMenu()
+                            end
+                        end,
+                    },
+                    x = {
+                        type = "range",
+                        name = L["X Position"],
+                        order = 11,
+                        min = -2500,
+                        max = 2500,
+                        step = 1,
+                        get = function() return self.db.x or -280 end,
+                        set = function(_, val)
+                            self.db.x = val
+                            if self.container then
+                                local pt = self.db.point or "BOTTOMRIGHT"
+                                self.container:ClearAllPoints()
+                                self.container:SetPoint(pt, UIParent, pt, val, self.db.y or 0)
+                                self:LayoutMicroMenu()
+                            end
+                        end,
+                    },
+                    y = {
+                        type = "range",
+                        name = L["Y Position"],
+                        order = 12,
+                        min = -1500,
+                        max = 1500,
+                        step = 1,
+                        get = function() return self.db.y or 0 end,
+                        set = function(_, val)
+                            self.db.y = val
+                            if self.container then
+                                local pt = self.db.point or "BOTTOMRIGHT"
+                                self.container:ClearAllPoints()
+                                self.container:SetPoint(pt, UIParent, pt, self.db.x or -280, val)
+                                self:LayoutMicroMenu()
+                            end
+                        end,
+                    },
                 },
             },
         },

@@ -46,6 +46,7 @@ local GROUP_PATH_MAP = {
     castbars = { "combat", "castbars" },
     castbar = { "combat", "castbars" },
     auras = { "combat", "auras" },
+    defaultauras = { "combat", "auras", "defaultAuras" },
     customtags = { "combat", "customtags" },
     encounterbar = { "combat", "encounterbar" },
     cooldownmanager = { "combat", "cooldownmanager" },
@@ -60,26 +61,42 @@ local GROUP_PATH_MAP = {
     menu = { "interface_group", "menu" },
     swingtimer = { "combat", "swingtimer" },
     swing = { "combat", "swingtimer" },
+    chat = { "interface_group", "chat" },
+    objectives = { "interface_group", "objectives" },
 }
 
-function RoithiUI:OpenConfigWindow(group)
-    local ACD = LibStub("AceConfigDialog-3.0", true)
-    if ACD then
-        if ACD.OpenFrames and ACD.OpenFrames["RoithiUI"] and not group then
+function RoithiUI:OpenSettings(group, ...)
+    local ACD = LibStub and LibStub("AceConfigDialog-3.0", true)
+    if not ACD then return end
+    if not group then
+        if ACD.OpenFrames and ACD.OpenFrames["RoithiUI"] then
             ACD:Close("RoithiUI")
         else
-            if group then
-                local path = GROUP_PATH_MAP[string.lower(group)]
-                if path then
-                    ACD:SelectGroup("RoithiUI", unpack(path))
-                else
-                    ACD:SelectGroup("RoithiUI", group)
-                end
-            end
             ACD:Open("RoithiUI")
         end
+        return
     end
+
+    local lowGroup = tostring(group):lower()
+    local basePath = GROUP_PATH_MAP[lowGroup]
+    local fullPath = {}
+    if basePath then
+        for _, p in ipairs(basePath) do
+            table.insert(fullPath, p)
+        end
+    else
+        table.insert(fullPath, group)
+    end
+    for i = 1, select("#", ...) do
+        local sub = select(i, ...)
+        if sub then
+            table.insert(fullPath, sub)
+        end
+    end
+    ACD:SelectGroup("RoithiUI", unpack(fullPath))
+    ACD:Open("RoithiUI")
 end
+RoithiUI.OpenConfigWindow = RoithiUI.OpenSettings
 
 local commandHandlers
 commandHandlers = {
@@ -94,6 +111,9 @@ commandHandlers = {
         print("  |cff00ccff/rui debug|r (or |cff00ccff/rd|r) - Toggle debug mode")
         print("  |cff00ccff/rui test boss|r - Toggle Boss frames preview mode")
         print("  |cff00ccff/rl|r - Quick reload UI")
+    end,
+    ["rl"] = function()
+        ReloadUI()
     end,
     ["?"] = function(self)
         commandHandlers["help"](self)
@@ -192,6 +212,13 @@ end
 -- Call Registration immediately as the addon object exists
 RoithiUI:RegisterChatCommand("roithi", "ChatCommand")
 RoithiUI:RegisterChatCommand("rui", "ChatCommand") -- Fix: Register /rui as alias
+RoithiUI:RegisterChatCommand("rl", function()
+    ReloadUI()
+end)
+_G.SLASH_ROITHIRL1 = "/rl"
+_G.SlashCmdList["ROITHIRL"] = function()
+    ReloadUI()
+end
 RoithiUI:RegisterChatCommand("lemdiag", function()
     local lib = LibStub("LibRoithi-1.0", true)
     if lib and lib.Diagnostic then

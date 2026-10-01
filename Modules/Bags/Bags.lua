@@ -46,37 +46,76 @@ function BagsMod:OnEnable()
     self:RegisterEvent("PLAYER_MONEY", "UpdateMoneyDisplay")
     self:RegisterEvent("MERCHANT_SHOW", "OnMerchantShow")
     self:RegisterEvent("MERCHANT_CLOSED", "OnMerchantClosed")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
 
     self:SetupBagBar()
     self:HookBlizzardBagFunctions()
     self:ScanInventoryOnce()
+    self:PrewarmItemSlots()
+end
+
+function BagsMod:PrewarmItemSlots()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+    self:CreateMainBagFrame()
+    for i = 1, 160 do
+        local slot = self:AcquireItemSlot(i)
+        if slot then
+            local parent = slot.slotParent or slot
+            parent:Hide()
+        end
+    end
+end
+
+function BagsMod:OnRegenEnabled()
+    if self.mainFrame and self.mainFrame:IsShown() then
+        self:UpdateInventory()
+    end
+end
+
+function BagsMod:RestoreBlizzardBags()
+    for i = 1, 13 do
+        local f = _G["ContainerFrame" .. i]
+        if f and f.SetParent then
+            f:SetParent(UIParent)
+        end
+    end
+    local cb = _G.ContainerFrameCombinedBags
+    if cb and cb.SetParent then
+        cb:SetParent(UIParent)
+    end
 end
 
 function BagsMod:OnDisable()
     if self.mainFrame and self.mainFrame.Hide then
         self.mainFrame:Hide()
     end
+    self:RestoreBlizzardBags()
+    if self.RestoreBlizzardBagBar then
+        self:RestoreBlizzardBagBar()
+    end
+end
+
+local blizzBagHidden
+local function GetBlizzBagHidden()
+    if not blizzBagHidden then
+        blizzBagHidden = CreateFrame("Frame", "RoithiUI_BlizzBagHidden", UIParent)
+        blizzBagHidden:Hide()
+    end
+    return blizzBagHidden
 end
 
 function BagsMod:KillBlizzardBags()
-    self.hookedBags = self.hookedBags or {}
-
-    local function SuppressFrame(f)
-        if not f then return end
-        if f.Hide then f:Hide() end
-        if f.HookScript and not self.hookedBags[f] then
-            self.hookedBags[f] = true
-            f:HookScript("OnShow", function(s)
-                if self.db and self.db.enabled ~= false then
-                    s:Hide()
-                end
-            end)
+    if self.db and self.db.enabled == false then return end
+    local hidden = GetBlizzBagHidden()
+    for i = 1, 13 do
+        local f = _G["ContainerFrame" .. i]
+        if f and f.SetParent and f:GetParent() ~= hidden then
+            f:SetParent(hidden)
         end
     end
-
-    SuppressFrame(_G.ContainerFrameCombinedBags)
-    for i = 1, 13 do
-        SuppressFrame(_G["ContainerFrame" .. i])
+    local cb = _G.ContainerFrameCombinedBags
+    if cb and cb.SetParent and cb:GetParent() ~= hidden then
+        cb:SetParent(hidden)
     end
 end
 
@@ -85,7 +124,7 @@ function BagsMod:HookBlizzardBagFunctions()
 
     local lastToggleTime = 0
     local function SmartToggleBags()
-        if self.db.enabled == false then return end
+        if self.db and self.db.enabled == false then return end
         local now = _G.GetTime and _G.GetTime() or 0
         if math.abs(now - lastToggleTime) < 0.05 then return end
         lastToggleTime = now
@@ -95,13 +134,13 @@ function BagsMod:HookBlizzardBagFunctions()
     end
 
     local function SmartOpenBags()
-        if self.db.enabled == false then return end
+        if self.db and self.db.enabled == false then return end
         self:OpenBags()
         self:KillBlizzardBags()
     end
 
     local function SmartCloseBags()
-        if self.db.enabled == false then return end
+        if self.db and self.db.enabled == false then return end
         self:CloseBags()
     end
 
@@ -109,11 +148,7 @@ function BagsMod:HookBlizzardBagFunctions()
     if _G.ToggleBackpack then hooksecurefunc("ToggleBackpack", SmartToggleBags) end
     if _G.ToggleBag then hooksecurefunc("ToggleBag", SmartToggleBags) end
     if _G.OpenAllBags then hooksecurefunc("OpenAllBags", SmartOpenBags) end
-    if _G.OpenBackpack then hooksecurefunc("OpenBackpack", SmartOpenBags) end
-    if _G.OpenBag then hooksecurefunc("OpenBag", SmartOpenBags) end
     if _G.CloseAllBags then hooksecurefunc("CloseAllBags", SmartCloseBags) end
-    if _G.CloseBackpack then hooksecurefunc("CloseBackpack", SmartCloseBags) end
-    if _G.CloseBag then hooksecurefunc("CloseBag", SmartCloseBags) end
 end
 
 function BagsMod:OpenCategory(catID)
@@ -148,7 +183,12 @@ function BagsMod:CloseBags()
     end
 end
 
+local lastToggleBagsTime = 0
 function BagsMod:ToggleBags(defaultCat)
+    local now = _G.GetTime and _G.GetTime() or 0
+    if math.abs(now - lastToggleBagsTime) < 0.2 then return end
+    lastToggleBagsTime = now
+
     if self.mainFrame and self.mainFrame:IsShown() then
         self:CloseBags()
     else
@@ -1129,10 +1169,27 @@ function BagsMod:AcquireItemSlot(index)
         return self.itemSlots[index]
     end
 
-    local slot = CreateFrame("Button", "RoithiBagSlot" .. index, self.mainFrame, "SecureActionButtonTemplate, BackdropTemplate")
-    local size = self.db.slotSize or 36
-    slot:SetSize(size, size)
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        return nil
+    end
 
+    self:CreateMainBagFrame()
+
+    local slotParent = CreateFrame("Frame", nil, self.mainFrame)
+    local size = self.db.slotSize or 36
+    slotParent:SetSize(size, size)
+
+    local template = "ContainerFrameItemButtonTemplate"
+    local slot = CreateFrame("ItemButton", "RoithiBagSlot" .. index, slotParent, template)
+    slot:SetAllPoints(slotParent)
+    slot.slotParent = slotParent
+
+    slotParent:SetFrameLevel(self.mainFrame:GetFrameLevel() + 5)
+    slot:SetFrameLevel(slotParent:GetFrameLevel() + 1)
+
+    if not slot.SetBackdrop and _G.BackdropTemplateMixin then
+        Mixin(slot, _G.BackdropTemplateMixin)
+    end
     if slot.SetBackdrop then
         slot:SetBackdrop({
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
@@ -1144,58 +1201,80 @@ function BagsMod:AcquireItemSlot(index)
     end
 
     -- Icon texture
-    local icon = slot:CreateTexture(nil, "ARTWORK")
-    icon:SetAllPoints(slot)
-    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    slot.icon = icon
+    local icon = slot.icon or slot.Icon or (slot.GetName and _G[slot:GetName() .. "IconTexture"])
+    if not icon then
+        icon = slot:CreateTexture(nil, "ARTWORK")
+        icon:SetAllPoints(slot)
+        slot.icon = icon
+    end
+    if slot.IconMask and icon.RemoveMaskTexture then
+        pcall(icon.RemoveMaskTexture, icon, slot.IconMask)
+    end
+    if slot.CircleMask and icon.RemoveMaskTexture then
+        pcall(icon.RemoveMaskTexture, icon, slot.CircleMask)
+    end
+    if icon.SetTexCoord then
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    end
 
     -- Count text
-    local count = slot:CreateFontString(nil, "OVERLAY")
+    local count = slot.Count or slot.count
+    if not count then
+        count = slot:CreateFontString(nil, "OVERLAY")
+        count:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -2, 2)
+        slot.count = count
+    end
     if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(count, "Friz Quadrata TT", 10, "OUTLINE")
     else
         count:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
     end
-    count:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -2, 2)
-    slot.count = count
 
     -- Item level text
-    local ilvl = slot:CreateFontString(nil, "OVERLAY")
+    local ilvl = slot.ilvl
+    if not ilvl then
+        ilvl = slot:CreateFontString(nil, "OVERLAY")
+        ilvl:SetPoint("TOPLEFT", slot, "TOPLEFT", 2, -2)
+        ilvl:SetTextColor(1, 0.82, 0, 1)
+        slot.ilvl = ilvl
+    end
     if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(ilvl, "Friz Quadrata TT", 9, "OUTLINE")
     else
         ilvl:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
     end
-    ilvl:SetPoint("TOPLEFT", slot, "TOPLEFT", 2, -2)
-    ilvl:SetTextColor(1, 0.82, 0, 1)
-    slot.ilvl = ilvl
 
     -- Favorite star indicator (Texture atlas, zero tofu box)
-    local fav = slot:CreateTexture(nil, "OVERLAY")
-    fav:SetSize(14, 14)
-    fav:SetPoint("TOPRIGHT", slot, "TOPRIGHT", -1, -1)
-    if fav.SetAtlas then
-        fav:SetAtlas("auctionhouse-icon-favorite")
-    else
-        fav:SetTexture("Interface\\Common\\Reputation-Star")
+    local fav = slot.fav
+    if not fav then
+        fav = slot:CreateTexture(nil, "OVERLAY")
+        fav:SetSize(14, 14)
+        fav:SetPoint("TOPRIGHT", slot, "TOPRIGHT", -1, -1)
+        if fav.SetAtlas then
+            fav:SetAtlas("auctionhouse-icon-favorite")
+        else
+            fav:SetTexture("Interface\\Common\\Reputation-Star")
+        end
+        slot.fav = fav
     end
-    slot.fav = fav
 
     -- New item highlight overlay
-    local newOverlay = slot:CreateTexture(nil, "OVERLAY")
-    newOverlay:SetAllPoints(slot)
-    newOverlay:SetTexture("Interface\\Buttons\\CheckButtonHilight")
-    newOverlay:SetBlendMode("ADD")
-    newOverlay:SetAlpha(0.65)
-    newOverlay:Hide()
-    slot.newOverlay = newOverlay
+    local newOverlay = slot.newOverlay
+    if not newOverlay then
+        newOverlay = slot:CreateTexture(nil, "OVERLAY")
+        newOverlay:SetAllPoints(slot)
+        newOverlay:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+        newOverlay:SetBlendMode("ADD")
+        newOverlay:SetAlpha(0.65)
+        newOverlay:Hide()
+        slot.newOverlay = newOverlay
+    end
 
     -- Click & Drag handling
-    if slot.RegisterForClicks then slot:RegisterForClicks("AnyUp") end
+    if slot.RegisterForClicks then slot:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
     if slot.RegisterForDrag then slot:RegisterForDrag("LeftButton") end
 
     local function HandlePickup(s)
-        if _G.InCombatLockdown and _G.InCombatLockdown() then return end
         if s.bag and s.slot then
             if _G.C_Container and _G.C_Container.PickupContainerItem then
                 _G.C_Container.PickupContainerItem(s.bag, s.slot)
@@ -1205,50 +1284,51 @@ function BagsMod:AcquireItemSlot(index)
         end
     end
 
-    slot:SetScript("PreClick", function(s, button)
-        if button == "RightButton" then
-            if _G.IsShiftKeyDown and _G.IsShiftKeyDown() and s.itemData and s.itemData.itemID then
-                if not (_G.InCombatLockdown and _G.InCombatLockdown()) and s.SetAttribute then
-                    s:SetAttribute("type2", nil)
+    if slot.HookScript then
+        slot:HookScript("PreClick", function(s, button)
+            if button == "RightButton" then
+                if _G.IsShiftKeyDown and _G.IsShiftKeyDown() and s.itemData and s.itemData.itemID then
+                    self:OpenItemCategoryMenu(s, s.itemData.itemID)
+                elseif _G.IsAltKeyDown and _G.IsAltKeyDown() and s.itemData and s.itemData.itemID then
+                    self.db.favorites = self.db.favorites or {}
+                    self.db.favorites[s.itemData.itemID] = not self.db.favorites[s.itemData.itemID]
+                    self:UpdateInventory()
                 end
-                self:OpenItemCategoryMenu(s, s.itemData.itemID)
-                return
             end
+        end)
+    end
 
-            if _G.IsAltKeyDown and _G.IsAltKeyDown() and s.itemData and s.itemData.itemID then
-                if not (_G.InCombatLockdown and _G.InCombatLockdown()) and s.SetAttribute then
-                    s:SetAttribute("type2", nil)
-                end
-                self.db.favorites = self.db.favorites or {}
-                self.db.favorites[s.itemData.itemID] = not self.db.favorites[s.itemData.itemID]
-                self:UpdateInventory()
-                return
-            end
-
-            if not (_G.InCombatLockdown and _G.InCombatLockdown()) and s.SetAttribute then
-                s:SetAttribute("type2", "item")
-                if s.bag and s.slot then
-                    s:SetAttribute("item", s.bag .. " " .. s.slot)
+    if not slot:GetScript("OnClick") then
+        slot:SetScript("OnClick", function(s, button)
+            if button == "LeftButton" then
+                HandlePickup(s)
+            elseif button == "RightButton" then
+                if _G.IsShiftKeyDown and _G.IsShiftKeyDown() and s.itemData and s.itemData.itemID then
+                    self:OpenItemCategoryMenu(s, s.itemData.itemID)
+                elseif _G.IsAltKeyDown and _G.IsAltKeyDown() and s.itemData and s.itemData.itemID then
+                    self.db.favorites = self.db.favorites or {}
+                    self.db.favorites[s.itemData.itemID] = not self.db.favorites[s.itemData.itemID]
+                    self:UpdateInventory()
                 else
-                    s:SetAttribute("item", nil)
+                    if s.bag and s.slot then
+                        if _G.C_Container and _G.C_Container.UseContainerItem then
+                            pcall(_G.C_Container.UseContainerItem, s.bag, s.slot)
+                        elseif _G.UseContainerItem then
+                            pcall(_G.UseContainerItem, s.bag, s.slot)
+                        end
+                    end
                 end
             end
-        end
-    end)
+        end)
+    end
 
-    slot:SetScript("OnClick", function(s, button)
-        if button == "LeftButton" then
-            HandlePickup(s)
-        end
-    end)
+    if not slot:GetScript("OnDragStart") then
+        slot:SetScript("OnDragStart", function(s) HandlePickup(s) end)
+    end
+    if not slot:GetScript("OnReceiveDrag") then
+        slot:SetScript("OnReceiveDrag", function(s) HandlePickup(s) end)
+    end
 
-    slot:SetScript("OnDragStart", function(s)
-        HandlePickup(s)
-    end)
-
-    slot:SetScript("OnReceiveDrag", function(s)
-        HandlePickup(s)
-    end)
 
     slot:SetScript("OnEnter", function(s)
         -- Slot new status management:
@@ -1357,8 +1437,17 @@ function BagsMod:UpdateInventory()
                 if isTradeableBoP then
                     self.newSlots[slotKey] = true
                     itemInfo.isNew = true
-                elseif not self.knownSlots[slotKey] or (_G.C_NewItems and _G.C_NewItems.IsNewItem and _G.C_NewItems.IsNewItem(bag, slot)) then
+                elseif _G.C_NewItems and _G.C_NewItems.IsNewItem then
+                    if _G.C_NewItems.IsNewItem(bag, slot) then
+                        self.newSlots[slotKey] = true
+                        itemInfo.isNew = true
+                    elseif self.newSlots[slotKey] then
+                        itemInfo.isNew = true
+                    end
+                elseif not self.knownItemIDs[itemInfo.itemID] then
                     self.newSlots[slotKey] = true
+                    itemInfo.isNew = true
+                elseif self.newSlots[slotKey] then
                     itemInfo.isNew = true
                 end
                 self.knownSlots[slotKey] = itemInfo.itemID
@@ -1454,129 +1543,142 @@ function BagsMod:UpdateInventory()
     local gridH = normalGridH + reagentGap + reagentGridH
     local frameH = headerH + gridH + footerH + 16
 
-    self.mainFrame:SetSize(frameW, frameH)
-    self:UpdateCategoryButtonsLayout()
+    if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+        self.mainFrame:SetSize(frameW, frameH)
+        self:UpdateCategoryButtonsLayout()
+    end
 
     local isSearching = (self.searchText and self.searchText ~= "")
 
     for i = 1, numDisplay do
         local entry = displaySlots[i]
         local slotFrame = self:AcquireItemSlot(i)
-        slotFrame:SetSize(slotSize, slotSize)
-        slotFrame:ClearAllPoints()
+        if slotFrame then
+            local parent = slotFrame.slotParent or slotFrame
+            parent:SetSize(slotSize, slotSize)
+            parent:ClearAllPoints()
 
-        local x, y
-        if activeCat == "ALL" and i > numNormal then
-            local relIdx = i - numNormal
-            local col = (relIdx - 1) % cols
-            local row = math.floor((relIdx - 1) / cols)
-            x = 8 + col * (slotSize + spacing)
-            y = -(headerH + normalGridH + reagentGap + row * (slotSize + spacing))
-        else
-            local col = (i - 1) % cols
-            local row = math.floor((i - 1) / cols)
-            x = 8 + col * (slotSize + spacing)
-            y = -(headerH + row * (slotSize + spacing))
-        end
-
-        slotFrame:SetPoint("TOPLEFT", self.mainFrame, "TOPLEFT", x, y)
-
-        slotFrame.bag = entry.bag
-        slotFrame.slot = entry.slot
-        slotFrame.itemData = entry.itemData
-
-        if not (_G.InCombatLockdown and _G.InCombatLockdown()) and slotFrame.SetAttribute then
-            slotFrame:SetAttribute("type2", "item")
-            if entry.bag and entry.slot then
-                slotFrame:SetAttribute("item", entry.bag .. " " .. entry.slot)
+            local x, y
+            if activeCat == "ALL" and i > numNormal then
+                local relIdx = i - numNormal
+                local col = (relIdx - 1) % cols
+                local row = math.floor((relIdx - 1) / cols)
+                x = 8 + col * (slotSize + spacing)
+                y = -(headerH + normalGridH + reagentGap + row * (slotSize + spacing))
             else
-                slotFrame:SetAttribute("item", nil)
-            end
-        end
-
-        local itemData = entry.itemData
-        if itemData then
-            local isMatch = true
-            if isSearching then
-                isMatch = self:MatchesSearchQuery(itemData, self.searchText)
+                local col = (i - 1) % cols
+                local row = math.floor((i - 1) / cols)
+                x = 8 + col * (slotSize + spacing)
+                y = -(headerH + row * (slotSize + spacing))
             end
 
-            slotFrame.icon:SetTexture(itemData.texture or "Interface\\Icons\\INV_Misc_QuestionMark")
-            slotFrame.icon:Show()
+            parent:SetFrameLevel(self.mainFrame:GetFrameLevel() + 5)
+            slotFrame:SetFrameLevel(parent:GetFrameLevel() + 1)
+            parent:SetPoint("TOPLEFT", self.mainFrame, "TOPLEFT", x, y)
+            parent:Show()
+            slotFrame:Show()
 
-            if isSearching and not isMatch then
-                -- Dim non-matching items
-                slotFrame:SetAlpha(0.2)
-                if slotFrame.icon.SetDesaturated then slotFrame.icon:SetDesaturated(true) end
-                slotFrame:SetBackdropBorderColor(0.15, 0.15, 0.15, 0.5)
-            else
-                -- Highlight matching items
-                slotFrame:SetAlpha(1.0)
-                if slotFrame.icon.SetDesaturated then slotFrame.icon:SetDesaturated(false) end
+            slotFrame:SetID(entry.slot or 0)
+            if slotFrame.slotParent then
+                slotFrame.slotParent:SetID(entry.bag or 0)
+            end
+
+            slotFrame.bag = entry.bag
+            slotFrame.slot = entry.slot
+            slotFrame.itemData = entry.itemData
+
+            local itemData = entry.itemData
+            if itemData then
+                local isMatch = true
                 if isSearching then
-                    slotFrame:SetBackdropBorderColor(1.0, 0.82, 0.0, 1.0)
+                    isMatch = self:MatchesSearchQuery(itemData, self.searchText)
+                end
+
+                local tex = itemData.texture or "Interface\\Icons\\INV_Misc_QuestionMark"
+                if slotFrame.SetItemButtonTexture then
+                    slotFrame:SetItemButtonTexture(tex)
+                end
+                slotFrame.icon:SetTexture(tex)
+                slotFrame.icon:Show()
+
+                if isSearching and not isMatch then
+                    -- Dim non-matching items
+                    slotFrame:SetAlpha(0.2)
+                    if slotFrame.icon.SetDesaturated then slotFrame.icon:SetDesaturated(true) end
+                    slotFrame:SetBackdropBorderColor(0.15, 0.15, 0.15, 0.5)
                 else
-                    local qc = QUALITY_COLORS[itemData.quality or 1] or QUALITY_COLORS[1]
-                    if self.db.qualityBorders ~= false then
-                        slotFrame:SetBackdropBorderColor(qc.r, qc.g, qc.b, 1.0)
+                    -- Highlight matching items
+                    slotFrame:SetAlpha(1.0)
+                    if slotFrame.icon.SetDesaturated then slotFrame.icon:SetDesaturated(false) end
+                    if isSearching then
+                        slotFrame:SetBackdropBorderColor(1.0, 0.82, 0.0, 1.0)
                     else
-                        slotFrame:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
+                        local qc = QUALITY_COLORS[itemData.quality or 1] or QUALITY_COLORS[1]
+                        if self.db.qualityBorders ~= false then
+                            slotFrame:SetBackdropBorderColor(qc.r, qc.g, qc.b, 1.0)
+                        else
+                            slotFrame:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
+                        end
                     end
                 end
-            end
 
-            -- Count
-            if itemData.count and itemData.count > 1 then
-                slotFrame.count:SetText(itemData.count)
-                slotFrame.count:Show()
+                -- Count
+                if itemData.count and itemData.count > 1 then
+                    slotFrame.count:SetText(itemData.count)
+                    slotFrame.count:Show()
+                else
+                    slotFrame.count:Hide()
+                end
+
+                -- Item Level
+                if self.db.showItemLevel and itemData.itemLevel and itemData.itemLevel > 1 and (itemData.classID == 2 or itemData.classID == 4) then
+                    slotFrame.ilvl:SetText(itemData.itemLevel)
+                    slotFrame.ilvl:Show()
+                else
+                    slotFrame.ilvl:Hide()
+                end
+
+                -- Favorites indicator
+                local favs = self.db.favorites or {}
+                if favs[itemData.itemID] then
+                    slotFrame.fav:Show()
+                else
+                    slotFrame.fav:Hide()
+                end
+
+                -- New item highlight
+                if itemData.isNew then
+                    slotFrame.newOverlay:Show()
+                else
+                    slotFrame.newOverlay:Hide()
+                end
+
+                slotFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
             else
+                -- Empty slot
+                slotFrame.icon:Hide()
+                if slotFrame.icon.SetTexture then slotFrame.icon:SetTexture(nil) end
+                if slotFrame.SetItemButtonTexture then slotFrame:SetItemButtonTexture(nil) end
                 slotFrame.count:Hide()
-            end
-
-            -- Item Level
-            if self.db.showItemLevel and itemData.itemLevel and itemData.itemLevel > 1 and (itemData.classID == 2 or itemData.classID == 4) then
-                slotFrame.ilvl:SetText(itemData.itemLevel)
-                slotFrame.ilvl:Show()
-            else
                 slotFrame.ilvl:Hide()
-            end
-
-            -- Favorites indicator
-            local favs = self.db.favorites or {}
-            if favs[itemData.itemID] then
-                slotFrame.fav:Show()
-            else
                 slotFrame.fav:Hide()
-            end
-
-            -- New item highlight
-            if itemData.isNew then
-                slotFrame.newOverlay:Show()
-            else
                 slotFrame.newOverlay:Hide()
+                if isSearching then
+                    slotFrame:SetAlpha(0.2)
+                else
+                    slotFrame:SetAlpha(1.0)
+                end
+                slotFrame:SetBackdropColor(0.03, 0.03, 0.03, 0.4)
+                slotFrame:SetBackdropBorderColor(0.15, 0.15, 0.15, 0.5)
             end
-
-            slotFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
-        else
-            -- Empty slot
-            slotFrame.icon:Hide()
-            slotFrame.count:Hide()
-            slotFrame.ilvl:Hide()
-            slotFrame.fav:Hide()
-            slotFrame.newOverlay:Hide()
-            if isSearching then
-                slotFrame:SetAlpha(0.2)
-            else
-                slotFrame:SetAlpha(1.0)
-            end
-            slotFrame:SetBackdropColor(0.03, 0.03, 0.03, 0.4)
-            slotFrame:SetBackdropBorderColor(0.15, 0.15, 0.15, 0.5)
         end
-
-        slotFrame:Show()
     end
 
     for i = numDisplay + 1, #self.itemSlots do
-        self.itemSlots[i]:Hide()
+        local s = self.itemSlots[i]
+        if s then
+            s:Hide()
+            if s.slotParent then s.slotParent:Hide() end
+        end
     end
 end

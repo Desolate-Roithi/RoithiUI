@@ -1,4 +1,5 @@
 local addonName, AT = ...
+if AT.skipLoad then return end
 local RoithiUI = AT.RoithiUI or _G.RoithiUI
 local MinimapMod = RoithiUI:GetModule("Minimap")
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")

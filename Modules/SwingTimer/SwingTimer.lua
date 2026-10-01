@@ -2,7 +2,7 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 if not ns.IsForever and not ns.isTestEnvironment then return end
 local RoithiUI = _G.RoithiUI
-local SwingTimer = RoithiUI:NewModule("SwingTimer", "AceEvent-3.0", "AceTimer-3.0")
+local SwingTimer = RoithiUI:NewModule("SwingTimer", "AceTimer-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
 local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
@@ -53,6 +53,244 @@ local SWING_RESET_SPELLS = {
     [6807] = true, [6808] = true, [6809] = true, [6810] = true, [9880] = true, [9881] = true, [26996] = true,
 }
 
+local issecretvalue = _G.issecretvalue
+local canaccessvalue = _G.canaccessvalue
+local function IsSecret(v)
+    return (type(issecretvalue) == "function" and issecretvalue(v))
+        or (type(canaccessvalue) == "function" and not canaccessvalue(v))
+        or (type(v) == "userdata")
+end
+
+function SwingTimer:GetSafeAttackSpeed(unit)
+    local main, off
+    if UnitAttackSpeed then
+        main, off = UnitAttackSpeed(unit)
+        if IsSecret(main) then main = nil end
+        if IsSecret(off) then off = nil end
+    end
+    if unit == "player" then
+        if main and type(main) == "number" and main > 0 then
+            self.cachedPlayerMainSpeed = main
+        else
+            main = self.cachedPlayerMainSpeed or 2.0
+        end
+        if off and type(off) == "number" and off > 0 then
+            self.cachedPlayerOffSpeed = off
+        else
+            off = self.cachedPlayerOffSpeed
+        end
+        return main, off
+    else
+        if main and type(main) == "number" and main > 0 then
+            self.cachedTargetSpeed = main
+        else
+            main = self.cachedTargetSpeed or 2.0
+        end
+        return main, off
+    end
+end
+
+function SwingTimer:GetSafeRangedSpeed(unit)
+    local speed
+    if UnitRangedDamage then
+        speed = select(1, UnitRangedDamage(unit or "player"))
+        if IsSecret(speed) then speed = nil end
+    end
+    if speed and type(speed) == "number" and speed > 0 then
+        self.cachedPlayerRangedSpeed = speed
+    else
+        speed = self.cachedPlayerRangedSpeed or 2.5
+    end
+    return speed
+end
+
+local SHOW_SWING_TIMER_CVAR = "showSwingTimer"
+
+function SwingTimer:EnsureBlizzardTimerEnabled()
+    if not _G.C_CVar or not _G.C_CVar.GetCVar or not _G.C_CVar.SetCVar then return false end
+    if _G.C_CVar.GetCVar(SHOW_SWING_TIMER_CVAR) == "1" then return true end
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return false end
+    pcall(_G.C_CVar.SetCVar, SHOW_SWING_TIMER_CVAR, "1")
+    return _G.C_CVar.GetCVar(SHOW_SWING_TIMER_CVAR) == "1"
+end
+
+function SwingTimer:SyncNativeProgress(hand, frame, value)
+    if self.isInEditMode or not self.playerFrame then return end
+    local pCfg = self.db and self.db.player or self.defaultSettings.player
+    if pCfg.enabled == false then return end
+
+    local bar
+    if hand == "main" then
+        bar = self.playerFrame.mainBar
+    elseif hand == "off" and pCfg.showOffhand ~= false then
+        bar = self.playerFrame.offBar
+    elseif hand == "ranged" then
+        bar = self.playerFrame.rangedBar
+    end
+
+    if not bar then return end
+
+    local statusBar = frame.GetStatusBar and frame:GetStatusBar()
+    local minVal, maxVal = 0, 2.0
+    if statusBar and statusBar.GetMinMaxValues then
+        minVal, maxVal = statusBar:GetMinMaxValues()
+    end
+
+    bar:SetMinMaxValues(minVal or 0, maxVal or 2.0)
+    bar:SetValue(value or 0)
+
+    if pCfg.showText ~= false then
+        local label = frame.GetTimeLabel and frame:GetTimeLabel()
+        local txt = label and label:GetText()
+        if txt and txt ~= "" then
+            bar.timeText:SetText(txt)
+        else
+            local dur = maxVal or 2.0
+            local val = value or 0
+            bar.timeText:SetText(string.format("%.1fs", math.max(0, dur - val)))
+        end
+    end
+
+    if bar.spark and maxVal and maxVal > 0 then
+        local w = bar:GetWidth() or 200
+        local prog = math.min(1, math.max(0, (value or 0) / maxVal))
+        bar.spark:ClearAllPoints()
+        bar.spark:SetPoint("CENTER", bar, "LEFT", prog * w, 0)
+    end
+
+    bar:Show()
+    self.playerFrame:Show()
+end
+
+function SwingTimer:SyncNativeReset(hand, frame)
+    if self.isInEditMode or not self.playerFrame then return end
+    self:SyncNativeProgress(hand, frame, 0)
+end
+
+function SwingTimer:SyncNativeClear(hand, _)
+    if not self.playerFrame then return end
+    local bar
+    if hand == "main" then
+        bar = self.playerFrame.mainBar
+    elseif hand == "off" then
+        bar = self.playerFrame.offBar
+    elseif hand == "ranged" then
+        bar = self.playerFrame.rangedBar
+    end
+    if bar then bar:Hide() end
+
+    local mb = self.playerFrame.mainBar
+    local ob = self.playerFrame.offBar
+    local rb = self.playerFrame.rangedBar
+    local anyShown = (mb and mb:IsShown()) or (ob and ob:IsShown()) or (rb and rb:IsShown())
+    if not anyShown then
+        self.playerFrame:Hide()
+    end
+end
+
+function SwingTimer:BindNativeSwingFrames()
+    self.nativeFramesBound = self.nativeFramesBound or {}
+    local anyBound = false
+
+    if _G.C_AddOns and _G.C_AddOns.LoadAddOn and not _G.SwingTimerMainHandFrame then
+        pcall(_G.C_AddOns.LoadAddOn, "Blizzard_SwingTimer")
+    end
+
+    self:EnsureBlizzardTimerEnabled()
+
+    local targets = {
+        main = _G.SwingTimerMainHandFrame,
+        off = _G.SwingTimerOffHandFrame,
+        ranged = _G.SwingTimerRangedFrame,
+    }
+
+    for hand, frame in pairs(targets) do
+        if frame and not self.nativeFramesBound[frame] then
+            self.nativeFramesBound[frame] = true
+            anyBound = true
+
+            if frame.SetAlpha then frame:SetAlpha(0) end
+            if frame.UpdateSystemSettingOpacity and hooksecurefunc then
+                hooksecurefunc(frame, "UpdateSystemSettingOpacity", function()
+                    frame:SetAlpha(0)
+                end)
+            end
+
+            local statusBar = frame.GetStatusBar and frame:GetStatusBar()
+            if statusBar and hooksecurefunc then
+                hooksecurefunc(statusBar, "SetValue", function(_, value)
+                    self:SyncNativeProgress(hand, frame, value)
+                end)
+            end
+
+            if frame.ResetSwingTimer and hooksecurefunc then
+                hooksecurefunc(frame, "ResetSwingTimer", function()
+                    self:SyncNativeReset(hand, frame)
+                end)
+            end
+
+            if frame.ClearSwingTimer and hooksecurefunc then
+                hooksecurefunc(frame, "ClearSwingTimer", function()
+                    self:SyncNativeClear(hand, frame)
+                end)
+            end
+        end
+    end
+
+    if anyBound or _G.SwingTimerMainHandFrame then
+        self.hasNativeFrames = true
+    end
+    return anyBound
+end
+
+function SwingTimer:SetupEventFrame()
+    if self.eventFrame then return end
+    local f = CreateFrame("Frame")
+    self.eventFrame = f
+    f:SetScript("OnEvent", function(_, event, ...)
+        if not self:IsEnabled() or (self.db and self.db.enabled == false) then return end
+        if event == "ADDON_LOADED" then
+            local loadedAddon = ...
+            if loadedAddon == "Blizzard_SwingTimer" then
+                self:BindNativeSwingFrames()
+            end
+        elseif event == "CVAR_UPDATE" then
+            local cvarName = ...
+            if cvarName == SHOW_SWING_TIMER_CVAR then
+                self:EnsureBlizzardTimerEnabled()
+            end
+        elseif event == "PLAYER_ENTERING_WORLD" then
+            self:BindNativeSwingFrames()
+        elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
+            self:OnCombatLog(event, ...)
+        elseif event == "UNIT_COMBAT" then
+            self:OnUnitCombat(...)
+        elseif event == "UNIT_ATTACK_SPEED" then
+            self:OnAttackSpeedChanged(event, ...)
+        elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+            self:OnSpellcastSucceeded(event, ...)
+        elseif event == "START_AUTOREPEAT_SPELL" then
+            self:OnStartAutorepeat()
+        elseif event == "STOP_AUTOREPEAT_SPELL" then
+            self:OnStopAutorepeat()
+        elseif event == "PLAYER_TARGET_CHANGED" then
+            self:OnTargetChanged()
+        elseif event == "PLAYER_ENTER_COMBAT" or event == "PLAYER_REGEN_DISABLED" then
+            self:OnEnterCombat()
+        elseif event == "PLAYER_LEAVE_COMBAT" or event == "PLAYER_REGEN_ENABLED" then
+            self:OnLeaveCombat()
+            if self.queuedEnable then
+                self.queuedEnable = false
+                self:OnEnable()
+            end
+        end
+    end)
+    f:RegisterEvent("PLAYER_REGEN_ENABLED")
+    f:RegisterEvent("PLAYER_ENTERING_WORLD")
+    f:RegisterEvent("ADDON_LOADED")
+    f:RegisterEvent("CVAR_UPDATE")
+end
+
 function SwingTimer:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.SwingTimer or self.defaultSettings
     if not self.db.player then self.db.player = self.defaultSettings.player end
@@ -66,31 +304,73 @@ function SwingTimer:OnInitialize()
     self.targetSwings = {
         main = { startTime = 0, duration = 0, active = false },
     }
+
+    self.cachedPlayerMainSpeed = 2.0
+    self.cachedPlayerOffSpeed = 2.0
+    self.cachedPlayerRangedSpeed = 2.5
+    self.cachedTargetSpeed = 2.0
+
+    self:SetupEventFrame()
+end
+
+function SwingTimer:RegisterEvent(event, _)
+    if self.eventFrame then
+        pcall(self.eventFrame.RegisterEvent, self.eventFrame, event)
+    end
+end
+
+function SwingTimer:UnregisterAllEvents()
+    self:OnDisable()
 end
 
 function SwingTimer:OnEnable()
     if not ns.IsForever and not ns.isTestEnvironment then return end
     if self.db.enabled == false then return end
 
+    self:SetupEventFrame()
+
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.queuedEnable = true
+        return
+    end
+
     self:CreateFrames()
     self:UpdateLayout()
+    self:BindNativeSwingFrames()
 
-    self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", "OnCombatLog")
-    self:RegisterEvent("UNIT_ATTACK_SPEED", "OnAttackSpeedChanged")
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
-    self:RegisterEvent("START_AUTOREPEAT_SPELL", "OnStartAutorepeat")
-    self:RegisterEvent("STOP_AUTOREPEAT_SPELL", "OnStopAutorepeat")
-    self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
-    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnEnterCombat")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnLeaveCombat")
-    self:RegisterEvent("PLAYER_ENTER_COMBAT", "OnEnterCombat")
-    self:RegisterEvent("PLAYER_LEAVE_COMBAT", "OnLeaveCombat")
+    local f = self.eventFrame
+    if f then
+        f:RegisterEvent("UNIT_ATTACK_SPEED")
+        f:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        f:RegisterEvent("START_AUTOREPEAT_SPELL")
+        f:RegisterEvent("STOP_AUTOREPEAT_SPELL")
+        f:RegisterEvent("PLAYER_TARGET_CHANGED")
+        f:RegisterEvent("PLAYER_REGEN_DISABLED")
+        f:RegisterEvent("PLAYER_ENTER_COMBAT")
+        f:RegisterEvent("PLAYER_LEAVE_COMBAT")
+        if f.RegisterUnitEvent then
+            f:RegisterUnitEvent("UNIT_COMBAT", "player", "target")
+        else
+            f:RegisterEvent("UNIT_COMBAT")
+        end
+    end
 
     self:SetupEditMode()
 end
 
 function SwingTimer:OnDisable()
-    self:UnregisterAllEvents()
+    local f = self.eventFrame
+    if f then
+        f:UnregisterEvent("UNIT_ATTACK_SPEED")
+        f:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        f:UnregisterEvent("START_AUTOREPEAT_SPELL")
+        f:UnregisterEvent("STOP_AUTOREPEAT_SPELL")
+        f:UnregisterEvent("PLAYER_TARGET_CHANGED")
+        f:UnregisterEvent("PLAYER_REGEN_DISABLED")
+        f:UnregisterEvent("PLAYER_ENTER_COMBAT")
+        f:UnregisterEvent("PLAYER_LEAVE_COMBAT")
+        f:UnregisterEvent("UNIT_COMBAT")
+    end
     if self.playerFrame then self.playerFrame:Hide() end
     if self.targetFrame then self.targetFrame:Hide() end
 end
@@ -187,6 +467,21 @@ function SwingTimer:SetupEditMode()
             pCfg.x = newX
             pCfg.y = newY
         end, { point = pCfg.point or "CENTER", x = pCfg.x or 0, y = pCfg.y or -140 })
+        if LEM.AddFrameSettingsButtons then
+            LEM:AddFrameSettingsButtons(self.playerFrame, {
+                {
+                    text = L["Open Full Settings"] or "Open Full Settings",
+                    click = function()
+                        if RoithiUI and RoithiUI.OpenSettings then
+                            RoithiUI:OpenSettings("swingtimer")
+                        elseif LibStub("AceConfigDialog-3.0") then
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "swingtimer")
+                            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                        end
+                    end,
+                },
+            })
+        end
         self.playerFrame.editModeRegistered = true
     end
 
@@ -198,6 +493,21 @@ function SwingTimer:SetupEditMode()
             tCfg.x = newX
             tCfg.y = newY
         end, { point = tCfg.point or "CENTER", x = tCfg.x or 0, y = tCfg.y or -160 })
+        if LEM.AddFrameSettingsButtons then
+            LEM:AddFrameSettingsButtons(self.targetFrame, {
+                {
+                    text = L["Open Full Settings"] or "Open Full Settings",
+                    click = function()
+                        if RoithiUI and RoithiUI.OpenSettings then
+                            RoithiUI:OpenSettings("swingtimer")
+                        elseif LibStub("AceConfigDialog-3.0") then
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "swingtimer")
+                            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                        end
+                    end,
+                },
+            })
+        end
         self.targetFrame.editModeRegistered = true
     end
 
@@ -325,7 +635,20 @@ end
 -- ----------------------------------------------------------------------------
 
 function SwingTimer:StartSwing(unit, swingType, duration)
-    if duration <= 0 then return end
+    if IsSecret(duration) or type(duration) ~= "number" then
+        if unit == "player" then
+            if swingType == "off" then
+                duration = self.cachedPlayerOffSpeed or 2.0
+            elseif swingType == "ranged" then
+                duration = self.cachedPlayerRangedSpeed or 2.5
+            else
+                duration = self.cachedPlayerMainSpeed or 2.0
+            end
+        else
+            duration = self.cachedTargetSpeed or 2.0
+        end
+    end
+    if not duration or duration <= 0 then return end
     local now = GetTime()
 
     if unit == "player" then
@@ -374,6 +697,10 @@ function SwingTimer:ApplyParryHaste(unit)
     local record = (unit == "player") and self.playerSwings.main or self.targetSwings.main
     if not record or not record.active then return end
 
+    if IsSecret(record.duration) or type(record.duration) ~= "number" or record.duration <= 0 then
+        record.duration = (unit == "player") and (self.cachedPlayerMainSpeed or 2.0) or (self.cachedTargetSpeed or 2.0)
+    end
+
     local elapsed = now - record.startTime
     local remaining = record.duration - elapsed
     if remaining <= 0 then return end
@@ -388,7 +715,7 @@ function SwingTimer:ApplyParryHaste(unit)
 end
 
 function SwingTimer:ResetPlayerSwing()
-    local mainSpeed = UnitAttackSpeed and UnitAttackSpeed("player") or 2.0
+    local mainSpeed = self:GetSafeAttackSpeed("player")
     self:StartSwing("player", "main", mainSpeed)
 end
 
@@ -397,13 +724,16 @@ end
 -- ----------------------------------------------------------------------------
 
 function SwingTimer:OnUpdatePlayer(_)
-    if self.isInEditMode then return end
+    if self.isInEditMode or self.hasNativeFrames then return end
     local now = GetTime()
     local anyActive = false
 
     -- Main Hand
     local mh = self.playerSwings.main
     if mh.active then
+        if IsSecret(mh.duration) or type(mh.duration) ~= "number" or mh.duration <= 0 then
+            mh.duration = self.cachedPlayerMainSpeed or 2.0
+        end
         local elapsed = now - mh.startTime
         if elapsed < mh.duration then
             anyActive = true
@@ -426,6 +756,9 @@ function SwingTimer:OnUpdatePlayer(_)
     -- Off Hand
     local oh = self.playerSwings.off
     if oh.active and (self.db.player.showOffhand ~= false) then
+        if IsSecret(oh.duration) or type(oh.duration) ~= "number" or oh.duration <= 0 then
+            oh.duration = self.cachedPlayerOffSpeed or 2.0
+        end
         local elapsed = now - oh.startTime
         if elapsed < oh.duration then
             anyActive = true
@@ -448,6 +781,9 @@ function SwingTimer:OnUpdatePlayer(_)
     -- Ranged
     local rg = self.playerSwings.ranged
     if rg.active then
+        if IsSecret(rg.duration) or type(rg.duration) ~= "number" or rg.duration <= 0 then
+            rg.duration = self.cachedPlayerRangedSpeed or 2.5
+        end
         local elapsed = now - rg.startTime
         if elapsed < rg.duration then
             anyActive = true
@@ -478,6 +814,9 @@ function SwingTimer:OnUpdateTarget(_)
     local tm = self.targetSwings.main
 
     if tm.active then
+        if IsSecret(tm.duration) or type(tm.duration) ~= "number" or tm.duration <= 0 then
+            tm.duration = self.cachedTargetSpeed or 2.0
+        end
         local elapsed = now - tm.startTime
         if elapsed < tm.duration then
             local remain = tm.duration - elapsed
@@ -532,10 +871,7 @@ function SwingTimer:OnCombatLog(event, ...)
                 isOffHand = info[13] or false
             end
 
-            local mainSpeed, offSpeed = 2.0, nil
-            if UnitAttackSpeed then
-                mainSpeed, offSpeed = UnitAttackSpeed("player")
-            end
+            local mainSpeed, offSpeed = self:GetSafeAttackSpeed("player")
 
             if isOffHand and offSpeed and offSpeed > 0 then
                 self:StartSwing("player", "off", offSpeed)
@@ -545,11 +881,11 @@ function SwingTimer:OnCombatLog(event, ...)
         elseif subevent == "SPELL_DAMAGE" or subevent == "SPELL_MISSED" then
             local spellId = info[12]
             if spellId and SWING_RESET_SPELLS[spellId] then
-                local mainSpeed = UnitAttackSpeed and UnitAttackSpeed("player") or 2.0
+                local mainSpeed = self:GetSafeAttackSpeed("player")
                 self:StartSwing("player", "main", mainSpeed)
             end
         elseif subevent == "RANGE_DAMAGE" or subevent == "RANGE_MISSED" then
-            local speed = (UnitRangedDamage and UnitRangedDamage("player")) or 2.5
+            local speed = self:GetSafeRangedSpeed("player")
             self:StartSwing("player", "ranged", speed)
         end
     end
@@ -557,7 +893,7 @@ function SwingTimer:OnCombatLog(event, ...)
     -- Target Actions
     if targetGUID and sourceGUID == targetGUID then
         if subevent == "SWING_DAMAGE" or subevent == "SWING_MISSED" then
-            local targetSpeed = (UnitAttackSpeed and UnitAttackSpeed("target")) or 2.0
+            local targetSpeed = self:GetSafeAttackSpeed("target")
             self:StartSwing("target", "main", targetSpeed)
         end
     end
@@ -577,11 +913,10 @@ end
 
 function SwingTimer:OnAttackSpeedChanged(_, unit)
     if unit == "player" then
-        local mainSpeed, offSpeed = 2.0, nil
-        if UnitAttackSpeed then mainSpeed, offSpeed = UnitAttackSpeed("player") end
+        local mainSpeed, offSpeed = self:GetSafeAttackSpeed("player")
         if self.playerSwings.main.active and mainSpeed and mainSpeed > 0 then
             local oldDur = self.playerSwings.main.duration
-            if oldDur > 0 then
+            if oldDur and oldDur > 0 then
                 local ratio = mainSpeed / oldDur
                 local now = GetTime()
                 local elapsed = (now - self.playerSwings.main.startTime) * ratio
@@ -594,7 +929,7 @@ function SwingTimer:OnAttackSpeedChanged(_, unit)
         end
         if self.playerSwings.off.active and offSpeed and offSpeed > 0 then
             local oldDur = self.playerSwings.off.duration
-            if oldDur > 0 then
+            if oldDur and oldDur > 0 then
                 local ratio = offSpeed / oldDur
                 local now = GetTime()
                 local elapsed = (now - self.playerSwings.off.startTime) * ratio
@@ -606,10 +941,10 @@ function SwingTimer:OnAttackSpeedChanged(_, unit)
             end
         end
     elseif unit == "target" then
-        local targetSpeed = UnitAttackSpeed and UnitAttackSpeed("target")
+        local targetSpeed = self:GetSafeAttackSpeed("target")
         if self.targetSwings.main.active and targetSpeed and targetSpeed > 0 then
             local oldDur = self.targetSwings.main.duration
-            if oldDur > 0 then
+            if oldDur and oldDur > 0 then
                 local ratio = targetSpeed / oldDur
                 local now = GetTime()
                 local elapsed = (now - self.targetSwings.main.startTime) * ratio
@@ -630,7 +965,7 @@ function SwingTimer:OnSpellcastSucceeded(_, unit, _, spellId)
 end
 
 function SwingTimer:OnStartAutorepeat()
-    local speed = (UnitRangedDamage and UnitRangedDamage("player")) or 2.5
+    local speed = self:GetSafeRangedSpeed("player")
     self:StartSwing("player", "ranged", speed)
 end
 
@@ -649,12 +984,28 @@ function SwingTimer:OnTargetChanged()
     end
 end
 
+function SwingTimer:OnUnitCombat(unit)
+    if unit == "player" then
+        if self.inCombat or (UnitAffectingCombat and UnitAffectingCombat("player")) then
+            local mainSpeed = self:GetSafeAttackSpeed("player")
+            self:StartSwing("player", "main", mainSpeed)
+        end
+    elseif unit == "target" then
+        if UnitExists and UnitExists("target") then
+            local targetSpeed = self:GetSafeAttackSpeed("target")
+            self:StartSwing("target", "main", targetSpeed)
+        end
+    end
+end
+
 function SwingTimer:OnEnterCombat()
-    local mainSpeed = (UnitAttackSpeed and UnitAttackSpeed("player")) or 2.0
+    self.inCombat = true
+    local mainSpeed = self:GetSafeAttackSpeed("player")
     self:StartSwing("player", "main", mainSpeed)
 end
 
 function SwingTimer:OnLeaveCombat()
+    self.inCombat = false
     if not self.isInEditMode then
         self.playerSwings.main.active = false
         self.playerSwings.off.active = false

@@ -240,7 +240,7 @@ local function GetOptions()
             },
             actionbars_group = {
                 type = "group",
-                name = L["Action Bars & Totems"] or "Action Bars & Totems",
+                name = L["Action Bars"] or "Action Bars",
                 order = 20,
                 childGroups = "tab",
                 args = {
@@ -257,6 +257,8 @@ local function GetOptions()
                     minimap = rawOptions.args.minimap,
                     bags = rawOptions.args.bags,
                     menu = rawOptions.args.menu,
+                    chat = rawOptions.args.chat,
+                    objectives = rawOptions.args.objectives,
                 },
             },
         },

@@ -573,8 +573,10 @@ function MinimapMod:StyleMinimap()
             {
                 text = "Open Full Settings",
                 click = function()
-                    if LibStub("AceConfigDialog-3.0") then
-                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "minimap")
+                    if RoithiUI and RoithiUI.OpenSettings then
+                        RoithiUI:OpenSettings("minimap")
+                    elseif LibStub("AceConfigDialog-3.0") then
+                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "interface_group", "minimap")
                         LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
                     end
                 end,
@@ -980,6 +982,22 @@ function MinimapMod:RegisterAnchorSettings(f, key)
             end,
         }
     })
+
+    if LEM.AddFrameSettingsButtons then
+        LEM:AddFrameSettingsButtons(f, {
+            {
+                text = "Open Full Settings",
+                click = function()
+                    if RoithiUI and RoithiUI.OpenSettings then
+                        RoithiUI:OpenSettings("minimap")
+                    elseif LibStub("AceConfigDialog-3.0") then
+                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "interface_group", "minimap")
+                        LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                    end
+                end,
+            }
+        })
+    end
 end
 
 local function CreateAnchorFrame(mod, key, name, editModeName, w, h, defaultPos)

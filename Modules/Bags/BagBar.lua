@@ -13,6 +13,30 @@ local REGULAR_BAG_SLOTS = {
     "CharacterBag3Slot",
 }
 
+function BagsMod:SetBagButtonsMouse(enable)
+    local allButtons = {
+        _G.MainMenuBarBackpackButton,
+        _G.KeyRingButton,
+        _G.CharacterReagentBag0Slot,
+        self.expanderButton,
+    }
+    for _, name in ipairs(REGULAR_BAG_SLOTS) do
+        table.insert(allButtons, _G[name])
+    end
+    for _, btn in ipairs(allButtons) do
+        if btn and btn.EnableMouse then
+            btn:EnableMouse(enable)
+        end
+    end
+    if self.bagBarFrame and LEM and LEM.frameSelections and LEM.frameSelections[self.bagBarFrame] then
+        local sel = LEM.frameSelections[self.bagBarFrame]
+        if sel then
+            if sel.SetFrameLevel then sel:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 100) end
+            if sel.EnableMouse then sel:EnableMouse(not enable) end
+        end
+    end
+end
+
 function BagsMod:SetupBagBar()
     if self.bagBarFrame then return end
 
@@ -26,8 +50,9 @@ function BagsMod:SetupBagBar()
         end
         if self.bagBarFrame and LEM and LEM.frameSelections and LEM.frameSelections[self.bagBarFrame] then
             local sel = LEM.frameSelections[self.bagBarFrame]
+            local isEditMode = (LEM and LEM.IsInEditMode and LEM:IsInEditMode()) or false
             if sel.SetFrameLevel then sel:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 50) end
-            if sel.EnableMouse then sel:EnableMouse(true) end
+            if sel.EnableMouse then sel:EnableMouse(isEditMode) end
         end
     end
 
@@ -109,52 +134,134 @@ function BagsMod:SetupBagBar()
     if bar.SetMovable then bar:SetMovable(true) end
     if bar.SetFrameStrata then bar:SetFrameStrata("HIGH") end
 
-    local pt = cfg.point or "BOTTOMRIGHT"
+    local btnSize = cfg.buttonSize or 30
+    local spacing = cfg.spacing or 4
+    local initialW = btnSize + 14 + spacing
+    if bar.SetSize then bar:SetSize(initialW, btnSize) end
+
+    local pt = cfg.point or "BOTTOMLEFT"
     if bar.ClearAllPoints then bar:ClearAllPoints() end
-    if bar.SetPoint then bar:SetPoint(pt, UIParent, pt, cfg.x or -10, cfg.y or 40) end
+    if bar.SetPoint then bar:SetPoint(pt, UIParent, pt, cfg.x or 10, cfg.y or 285) end
 
     self.bagBarFrame = bar
 
     if LEM and LEM.AddFrame then
         bar.editModeName = L["Bag Bar"]
-        local defaults = { point = pt, x = cfg.x or -10, y = cfg.y or 40 }
-        LEM:AddFrame(bar, function(_, _, newPoint, newX, newY)
+        local defaults = { point = pt, x = cfg.x or 10, y = cfg.y or 285 }
+        LEM:AddFrame(bar, function(f, _, newPoint, newX, newY)
             self.db.bagBar = self.db.bagBar or {}
             self.db.bagBar.point = newPoint
             self.db.bagBar.x = newX
             self.db.bagBar.y = newY
+            if f and f.ClearAllPoints and f.SetPoint then
+                f:ClearAllPoints()
+                f:SetPoint(newPoint, UIParent, newPoint, newX, newY)
+            end
+            self:UpdateBagBarLayout()
         end, defaults)
         if LEM.frameSelections and LEM.frameSelections[bar] then
             local sel = LEM.frameSelections[bar]
-            if sel.SetFrameLevel then sel:SetFrameLevel(bar:GetFrameLevel() + 50) end
-            if sel.EnableMouse then sel:EnableMouse(true) end
+            local isEditMode = (LEM and LEM.IsInEditMode and LEM:IsInEditMode()) or false
+            if sel.SetFrameLevel then sel:SetFrameLevel(bar:GetFrameLevel() + 100) end
+            if sel.EnableMouse then sel:EnableMouse(isEditMode) end
         end
-    end
 
-    local function SetBagButtonsMouse(enable)
-        local allButtons = {
-            _G.MainMenuBarBackpackButton,
-            _G.KeyRingButton,
-            _G.CharacterReagentBag0Slot,
-        }
-        for _, name in ipairs(REGULAR_BAG_SLOTS) do
-            table.insert(allButtons, _G[name])
+        if LEM.AddFrameSettings then
+            local sliderType = (LEM.SettingType and LEM.SettingType.Slider) or 2
+            local settings = {
+                {
+                    name = L["X Position"],
+                    kind = sliderType,
+                    minValue = -2500,
+                    maxValue = 2500,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db.bagBar and self.db.bagBar.x or 10 end,
+                    set = function(_, val)
+                        self.db.bagBar = self.db.bagBar or {}
+                        self.db.bagBar.x = val
+                        local p = self.db.bagBar.point or "BOTTOMLEFT"
+                        bar:ClearAllPoints()
+                        bar:SetPoint(p, UIParent, p, val, self.db.bagBar.y or 285)
+                        self:UpdateBagBarLayout()
+                    end,
+                },
+                {
+                    name = L["Y Position"],
+                    kind = sliderType,
+                    minValue = -1500,
+                    maxValue = 1500,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db.bagBar and self.db.bagBar.y or 285 end,
+                    set = function(_, val)
+                        self.db.bagBar = self.db.bagBar or {}
+                        self.db.bagBar.y = val
+                        local p = self.db.bagBar.point or "BOTTOMLEFT"
+                        bar:ClearAllPoints()
+                        bar:SetPoint(p, UIParent, p, self.db.bagBar.x or 10, val)
+                        self:UpdateBagBarLayout()
+                    end,
+                },
+                {
+                    name = L["Button Size"],
+                    kind = sliderType,
+                    minValue = 20,
+                    maxValue = 48,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db.bagBar and self.db.bagBar.buttonSize or 30 end,
+                    set = function(_, val)
+                        self.db.bagBar = self.db.bagBar or {}
+                        self.db.bagBar.buttonSize = val
+                        self:UpdateBagBarLayout()
+                    end,
+                },
+                {
+                    name = L["Button Spacing"],
+                    kind = sliderType,
+                    minValue = 0,
+                    maxValue = 12,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db.bagBar and self.db.bagBar.spacing or 4 end,
+                    set = function(_, val)
+                        self.db.bagBar = self.db.bagBar or {}
+                        self.db.bagBar.spacing = val
+                        self:UpdateBagBarLayout()
+                    end,
+                },
+            }
+            LEM:AddFrameSettings(bar, settings)
         end
-        for _, btn in ipairs(allButtons) do
-            if btn and btn.EnableMouse then
-                btn:EnableMouse(enable)
-            end
+        if LEM.AddFrameSettingsButtons then
+            LEM:AddFrameSettingsButtons(bar, {
+                {
+                    text = L["Open Full Settings"] or "Open Full Settings",
+                    click = function()
+                        if RoithiUI and RoithiUI.OpenSettings then
+                            RoithiUI:OpenSettings("bags")
+                        elseif LibStub("AceConfigDialog-3.0") then
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "interface_group", "bags")
+                            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                        end
+                    end,
+                },
+            })
         end
     end
 
     if not self.editModeBagHooked then
         if _G.EventRegistry and _G.EventRegistry.RegisterCallback then
-            _G.EventRegistry:RegisterCallback("EditMode.Enter", function() SetBagButtonsMouse(false) end, self)
-            _G.EventRegistry:RegisterCallback("EditMode.Exit", function() SetBagButtonsMouse(true) end, self)
+            _G.EventRegistry:RegisterCallback("EditMode.Enter", function() self:SetBagButtonsMouse(false) end, self)
+            _G.EventRegistry:RegisterCallback("EditMode.Exit", function() self:SetBagButtonsMouse(true) end, self)
         end
-        if LEM and LEM.anonCallbacksEnter and LEM.anonCallbacksExit then
-            table.insert(LEM.anonCallbacksEnter, function() SetBagButtonsMouse(false) end)
-            table.insert(LEM.anonCallbacksExit, function() SetBagButtonsMouse(true) end)
+        if LEM and LEM.RegisterCallback then
+            LEM:RegisterCallback("enter", function() self:SetBagButtonsMouse(false) end)
+            LEM:RegisterCallback("exit", function() self:SetBagButtonsMouse(true) end)
+        elseif LEM and LEM.anonCallbacksEnter and LEM.anonCallbacksExit then
+            table.insert(LEM.anonCallbacksEnter, function() self:SetBagButtonsMouse(false) end)
+            table.insert(LEM.anonCallbacksExit, function() self:SetBagButtonsMouse(true) end)
         end
         self.editModeBagHooked = true
     end
@@ -184,13 +291,16 @@ function BagsMod:CreateBagBarExpander()
 
     local text = expander:CreateFontString(nil, "OVERLAY")
     if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 9, "OUTLINE")
+        LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
     end
+    text:ClearAllPoints()
     text:SetPoint("CENTER", expander, "CENTER", 0, 0)
+    if text.SetJustifyH then text:SetJustifyH("CENTER") end
+    if text.SetJustifyV then text:SetJustifyV("MIDDLE") end
     if text.SetTextColor then text:SetTextColor(0.8, 0.8, 0.8, 1) end
 
     local isExpanded = (cfg and cfg.expanded == true) or false
-    text:SetText(isExpanded and ">" or "<")
+    text:SetText(isExpanded and "<" or ">")
     expander.arrow = text
 
     expander:SetScript("OnClick", function()
@@ -198,7 +308,7 @@ function BagsMod:CreateBagBarExpander()
         self.db.bagBar.expanded = not self.db.bagBar.expanded
         local expanded = self.db.bagBar.expanded
         if expander.arrow then
-            expander.arrow:SetText(expanded and ">" or "<")
+            expander.arrow:SetText(expanded and "<" or ">")
         end
         self:UpdateBagBarLayout()
     end)
@@ -483,6 +593,18 @@ function BagsMod:StyleBagButtons()
         self.backpackSlotHooked = true
     end
 
+    for _, name in ipairs(REGULAR_BAG_SLOTS) do
+        local btn = _G[name]
+        if btn and not btn.roithiBagHooked and btn.HookScript then
+            btn:HookScript("OnClick", function()
+                if self.db and self.db.enabled ~= false then
+                    self:ToggleBags("ALL")
+                end
+            end)
+            btn.roithiBagHooked = true
+        end
+    end
+
     if _G.CharacterReagentBag0Slot and not self.reagentSlotHooked and _G.CharacterReagentBag0Slot.HookScript then
         _G.CharacterReagentBag0Slot:HookScript("OnClick", function()
             if self.db and self.db.enabled ~= false and self.OpenCategory then
@@ -556,6 +678,9 @@ function BagsMod:UpdateBagBarLayout()
     local spacing = cfg.spacing or 4
     local isExpanded = cfg.expanded == true
 
+    local isEditMode = (LEM and LEM.IsInEditMode and LEM:IsInEditMode()) or false
+    local btnMouse = not isEditMode
+
     local xOffset = 0
 
     -- 1. Main backpack
@@ -567,6 +692,10 @@ function BagsMod:UpdateBagBarLayout()
             backpack.originalParent = backpack:GetParent()
         end
         if backpack.SetParent then backpack:SetParent(self.bagBarFrame) end
+        if backpack.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
+            backpack:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 10)
+        end
+        if backpack.EnableMouse then backpack:EnableMouse(btnMouse) end
         if backpack.ClearAllPoints then backpack:ClearAllPoints() end
         if backpack.SetSize then backpack:SetSize(btnSize, btnSize) end
         if backpack.SetPoint then backpack:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0) end
@@ -578,7 +707,14 @@ function BagsMod:UpdateBagBarLayout()
     if self.expanderButton then
         self.expanderButton:ClearAllPoints()
         self.expanderButton:SetSize(14, btnSize)
+        if self.expanderButton.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
+            self.expanderButton:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 10)
+        end
+        if self.expanderButton.EnableMouse then self.expanderButton:EnableMouse(btnMouse) end
         self.expanderButton:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0)
+        if self.expanderButton.arrow then
+            self.expanderButton.arrow:SetText(isExpanded and "<" or ">")
+        end
         self.expanderButton:Show()
         xOffset = xOffset + 14 + spacing
     end
@@ -593,6 +729,10 @@ function BagsMod:UpdateBagBarLayout()
                 btn.originalParent = btn:GetParent()
             end
             if btn.SetParent then btn:SetParent(self.bagBarFrame) end
+            if btn.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
+                btn:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 10)
+            end
+            if btn.EnableMouse then btn:EnableMouse(btnMouse) end
             if isExpanded then
                 if btn.ClearAllPoints then btn:ClearAllPoints() end
                 if btn.SetSize then btn:SetSize(btnSize, btnSize) end
@@ -614,6 +754,10 @@ function BagsMod:UpdateBagBarLayout()
             reagentBag.originalParent = reagentBag:GetParent()
         end
         if reagentBag.SetParent then reagentBag:SetParent(self.bagBarFrame) end
+        if reagentBag.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
+            reagentBag:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 10)
+        end
+        if reagentBag.EnableMouse then reagentBag:EnableMouse(btnMouse) end
         if reagentBag.ClearAllPoints then reagentBag:ClearAllPoints() end
         if reagentBag.SetSize then reagentBag:SetSize(btnSize, btnSize) end
         if reagentBag.SetPoint then reagentBag:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0) end
@@ -630,6 +774,10 @@ function BagsMod:UpdateBagBarLayout()
             keyring.originalParent = keyring:GetParent()
         end
         if keyring.SetParent then keyring:SetParent(self.bagBarFrame) end
+        if keyring.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
+            keyring:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 10)
+        end
+        if keyring.EnableMouse then keyring:EnableMouse(btnMouse) end
         if keyring.ClearAllPoints then keyring:ClearAllPoints() end
         if keyring.SetSize then keyring:SetSize(btnSize, btnSize) end
         if keyring.SetPoint then keyring:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0) end
@@ -641,6 +789,9 @@ function BagsMod:UpdateBagBarLayout()
     local totalH = btnSize
     if self.bagBarFrame.SetSize then
         self.bagBarFrame:SetSize(totalW, totalH)
+    end
+    if self.SetBagButtonsMouse then
+        self:SetBagButtonsMouse(not isEditMode)
     end
 end
 

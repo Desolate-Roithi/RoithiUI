@@ -321,6 +321,32 @@ function AB:GetOptions()
                     self:LayoutBar(bKey)
                 end,
             },
+            maxButtons = {
+                type = "range",
+                name = L["Max Buttons"],
+                order = 9.5,
+                min = 1,
+                max = 12,
+                step = 1,
+                hidden = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return bKey == "extraAction" or bKey == "zoneAction"
+                end,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    local cfg = self.BAR_CONFIGS and self.BAR_CONFIGS[bKey]
+                    local defaultCount = cfg and cfg.count or 12
+                    return self.db[bKey] and self.db[bKey].maxButtons or defaultCount
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    local cfg = self.BAR_CONFIGS and self.BAR_CONFIGS[bKey]
+                    local maxCount = cfg and cfg.count or 12
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].maxButtons = math.min(val, maxCount)
+                    self:LayoutBar(bKey)
+                end,
+            },
         },
     }
 

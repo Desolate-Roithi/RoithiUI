@@ -1,4 +1,5 @@
 local addonName, AT = ...
+if AT.skipLoad then return end
 local RoithiUI = AT.RoithiUI or _G.RoithiUI
 local MinimapMod = RoithiUI:GetModule("Minimap")
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
@@ -835,6 +836,21 @@ function MinimapMod:CreateAddonBar()
         }
         if LEM.AddFrameSettings then
             LEM:AddFrameSettings(bar, settings)
+        end
+        if LEM.AddFrameSettingsButtons then
+            LEM:AddFrameSettingsButtons(bar, {
+                {
+                    text = "Open Full Settings",
+                    click = function()
+                        if RoithiUI and RoithiUI.OpenSettings then
+                            RoithiUI:OpenSettings("minimap")
+                        elseif LibStub("AceConfigDialog-3.0") then
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "interface_group", "minimap")
+                            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                        end
+                    end,
+                }
+            })
         end
     end
 

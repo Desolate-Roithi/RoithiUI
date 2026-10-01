@@ -984,7 +984,23 @@ function Totems:UpdateSpellCooldown(catKey)
     end
     btn.cooldown.noCooldownCount = nil
 
-    if start and duration and duration > 1.5 then
+    local isSecret = false
+    if _G.issecretvalue and (_G.issecretvalue(duration) or _G.issecretvalue(start)) then
+        isSecret = true
+    elseif type(duration) == "userdata" or type(start) == "userdata" then
+        isSecret = true
+    else
+        local ok, _ = pcall(function() return duration > 1.5 end)
+        if not ok then
+            isSecret = true
+        end
+    end
+
+    if isSecret then
+        btn.cooldownEnd = nil
+        if btn.cooldownText then btn.cooldownText:Hide() end
+        CooldownFrame_Set(btn.cooldown, start, duration, enabled)
+    elseif start and duration and duration > 1.5 then
         btn.cooldownEnd = start + duration
         CooldownFrame_Set(btn.cooldown, start, duration, enabled)
     elseif start and duration and duration > 0 then
@@ -1016,13 +1032,21 @@ function Totems:UpdateTotemSlots()
                 haveTotem, _, startTime, duration, _ = GetTotemInfo(info.blizzSlot)
             end
 
-            if haveTotem and duration and duration > 0 and (startTime + duration) > now then
-                state.isActive = true
-                state.expirationTime = startTime + duration
-            else
-                state.isActive = false
-                state.expirationTime = 0
+            local isActive = false
+            local expTime = 0
+            local ok, active = pcall(function()
+                return haveTotem and duration and duration > 0 and (startTime + duration) > now
+            end)
+            if ok and active then
+                isActive = true
+                expTime = startTime + duration
+            elseif not ok and haveTotem then
+                isActive = true
+                expTime = 0
             end
+
+            state.isActive = isActive
+            state.expirationTime = expTime
             self:UpdateSlotBorder(catKey)
         end
     end
@@ -1153,7 +1177,12 @@ function Totems:OnTick()
         local state = self.slotStates and self.slotStates[catKey]
         if btn and btn:IsShown() then
             if btn.cooldownText then
-                if btn.cooldownEnd and btn.cooldownEnd > now and self.db.showCooldown ~= false then
+                local isCdActive = false
+                if btn.cooldownEnd then
+                    local ok, cmp = pcall(function() return btn.cooldownEnd > now end)
+                    isCdActive = ok and cmp
+                end
+                if isCdActive and self.db.showCooldown ~= false then
                     btn.cooldownText:SetText(FormatTimeSeconds(btn.cooldownEnd - now))
                     btn.cooldownText:Show()
                 else
@@ -1162,7 +1191,17 @@ function Totems:OnTick()
                 end
             end
             if state then
-                if state.isActive and state.expirationTime > now then
+                local isExpActive = false
+                local isTimedOut = false
+                if state.isActive and state.expirationTime then
+                    local ok, cmp = pcall(function() return state.expirationTime > now end)
+                    if ok and cmp then
+                        isExpActive = true
+                    elseif ok and not cmp and state.expirationTime > 0 then
+                        isTimedOut = true
+                    end
+                end
+                if isExpActive then
                     if self.db.showDuration then
                         btn.timerText:SetText(FormatTimeSeconds(state.expirationTime - now))
                     else
@@ -1170,7 +1209,7 @@ function Totems:OnTick()
                     end
                 else
                     btn.timerText:SetText("")
-                    if state.isActive and state.expirationTime <= now and state.expirationTime > 0 then
+                    if isTimedOut then
                         -- Timed out: refresh this slot
                         state.isActive = false
                         state.expirationTime = 0
@@ -1244,4 +1283,20 @@ function Totems:SetupLEM()
         self.db.x = newX
         self.db.y = newY
     end, defaultPos, L["Totem Bar"])
+
+    if LEM.AddFrameSettingsButtons then
+        LEM:AddFrameSettingsButtons(self.bar, {
+            {
+                text = L["Open Full Settings"] or "Open Full Settings",
+                click = function()
+                    if RoithiUI and RoithiUI.OpenSettings then
+                        RoithiUI:OpenSettings("totems")
+                    elseif LibStub("AceConfigDialog-3.0") then
+                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "actionbars_group", "totems")
+                        LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                    end
+                end,
+            },
+        })
+    end
 end

@@ -66,9 +66,9 @@ MenuMod.defaultSettings = {
     alpha = 1.0,
     mouseover = false,
     mouseoverAlpha = 0.0,
-    point = "BOTTOMRIGHT",
-    x = -280,
-    y = 0,
+    point = "BOTTOMLEFT",
+    x = 10,
+    y = 285,
 }
 
 function MenuMod:OnInitialize()
@@ -236,6 +236,15 @@ function MenuMod:SetupMicroMenu()
     end
 
     local pt = self.db.point or "BOTTOMRIGHT"
+    local btnW = self.db.buttonWidth or 24
+    local btnH = self.db.buttonHeight or 32
+    local spacing = self.db.spacing or 2
+    local numButtons = 11
+    local isHoriz = (self.db.orientation or "HORIZONTAL") == "HORIZONTAL"
+    local initialW = isHoriz and (numButtons * btnW + (numButtons - 1) * spacing) or btnW
+    local initialH = isHoriz and btnH or (numButtons * btnH + (numButtons - 1) * spacing)
+    if container.SetSize then container:SetSize(initialW, initialH) end
+
     if container.ClearAllPoints then container:ClearAllPoints() end
     if container.SetPoint then
         container:SetPoint(pt, UIParent, pt, self.db.x or -280, self.db.y or 0)
@@ -246,11 +255,123 @@ function MenuMod:SetupMicroMenu()
     if LEM and LEM.AddFrame then
         container.editModeName = L["Micro Menu"]
         local defaults = { point = pt, x = self.db.x or -280, y = self.db.y or 0 }
-        LEM:AddFrame(container, function(_, _, newPoint, newX, newY)
+        LEM:AddFrame(container, function(f, _, newPoint, newX, newY)
             self.db.point = newPoint
             self.db.x = newX
             self.db.y = newY
+            if f and f.ClearAllPoints and f.SetPoint then
+                f:ClearAllPoints()
+                f:SetPoint(newPoint, UIParent, newPoint, newX, newY)
+            end
+            self:LayoutMicroMenu()
         end, defaults)
+
+        if LEM.AddFrameSettings then
+            local sliderType = (LEM.SettingType and LEM.SettingType.Slider) or 2
+            local dropdownType = (LEM.SettingType and LEM.SettingType.Dropdown) or 4
+            local settings = {
+                {
+                    name = L["X Position"],
+                    kind = sliderType,
+                    minValue = -2500,
+                    maxValue = 2500,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db.x or -280 end,
+                    set = function(_, val)
+                        self.db.x = val
+                        local p = self.db.point or "BOTTOMRIGHT"
+                        container:ClearAllPoints()
+                        container:SetPoint(p, UIParent, p, val, self.db.y or 0)
+                        self:LayoutMicroMenu()
+                    end,
+                },
+                {
+                    name = L["Y Position"],
+                    kind = sliderType,
+                    minValue = -1500,
+                    maxValue = 1500,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db.y or 0 end,
+                    set = function(_, val)
+                        self.db.y = val
+                        local p = self.db.point or "BOTTOMRIGHT"
+                        container:ClearAllPoints()
+                        container:SetPoint(p, UIParent, p, self.db.x or -280, val)
+                        self:LayoutMicroMenu()
+                    end,
+                },
+                {
+                    name = L["Orientation"],
+                    kind = dropdownType,
+                    values = {
+                        { text = L["Horizontal"], value = "HORIZONTAL" },
+                        { text = L["Vertical"], value = "VERTICAL" },
+                    },
+                    get = function() return self.db.orientation or "HORIZONTAL" end,
+                    set = function(_, val)
+                        self.db.orientation = val
+                        self:LayoutMicroMenu()
+                    end,
+                },
+                {
+                    name = L["Button Width"],
+                    kind = sliderType,
+                    minValue = 16,
+                    maxValue = 48,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db.buttonWidth or 24 end,
+                    set = function(_, val)
+                        self.db.buttonWidth = val
+                        self:LayoutMicroMenu()
+                    end,
+                },
+                {
+                    name = L["Button Height"],
+                    kind = sliderType,
+                    minValue = 16,
+                    maxValue = 48,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db.buttonHeight or 32 end,
+                    set = function(_, val)
+                        self.db.buttonHeight = val
+                        self:LayoutMicroMenu()
+                    end,
+                },
+                {
+                    name = L["Button Spacing"],
+                    kind = sliderType,
+                    minValue = 0,
+                    maxValue = 10,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db.spacing or 2 end,
+                    set = function(_, val)
+                        self.db.spacing = val
+                        self:LayoutMicroMenu()
+                    end,
+                },
+            }
+            LEM:AddFrameSettings(container, settings)
+        end
+        if LEM.AddFrameSettingsButtons then
+            LEM:AddFrameSettingsButtons(container, {
+                {
+                    text = L["Open Full Settings"] or "Open Full Settings",
+                    click = function()
+                        if RoithiUI and RoithiUI.OpenSettings then
+                            RoithiUI:OpenSettings("menu")
+                        elseif LibStub("AceConfigDialog-3.0") then
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "interface_group", "menu")
+                            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                        end
+                    end,
+                },
+            })
+        end
     end
 
     if self.container.Show then self.container:Show() end
@@ -469,39 +590,36 @@ function MenuMod:IsMicroMenuMouseOver()
     return false
 end
 
-function MenuMod:UpdateNativeMicroMenuAlpha()
-    local target = _G.MicroMenu or _G.MicroButtonAndBagsBar
-    if not target then return end
-
-    if self.db.mouseover then
-        local targetAlpha = self:IsMicroMenuMouseOver() and (self.db.alpha or 1.0) or (self.db.mouseoverAlpha or 0.0)
-        if target.SetAlpha then target:SetAlpha(targetAlpha) end
-    else
-        if target.SetAlpha then target:SetAlpha(self.db.alpha or 1.0) end
+function MenuMod:ApplyMicroMenuAlpha(alpha)
+    if self.container and self.container.SetAlpha then
+        self.container:SetAlpha(alpha)
+    end
+    if _G.MicroMenu and _G.MicroMenu.SetAlpha then
+        _G.MicroMenu:SetAlpha(alpha)
+    end
+    if _G.MicroButtonAndBagsBar and _G.MicroButtonAndBagsBar.SetAlpha then
+        _G.MicroButtonAndBagsBar:SetAlpha(alpha)
+    end
+    if not _G.MicroMenu and not _G.MicroButtonAndBagsBar then
+        for _, btn in ipairs(self:GetMicroButtons()) do
+            if btn.SetAlpha then btn:SetAlpha(alpha) end
+        end
     end
 end
 
 function MenuMod:UpdateMicroMenuAlpha()
-    if _G.MicroMenu then
-        self:UpdateNativeMicroMenuAlpha()
-        return
-    end
-
-    if not self.container then return end
+    local targetAlpha
     if self.db.mouseover then
-        local targetAlpha = self:IsMicroMenuMouseOver() and (self.db.alpha or 1.0) or (self.db.mouseoverAlpha or 0.0)
-        if self.container.SetAlpha then self.container:SetAlpha(targetAlpha) end
+        targetAlpha = self:IsMicroMenuMouseOver() and (self.db.alpha or 1.0) or (self.db.mouseoverAlpha or 0.0)
     else
-        if self.container.SetAlpha then self.container:SetAlpha(self.db.alpha or 1.0) end
+        targetAlpha = self.db.alpha or 1.0
     end
+    self:ApplyMicroMenuAlpha(targetAlpha)
 end
 
 function MenuMod:OnContainerEnter()
     if self.db.mouseover then
-        local target = _G.MicroMenu or _G.MicroButtonAndBagsBar or self.container
-        if target and target.SetAlpha then
-            target:SetAlpha(self.db.alpha or 1.0)
-        end
+        self:ApplyMicroMenuAlpha(self.db.alpha or 1.0)
     end
 end
 
@@ -509,10 +627,7 @@ function MenuMod:OnContainerLeave()
     if self.db.mouseover and _G.C_Timer and _G.C_Timer.After then
         _G.C_Timer.After(0.05, function()
             if not self:IsMicroMenuMouseOver() then
-                local target = _G.MicroMenu or _G.MicroButtonAndBagsBar or self.container
-                if target and target.SetAlpha then
-                    target:SetAlpha(self.db.mouseoverAlpha or 0.0)
-                end
+                self:ApplyMicroMenuAlpha(self.db.mouseoverAlpha or 0.0)
             end
         end)
     end

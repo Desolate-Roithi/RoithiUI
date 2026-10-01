@@ -534,22 +534,35 @@ local function GetGlobalAuraOptions()
         type = "group",
         name = L["Auras"],
         order = 4,
+        childGroups = "tab",
         args = {
-            intro = {
-                type = "description",
-                name = L["Manage Smart Filters (12.0.1) and Custom Aura Frames."],
-                order = 0,
-            },
             defaultAuras = {
                 type = "group",
-                name = L["Default Auras (Buff & Debuff Frames)"] or "Default Auras (Buff & Debuff Frames)",
-                order = 0.8,
-                inline = true,
+                name = L["Default Auras Settings"] or "Default Auras Settings",
+                order = 1,
                 args = {
                     desc = {
                         type = "description",
                         name = L["Styling for Blizzard's standard player BuffFrame and DebuffFrame."],
                         order = 0,
+                    },
+                    buffFrameEnableSkinning = {
+                        type = "toggle",
+                        name = L["Enable Aura Skinning"] or "Enable Aura Skinning",
+                        desc = L["Apply modern border and typography styling to default Buffs and Debuffs."] or "Apply modern styling to default Buffs and Debuffs.",
+                        order = 0.5,
+                        get = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            return mdb and mdb.buffFrameEnableSkinning ~= false
+                        end,
+                        set = function(_, val)
+                            if RoithiUI.db and RoithiUI.db.profile then
+                                RoithiUI.db.profile.Minimap = RoithiUI.db.profile.Minimap or {}
+                                RoithiUI.db.profile.Minimap.buffFrameEnableSkinning = val
+                            end
+                            local MM = RoithiUI:GetModule("Minimap", true)
+                            if MM and MM.RefreshBuffFrameStyling then MM:RefreshBuffFrameStyling() end
+                        end,
                     },
                     buffFrameShowBorder = {
                         type = "toggle",
@@ -565,7 +578,7 @@ local function GetGlobalAuraOptions()
                                 RoithiUI.db.profile.Minimap.buffFrameShowBorder = val
                             end
                             local MM = RoithiUI:GetModule("Minimap", true)
-                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                            if MM and MM.RefreshBuffFrameStyling then MM:RefreshBuffFrameStyling() end
                         end,
                     },
                     buffFrameBorderSize = {
@@ -585,7 +598,7 @@ local function GetGlobalAuraOptions()
                                 RoithiUI.db.profile.Minimap.buffFrameBorderSize = val
                             end
                             local MM = RoithiUI:GetModule("Minimap", true)
-                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                            if MM and MM.RefreshBuffFrameStyling then MM:RefreshBuffFrameStyling() end
                         end,
                         disabled = function()
                             local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
@@ -608,7 +621,7 @@ local function GetGlobalAuraOptions()
                                 RoithiUI.db.profile.Minimap.buffFrameBorderColor = { r = r, g = g, b = b, a = a }
                             end
                             local MM = RoithiUI:GetModule("Minimap", true)
-                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                            if MM and MM.RefreshBuffFrameStyling then MM:RefreshBuffFrameStyling() end
                         end,
                         disabled = function()
                             local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
@@ -629,7 +642,67 @@ local function GetGlobalAuraOptions()
                                 RoithiUI.db.profile.Minimap.buffFrameZoomIcons = val
                             end
                             local MM = RoithiUI:GetModule("Minimap", true)
-                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                            if MM and MM.RefreshBuffFrameStyling then MM:RefreshBuffFrameStyling() end
+                        end,
+                    },
+                    buffFrameFont = {
+                        type = "select",
+                        dialogControl = "LSM30_Font",
+                        name = L["Font"] or "Font",
+                        order = 4.5,
+                        values = AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font,
+                        get = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            return (mdb and mdb.buffFrameFont) or "Friz Quadrata TT"
+                        end,
+                        set = function(_, val)
+                            if RoithiUI.db and RoithiUI.db.profile then
+                                RoithiUI.db.profile.Minimap = RoithiUI.db.profile.Minimap or {}
+                                RoithiUI.db.profile.Minimap.buffFrameFont = val
+                            end
+                            local MM = RoithiUI:GetModule("Minimap", true)
+                            if MM and MM.RefreshBuffFrameStyling then MM:RefreshBuffFrameStyling() end
+                        end,
+                    },
+                    buffFrameFontOutline = {
+                        type = "select",
+                        name = L["Font Outline"] or "Font Outline",
+                        order = 4.7,
+                        values = {
+                            ["NONE"] = L["None"] or "None",
+                            ["OUTLINE"] = L["Outline"] or "Outline",
+                            ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
+                            ["MONOCHROME"] = L["Monochrome"] or "Monochrome",
+                        },
+                        get = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            return (mdb and mdb.buffFrameFontOutline) or "OUTLINE"
+                        end,
+                        set = function(_, val)
+                            if RoithiUI.db and RoithiUI.db.profile then
+                                RoithiUI.db.profile.Minimap = RoithiUI.db.profile.Minimap or {}
+                                RoithiUI.db.profile.Minimap.buffFrameFontOutline = val
+                            end
+                            local MM = RoithiUI:GetModule("Minimap", true)
+                            if MM and MM.RefreshBuffFrameStyling then MM:RefreshBuffFrameStyling() end
+                        end,
+                    },
+                    buffFrameShowShadow = {
+                        type = "toggle",
+                        name = L["Show Text Shadow"] or "Show Text Shadow",
+                        desc = L["Toggle drop shadow behind duration and stack text."] or "Toggle drop shadow behind duration and stack text.",
+                        order = 4.9,
+                        get = function()
+                            local mdb = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap
+                            return mdb and mdb.buffFrameShowShadow == true
+                        end,
+                        set = function(_, val)
+                            if RoithiUI.db and RoithiUI.db.profile then
+                                RoithiUI.db.profile.Minimap = RoithiUI.db.profile.Minimap or {}
+                                RoithiUI.db.profile.Minimap.buffFrameShowShadow = val
+                            end
+                            local MM = RoithiUI:GetModule("Minimap", true)
+                            if MM and MM.RefreshBuffFrameStyling then MM:RefreshBuffFrameStyling() end
                         end,
                     },
                     buffFrameDurationSize = {
@@ -649,7 +722,7 @@ local function GetGlobalAuraOptions()
                                 RoithiUI.db.profile.Minimap.buffFrameDurationSize = val
                             end
                             local MM = RoithiUI:GetModule("Minimap", true)
-                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                            if MM and MM.RefreshBuffFrameStyling then MM:RefreshBuffFrameStyling() end
                         end,
                     },
                     buffFrameCountSize = {
@@ -669,7 +742,7 @@ local function GetGlobalAuraOptions()
                                 RoithiUI.db.profile.Minimap.buffFrameCountSize = val
                             end
                             local MM = RoithiUI:GetModule("Minimap", true)
-                            if MM and MM.HookBuffFrameStyling then MM:HookBuffFrameStyling() end
+                            if MM and MM.RefreshBuffFrameStyling then MM:RefreshBuffFrameStyling() end
                         end,
                     },
                 },

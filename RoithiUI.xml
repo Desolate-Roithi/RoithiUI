@@ -62,4 +62,12 @@
     <!-- Swing Timer (Forever Only) -->
     <Script file="Modules/SwingTimer/SwingTimer.lua"/>
     <Script file="Modules/SwingTimer/Options.lua"/>
+
+    <!-- Chat -->
+    <Script file="Modules/Chat/Chat.lua"/>
+    <Script file="Modules/Chat/Options.lua"/>
+
+    <!-- Objectives -->
+    <Script file="Modules/Objectives/Objectives.lua"/>
+    <Script file="Modules/Objectives/Options.lua"/>
 </Ui>

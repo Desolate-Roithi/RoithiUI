@@ -51,6 +51,7 @@ function AB:SetupLEM()
         end, defaults)
 
         if LEM.AddFrameSettings then
+            local maxBarCount = self.BAR_CONFIGS and self.BAR_CONFIGS[barKey] and self.BAR_CONFIGS[barKey].count or 12
             local settings = {
                 {
                     name = L["Button Size"],
@@ -94,18 +95,49 @@ function AB:SetupLEM()
                         self:LayoutBar(barKey)
                     end,
                 },
-                {
-                    name = L["Vertical Orientation"] or "Vertical Orientation",
-                    kind = LEM.SettingType.Checkbox,
-                    get = function() return self.db[barKey] and self.db[barKey].orientation == "VERTICAL" end,
+            }
+            if maxBarCount > 1 then
+                table.insert(settings, {
+                    name = L["Max Buttons"],
+                    kind = LEM.SettingType.Slider,
+                    minValue = 1,
+                    maxValue = maxBarCount,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db[barKey] and self.db[barKey].maxButtons or maxBarCount end,
                     set = function(_, val)
                         self.db[barKey] = self.db[barKey] or {}
-                        self.db[barKey].orientation = val and "VERTICAL" or "HORIZONTAL"
+                        self.db[barKey].maxButtons = val
                         self:LayoutBar(barKey)
                     end,
-                },
-            }
+                })
+            end
+            table.insert(settings, {
+                name = L["Vertical Orientation"] or "Vertical Orientation",
+                kind = LEM.SettingType.Checkbox,
+                get = function() return self.db[barKey] and self.db[barKey].orientation == "VERTICAL" end,
+                set = function(_, val)
+                    self.db[barKey] = self.db[barKey] or {}
+                    self.db[barKey].orientation = val and "VERTICAL" or "HORIZONTAL"
+                    self:LayoutBar(barKey)
+                end,
+            })
             LEM:AddFrameSettings(container, settings)
+        end
+        if LEM.AddFrameSettingsButtons then
+            LEM:AddFrameSettingsButtons(container, {
+                {
+                    text = L["Open Full Settings"] or "Open Full Settings",
+                    click = function()
+                        if RoithiUI and RoithiUI.OpenSettings then
+                            RoithiUI:OpenSettings("actionbars")
+                        elseif LibStub("AceConfigDialog-3.0") then
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "actionbars_group", "actionbars")
+                            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                        end
+                    end,
+                },
+            })
         end
     end
 end

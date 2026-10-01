@@ -2397,8 +2397,10 @@ function ns.InitializeUnitFrameConfig()
                         {
                             text = "Open Full Settings",
                             click = function()
-                                if LibStub("AceConfigDialog-3.0") then
-                                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", unit)
+                                if RoithiUI and RoithiUI.OpenSettings then
+                                    RoithiUI:OpenSettings("unitframes", unit)
+                                elseif LibStub("AceConfigDialog-3.0") then
+                                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "unitframes", unit)
                                     LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
                                 end
                             end
@@ -2407,13 +2409,64 @@ function ns.InitializeUnitFrameConfig()
                 end)
 
                 if frame.Power then
-                    pcall(function() LEM:AddFrameSettings(frame.Power, GetSettingsForPower(unit)) end)
+                    pcall(function()
+                        LEM:AddFrameSettings(frame.Power, GetSettingsForPower(unit))
+                        if LEM.AddFrameSettingsButtons then
+                            LEM:AddFrameSettingsButtons(frame.Power, {
+                                {
+                                    text = "Open Full Settings",
+                                    click = function()
+                                        if RoithiUI and RoithiUI.OpenSettings then
+                                            RoithiUI:OpenSettings("unitframes", unit)
+                                        elseif LibStub("AceConfigDialog-3.0") then
+                                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "unitframes", unit)
+                                            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                                        end
+                                    end
+                                }
+                            })
+                        end
+                    end)
                 end
                 if frame.ClassPower then
-                    pcall(function() LEM:AddFrameSettings(frame.ClassPower, GetSettingsForClassPower(unit)) end)
+                    pcall(function()
+                        LEM:AddFrameSettings(frame.ClassPower, GetSettingsForClassPower(unit))
+                        if LEM.AddFrameSettingsButtons then
+                            LEM:AddFrameSettingsButtons(frame.ClassPower, {
+                                {
+                                    text = "Open Full Settings",
+                                    click = function()
+                                        if RoithiUI and RoithiUI.OpenSettings then
+                                            RoithiUI:OpenSettings("unitframes", unit)
+                                        elseif LibStub("AceConfigDialog-3.0") then
+                                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "unitframes", unit)
+                                            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                                        end
+                                    end
+                                }
+                            })
+                        end
+                    end)
                 end
                 if frame.AdditionalPower then
-                    pcall(function() LEM:AddFrameSettings(frame.AdditionalPower, GetSettingsForAdditionalPower(unit)) end)
+                    pcall(function()
+                        LEM:AddFrameSettings(frame.AdditionalPower, GetSettingsForAdditionalPower(unit))
+                        if LEM.AddFrameSettingsButtons then
+                            LEM:AddFrameSettingsButtons(frame.AdditionalPower, {
+                                {
+                                    text = "Open Full Settings",
+                                    click = function()
+                                        if RoithiUI and RoithiUI.OpenSettings then
+                                            RoithiUI:OpenSettings("unitframes", unit)
+                                        elseif LibStub("AceConfigDialog-3.0") then
+                                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "unitframes", unit)
+                                            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                                        end
+                                    end
+                                }
+                            })
+                        end
+                    end)
                 end
             end
         end
@@ -2769,8 +2822,10 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
         {
             text = "Open Full Settings",
             click = function()
-                if LibStub("AceConfigDialog-3.0") then
-                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", "boss", "boss1")
+                if RoithiUI and RoithiUI.OpenSettings then
+                    RoithiUI:OpenSettings("unitframes", "boss", "boss1")
+                elseif LibStub("AceConfigDialog-3.0") then
+                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "unitframes", "boss", "boss1")
                     LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
                 end
             end

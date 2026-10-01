@@ -309,6 +309,7 @@ L["Action Bar 5"] = "Action Bar 5"
 L["Pet Action Bar"] = "Pet Action Bar"
 L["Stance / Shapeshift Bar"] = "Stance / Shapeshift Bar"
 L["Buttons Per Row"] = "Buttons Per Row"
+L["Max Buttons"] = "Max Buttons"
 L["Show Keybind Text"] = "Show Keybind Text"
 L["Show Macro Text"] = "Show Macro Text"
 
@@ -676,4 +677,5 @@ L["Extra Action Button"] = "Extra Action Button"
 L["Show Background"] = "Show Background"
 L["Vertical Orientation"] = "Vertical Orientation"
 L["Zone Ability Button"] = "Zone Ability Button"
+L["Open Full Settings"] = "Open Full Settings"
 

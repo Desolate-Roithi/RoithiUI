@@ -3,6 +3,7 @@ if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local AB = RoithiUI:GetModule("Actionbars")
 local LibRoithi = LibStub("LibRoithi-1.0")
+local LEM = LibStub("LibEditMode-Roithi", true)
 
 local BAR_CONFIGS = {
     bar1 = { name = "RoithiActionBar1", prefix = "ActionButton", count = 12 },
@@ -90,13 +91,75 @@ local function ButtonHasAction(btn)
     return false
 end
 
+local function IsExtraActionActive()
+    if _G.C_ActionBar and _G.C_ActionBar.HasExtraActionBar and _G.C_ActionBar.HasExtraActionBar() then
+        return true
+    end
+    if _G.HasExtraActionBar and _G.HasExtraActionBar() then
+        return true
+    end
+    local btn = _G.ExtraActionButton1
+    if btn then
+        if btn.HasAction and btn:HasAction() then
+            return true
+        end
+        local action = btn.action or (btn.CalculateAction and btn:CalculateAction())
+        if action and _G.HasAction and _G.HasAction(action) then
+            return true
+        end
+    end
+    return false
+end
+AB.IsExtraActionActive = IsExtraActionActive
+
+local function IsZoneActionActive()
+    if _G.C_ZoneAbility and _G.C_ZoneAbility.GetActiveAbilities then
+        local abilities = _G.C_ZoneAbility.GetActiveAbilities()
+        if abilities and #abilities > 0 then
+            return true
+        end
+    end
+    local zf = _G.ZoneAbilityFrame
+    if zf then
+        if zf.HasZoneAbility and zf:HasZoneAbility() then
+            return true
+        end
+        if zf.SpellButtonContainer and zf.SpellButtonContainer.EnumerateActive then
+            local iter, state = zf.SpellButtonContainer:EnumerateActive()
+            if iter and iter(state) then
+                return true
+            end
+        end
+        local btn = zf.SpellButton or _G.ZoneAbilityButton1
+        if btn and btn.HasAction and btn:HasAction() then
+            return true
+        end
+    end
+    return false
+end
+AB.IsZoneActionActive = IsZoneActionActive
+
 function AB:GetBarButtons(barKey)
     local cfg = BAR_CONFIGS[barKey]
     if not cfg then return {} end
 
     if barKey == "zoneAction" then
-        local btn = (_G.ZoneAbilityFrame and _G.ZoneAbilityFrame.SpellButton) or _G.ZoneAbilityFrame or _G.ZoneAbilityButton1
-        return btn and { btn } or {}
+        local buttons = {}
+        local zf = _G.ZoneAbilityFrame
+        if zf then
+            if zf.SpellButtonContainer and zf.SpellButtonContainer.EnumerateActive then
+                for spellBtn in zf.SpellButtonContainer:EnumerateActive() do
+                    table.insert(buttons, spellBtn)
+                end
+            end
+            if #buttons == 0 and zf.SpellButton then
+                table.insert(buttons, zf.SpellButton)
+            end
+        end
+        if #buttons == 0 and _G.ZoneAbilityButton1 then
+            table.insert(buttons, _G.ZoneAbilityButton1)
+        end
+        return buttons
     end
 
     local buttons = {}
@@ -167,12 +230,27 @@ function AB:UpdateEmptyButtons(barKey)
     if db.enabled == false then return end
 
     local buttons = self:GetBarButtons(barKey)
+    local maxBtns = db.maxButtons or #buttons
+    if maxBtns < 1 then maxBtns = 1 end
+    local displayCount = math.min(#buttons, maxBtns)
+    local isEditMode = (LEM and LEM.isInEditMode) or false
+    if barKey == "stance" and not isEditMode then
+        local numForms = _G.GetNumShapeshiftForms and _G.GetNumShapeshiftForms() or 0
+        displayCount = math.min(displayCount, numForms)
+    end
     local hideEmpty = db.hideEmpty == true and not self.showingGrid
 
-    for _, btn in ipairs(buttons) do
-        if hideEmpty then
+    local inCombat = (_G.InCombatLockdown and _G.InCombatLockdown()) or false
+
+    for i, btn in ipairs(buttons) do
+        if i > displayCount then
+            if btn.SetAlpha then btn:SetAlpha(0) end
+            if not inCombat and btn.Hide then btn:Hide() end
+            if btn.roithiBackdrop and btn.roithiBackdrop.Hide then btn.roithiBackdrop:Hide() end
+        elseif hideEmpty then
             local hasAct = ButtonHasAction(btn)
             if hasAct then
+                if not inCombat and btn.Show and not btn:IsShown() then btn:Show() end
                 if btn.SetAlpha then btn:SetAlpha(1) end
                 if btn.roithiBackdrop and btn.roithiBackdrop.Show then btn.roithiBackdrop:Show() end
             else
@@ -180,6 +258,7 @@ function AB:UpdateEmptyButtons(barKey)
                 if btn.roithiBackdrop and btn.roithiBackdrop.Hide then btn.roithiBackdrop:Hide() end
             end
         else
+            if not inCombat and btn.Show and not btn:IsShown() then btn:Show() end
             if btn.SetAlpha then btn:SetAlpha(1) end
             if btn.roithiBackdrop and btn.roithiBackdrop.Show then btn.roithiBackdrop:Show() end
         end
@@ -207,12 +286,8 @@ function AB:SetupBars()
             local f = CreateFrame("Frame", cfg.name, UIParent)
             if f.SetClampedToScreen then f:SetClampedToScreen(true) end
             if f.SetMovable then f:SetMovable(true) end
-            if f.EnableMouse then f:EnableMouse(true) end
+            if f.EnableMouse then f:EnableMouse(false) end
             f.barKey = barKey
-            if f.SetScript then
-                f:SetScript("OnEnter", function() self:OnBarEnter(barKey) end)
-                f:SetScript("OnLeave", function() self:OnBarLeave(barKey) end)
-            end
             self.bars[barKey] = f
 
             local db = self.db[barKey] or {}
@@ -223,8 +298,46 @@ function AB:SetupBars()
 
         local db = self.db[barKey] or {}
         if db.enabled ~= false and self.bars[barKey].Show then
-            self.bars[barKey]:Show()
+            if barKey == "pet" and not (_G.PetHasActionBar and _G.PetHasActionBar()) then
+                if self.bars[barKey].Hide then self.bars[barKey]:Hide() end
+            elseif barKey == "stance" and (_G.GetNumShapeshiftForms and _G.GetNumShapeshiftForms() or 0) == 0 then
+                if self.bars[barKey].Hide then self.bars[barKey]:Hide() end
+            elseif barKey == "extraAction" and not IsExtraActionActive() then
+                if self.bars[barKey].Hide then self.bars[barKey]:Hide() end
+            elseif barKey == "zoneAction" and not IsZoneActionActive() then
+                if self.bars[barKey].Hide then self.bars[barKey]:Hide() end
+            else
+                self.bars[barKey]:Show()
+            end
         end
+    end
+
+    if _G.ExtraActionBarFrame and not self.extraActionBarHooked and hooksecurefunc then
+        hooksecurefunc(_G.ExtraActionBarFrame, "Show", function()
+            if not _G.InCombatLockdown or not _G.InCombatLockdown() then
+                self:LayoutBar("extraAction")
+            end
+        end)
+        hooksecurefunc(_G.ExtraActionBarFrame, "Hide", function()
+            if not _G.InCombatLockdown or not _G.InCombatLockdown() then
+                self:LayoutBar("extraAction")
+            end
+        end)
+        self.extraActionBarHooked = true
+    end
+
+    if _G.ZoneAbilityFrame and not self.zoneAbilityHooked and hooksecurefunc then
+        hooksecurefunc(_G.ZoneAbilityFrame, "Show", function()
+            if not _G.InCombatLockdown or not _G.InCombatLockdown() then
+                self:LayoutBar("zoneAction")
+            end
+        end)
+        hooksecurefunc(_G.ZoneAbilityFrame, "Hide", function()
+            if not _G.InCombatLockdown or not _G.InCombatLockdown() then
+                self:LayoutBar("zoneAction")
+            end
+        end)
+        self.zoneAbilityHooked = true
     end
 
     -- Hide Blizzard Art Frames in Classic/Forever & prevent mouse blocking
@@ -267,6 +380,13 @@ function AB:SetupBars()
     if not self.overlayHooksRegistered and hooksecurefunc then
         if _G.ActionButton_Update then
             hooksecurefunc("ActionButton_Update", function(btn)
+                if (not self.IsEnabled or self:IsEnabled()) and btn then
+                    self:UpdateOverlayContainment(btn)
+                end
+            end)
+        end
+        if _G.ActionButton_UpdateState then
+            hooksecurefunc("ActionButton_UpdateState", function(btn)
                 if (not self.IsEnabled or self:IsEnabled()) and btn then
                     self:UpdateOverlayContainment(btn)
                 end
@@ -399,6 +519,11 @@ function AB:UpdateOverlayContainment(button)
             overlay:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
             overlay:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
         end
+        if overlay then
+            if overlay.EnableMouse then overlay:EnableMouse(false) end
+            if overlay.SetMouseClickEnabled then overlay:SetMouseClickEnabled(false) end
+            if overlay.SetMouseMotionEnabled then overlay:SetMouseMotionEnabled(false) end
+        end
     end
 
     if button.SlotArt and button.SlotArt.SetAlpha then button.SlotArt:SetAlpha(0) end
@@ -422,13 +547,18 @@ function AB:UpdateOverlayContainment(button)
     if button.roithiBackdrop and button.roithiBackdrop.SetBackdropBorderColor then
         local isEquipped = false
         local action = button.action or (button.GetPagedID and button:GetPagedID()) or (button.CalculateAction and button:CalculateAction())
-        if action and _G.C_ActionBar and _G.C_ActionBar.IsEquippedAction then
-            isEquipped = _G.C_ActionBar.IsEquippedAction(action)
+        if action then
+            if _G.C_ActionBar and _G.C_ActionBar.IsEquippedAction then
+                isEquipped = _G.C_ActionBar.IsEquippedAction(action)
+            elseif _G.IsEquippedAction then
+                isEquipped = _G.IsEquippedAction(action)
+            end
         elseif border and border.IsShown and border:IsShown() then
             isEquipped = true
         end
 
-        local isChecked = button.GetChecked and button:GetChecked() == true
+        local rawChecked = button.GetChecked and button:GetChecked()
+        local isChecked = (rawChecked == true or rawChecked == 1)
 
         if isEquipped or isChecked then
             -- Crisp 1px green border for equipped items and active stances/auras, perfectly fitting the frame
@@ -442,6 +572,30 @@ end
 
 function AB:StyleButton(button)
     if not button then return end
+
+    -- Suppress Blizzard bulky style/placeholder artwork on Extra Action & Zone Ability buttons
+    if button.style and not button.roithiStyleHooked then
+        button.style:SetAlpha(0)
+        if button.style.Hide then button.style:Hide() end
+        if hooksecurefunc then
+            hooksecurefunc(button.style, "Show", function(s)
+                s:SetAlpha(0)
+                if s.Hide then s:Hide() end
+            end)
+        end
+        button.roithiStyleHooked = true
+    end
+    if _G.ZoneAbilityFrame and _G.ZoneAbilityFrame.Style and not _G.ZoneAbilityFrame.roithiStyleHooked then
+        _G.ZoneAbilityFrame.Style:SetAlpha(0)
+        if _G.ZoneAbilityFrame.Style.Hide then _G.ZoneAbilityFrame.Style:Hide() end
+        if hooksecurefunc then
+            hooksecurefunc(_G.ZoneAbilityFrame.Style, "Show", function(s)
+                s:SetAlpha(0)
+                if s.Hide then s:Hide() end
+            end)
+        end
+        _G.ZoneAbilityFrame.roithiStyleHooked = true
+    end
 
     -- 1. Icon TexCoords (Zoomed to create modern square look)
     local zoom = self.db.iconZoom or 0.07
@@ -460,6 +614,9 @@ function AB:StyleButton(button)
         if bg.SetFrameLevel and button.GetFrameLevel then
             bg:SetFrameLevel(math.max(0, button:GetFrameLevel() - 1))
         end
+        if bg.EnableMouse then bg:EnableMouse(false) end
+        if bg.SetMouseClickEnabled then bg:SetMouseClickEnabled(false) end
+        if bg.SetMouseMotionEnabled then bg:SetMouseMotionEnabled(false) end
         if bg.SetBackdrop then
             bg:SetBackdrop({
                 bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
@@ -472,6 +629,9 @@ function AB:StyleButton(button)
         end
         button.roithiBackdrop = bg
     else
+        if button.roithiBackdrop.EnableMouse then button.roithiBackdrop:EnableMouse(false) end
+        if button.roithiBackdrop.SetMouseClickEnabled then button.roithiBackdrop:SetMouseClickEnabled(false) end
+        if button.roithiBackdrop.SetMouseMotionEnabled then button.roithiBackdrop:SetMouseMotionEnabled(false) end
         if button.roithiBackdrop.Show then button.roithiBackdrop:Show() end
         local bc = self.db.borderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
         if button.roithiBackdrop.SetBackdropBorderColor then
@@ -479,25 +639,23 @@ function AB:StyleButton(button)
         end
     end
 
+    -- Secure non-interactive TextOverlayContainer
+    local toc = button.TextOverlayContainer
+    if toc then
+        if toc.EnableMouse then toc:EnableMouse(false) end
+        if toc.SetMouseClickEnabled then toc:SetMouseClickEnabled(false) end
+        if toc.SetMouseMotionEnabled then toc:SetMouseMotionEnabled(false) end
+    end
+
     -- 3. Securely hook Border Show/Hide and Checked states
     local border = button.Border or _G[button.GetName and button:GetName() and (button:GetName() .. "Border") or ""]
     if border and not border.roithiBorderHooked and hooksecurefunc then
         hooksecurefunc(border, "Show", function(b)
             if b.SetAlpha then b:SetAlpha(0) end
-            if button.roithiBackdrop and button.roithiBackdrop.SetBackdropBorderColor then
-                button.roithiBackdrop:SetBackdropBorderColor(0.2, 0.9, 0.2, 1.0)
-            end
+            AB:UpdateOverlayContainment(button)
         end)
         hooksecurefunc(border, "Hide", function()
-            if button.roithiBackdrop and button.roithiBackdrop.SetBackdropBorderColor then
-                local isChecked = button.GetChecked and button:GetChecked() == true
-                if isChecked then
-                    button.roithiBackdrop:SetBackdropBorderColor(0.2, 0.9, 0.2, 1.0)
-                else
-                    local bc = AB.db and AB.db.borderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
-                    button.roithiBackdrop:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
-                end
-            end
+            AB:UpdateOverlayContainment(button)
         end)
         border.roithiBorderHooked = true
     end
@@ -515,6 +673,9 @@ function AB:StyleButton(button)
     -- 5. Keybind Hotkey Styling
     local hotkey = button.HotKey or _G[button.GetName and button:GetName() and (button:GetName() .. "HotKey") or ""]
     if hotkey then
+        if hotkey.EnableMouse then hotkey:EnableMouse(false) end
+        if hotkey.SetMouseClickEnabled then hotkey:SetMouseClickEnabled(false) end
+        if hotkey.SetMouseMotionEnabled then hotkey:SetMouseMotionEnabled(false) end
         if hotkey.SetShown then
             hotkey:SetShown(self.db.showHotkeys ~= false)
         end
@@ -547,6 +708,9 @@ function AB:StyleButton(button)
     -- 6. Macro Text Styling
     local name = button.Name or _G[button.GetName and button:GetName() and (button:GetName() .. "Name") or ""]
     if name then
+        if name.EnableMouse then name:EnableMouse(false) end
+        if name.SetMouseClickEnabled then name:SetMouseClickEnabled(false) end
+        if name.SetMouseMotionEnabled then name:SetMouseMotionEnabled(false) end
         if name.SetShown then
             name:SetShown(self.db.showMacroText ~= false)
         end
@@ -558,6 +722,9 @@ function AB:StyleButton(button)
     -- 7. Item / Charge Count Styling
     local count = button.Count or _G[button.GetName and button:GetName() and (button:GetName() .. "Count") or ""]
     if count then
+        if count.EnableMouse then count:EnableMouse(false) end
+        if count.SetMouseClickEnabled then count:SetMouseClickEnabled(false) end
+        if count.SetMouseMotionEnabled then count:SetMouseMotionEnabled(false) end
         if count.SetShown then
             count:SetShown(self.db.showCount ~= false)
         end
@@ -652,7 +819,6 @@ function AB:LayoutBar(barKey)
                 end
             end
         end
-        local LEM = LibStub("LibEditMode-Roithi", true)
         if LEM and LEM.frameSelections and LEM.frameSelections[container] then
             local sel = LEM.frameSelections[container]
             if sel and sel.Hide then sel:Hide() end
@@ -661,7 +827,6 @@ function AB:LayoutBar(barKey)
     end
 
     local isEditMode = false
-    local LEM = LibStub("LibEditMode-Roithi", true)
     if LEM and LEM.IsInEditMode and LEM:IsInEditMode() then
         isEditMode = true
     elseif _G.EditModeManagerFrame and _G.EditModeManagerFrame:IsShown() then
@@ -698,6 +863,28 @@ function AB:LayoutBar(barKey)
         end
     end
 
+    -- 3. Extra Action Bar: Hide if not active and not in Edit Mode
+    if barKey == "extraAction" and not isEditMode then
+        if not IsExtraActionActive() then
+            if container.Hide then container:Hide() end
+            for _, btn in ipairs(buttons) do
+                if btn.Hide then btn:Hide() end
+            end
+            return
+        end
+    end
+
+    -- 4. Zone Action Bar: Hide if not active and not in Edit Mode
+    if barKey == "zoneAction" and not isEditMode then
+        if not IsZoneActionActive() then
+            if container.Hide then container:Hide() end
+            for _, btn in ipairs(buttons) do
+                if btn.Hide then btn:Hide() end
+            end
+            return
+        end
+    end
+
     if container.Show then container:Show() end
 
     -- Hide Blizzard native frames for this bar to prevent duplicate displays & Edit Mode outlines
@@ -725,67 +912,86 @@ function AB:LayoutBar(barKey)
         end
     end
 
-    if #buttons == 0 then return end
-
     local btnSize = db.buttonSize or 36
     local spacing = db.spacing or 4
     local isVertical = (db.orientation == "VERTICAL")
+    local maxBtns = db.maxButtons or (BAR_CONFIGS[barKey] and BAR_CONFIGS[barKey].count) or #buttons
+    if maxBtns < 1 then maxBtns = 1 end
+    local displayCount = math.min(#buttons, maxBtns)
+    if barKey == "stance" and not isEditMode then
+        local numForms = _G.GetNumShapeshiftForms and _G.GetNumShapeshiftForms() or 0
+        displayCount = math.min(displayCount, numForms)
+    end
+
     local perLine = db.buttonsPerRow or #buttons
     if perLine < 1 then perLine = 1 end
 
+    local layoutCount = math.max(1, displayCount)
     local numCols, numRows
     if isVertical then
-        numRows = math.min(#buttons, perLine)
-        numCols = math.ceil(#buttons / perLine)
+        numRows = math.min(layoutCount, perLine)
+        numCols = math.ceil(layoutCount / perLine)
     else
-        numCols = math.min(#buttons, perLine)
-        numRows = math.ceil(#buttons / perLine)
+        numCols = math.min(layoutCount, perLine)
+        numRows = math.ceil(layoutCount / perLine)
     end
+    if numCols < 1 then numCols = 1 end
+    if numRows < 1 then numRows = 1 end
 
     local totalW = (numCols * btnSize) + math.max(0, (numCols - 1) * spacing)
     local totalH = (numRows * btnSize) + math.max(0, (numRows - 1) * spacing)
     if container.SetSize then container:SetSize(totalW, totalH) end
 
+    if #buttons == 0 then return end
+
     for i, btn in ipairs(buttons) do
-        btn.barKey = barKey
-        if not btn.originalParent and btn.GetParent then
-            btn.originalParent = btn:GetParent()
-        end
-        if not btn.roithiOriginalPoints and btn.GetNumPoints then
-            btn.roithiOriginalPoints = {}
-            for p = 1, btn:GetNumPoints() do
-                local pt, relTo, relPt, x, y = btn:GetPoint(p)
-                table.insert(btn.roithiOriginalPoints, { point = pt, relTo = relTo, relPt = relPt, x = x, y = y })
+        if i <= displayCount then
+            btn.barKey = barKey
+            if not btn.originalParent and btn.GetParent then
+                btn.originalParent = btn:GetParent()
             end
-            if btn.GetSize then
-                local w, h = btn:GetSize()
-                btn.roithiOriginalWidth = w
-                btn.roithiOriginalHeight = h
+            if not btn.roithiOriginalPoints and btn.GetNumPoints then
+                btn.roithiOriginalPoints = {}
+                for p = 1, btn:GetNumPoints() do
+                    local pt, relTo, relPt, x, y = btn:GetPoint(p)
+                    table.insert(btn.roithiOriginalPoints, { point = pt, relTo = relTo, relPt = relPt, x = x, y = y })
+                end
+                if btn.GetSize then
+                    local w, h = btn:GetSize()
+                    btn.roithiOriginalWidth = w
+                    btn.roithiOriginalHeight = h
+                end
             end
-        end
-        if btn.SetParent then
-            btn:SetParent(container)
-        end
-        if container.GetFrameLevel and btn.SetFrameLevel then
-            btn:SetFrameLevel(container:GetFrameLevel() + 10)
-        end
-        if btn.SetAlpha then btn:SetAlpha(1) end
-        if btn.Show then btn:Show() end
-        if btn.ClearAllPoints then btn:ClearAllPoints() end
+            if btn.SetParent then
+                btn:SetParent(container)
+            end
+            if container.GetFrameLevel and btn.SetFrameLevel then
+                btn:SetFrameLevel(container:GetFrameLevel() + 10)
+            end
+            if btn.SetAlpha then btn:SetAlpha(1) end
+            if btn.Show then btn:Show() end
+            if btn.ClearAllPoints then btn:ClearAllPoints() end
 
-        local col, row
-        if isVertical then
-            row = (i - 1) % perLine
-            col = math.floor((i - 1) / perLine)
+            local col, row
+            if isVertical then
+                row = (i - 1) % perLine
+                col = math.floor((i - 1) / perLine)
+            else
+                col = (i - 1) % perLine
+                row = math.floor((i - 1) / perLine)
+            end
+            local x = col * (btnSize + spacing)
+            local y = -row * (btnSize + spacing)
+
+            if btn.SetSize then btn:SetSize(btnSize, btnSize) end
+            if btn.SetPoint then btn:SetPoint("TOPLEFT", container, "TOPLEFT", x, y) end
         else
-            col = (i - 1) % perLine
-            row = math.floor((i - 1) / perLine)
+            if btn.Hide then btn:Hide() end
+            if btn.SetAlpha then btn:SetAlpha(0) end
+            if btn.roithiBackdrop and btn.roithiBackdrop.Hide then
+                btn.roithiBackdrop:Hide()
+            end
         end
-        local x = col * (btnSize + spacing)
-        local y = -row * (btnSize + spacing)
-
-        if btn.SetSize then btn:SetSize(btnSize, btnSize) end
-        if btn.SetPoint then btn:SetPoint("TOPLEFT", container, "TOPLEFT", x, y) end
     end
 
     self:UpdateBarMouseover(barKey)
