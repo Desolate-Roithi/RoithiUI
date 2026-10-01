@@ -76,6 +76,26 @@ function ns.UpdateCastBarMedia(bar)
     if bar.TimeFS then bar.TimeFS:SetFont(font, 12, "OUTLINE") end
 end
 
+function ns.ClampCastbarCoordinates(bar, point, x, y, db)
+    local width = (bar and bar.GetWidth and bar:GetWidth()) or (db and db.width) or 200
+    if not width or width <= 0 or (issecretvalue and issecretvalue(width)) then
+        width = (db and db.width) or 200
+    end
+    local height = (bar and bar.GetHeight and bar:GetHeight()) or (db and db.height) or 20
+    if not height or height <= 0 or (issecretvalue and issecretvalue(height)) then
+        height = (db and db.height) or 20
+    end
+
+    local iconScale = (db and db.iconScale) or 1.0
+    local showIcon = (db and db.showIcon ~= false)
+    local extraLeft = showIcon and (height * iconScale) or 0
+
+    if ns.Utils and ns.Utils.SanitizeAndCenterPoint then
+        return ns.Utils.SanitizeAndCenterPoint(point, x, y, width, height, 10, extraLeft)
+    end
+    return point or "CENTER", x or 0, y or 0
+end
+
 function ns.RefreshAllCastbars()
     if not ns.bars then return end
     local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar
@@ -86,8 +106,24 @@ function ns.RefreshAllCastbars()
             if not db.enabled then
                 bar:Hide()
             end
-            if ns.SetCastbarAttachment then
-                ns.SetCastbarAttachment(unit, not db.detached)
+            if db.detached then
+                bar:SetParent(UIParent)
+                bar:SetMovable(true)
+                bar:SetClampedToScreen(true)
+                local iconExtra = (db.showIcon ~= false) and ((db.height or 20) * (db.iconScale or 1.0)) or 0
+                bar:SetClampRectInsets(-iconExtra - 5, 0, 0, 0)
+                local point, x, y = ns.ClampCastbarCoordinates(bar, db.point, db.x, db.y, db)
+                db.point = point
+                db.x = x
+                db.y = y
+                if not bar.isInEditMode then
+                    bar:ClearAllPoints()
+                    bar:SetPoint(point, UIParent, point, x, y)
+                end
+            else
+                if ns.SetCastbarAttachment then
+                    ns.SetCastbarAttachment(unit, true)
+                end
             end
         end
     end
@@ -310,6 +346,10 @@ function ns.UpdateCast(bar, unitOverride)
 
     if bar.isInEditMode then return end
 
+    if not db.detached and not (InCombatLockdown and InCombatLockdown()) and ns.SetCastbarAttachment then
+        ns.SetCastbarAttachment(bar.unit, true)
+    end
+
     local name, text, texture, notInterruptible, castID
     local durationObj
     local isChannel = false
@@ -358,12 +398,12 @@ function ns.UpdateCast(bar, unitOverride)
 
     local totalSec = durationObj:GetTotalDuration()
     local remSec = durationObj:GetRemainingDuration()
-    local isTotalSecret = (issecretvalue and issecretvalue(totalSec)) or (canaccessvalue and not canaccessvalue(totalSec)) or (type(totalSec) == "userdata" or type(totalSec) == "table")
-    local isRemSecret = (issecretvalue and issecretvalue(remSec)) or (canaccessvalue and not canaccessvalue(remSec)) or (type(remSec) == "userdata" or type(remSec) == "table")
+    local isTotalSecret = (issecretvalue and issecretvalue(totalSec)) or (canaccessvalue and not canaccessvalue(totalSec)) or type(totalSec) ~= "number"
+    local isRemSecret = (issecretvalue and issecretvalue(remSec)) or (canaccessvalue and not canaccessvalue(remSec)) or type(remSec) ~= "number"
 
     local curVal = 0
-    if not isTotalSecret and not isRemSecret and type(totalSec) == "number" and type(remSec) == "number" then
-        if totalSec <= 0 then totalSec = 1 end
+    if not isTotalSecret and not isRemSecret then
+        if not totalSec or totalSec <= 0 then totalSec = 1 end
         curVal = isChannel and remSec or (totalSec - remSec)
         if curVal < 0 then curVal = 0 end
         if curVal > totalSec then curVal = totalSec end

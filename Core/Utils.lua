@@ -5,12 +5,13 @@ if ns.skipLoad then return end
 -- Environment & Client Flavor Detection
 -- -------------------------------------------------------------------------
 local GetBuildInfo = _G.GetBuildInfo
+local C_GameRules = _G.C_GameRules
 local WOW_PROJECT_ID = _G.WOW_PROJECT_ID
 local WOW_PROJECT_MAINLINE = _G.WOW_PROJECT_MAINLINE
 
 local _, _, _, interfaceVersion = GetBuildInfo()
 ns.InterfaceVersion = tonumber(interfaceVersion) or 0
-ns.IsForever = (ns.InterfaceVersion == 16001) or (_G.C_GameRules and _G.C_GameRules.IsForever and _G.C_GameRules.IsForever() or false)
+ns.IsForever = (ns.InterfaceVersion == 16001) or (C_GameRules and C_GameRules.IsForever and C_GameRules.IsForever() or false)
 ns.IsRetail = not ns.IsForever and (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 
 -- -------------------------------------------------------------------------
@@ -117,113 +118,97 @@ function ns.Utils.ShowExportWindow(exportString)
 end
 
 -- -------------------------------------------------------------------------
--- Screen Clamping & Coordinate Sanitization
+-- Screen Clamping & Coordinate Sanitization Helpers
 -- -------------------------------------------------------------------------
-function ns.Utils.SanitizeAndCenterPoint(point, x, y, width, height, padding)
-    padding = padding or 10
-    width = tonumber(width) or 200
-    height = tonumber(height) or 20
+function ns.Utils.SanitizeAndCenterPoint(point, x, y, width, height, padding, extraLeft)
+    point = point or "CENTER"
     x = tonumber(x) or 0
     y = tonumber(y) or 0
-    point = point or "CENTER"
+    width = tonumber(width) or 200
+    height = tonumber(height) or 20
+    padding = tonumber(padding) or 10
+    extraLeft = tonumber(extraLeft) or 0
 
-    local screenW, screenH = 1920, 1080
-    if UIParent and UIParent.GetSize then
-        local w, h = UIParent:GetSize()
-        if w and w > 0 and h and h > 0 then
-            screenW, screenH = w, h
-        end
-    end
+    local sw = UIParent and UIParent:GetWidth() or 1920
+    local sh = UIParent and UIParent:GetHeight() or 1080
+    if not sw or sw <= 0 then sw = 1920 end
+    if not sh or sh <= 0 then sh = 1080 end
 
-    local halfW = screenW / 2
-    local halfH = screenH / 2
-
-    -- Convert non-CENTER points to screen-centered coordinates
-    local cX = x
-    local cY = y
-
-    if point == "TOP" then
-        cY = y + halfH - (height / 2)
-    elseif point == "BOTTOM" then
-        cY = y - halfH + (height / 2)
+    local centerX, centerY = x, y
+    if point == "BOTTOM" then
+        centerY = y - (sh / 2) + (height / 2)
+    elseif point == "TOP" then
+        centerY = y + (sh / 2) - (height / 2)
     elseif point == "LEFT" then
-        cX = x - halfW + (width / 2)
+        centerX = x - (sw / 2) + (width / 2)
     elseif point == "RIGHT" then
-        cX = x + halfW - (width / 2)
+        centerX = x + (sw / 2) - (width / 2)
     elseif point == "TOPLEFT" then
-        cX = x - halfW + (width / 2)
-        cY = y + halfH - (height / 2)
-    elseif point == "TOPRIGHT" then
-        cX = x + halfW - (width / 2)
-        cY = y + halfH - (height / 2)
+        centerX = x - (sw / 2) + (width / 2)
+        centerY = y + (sh / 2) - (height / 2)
     elseif point == "BOTTOMLEFT" then
-        cX = x - halfW + (width / 2)
-        cY = y - halfH + (height / 2)
+        centerX = x - (sw / 2) + (width / 2)
+        centerY = y - (sh / 2) + (height / 2)
+    elseif point == "TOPRIGHT" then
+        centerX = x + (sw / 2) - (width / 2)
+        centerY = y + (sh / 2) - (height / 2)
     elseif point == "BOTTOMRIGHT" then
-        cX = x + halfW - (width / 2)
-        cY = y - halfH + (height / 2)
+        centerX = x + (sw / 2) - (width / 2)
+        centerY = y - (sh / 2) + (height / 2)
     end
 
-    -- Strict clamping within visible screen boundaries
-    local maxX = math.max(0, halfW - (width / 2) - padding)
-    local maxY = math.max(0, halfH - (height / 2) - padding)
+    local maxX = (sw / 2) - (width / 2) - padding
+    local minX = -((sw / 2) - (width / 2) - padding - extraLeft)
+    if minX > maxX then minX = maxX end
+    centerX = math.max(minX, math.min(maxX, centerX))
 
-    cX = math.max(-maxX, math.min(maxX, cX))
-    cY = math.max(-maxY, math.min(maxY, cY))
+    local maxY = (sh / 2) - (height / 2) - padding
+    local minY = -maxY
+    if minY > maxY then minY, maxY = maxY, minY end
+    centerY = math.max(minY, math.min(maxY, centerY))
 
-    cX = math.floor(cX * 100 + 0.5) / 100
-    cY = math.floor(cY * 100 + 0.5) / 100
-
-    return "CENTER", cX, cY
+    return "CENTER", math.floor(centerX * 100 + 0.5) / 100, math.floor(centerY * 100 + 0.5) / 100
 end
 
 function ns.Utils.ClampFrameToScreen(frame, padding)
-    if not frame then return end
+    if not frame or not frame.GetPoint then return end
     padding = padding or 10
 
-    if frame.SetClampedToScreen then
-        frame:SetClampedToScreen(true)
-        if frame.SetClampRectInsets then
-            frame:SetClampRectInsets(-padding, padding, padding, -padding)
-        end
-    end
+    local sw = UIParent and UIParent:GetWidth() or 1920
+    local sh = UIParent and UIParent:GetHeight() or 1080
+    if not sw or sw <= 0 then sw = 1920 end
+    if not sh or sh <= 0 then sh = 1080 end
 
     local left = frame.GetLeft and frame:GetLeft()
     local right = frame.GetRight and frame:GetRight()
     local top = frame.GetTop and frame:GetTop()
     local bottom = frame.GetBottom and frame:GetBottom()
-    if not left or not right or not top or not bottom then return end
 
-    local screenW, screenH = 1920, 1080
-    if UIParent and UIParent.GetSize then
-        local w, h = UIParent:GetSize()
-        if w and w > 0 and h and h > 0 then
-            screenW, screenH = w, h
-        end
-    end
+    if not left or not right or not top or not bottom then return end
+    if (_G.issecretvalue and (_G.issecretvalue(left) or _G.issecretvalue(right) or _G.issecretvalue(top) or _G.issecretvalue(bottom))) then return end
 
     local shiftX = 0
     local shiftY = 0
 
     if left < padding then
         shiftX = padding - left
-    elseif right > (screenW - padding) then
-        shiftX = (screenW - padding) - right
+    elseif right > (sw - padding) then
+        shiftX = (sw - padding) - right
     end
 
     if bottom < padding then
         shiftY = padding - bottom
-    elseif top > (screenH - padding) then
-        shiftY = (screenH - padding) - top
+    elseif top > (sh - padding) then
+        shiftY = (sh - padding) - top
     end
 
     if shiftX ~= 0 or shiftY ~= 0 then
-        local numPoints = frame.GetNumPoints and frame:GetNumPoints() or 1
-        if numPoints == 1 and frame.GetPoint and frame.ClearAllPoints and frame.SetPoint then
-            local pt, relTo, relPt, curX, curY = frame:GetPoint(1)
-            frame:ClearAllPoints()
-            frame:SetPoint(pt or "CENTER", relTo or UIParent, relPt or pt or "CENTER", (curX or 0) + shiftX, (curY or 0) + shiftY)
-        end
+        local p, relTo, relP, curX, curY = frame:GetPoint(1)
+        p = p or "CENTER"
+        curX = (curX or 0) + shiftX
+        curY = (curY or 0) + shiftY
+        frame:ClearAllPoints()
+        frame:SetPoint(p, relTo or UIParent, relP or p, curX, curY)
     end
 end
 

@@ -369,6 +369,7 @@ function UF:OnEnable()
         end
     end
     if ns.InitializeUnitFrameConfig then ns.InitializeUnitFrameConfig() end
+    if ns.RefreshAllCastbars then ns.RefreshAllCastbars() end
 end
 
 function UF:OnDisable()

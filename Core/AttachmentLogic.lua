@@ -147,6 +147,17 @@ function AL:IsActive(unit, frameType)
 
     local elementKey = ElementMap[frameType]
     local element = frame[elementKey]
+    if not element then return false end
+
+    local db = self:GetElementDB(unit, frameType)
+    if frameType == "Power" then
+        return db and db.powerEnabled ~= false
+    elseif frameType == "ClassPower" then
+        return db and db.classPowerEnabled ~= false and (element:IsShown() or frame.unit == "player")
+    elseif frameType == "AdditionalPower" then
+        return db and db.additionalPowerEnabled ~= false and element:IsShown()
+    end
+
     return element and element:IsShown()
 end
 
@@ -282,8 +293,10 @@ function AL:ApplyLayout(unit, frameType)
     local db = self:GetElementDB(unit, frameType)
     local isDetached = self:IsDetached(unit, frameType)
 
-    -- Force detached if no unit frame exists to anchor to
-    if not uFrame then isDetached = true end
+    -- If frame is supposed to be attached, but uFrame is not ready yet, do NOT force detached!
+    if not uFrame and not isDetached then
+        return
+    end
 
     frame:ClearAllPoints()
 
@@ -295,9 +308,8 @@ function AL:ApplyLayout(unit, frameType)
             point = db.point or "CENTER"
             x, y = db.x or 0, db.y or 0
             width = db.width or 250
-            local height = db.height or 20
-            if ns.Utils and ns.Utils.SanitizeAndCenterPoint then
-                point, x, y = ns.Utils.SanitizeAndCenterPoint(point, x, y, width, height, 10)
+            if ns.ClampCastbarCoordinates then
+                point, x, y = ns.ClampCastbarCoordinates(frame, point, x, y, db)
                 db.point = point
                 db.x = x
                 db.y = y
@@ -335,16 +347,22 @@ function AL:ApplyLayout(unit, frameType)
 
         frame:SetParent(UIParent)
         frame:SetPoint(point, UIParent, point, x, y)
-        if frameType ~= "Auras" and not frameType:match("^CustomAura_") then frame:SetWidth(width) end -- Auras manage their own width/growth
-        if ns.Utils and ns.Utils.ClampFrameToScreen then
-            ns.Utils.ClampFrameToScreen(frame, 10)
+        if frameType == "Castbar" then
+            frame:SetClampedToScreen(true)
+            local iconSize = (db.showIcon ~= false) and ((db.height or 20) * (db.iconScale or 1.0)) or 0
+            frame:SetClampRectInsets(-iconSize - 5, 0, 0, 0)
         end
+        if frameType ~= "Auras" and not frameType:match("^CustomAura_") then frame:SetWidth(width) end -- Auras manage their own width/growth
     else
         -- ATTACHED: Anchor to valid parent
         frame:SetMovable(false)
         local anchor = uFrame and self:GetValidAnchor(unit, frameType)
         if anchor then
-            frame:SetParent(anchor)
+            if frameType == "Castbar" then
+                frame:SetParent(uFrame)
+            else
+                frame:SetParent(anchor)
+            end
             if frameType == "Auras" or frameType:match("^RoithiAuras_") or frameType:match("^CustomAura_") then
                 -- SATELLITE MODE: Respect configured relative offsets
                 local anchorPt, anchorX, anchorY
@@ -394,7 +412,7 @@ function AL:ApplyLayout(unit, frameType)
                 -- Dynamic Width & Offset deduction for Castbars (fixes 0-start icon alignment)
                 if frameType == "Castbar" then
                     local cbDB = RoithiUI.db.profile.Castbar[unit]
-                    if cbDB and cbDB.showIcon and not cbDB.detached then
+                    if cbDB and cbDB.showIcon ~= false and not cbDB.detached then
                         local iconSize = (cbDB.height or 20) * (cbDB.iconScale or 1.0)
                         local w = parentW - iconSize
                         if w < 1 then w = 1 end
