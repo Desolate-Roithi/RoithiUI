@@ -19,6 +19,15 @@ SwingTimer.defaultSettings = {
         width = 200,
         height = 12,
         showOffhand = true,
+        barOrder = "MAIN_TOP",
+        showLabel = true,
+        showTimer = true,
+        labelAnchor = "LEFT",
+        timerAnchor = "RIGHT",
+        labelX = 4,
+        labelY = 0,
+        timerX = -4,
+        timerY = 0,
         showText = true,
         point = "CENTER",
         x = 0,
@@ -31,6 +40,14 @@ SwingTimer.defaultSettings = {
         enabled = true,
         width = 200,
         height = 12,
+        showLabel = true,
+        showTimer = true,
+        labelAnchor = "LEFT",
+        timerAnchor = "RIGHT",
+        labelX = 4,
+        labelY = 0,
+        timerX = -4,
+        timerY = 0,
         showText = true,
         point = "CENTER",
         x = 0,
@@ -55,6 +72,14 @@ local SWING_RESET_SPELLS = {
 
 local issecretvalue = _G.issecretvalue
 local canaccessvalue = _G.canaccessvalue
+local function UnitCanAttack(a, b)
+    local fn = _G.UnitCanAttack
+    return fn and fn(a, b)
+end
+local function UnitIsUnit(a, b)
+    local fn = _G.UnitIsUnit
+    return fn and fn(a, b)
+end
 local function IsSecret(v)
     return (type(issecretvalue) == "function" and issecretvalue(v))
         or (type(canaccessvalue) == "function" and not canaccessvalue(v))
@@ -139,7 +164,13 @@ function SwingTimer:SyncNativeProgress(hand, frame, value)
     bar:SetMinMaxValues(minVal or 0, maxVal or 2.0)
     bar:SetValue(value or 0)
 
-    if pCfg.showText ~= false then
+    local showTimer = true
+    if pCfg.showTimer ~= nil then
+        showTimer = (pCfg.showTimer == true)
+    elseif pCfg.showText ~= nil then
+        showTimer = (pCfg.showText ~= false)
+    end
+    if showTimer then
         local label = frame.GetTimeLabel and frame:GetTimeLabel()
         local txt = label and label:GetText()
         if txt and txt ~= "" then
@@ -204,10 +235,25 @@ function SwingTimer:BindNativeSwingFrames()
         ranged = _G.SwingTimerRangedFrame,
     }
 
+    local function SuppressNativeSelection(targetFrame)
+        if not targetFrame then return end
+        if targetFrame.Selection then
+            targetFrame.Selection:Hide()
+            if not targetFrame.roithiSelectionHooked and hooksecurefunc then
+                hooksecurefunc(targetFrame.Selection, "Show", function(sel)
+                    sel:Hide()
+                end)
+                targetFrame.roithiSelectionHooked = true
+            end
+        end
+    end
+
     for hand, frame in pairs(targets) do
         if frame and not self.nativeFramesBound[frame] then
             self.nativeFramesBound[frame] = true
             anyBound = true
+
+            SuppressNativeSelection(frame)
 
             if frame.SetAlpha then frame:SetAlpha(0) end
             if frame.UpdateSystemSettingOpacity and hooksecurefunc then
@@ -234,6 +280,8 @@ function SwingTimer:BindNativeSwingFrames()
                     self:SyncNativeClear(hand, frame)
                 end)
             end
+        elseif frame then
+            SuppressNativeSelection(frame)
         end
     end
 
@@ -265,10 +313,22 @@ function SwingTimer:SetupEventFrame()
             self:OnCombatLog(event, ...)
         elseif event == "UNIT_COMBAT" then
             self:OnUnitCombat(...)
+        elseif event == "PLAYER_SWING" then
+            self:OnPlayerSwing(...)
+        elseif event == "PLAYER_SWING_RANGE_UPDATE" then
+            self:OnPlayerSwingRangeUpdate(...)
         elseif event == "UNIT_ATTACK_SPEED" then
             self:OnAttackSpeedChanged(event, ...)
+        elseif event == "UNIT_SPELLCAST_START" then
+            self:OnSpellcastStart(event, ...)
         elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
             self:OnSpellcastSucceeded(event, ...)
+        elseif event == "UNIT_SPELLCAST_INTERRUPTED" or event == "UNIT_SPELLCAST_FAILED" then
+            self:OnSpellcastFinished(event, ...)
+        elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
+            self:OnSpellcastStart(event, ...)
+        elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+            self:OnSpellcastFinished(event, ...)
         elseif event == "START_AUTOREPEAT_SPELL" then
             self:OnStartAutorepeat()
         elseif event == "STOP_AUTOREPEAT_SPELL" then
@@ -341,13 +401,22 @@ function SwingTimer:OnEnable()
     local f = self.eventFrame
     if f then
         f:RegisterEvent("UNIT_ATTACK_SPEED")
+        f:RegisterEvent("UNIT_SPELLCAST_START")
         f:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        f:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+        f:RegisterEvent("UNIT_SPELLCAST_FAILED")
+        f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+        f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
         f:RegisterEvent("START_AUTOREPEAT_SPELL")
         f:RegisterEvent("STOP_AUTOREPEAT_SPELL")
         f:RegisterEvent("PLAYER_TARGET_CHANGED")
         f:RegisterEvent("PLAYER_REGEN_DISABLED")
         f:RegisterEvent("PLAYER_ENTER_COMBAT")
         f:RegisterEvent("PLAYER_LEAVE_COMBAT")
+        if f.RegisterEvent then
+            pcall(f.RegisterEvent, f, "PLAYER_SWING")
+            pcall(f.RegisterEvent, f, "PLAYER_SWING_RANGE_UPDATE")
+        end
         if f.RegisterUnitEvent then
             f:RegisterUnitEvent("UNIT_COMBAT", "player", "target")
         else
@@ -362,7 +431,12 @@ function SwingTimer:OnDisable()
     local f = self.eventFrame
     if f then
         f:UnregisterEvent("UNIT_ATTACK_SPEED")
+        f:UnregisterEvent("UNIT_SPELLCAST_START")
         f:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        f:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+        f:UnregisterEvent("UNIT_SPELLCAST_FAILED")
+        f:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+        f:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
         f:UnregisterEvent("START_AUTOREPEAT_SPELL")
         f:UnregisterEvent("STOP_AUTOREPEAT_SPELL")
         f:UnregisterEvent("PLAYER_TARGET_CHANGED")
@@ -370,6 +444,10 @@ function SwingTimer:OnDisable()
         f:UnregisterEvent("PLAYER_ENTER_COMBAT")
         f:UnregisterEvent("PLAYER_LEAVE_COMBAT")
         f:UnregisterEvent("UNIT_COMBAT")
+        if f.UnregisterEvent then
+            pcall(f.UnregisterEvent, f, "PLAYER_SWING")
+            pcall(f.UnregisterEvent, f, "PLAYER_SWING_RANGE_UPDATE")
+        end
     end
     if self.playerFrame then self.playerFrame:Hide() end
     if self.targetFrame then self.targetFrame:Hide() end
@@ -378,6 +456,14 @@ end
 -- ----------------------------------------------------------------------------
 -- Frame Creation & Styling
 -- ----------------------------------------------------------------------------
+
+local function SetClickthrough(frame, clickthrough)
+    if not frame then return end
+    local enableMouse = not clickthrough
+    if frame.EnableMouse then frame:EnableMouse(enableMouse) end
+    if frame.SetMouseClickEnabled then frame:SetMouseClickEnabled(enableMouse) end
+    if frame.SetMouseMotionEnabled then frame:SetMouseMotionEnabled(enableMouse) end
+end
 
 local function CreateBarWidget(parent, name)
     local bar = CreateFrame("StatusBar", name, parent, "BackdropTemplate")
@@ -418,6 +504,7 @@ local function CreateBarWidget(parent, name)
     bar:SetMinMaxValues(0, 1)
     bar:SetValue(0)
     bar:Hide()
+    SetClickthrough(bar, true)
 
     return bar
 end
@@ -431,6 +518,7 @@ function SwingTimer:CreateFrames()
     pFrame:SetMovable(true)
     pFrame:SetFrameStrata("HIGH")
     pFrame:SetFrameLevel(50)
+    SetClickthrough(pFrame, true)
 
     pFrame.mainBar = CreateBarWidget(pFrame, "RoithiSwingTimer_Player_Main")
     pFrame.offBar = CreateBarWidget(pFrame, "RoithiSwingTimer_Player_Off")
@@ -447,6 +535,7 @@ function SwingTimer:CreateFrames()
     tFrame:SetMovable(true)
     tFrame:SetFrameStrata("HIGH")
     tFrame:SetFrameLevel(50)
+    SetClickthrough(tFrame, true)
 
     tFrame.mainBar = CreateBarWidget(tFrame, "RoithiSwingTimer_Target_Main")
 
@@ -459,6 +548,19 @@ end
 function SwingTimer:SetupEditMode()
     if not LEM or not LEM.AddFrame then return end
 
+    local function SuppressNativeSelection(targetFrame)
+        if not targetFrame then return end
+        if targetFrame.Selection then
+            targetFrame.Selection:Hide()
+            if not targetFrame.roithiSelectionHooked and hooksecurefunc then
+                hooksecurefunc(targetFrame.Selection, "Show", function(sel)
+                    sel:Hide()
+                end)
+                targetFrame.roithiSelectionHooked = true
+            end
+        end
+    end
+
     if self.playerFrame and not self.playerFrame.editModeRegistered then
         self.playerFrame.editModeName = L["Player Swing Timer"] or "Player Swing Timer"
         local pCfg = self.db.player or self.defaultSettings.player
@@ -467,6 +569,11 @@ function SwingTimer:SetupEditMode()
             pCfg.x = newX
             pCfg.y = newY
         end, { point = pCfg.point or "CENTER", x = pCfg.x or 0, y = pCfg.y or -140 })
+
+        if LEM.AddFrameSettings and self.GetPlayerLEMFrameSettings then
+            LEM:AddFrameSettings(self.playerFrame, self:GetPlayerLEMFrameSettings())
+        end
+
         if LEM.AddFrameSettingsButtons then
             LEM:AddFrameSettingsButtons(self.playerFrame, {
                 {
@@ -493,6 +600,11 @@ function SwingTimer:SetupEditMode()
             tCfg.x = newX
             tCfg.y = newY
         end, { point = tCfg.point or "CENTER", x = tCfg.x or 0, y = tCfg.y or -160 })
+
+        if LEM.AddFrameSettings and self.GetTargetLEMFrameSettings then
+            LEM:AddFrameSettings(self.targetFrame, self:GetTargetLEMFrameSettings())
+        end
+
         if LEM.AddFrameSettingsButtons then
             LEM:AddFrameSettingsButtons(self.targetFrame, {
                 {
@@ -511,16 +623,70 @@ function SwingTimer:SetupEditMode()
         self.targetFrame.editModeRegistered = true
     end
 
+    if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.eventRegistryRegistered then
+        _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
+            SuppressNativeSelection(_G.SwingTimerMainHandFrame)
+            SuppressNativeSelection(_G.SwingTimerOffHandFrame)
+            SuppressNativeSelection(_G.SwingTimerRangedFrame)
+        end, self)
+        self.eventRegistryRegistered = true
+    end
+
     if LEM.RegisterCallback and not self.lemCallbackRegistered then
         LEM:RegisterCallback("enter", function()
             self.isInEditMode = true
+            SetClickthrough(self.playerFrame, false)
+            SetClickthrough(self.targetFrame, false)
+            SuppressNativeSelection(_G.SwingTimerMainHandFrame)
+            SuppressNativeSelection(_G.SwingTimerOffHandFrame)
+            SuppressNativeSelection(_G.SwingTimerRangedFrame)
             self:ShowSampleBars(true)
         end)
         LEM:RegisterCallback("exit", function()
             self.isInEditMode = false
+            SetClickthrough(self.playerFrame, true)
+            SetClickthrough(self.targetFrame, true)
             self:ShowSampleBars(false)
         end)
         self.lemCallbackRegistered = true
+    end
+end
+
+local function ConfigureBarText(bar, cfg)
+    if not bar or not cfg then return end
+
+    local showLabel = true
+    if cfg.showLabel ~= nil then
+        showLabel = (cfg.showLabel == true)
+    elseif cfg.showText ~= nil then
+        showLabel = (cfg.showText ~= false)
+    end
+
+    local showTimer = true
+    if cfg.showTimer ~= nil then
+        showTimer = (cfg.showTimer == true)
+    elseif cfg.showText ~= nil then
+        showTimer = (cfg.showText ~= false)
+    end
+
+    if bar.labelText then
+        bar.labelText:SetShown(showLabel)
+        bar.labelText:ClearAllPoints()
+        local lAnchor = cfg.labelAnchor or "LEFT"
+        local lx = cfg.labelX or 4
+        local ly = cfg.labelY or 0
+        bar.labelText:SetPoint(lAnchor, bar, lAnchor, lx, ly)
+        bar.labelText:SetJustifyH(lAnchor)
+    end
+
+    if bar.timeText then
+        bar.timeText:SetShown(showTimer)
+        bar.timeText:ClearAllPoints()
+        local tAnchor = cfg.timerAnchor or "RIGHT"
+        local tx = cfg.timerX or -4
+        local ty = cfg.timerY or 0
+        bar.timeText:SetPoint(tAnchor, bar, tAnchor, tx, ty)
+        bar.timeText:SetJustifyH(tAnchor)
     end
 end
 
@@ -541,7 +707,11 @@ function SwingTimer:ShowSampleBars(show)
                 self.playerFrame.offBar:SetValue(0.3)
                 self.playerFrame.offBar.timeText:SetText("0.6s")
                 self.playerFrame.offBar.labelText:SetText(L["Off Hand"] or "Off Hand")
+            else
+                self.playerFrame.offBar:Hide()
             end
+            ConfigureBarText(self.playerFrame.mainBar, pCfg)
+            ConfigureBarText(self.playerFrame.offBar, pCfg)
         end
 
         local tCfg = self.db.target or self.defaultSettings.target
@@ -551,6 +721,7 @@ function SwingTimer:ShowSampleBars(show)
             self.targetFrame.mainBar:SetValue(0.5)
             self.targetFrame.mainBar.timeText:SetText("1.0s")
             self.targetFrame.mainBar.labelText:SetText(L["Target"] or "Target")
+            ConfigureBarText(self.targetFrame.mainBar, tCfg)
         end
     else
         self.playerFrame.mainBar:Hide()
@@ -578,38 +749,47 @@ function SwingTimer:UpdateLayout()
     self.playerFrame:SetPoint(pCfg.point or "CENTER", UIParent, pCfg.point or "CENTER", pCfg.x or 0, pCfg.y or -140)
     self.playerFrame:SetSize(pWidth, hasOffhand and (pHeight * 2 + 2) or pHeight)
 
-    -- Player Main Hand Bar
+    local isOffTop = (pCfg.barOrder == "OFF_TOP")
     local mb = self.playerFrame.mainBar
-    mb:ClearAllPoints()
-    mb:SetPoint("TOPLEFT", self.playerFrame, "TOPLEFT", 0, 0)
-    mb:SetSize(pWidth, pHeight)
+    local ob = self.playerFrame.offBar
+    local rb = self.playerFrame.rangedBar
+
+    if isOffTop then
+        ob:ClearAllPoints()
+        ob:SetPoint("TOPLEFT", self.playerFrame, "TOPLEFT", 0, 0)
+        ob:SetSize(pWidth, pHeight)
+
+        mb:ClearAllPoints()
+        mb:SetPoint("TOPLEFT", ob, "BOTTOMLEFT", 0, -2)
+        mb:SetSize(pWidth, pHeight)
+    else
+        mb:ClearAllPoints()
+        mb:SetPoint("TOPLEFT", self.playerFrame, "TOPLEFT", 0, 0)
+        mb:SetSize(pWidth, pHeight)
+
+        ob:ClearAllPoints()
+        ob:SetPoint("TOPLEFT", mb, "BOTTOMLEFT", 0, -2)
+        ob:SetSize(pWidth, pHeight)
+    end
+
     local mc = pCfg.colorMain or { r = 1.0, g = 0.82, b = 0.0, a = 1.0 }
     mb:SetStatusBarColor(mc.r, mc.g, mc.b, mc.a or 1.0)
     mb.labelText:SetText(L["Main Hand"] or "Main Hand")
-    mb.labelText:SetShown(pCfg.showText ~= false)
-    mb.timeText:SetShown(pCfg.showText ~= false)
 
-    -- Player Off Hand Bar
-    local ob = self.playerFrame.offBar
-    ob:ClearAllPoints()
-    ob:SetPoint("TOPLEFT", mb, "BOTTOMLEFT", 0, -2)
-    ob:SetSize(pWidth, pHeight)
     local oc = pCfg.colorOff or { r = 0.35, g = 0.75, b = 1.0, a = 1.0 }
     ob:SetStatusBarColor(oc.r, oc.g, oc.b, oc.a or 1.0)
     ob.labelText:SetText(L["Off Hand"] or "Off Hand")
-    ob.labelText:SetShown(pCfg.showText ~= false)
-    ob.timeText:SetShown(pCfg.showText ~= false)
 
-    -- Player Ranged Bar (Overlays Main Bar)
-    local rb = self.playerFrame.rangedBar
     rb:ClearAllPoints()
     rb:SetPoint("TOPLEFT", self.playerFrame, "TOPLEFT", 0, 0)
     rb:SetSize(pWidth, pHeight)
     local rc = pCfg.colorRanged or { r = 0.2, g = 0.85, b = 0.35, a = 1.0 }
     rb:SetStatusBarColor(rc.r, rc.g, rc.b, rc.a or 1.0)
     rb.labelText:SetText(L["Ranged"] or "Ranged")
-    rb.labelText:SetShown(pCfg.showText ~= false)
-    rb.timeText:SetShown(pCfg.showText ~= false)
+
+    ConfigureBarText(mb, pCfg)
+    ConfigureBarText(ob, pCfg)
+    ConfigureBarText(rb, pCfg)
 
     -- Target Frame Sizing & Anchors
     local tWidth = tCfg.width or 200
@@ -626,8 +806,7 @@ function SwingTimer:UpdateLayout()
     local tc = tCfg.color or { r = 0.85, g = 0.25, b = 0.25, a = 1.0 }
     tb:SetStatusBarColor(tc.r, tc.g, tc.b, tc.a or 1.0)
     tb.labelText:SetText(L["Target"] or "Target")
-    tb.labelText:SetShown(tCfg.showText ~= false)
-    tb.timeText:SetShown(tCfg.showText ~= false)
+    ConfigureBarText(tb, tCfg)
 end
 
 -- ----------------------------------------------------------------------------
@@ -663,14 +842,17 @@ function SwingTimer:StartSwing(unit, swingType, duration)
         if not self.isInEditMode and self.playerFrame then
             self.playerFrame:Show()
             if swingType == "main" and self.playerFrame.mainBar then
+                self.playerFrame.mainBar.lastTenth = nil
                 self.playerFrame.mainBar:SetMinMaxValues(0, duration)
                 self.playerFrame.mainBar:SetValue(0)
                 self.playerFrame.mainBar:Show()
             elseif swingType == "off" and self.playerFrame.offBar and (self.db.player.showOffhand ~= false) then
+                self.playerFrame.offBar.lastTenth = nil
                 self.playerFrame.offBar:SetMinMaxValues(0, duration)
                 self.playerFrame.offBar:SetValue(0)
                 self.playerFrame.offBar:Show()
             elseif swingType == "ranged" and self.playerFrame.rangedBar then
+                self.playerFrame.rangedBar.lastTenth = nil
                 self.playerFrame.rangedBar:SetMinMaxValues(0, duration)
                 self.playerFrame.rangedBar:SetValue(0)
                 self.playerFrame.rangedBar:Show()
@@ -685,6 +867,7 @@ function SwingTimer:StartSwing(unit, swingType, duration)
 
         if not self.isInEditMode and self.targetFrame and self.targetFrame.mainBar then
             self.targetFrame:Show()
+            self.targetFrame.mainBar.lastTenth = nil
             self.targetFrame.mainBar:SetMinMaxValues(0, duration)
             self.targetFrame.mainBar:SetValue(0)
             self.targetFrame.mainBar:Show()
@@ -697,6 +880,11 @@ function SwingTimer:ApplyParryHaste(unit)
     local record = (unit == "player") and self.playerSwings.main or self.targetSwings.main
     if not record or not record.active then return end
 
+    if record.lastParryTime and (now - record.lastParryTime < 0.05) then
+        return
+    end
+    record.lastParryTime = now
+
     if IsSecret(record.duration) or type(record.duration) ~= "number" or record.duration <= 0 then
         record.duration = (unit == "player") and (self.cachedPlayerMainSpeed or 2.0) or (self.cachedTargetSpeed or 2.0)
     end
@@ -705,13 +893,28 @@ function SwingTimer:ApplyParryHaste(unit)
     local remaining = record.duration - elapsed
     if remaining <= 0 then return end
 
-    -- Parry reduces remaining swing time by 40% of weapon speed, capped so at least 20% remains
-    local reduction = record.duration * 0.40
-    local minRemaining = record.duration * 0.20
+    local speed = record.duration
+    local minRemaining = speed * 0.20
 
-    local newRemaining = math.max(minRemaining, remaining - reduction)
+    -- In Classic mechanics, parry haste never alters swings already at or below 20%
+    if remaining <= minRemaining then
+        return
+    end
+
+    -- Canonical Classic 60%/20% Parry Haste Rule:
+    -- If remaining > 60%, it reduces by 40% of weapon speed.
+    -- If remaining is between 20% and 60%, it drops directly to 20% of weapon speed.
+    local newRemaining
+    if remaining <= speed * 0.60 then
+        newRemaining = minRemaining
+    else
+        newRemaining = remaining - (speed * 0.40)
+    end
+
     local diff = remaining - newRemaining
-    record.startTime = record.startTime - diff
+    if diff > 0 then
+        record.startTime = record.startTime - diff
+    end
 end
 
 function SwingTimer:ResetPlayerSwing()
@@ -740,7 +943,11 @@ function SwingTimer:OnUpdatePlayer(_)
             local remain = mh.duration - elapsed
             local bar = self.playerFrame.mainBar
             bar:SetValue(elapsed)
-            bar.timeText:SetText(string.format("%.1fs", remain))
+            local tenth = math.floor(remain * 10)
+            if tenth ~= bar.lastTenth then
+                bar.lastTenth = tenth
+                bar.timeText:SetText(string.format("%.1fs", math.max(0, remain)))
+            end
             if bar.spark then
                 local w = bar:GetWidth() or 200
                 local prog = (mh.duration > 0) and math.min(1, math.max(0, elapsed / mh.duration)) or 0
@@ -749,6 +956,7 @@ function SwingTimer:OnUpdatePlayer(_)
             end
         else
             mh.active = false
+            self.playerFrame.mainBar.lastTenth = nil
             self.playerFrame.mainBar:Hide()
         end
     end
@@ -765,7 +973,11 @@ function SwingTimer:OnUpdatePlayer(_)
             local remain = oh.duration - elapsed
             local bar = self.playerFrame.offBar
             bar:SetValue(elapsed)
-            bar.timeText:SetText(string.format("%.1fs", remain))
+            local tenth = math.floor(remain * 10)
+            if tenth ~= bar.lastTenth then
+                bar.lastTenth = tenth
+                bar.timeText:SetText(string.format("%.1fs", math.max(0, remain)))
+            end
             if bar.spark then
                 local w = bar:GetWidth() or 200
                 local prog = (oh.duration > 0) and math.min(1, math.max(0, elapsed / oh.duration)) or 0
@@ -774,6 +986,7 @@ function SwingTimer:OnUpdatePlayer(_)
             end
         else
             oh.active = false
+            self.playerFrame.offBar.lastTenth = nil
             self.playerFrame.offBar:Hide()
         end
     end
@@ -790,7 +1003,11 @@ function SwingTimer:OnUpdatePlayer(_)
             local remain = rg.duration - elapsed
             local bar = self.playerFrame.rangedBar
             bar:SetValue(elapsed)
-            bar.timeText:SetText(string.format("%.1fs", remain))
+            local tenth = math.floor(remain * 10)
+            if tenth ~= bar.lastTenth then
+                bar.lastTenth = tenth
+                bar.timeText:SetText(string.format("%.1fs", math.max(0, remain)))
+            end
             if bar.spark then
                 local w = bar:GetWidth() or 200
                 local prog = (rg.duration > 0) and math.min(1, math.max(0, elapsed / rg.duration)) or 0
@@ -799,6 +1016,7 @@ function SwingTimer:OnUpdatePlayer(_)
             end
         else
             rg.active = false
+            self.playerFrame.rangedBar.lastTenth = nil
             self.playerFrame.rangedBar:Hide()
         end
     end
@@ -817,12 +1035,21 @@ function SwingTimer:OnUpdateTarget(_)
         if IsSecret(tm.duration) or type(tm.duration) ~= "number" or tm.duration <= 0 then
             tm.duration = self.cachedTargetSpeed or 2.0
         end
-        local elapsed = now - tm.startTime
+        local elapsed
+        if tm.isCasting then
+            elapsed = (tm.castPauseStart or now) - tm.startTime
+        else
+            elapsed = now - tm.startTime
+        end
         if elapsed < tm.duration then
             local remain = tm.duration - elapsed
             local bar = self.targetFrame.mainBar
             bar:SetValue(elapsed)
-            bar.timeText:SetText(string.format("%.1fs", remain))
+            local tenth = math.floor(remain * 10)
+            if tenth ~= bar.lastTenth then
+                bar.lastTenth = tenth
+                bar.timeText:SetText(string.format("%.1fs", math.max(0, remain)))
+            end
             if bar.spark then
                 local w = bar:GetWidth() or 200
                 local prog = (tm.duration > 0) and math.min(1, math.max(0, elapsed / tm.duration)) or 0
@@ -831,6 +1058,7 @@ function SwingTimer:OnUpdateTarget(_)
             end
         else
             tm.active = false
+            self.targetFrame.mainBar.lastTenth = nil
             self.targetFrame.mainBar:Hide()
             self.targetFrame:Hide()
         end
@@ -898,15 +1126,24 @@ function SwingTimer:OnCombatLog(event, ...)
         end
     end
 
-    -- Parry Haste Detection
-    if subevent == "SWING_MISSED" then
-        local missType = info[12]
+    -- Parry Haste Detection (White Swings & Yellow Special Attacks)
+    if subevent == "SWING_MISSED" or subevent == "SPELL_MISSED" or subevent == "SPELL_EXTRA_ATTACKS_MISSED" then
+        local missType = (subevent == "SWING_MISSED") and info[12] or info[15]
         if missType == "PARRY" then
             if destGUID == playerGUID then
                 self:ApplyParryHaste("player")
             elseif targetGUID and destGUID == targetGUID then
                 self:ApplyParryHaste("target")
             end
+        end
+    end
+
+    -- Target Death Detection
+    if subevent == "UNIT_DIED" and targetGUID and destGUID == targetGUID then
+        self.targetSwings.main.active = false
+        if self.targetFrame and not self.isInEditMode then
+            self.targetFrame.mainBar:Hide()
+            self.targetFrame:Hide()
         end
     end
 end
@@ -962,6 +1199,65 @@ function SwingTimer:OnSpellcastSucceeded(_, unit, _, spellId)
     if unit == "player" and spellId and SWING_RESET_SPELLS[spellId] then
         self:ResetPlayerSwing()
     end
+    if unit == "target" then
+        self:OnSpellcastFinished("UNIT_SPELLCAST_SUCCEEDED", unit)
+        if spellId and SWING_RESET_SPELLS[spellId] then
+            local targetSpeed = self:GetSafeAttackSpeed("target")
+            self:StartSwing("target", "main", targetSpeed)
+        end
+    end
+end
+
+function SwingTimer:OnPlayerSwing(swingDuration, swingType)
+    if self.isInEditMode or not self.playerFrame then return end
+    if type(swingDuration) ~= "number" or swingDuration <= 0 then return end
+
+    -- Enum.PlayerSwingType: 0 = MainHand, 1 = OffHand, 2 = Ranged
+    if swingType == 0 then
+        self:StartSwing("player", "main", swingDuration)
+    elseif swingType == 1 then
+        self:StartSwing("player", "off", swingDuration)
+    elseif swingType == 2 then
+        self:StartSwing("player", "ranged", swingDuration)
+    end
+end
+
+function SwingTimer:OnPlayerSwingRangeUpdate(swingType, isInRange, checksRange)
+    if not self.playerFrame then return end
+    local isOutOfRange = (checksRange == true and isInRange == false)
+    local bar
+    if swingType == 0 then
+        bar = self.playerFrame.mainBar
+    elseif swingType == 1 then
+        bar = self.playerFrame.offBar
+    elseif swingType == 2 then
+        bar = self.playerFrame.rangedBar
+    end
+    if bar and bar.timeText then
+        if isOutOfRange then
+            bar.timeText:SetTextColor(1.0, 0.2, 0.2, 1.0)
+        else
+            bar.timeText:SetTextColor(1.0, 1.0, 1.0, 1.0)
+        end
+    end
+end
+
+function SwingTimer:OnSpellcastStart(_, unit)
+    if unit == "target" and self.targetSwings and self.targetSwings.main and self.targetSwings.main.active then
+        self.targetSwings.main.isCasting = true
+        self.targetSwings.main.castPauseStart = GetTime()
+    end
+end
+
+function SwingTimer:OnSpellcastFinished(_, unit)
+    if unit == "target" and self.targetSwings and self.targetSwings.main and self.targetSwings.main.isCasting then
+        self.targetSwings.main.isCasting = false
+        if self.targetSwings.main.castPauseStart then
+            local pauseDuration = GetTime() - self.targetSwings.main.castPauseStart
+            self.targetSwings.main.startTime = self.targetSwings.main.startTime + pauseDuration
+            self.targetSwings.main.castPauseStart = nil
+        end
+    end
 end
 
 function SwingTimer:OnStartAutorepeat()
@@ -982,16 +1278,38 @@ function SwingTimer:OnTargetChanged()
         self.targetFrame.mainBar:Hide()
         self.targetFrame:Hide()
     end
+    if UnitExists and UnitExists("target") and UnitAffectingCombat and UnitAffectingCombat("target") then
+        local targetSpeed = self:GetSafeAttackSpeed("target")
+        self:StartSwing("target", "main", targetSpeed)
+    end
 end
 
-function SwingTimer:OnUnitCombat(unit)
+function SwingTimer:OnUnitCombat(unit, action)
     if unit == "player" then
         if self.inCombat or (UnitAffectingCombat and UnitAffectingCombat("player")) then
             local mainSpeed = self:GetSafeAttackSpeed("player")
             self:StartSwing("player", "main", mainSpeed)
         end
+        if UnitExists and UnitExists("target") and UnitCanAttack and UnitCanAttack("player", "target") then
+            local isTargetAttackingPlayer = false
+            if UnitIsUnit and UnitIsUnit("targettarget", "player") then
+                isTargetAttackingPlayer = true
+            elseif not UnitExists("targettarget") then
+                isTargetAttackingPlayer = true
+            end
+
+            if isTargetAttackingPlayer then
+                local targetSpeed = self:GetSafeAttackSpeed("target")
+                self:StartSwing("target", "main", targetSpeed)
+            end
+        end
+        if action == "PARRY" then
+            self:ApplyParryHaste("player")
+        end
     elseif unit == "target" then
-        if UnitExists and UnitExists("target") then
+        if action == "PARRY" then
+            self:ApplyParryHaste("target")
+        elseif not self.targetSwings.main.active and UnitExists and UnitExists("target") and UnitAffectingCombat and UnitAffectingCombat("target") then
             local targetSpeed = self:GetSafeAttackSpeed("target")
             self:StartSwing("target", "main", targetSpeed)
         end

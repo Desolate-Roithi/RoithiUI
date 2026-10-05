@@ -175,6 +175,29 @@ function AB:GetBarButtons(barKey)
     return buttons
 end
 
+function AB:SetButtonsMouseInteractivity(enable)
+    if not self.bars then return end
+    for barKey, container in pairs(self.bars) do
+        local buttons = self:GetBarButtons(barKey)
+        for _, btn in ipairs(buttons) do
+            if btn and btn.EnableMouse then
+                btn:EnableMouse(enable)
+            end
+        end
+        if container and LEM and LEM.frameSelections and LEM.frameSelections[container] then
+            local sel = LEM.frameSelections[container]
+            if sel then
+                if sel.SetFrameLevel then
+                    sel:SetFrameLevel(container:GetFrameLevel() + (enable and 0 or 100))
+                end
+                if sel.EnableMouse then
+                    sel:EnableMouse(not enable)
+                end
+            end
+        end
+    end
+end
+
 function AB:IsBarMouseOver(barKey)
     local container = self.bars[barKey]
     if not container then return false end
@@ -284,6 +307,8 @@ function AB:SetupBars()
     for barKey, cfg in pairs(BAR_CONFIGS) do
         if not self.bars[barKey] then
             local f = CreateFrame("Frame", cfg.name, UIParent)
+            if f.SetFrameStrata then f:SetFrameStrata("HIGH") end
+            if f.SetFrameLevel then f:SetFrameLevel(100) end
             if f.SetClampedToScreen then f:SetClampedToScreen(true) end
             if f.SetMovable then f:SetMovable(true) end
             if f.EnableMouse then f:EnableMouse(false) end
@@ -294,6 +319,9 @@ function AB:SetupBars()
             local pt = db.point or "BOTTOM"
             if f.ClearAllPoints then f:ClearAllPoints() end
             if f.SetPoint then f:SetPoint(pt, UIParent, pt, db.x or 0, db.y or 0) end
+        else
+            if self.bars[barKey].SetFrameStrata then self.bars[barKey]:SetFrameStrata("HIGH") end
+            if self.bars[barKey].SetFrameLevel then self.bars[barKey]:SetFrameLevel(100) end
         end
 
         local db = self.db[barKey] or {}
@@ -361,6 +389,7 @@ function AB:SetupBars()
 
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.editModeRegistered then
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
+            self:SetButtonsMouseInteractivity(false)
             for _, bFrames in pairs(BLIZZARD_BAR_FRAMES) do
                 for _, fname in ipairs(bFrames) do
                     local bf = _G[fname]
@@ -373,6 +402,9 @@ function AB:SetupBars()
                     end
                 end
             end
+        end, self)
+        _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
+            self:SetButtonsMouseInteractivity(true)
         end, self)
         self.editModeRegistered = true
     end
@@ -865,7 +897,11 @@ function AB:LayoutBar(barKey)
 
     -- 3. Extra Action Bar: Hide if not active and not in Edit Mode
     if barKey == "extraAction" and not isEditMode then
-        if not IsExtraActionActive() then
+        local active = IsExtraActionActive()
+        if _G.ExtraActionBarFrame and _G.ExtraActionBarFrame.EnableMouse then
+            _G.ExtraActionBarFrame:EnableMouse(active)
+        end
+        if not active then
             if container.Hide then container:Hide() end
             for _, btn in ipairs(buttons) do
                 if btn.Hide then btn:Hide() end
@@ -964,6 +1000,9 @@ function AB:LayoutBar(barKey)
             end
             if btn.SetParent then
                 btn:SetParent(container)
+            end
+            if btn.SetFrameStrata then
+                btn:SetFrameStrata("HIGH")
             end
             if container.GetFrameLevel and btn.SetFrameLevel then
                 btn:SetFrameLevel(container:GetFrameLevel() + 10)

@@ -81,14 +81,14 @@ BagsMod.defaultSettings = {
         expanded = false,
         buttonSize = 30,
         spacing = 4,
-        point = "BOTTOMRIGHT",
-        x = -10,
-        y = 40,
+        point = "CENTER",
+        x = 292,
+        y = -236,
     },
     bagWindow = {
-        point = "BOTTOMRIGHT",
-        x = -10,
-        y = 80,
+        point = "CENTER",
+        x = 292,
+        y = -200,
     },
 }
 

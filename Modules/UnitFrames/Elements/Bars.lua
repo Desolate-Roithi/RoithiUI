@@ -447,100 +447,106 @@ function UF:CreateHealPrediction(frame)
         ---@diagnostic disable-next-line: undefined-global
         local calculator = CreateUnitHealPredictionCalculator()
 
-        frame:HookScript("OnUpdate", function()
-            local status, err = pcall(function()
-                ---@diagnostic disable-next-line: undefined-global
-                UnitGetDetailedHealPrediction(frame.unit, "player", calculator)
+        local function RunHealPredictionUpdate()
+            ---@diagnostic disable-next-line: undefined-global
+            UnitGetDetailedHealPrediction(frame.unit, "player", calculator)
 
-                -- 1. Get Values
-                local _, myIncomingHeal, otherIncomingHeal, _ = calculator:GetIncomingHeals()
-                calculator:GetDamageAbsorbs()
-                local healAbsorbAmount = calculator:GetHealAbsorbs() or 0
+            -- 1. Get Values
+            local _, myIncomingHeal, otherIncomingHeal, _ = calculator:GetIncomingHeals()
+            calculator:GetDamageAbsorbs()
+            local healAbsorbAmount = calculator:GetHealAbsorbs() or 0
 
-                -- Support Safe Rendering (Secret Values) using SetValue + Scaling
-                -- We want the bar to represent 0 -> 110% of Health
-                -- So we make the Frame 110% wide, and SetMinMax to 0 -> 110% MaxHealth
+            -- Support Safe Rendering (Secret Values) using SetValue + Scaling
+            -- We want the bar to represent 0 -> 110% of Health
+            -- So we make the Frame 110% wide, and SetMinMax to 0 -> 110% MaxHealth
 
-                local maxHealthVal = UnitHealthMax(frame.unit)
-                -- UnitHealthMax returns secret; comparison crashes. Safe to pass to SetMinMaxValues.
+            local maxHealthVal = UnitHealthMax(frame.unit)
+            -- UnitHealthMax returns secret; comparison crashes. Safe to pass to SetMinMaxValues.
 
-                local width = frame.Health:GetWidth()
-                if width <= 0 then return end
+            local width = frame.Health:GetWidth()
+            if width <= 0 then return end
 
-                -- Heal Logic (SetValue + Stacked)
-                myHeal:SetWidth(width)
-                myHeal:SetMinMaxValues(0, maxHealthVal)
-                myHeal:SetValue(myIncomingHeal or 0)
+            -- Heal Logic (SetValue + Stacked)
+            myHeal:SetWidth(width)
+            myHeal:SetMinMaxValues(0, maxHealthVal)
+            myHeal:SetValue(myIncomingHeal or 0)
 
-                otherHeal:SetWidth(width)
-                otherHeal:SetMinMaxValues(0, maxHealthVal)
-                otherHeal:SetValue(otherIncomingHeal or 0)
+            otherHeal:SetWidth(width)
+            otherHeal:SetMinMaxValues(0, maxHealthVal)
+            otherHeal:SetValue(otherIncomingHeal or 0)
 
-                local healthTex = frame.Health:GetStatusBarTexture()
-                myHeal:ClearAllPoints()
-                if healthTex then
-                    myHeal:SetPoint("TOPLEFT", healthTex, "TOPRIGHT", 0, 0)
-                    myHeal:SetPoint("BOTTOMLEFT", healthTex, "BOTTOMRIGHT", 0, 0)
-                else
-                    myHeal:SetPoint("TOPLEFT", frame.Health, "TOPLEFT", 0, 0)
-                    myHeal:SetPoint("BOTTOMLEFT", frame.Health, "BOTTOMLEFT", 0, 0)
-                end
+            local healthTex = frame.Health:GetStatusBarTexture()
+            myHeal:ClearAllPoints()
+            if healthTex then
+                myHeal:SetPoint("TOPLEFT", healthTex, "TOPRIGHT", 0, 0)
+                myHeal:SetPoint("BOTTOMLEFT", healthTex, "BOTTOMRIGHT", 0, 0)
+            else
+                myHeal:SetPoint("TOPLEFT", frame.Health, "TOPLEFT", 0, 0)
+                myHeal:SetPoint("BOTTOMLEFT", frame.Health, "BOTTOMLEFT", 0, 0)
+            end
 
-                local myTex = myHeal:GetStatusBarTexture()
-                otherHeal:ClearAllPoints()
-                if myTex then
-                    otherHeal:SetPoint("TOPLEFT", myTex, "TOPRIGHT", 0, 0)
-                    otherHeal:SetPoint("BOTTOMLEFT", myTex, "BOTTOMRIGHT", 0, 0)
-                else
-                    otherHeal:SetPoint("TOPLEFT", myHeal, "TOPLEFT", 0, 0)
-                    otherHeal:SetPoint("BOTTOMLEFT", myHeal, "BOTTOMLEFT", 0, 0)
-                end
+            local myTex = myHeal:GetStatusBarTexture()
+            otherHeal:ClearAllPoints()
+            if myTex then
+                otherHeal:SetPoint("TOPLEFT", myTex, "TOPRIGHT", 0, 0)
+                otherHeal:SetPoint("BOTTOMLEFT", myTex, "BOTTOMRIGHT", 0, 0)
+            else
+                otherHeal:SetPoint("TOPLEFT", myHeal, "TOPLEFT", 0, 0)
+                otherHeal:SetPoint("BOTTOMLEFT", myHeal, "BOTTOMLEFT", 0, 0)
+            end
 
-                healAbsorb:SetWidth(width)
-                healAbsorb:SetMinMaxValues(0, maxHealthVal)
-                healAbsorb:SetValue(healAbsorbAmount)
-                healAbsorb:ClearAllPoints()
-                if healthTex then
-                    healAbsorb:SetPoint("TOPRIGHT", healthTex, "TOPRIGHT", 0, 0)
-                    healAbsorb:SetPoint("BOTTOMRIGHT", healthTex, "BOTTOMRIGHT", 0, 0)
-                else
-                    healAbsorb:SetPoint("TOPRIGHT", frame.Health, "TOPRIGHT", 0, 0)
-                    healAbsorb:SetPoint("BOTTOMRIGHT", frame.Health, "BOTTOMRIGHT", 0, 0)
-                end
-                healAbsorb:Show()
+            healAbsorb:SetWidth(width)
+            healAbsorb:SetMinMaxValues(0, maxHealthVal)
+            healAbsorb:SetValue(healAbsorbAmount)
+            healAbsorb:ClearAllPoints()
+            if healthTex then
+                healAbsorb:SetPoint("TOPRIGHT", healthTex, "TOPRIGHT", 0, 0)
+                healAbsorb:SetPoint("BOTTOMRIGHT", healthTex, "BOTTOMRIGHT", 0, 0)
+            else
+                healAbsorb:SetPoint("TOPRIGHT", frame.Health, "TOPRIGHT", 0, 0)
+                healAbsorb:SetPoint("BOTTOMRIGHT", frame.Health, "BOTTOMRIGHT", 0, 0)
+            end
+            healAbsorb:Show()
 
-                -- Absorb Logic (Restricted Environment Safe Mode)
-                -- 1. We cannot check if values are <= 0 or nil (Comparison Crash)
-                -- 2. We cannot multiply maxHealth * 1.1 (Arithmetic Crash)
-                -- 3. We Must pass-through values directly to widgets.
+            -- Absorb Logic (Restricted Environment Safe Mode)
+            -- 1. We cannot check if values are <= 0 or nil (Comparison Crash)
+            -- 2. We cannot multiply maxHealth * 1.1 (Arithmetic Crash)
+            -- 3. We Must pass-through values directly to widgets.
 
-                local totalAbsorb = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(frame.unit) or 0
+            local totalAbsorb = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(frame.unit) or 0
 
-                absorb:ClearAllPoints()
-                absorb:SetPoint("TOPLEFT", frame.Health, "TOPLEFT", 0, 0)
-                absorb:SetPoint("BOTTOMLEFT", frame.Health, "BOTTOMLEFT", 0, 0)
+            absorb:ClearAllPoints()
+            absorb:SetPoint("TOPLEFT", frame.Health, "TOPLEFT", 0, 0)
+            absorb:SetPoint("BOTTOMLEFT", frame.Health, "BOTTOMLEFT", 0, 0)
 
-                -- Width: 100% of Health Frame (Safe UI Value)
-                -- We cannot scale to 110% because we cannot multiply the MaxValue secret.
-                absorb:SetWidth(width)
+            -- Width: 100% of Health Frame (Safe UI Value)
+            -- We cannot scale to 110% because we cannot multiply the MaxValue secret.
+            absorb:SetWidth(width)
 
-                -- MinMax: Pass-through from Health Bar (Secret -> Secret)
-                -- We assume Health Bar has valid MinMax from its own secure update.
-                local hMin, hMax = frame.Health:GetMinMaxValues()
-                absorb:SetMinMaxValues(hMin, hMax)
+            -- MinMax: Pass-through from Health Bar (Secret -> Secret)
+            -- We assume Health Bar has valid MinMax from its own secure update.
+            local hMin, hMax = frame.Health:GetMinMaxValues()
+            absorb:SetMinMaxValues(hMin, hMax)
 
-                -- Value: Direct Pass (Secret -> Secret)
-                absorb:SetValue(totalAbsorb or 0)
+            -- Value: Direct Pass (Secret -> Secret)
+            absorb:SetValue(totalAbsorb or 0)
 
-                absorb:Show()
+            absorb:Show()
 
-                -- Color: Higher Visibility (Light Blue-Grey, Higher Alpha)
-                absorb:SetStatusBarColor(0.6, 0.8, 1, 0.6)
+            -- Color: Higher Visibility (Light Blue-Grey, Higher Alpha)
+            absorb:SetStatusBarColor(0.6, 0.8, 1, 0.6)
 
-                -- Glow: Disabled (Cannot compare total > max)
-                overAbsorbGlow:Hide()
-            end)
+            -- Glow: Disabled (Cannot compare total > max)
+            overAbsorbGlow:Hide()
+        end
 
+        local healElapsed = 0
+        frame:HookScript("OnUpdate", function(_, dt)
+            healElapsed = healElapsed + (dt or 0.016)
+            if healElapsed < 0.05 then return end
+            healElapsed = 0
+
+            local status, err = pcall(RunHealPredictionUpdate)
             if not status then
                 local t = GetTime()
                 if not frame.lastErr or (t - frame.lastErr > 3) then

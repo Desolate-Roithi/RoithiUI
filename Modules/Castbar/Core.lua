@@ -135,86 +135,90 @@ end
 -- ----------------------------------------------------------------------------
 -- 2. Taint-Safe Blizzard Frame Hiding
 -- ----------------------------------------------------------------------------
+local BLIZZ_CAST_EVENTS = {
+    "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_EMPOWER_START",
+    "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_EMPOWER_STOP",
+    "UNIT_SPELLCAST_DELAYED", "UNIT_SPELLCAST_CHANNEL_UPDATE", "UNIT_SPELLCAST_EMPOWER_UPDATE",
+    "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED",
+    "UNIT_SPELLCAST_INTERRUPTIBLE", "UNIT_SPELLCAST_NOT_INTERRUPTIBLE",
+}
+
 function ns.UpdateBlizzardVisibility()
-    local db = RoithiUI.db.profile.Castbar
+    if InCombatLockdown and InCombatLockdown() then
+        if not ns.pendingBlizzVisibilityUpdate then
+            ns.pendingBlizzVisibilityUpdate = true
+            local regenFrame = CreateFrame("Frame")
+            regenFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+            regenFrame:SetScript("OnEvent", function(self)
+                self:UnregisterAllEvents()
+                ns.pendingBlizzVisibilityUpdate = false
+                ns.UpdateBlizzardVisibility()
+            end)
+        end
+        return
+    end
+
+    local db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar
     if not db then return end
 
     -- Helper to hide/show
-    local function ToggleBlizzBar(frame, shouldHide)
+    local function ToggleBlizzBar(frame, unit, shouldHide)
         if not frame then return end
 
         if shouldHide then
-            -- Hide visually but keep events running to avoid Taint/Restoration issues
-            -- (UnregisterAllEvents is too destructive and hard to reverse correctly)
+            frame.shouldBeHiddenRoithi = true
+            if frame.UnregisterAllEvents then
+                frame:UnregisterAllEvents()
+            end
             frame:SetAlpha(0)
             if frame.EnableMouse then frame:EnableMouse(false) end
-            frame:Hide()
-
-            -- Hook OnShow to force hide?
-            -- No, SetAlpha(0) allows standard code to run without visible artifacts.
-            -- But standard code might SetAlpha(1).
-            -- Let's try explicit Unregister if Safe, but user reported failure.
-            -- We'll try SetParent(Hidden) approach if possible, but SetAlpha is safest for 12.0.1
-            -- Restore to standard Hide approach
-            if not frame.RoithiHooked then
-                hooksecurefunc(frame, "Show", function(self)
-                    if self.shouldBeHiddenRoithi then
-                        self:Hide()
-                    end
-                end)
-                if frame.GetHeight then
-                    local origGetHeight = frame.GetHeight
-                    frame.GetHeight = function(self, ...)
-                        local h = origGetHeight(self, ...)
-                        if (issecretvalue and issecretvalue(h)) or (canaccessvalue and not canaccessvalue(h)) then
-                            return 20
-                        end
-                        return h
-                    end
-                end
-                if frame.GetWidth then
-                    local origGetWidth = frame.GetWidth
-                    frame.GetWidth = function(self, ...)
-                        local w = origGetWidth(self, ...)
-                        if (issecretvalue and issecretvalue(w)) or (canaccessvalue and not canaccessvalue(w)) then
-                            return 150
-                        end
-                        return w
-                    end
-                end
-                frame.RoithiHooked = true
-            end
-            frame.shouldBeHiddenRoithi = true
             frame:Hide()
         else
             frame.shouldBeHiddenRoithi = false
             frame:SetAlpha(1)
+            if frame.EnableMouse then frame:EnableMouse(true) end
+            if unit and frame.RegisterUnitEvent and not (frame.IsEventRegistered and frame:IsEventRegistered("UNIT_SPELLCAST_START")) then
+                for _, event in ipairs(BLIZZ_CAST_EVENTS) do
+                    pcall(frame.RegisterUnitEvent, frame, event, unit)
+                end
+                if frame.RegisterEvent then
+                    pcall(frame.RegisterEvent, frame, "PLAYER_ENTERING_WORLD")
+                    if unit == "pet" then
+                        pcall(frame.RegisterEvent, frame, "UNIT_PET")
+                    end
+                end
+            end
             frame:Show()
         end
     end
 
     -- Target
-    -- Check both legacy global and new key
     local targetBar = (TargetFrame and TargetFrame.spellbar) or _G.TargetFrameSpellBar
     if targetBar then
-        ToggleBlizzBar(targetBar, db.target and db.target.enabled)
+        ToggleBlizzBar(targetBar, "target", db.target and db.target.enabled)
     end
 
     -- Focus
     local focusBar = (FocusFrame and FocusFrame.spellbar) or _G.FocusFrameSpellBar
     if focusBar then
-        ToggleBlizzBar(focusBar, db.focus and db.focus.enabled)
+        ToggleBlizzBar(focusBar, "focus", db.focus and db.focus.enabled)
     end
 
     -- Player
     local playerBar = (PlayerFrame and PlayerFrame.Spellbar) or _G.PlayerCastingBarFrame
     if playerBar then
-        ToggleBlizzBar(playerBar, db.player and db.player.enabled)
+        ToggleBlizzBar(playerBar, "player", db.player and db.player.enabled)
+    end
+    if _G.PlayerCastingBarFrame and _G.PlayerCastingBarFrame ~= playerBar then
+        ToggleBlizzBar(_G.PlayerCastingBarFrame, "player", db.player and db.player.enabled)
     end
 
     -- Pet / Vehicle
     if _G.PetCastingBarFrame then
-        ToggleBlizzBar(_G.PetCastingBarFrame, db.pet and db.pet.enabled)
+        ToggleBlizzBar(_G.PetCastingBarFrame, "pet", db.pet and db.pet.enabled)
+    end
+    if PetFrame and PetFrame.Spellbar and PetFrame.Spellbar ~= _G.PetCastingBarFrame then
+        ToggleBlizzBar(PetFrame.Spellbar, "pet", db.pet and db.pet.enabled)
     end
 end
 

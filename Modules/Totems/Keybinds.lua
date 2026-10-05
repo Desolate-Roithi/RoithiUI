@@ -11,7 +11,7 @@ _G.BINDING_HEADER_ROITHI_TOTEMS = L["RoithiUI Totem Bar"]
 _G.BINDING_NAME_ROITHI_TOTEM_CYCLE_TYPE = L["Cycle Category"]
 _G.BINDING_NAME_ROITHI_TOTEM_CYCLE_SPELL = L["Cycle Spell in Category"]
 
-_G["BINDING_NAME_CLICK RoithiTotemButton_current:LeftButton"] = L["Cast Current Category Totem"]
+_G["BINDING_NAME_CLICK RoithiTotemButton_current:LeftButton"] = L["Place Current Selected Totem"] or L["Cast Current Category Totem"]
 _G["BINDING_NAME_CLICK RoithiTotemButton_earth:LeftButton"] = L["Cast Earth Totem"]
 _G["BINDING_NAME_CLICK RoithiTotemButton_fire:LeftButton"] = L["Cast Fire Totem"]
 _G["BINDING_NAME_CLICK RoithiTotemButton_water:LeftButton"] = L["Cast Water Totem"]
@@ -26,7 +26,8 @@ _G["BINDING_NAME_CLICK RoithiTotemButton_water:RightButton"] = L["Unsummon Water
 _G["BINDING_NAME_CLICK RoithiTotemButton_air:RightButton"] = L["Unsummon Air Totem"]
 
 -- Aliases for direct names
-_G.BINDING_NAME_ROITHI_TOTEM_CAST_CURRENT = L["Cast Current Category Totem"]
+_G.BINDING_NAME_ROITHI_TOTEM_CAST_CURRENT = _G["BINDING_NAME_CLICK RoithiTotemButton_current:LeftButton"]
+_G.BINDING_NAME_ROITHI_TOTEM_PLACE_CURRENT = _G["BINDING_NAME_CLICK RoithiTotemButton_current:LeftButton"]
 _G.BINDING_NAME_ROITHI_TOTEM_CAST_EARTH = L["Cast Earth Totem"]
 _G.BINDING_NAME_ROITHI_TOTEM_CAST_FIRE = L["Cast Fire Totem"]
 _G.BINDING_NAME_ROITHI_TOTEM_CAST_WATER = L["Cast Water Totem"]
@@ -147,6 +148,9 @@ function Totems:CycleCategory(direction)
     if self.UpdateAllSlotBorders then
         self:UpdateAllSlotBorders()
     end
+    if self.UpdateHotkeys then
+        self:UpdateHotkeys()
+    end
     self:OnTick()
 end
 
@@ -229,11 +233,17 @@ end
 
 function Totems:UpdateHotkeys()
     if not self.buttons then return end
+    local currentKey = GetBindingKey and GetBindingKey("CLICK RoithiTotemButton_current:LeftButton")
+    local selectedCat = self.db and self.db.selectedCategory
+
     for _, catKey in ipairs(self.categories) do
         local btn = self.buttons[catKey]
         if btn and btn.hotkeyText then
             local bindingAction = "CLICK " .. btn:GetName() .. ":LeftButton"
             local key = GetBindingKey and GetBindingKey(bindingAction)
+            if not key and catKey == selectedCat then
+                key = currentKey
+            end
             if key and (not self.db or self.db.showKeybind ~= false) then
                 btn.hotkeyText:SetText(FormatHotkey(key))
             else
@@ -242,5 +252,44 @@ function Totems:UpdateHotkeys()
         end
     end
 end
+
+function Totems:HookQuickKeybindFrame()
+    if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.quickKeybindEventsRegistered then
+        self.quickKeybindEventsRegistered = true
+        _G.EventRegistry:RegisterCallback("QuickKeybindFrame.QuickKeybindModeEnabled", function()
+            self:UpdateQuickKeybindMode(true)
+        end, self)
+        _G.EventRegistry:RegisterCallback("QuickKeybindFrame.QuickKeybindModeDisabled", function()
+            self:UpdateQuickKeybindMode(false)
+        end, self)
+    end
+
+    if not _G.QuickKeybindFrame or self.quickKeybindHooked then return end
+    self.quickKeybindHooked = true
+
+    _G.QuickKeybindFrame:HookScript("OnShow", function()
+        self:UpdateQuickKeybindMode(true)
+    end)
+    _G.QuickKeybindFrame:HookScript("OnHide", function()
+        self:UpdateQuickKeybindMode(false)
+    end)
+end
+
+function Totems:UpdateQuickKeybindMode(show)
+    if show and self.CloseFlyout then
+        self:CloseFlyout()
+    end
+    if not self.buttons then return end
+    for _, catKey in ipairs(self.categories) do
+        local btn = self.buttons[catKey]
+        if btn and btn.DoModeChange then
+            btn:DoModeChange(show)
+        end
+    end
+    if not show and self.UpdateHotkeys then
+        self:UpdateHotkeys()
+    end
+end
+
 
 

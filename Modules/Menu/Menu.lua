@@ -66,9 +66,9 @@ MenuMod.defaultSettings = {
     alpha = 1.0,
     mouseover = false,
     mouseoverAlpha = 0.0,
-    point = "BOTTOMLEFT",
-    x = 10,
-    y = 285,
+    point = "CENTER",
+    x = 4,
+    y = -235,
 }
 
 function MenuMod:OnInitialize()

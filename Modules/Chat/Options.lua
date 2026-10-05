@@ -42,6 +42,100 @@ function ChatMod:GetOptions()
                             self:RefreshSettings()
                         end,
                     },
+                    timestampFormat = {
+                        type = "select",
+                        name = L["Timestamps"] or "Timestamps",
+                        desc = L["Display message timestamps using native taint-free engine formatting."] or "Display message timestamps using native taint-free engine formatting.",
+                        order = 3,
+                        values = {
+                            ["none"] = L["None"] or "None",
+                            ["%H:%M "] = "14:35 (24-hour)",
+                            ["[%H:%M] "] = "[14:35] (24-hour bracketed)",
+                            ["%H:%M:%S "] = "14:35:00 (24-hour with seconds)",
+                            ["[%H:%M:%S] "] = "[14:35:00] (24-hour bracketed with seconds)",
+                            ["%I:%M %p "] = "02:35 PM (12-hour)",
+                            ["[%I:%M %p] "] = "[02:35 PM] (12-hour bracketed)",
+                            ["%I:%M:%S %p "] = "02:35:00 PM (12-hour with seconds)",
+                            ["[%I:%M:%S %p] "] = "[02:35:00 PM] (12-hour bracketed with seconds)",
+                        },
+                        get = function() return self.db.timestampFormat or "%H:%M " end,
+                        set = function(_, val)
+                            self.db.timestampFormat = val
+                            self:ApplyTimestampFormat()
+                        end,
+                    },
+                    buttonDockPosition = {
+                        type = "select",
+                        name = L["Action Buttons Dock"] or "Action Buttons Dock",
+                        desc = L["Position for the Chattynator-style action icons (Channels, Quick Chat, Voice, Social)."] or "Position for the Chattynator-style action icons (Channels, Quick Chat, Voice, Social).",
+                        order = 4,
+                        values = {
+                            ["INSIDE_TOP_RIGHT"] = L["Inside Top-Right"] or "Inside Top-Right",
+                            ["INSIDE_TOP_LEFT"] = L["Inside Top-Left"] or "Inside Top-Left",
+                            ["ABOVE_CHAT"] = L["Above Chat"] or "Above Chat",
+                            ["OUTSIDE_LEFT"] = L["Outside Left"] or "Outside Left",
+                            ["HIDDEN"] = L["Hidden"] or "Hidden",
+                        },
+                        get = function() return self.db.buttonDockPosition or "INSIDE_TOP_RIGHT" end,
+                        set = function(_, val)
+                            self.db.buttonDockPosition = val
+                            self:UpdateButtonsDock()
+                        end,
+                    },
+                    shortenChannels = {
+                        type = "toggle",
+                        name = L["Shorten Channel Names"] or "Shorten Channel Names",
+                        desc = L["Shorten standard channels (e.g. [1. General] -> [1], [Guild] -> [G])."] or "Shorten standard channels (e.g. [1. General] -> [1], [Guild] -> [G]).",
+                        order = 5,
+                        get = function() return self.db.shortenChannels ~= false end,
+                        set = function(_, val)
+                            self.db.shortenChannels = val
+                        end,
+                    },
+                    linkURLs = {
+                        type = "toggle",
+                        name = L["Clickable URLs"] or "Clickable URLs",
+                        desc = L["Turn web URLs in chat into clickable links that can be copied with Ctrl+C."] or "Turn web URLs in chat into clickable links that can be copied with Ctrl+C.",
+                        order = 6,
+                        get = function() return self.db.linkURLs ~= false end,
+                        set = function(_, val)
+                            self.db.linkURLs = val
+                        end,
+                    },
+                    showClassIcons = {
+                        type = "toggle",
+                        name = L["Show Class Icons"] or "Show Class Icons",
+                        desc = L["Displays class icons before player names in chat messages."] or "Displays class icons before player names in chat messages.",
+                        order = 7,
+                        get = function() return self.db.showClassIcons ~= false end,
+                        set = function(_, val)
+                            self.db.showClassIcons = val
+                        end,
+                    },
+                    showRaceIcons = {
+                        type = "toggle",
+                        name = L["Show Race Icons"] or "Show Race Icons",
+                        desc = L["Displays race icons before player names in chat messages."] or "Displays race icons before player names in chat messages.",
+                        order = 8,
+                        get = function() return self.db.showRaceIcons ~= false end,
+                        set = function(_, val)
+                            self.db.showRaceIcons = val
+                        end,
+                    },
+                    chatIconSize = {
+                        type = "range",
+                        name = L["Chat Icon Size"] or "Chat Icon Size",
+                        desc = L["Size in pixels of race and class icons in chat."] or "Size in pixels of race and class icons in chat.",
+                        order = 9,
+                        min = 10,
+                        max = 24,
+                        step = 1,
+                        get = function() return self.db.chatIconSize or 14 end,
+                        set = function(_, val)
+                            self.db.chatIconSize = val
+                        end,
+                        disabled = function() return not (self.db.showClassIcons or self.db.showRaceIcons) end,
+                    },
                 },
             },
             background = {
@@ -102,6 +196,61 @@ function ChatMod:GetOptions()
                         end,
                         disabled = function() return not self.db.showBackground or not self.db.showBorder end,
                     },
+                    backgroundPaddingX = {
+                        type = "range",
+                        name = L["Horizontal Padding"] or "Horizontal Padding",
+                        desc = L["Horizontal breathing room for the background panel around the chat frame. Set to 0 for flush edges."] or "Horizontal breathing room for the background panel around the chat frame. Set to 0 for flush edges.",
+                        order = 5,
+                        min = 0,
+                        max = 30,
+                        step = 1,
+                        get = function() return (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 2 end,
+                        set = function(_, val)
+                            self.db.backgroundPaddingX = val
+                            self:UpdateBackgroundPosition()
+                        end,
+                        disabled = function() return not self.db.showBackground end,
+                    },
+                    backgroundPaddingY = {
+                        type = "range",
+                        name = L["Vertical Padding"] or "Vertical Padding",
+                        desc = L["Vertical padding for the background panel. Set to 0 for flush edges."] or "Vertical padding for the background panel. Set to 0 for flush edges.",
+                        order = 6,
+                        min = 0,
+                        max = 20,
+                        step = 1,
+                        get = function() return (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 2 end,
+                        set = function(_, val)
+                            self.db.backgroundPaddingY = val
+                            self:UpdateBackgroundPosition()
+                        end,
+                        disabled = function() return not self.db.showBackground end,
+                    },
+                    includeEditBoxInBackground = {
+                        type = "toggle",
+                        name = L["Include Edit Box in Background"] or "Include Edit Box in Background",
+                        desc = L["Extend the background panel down to encompass the edit box area below the chat frame."] or "Extend the background panel down to encompass the edit box area below the chat frame.",
+                        order = 7,
+                        get = function() return self.db.includeEditBoxInBackground == true end,
+                        set = function(_, val)
+                            self.db.includeEditBoxInBackground = val
+                            self:UpdateBackgroundPosition()
+                        end,
+                        disabled = function() return not self.db.showBackground end,
+                    },
+                    clampToScreen = {
+                        type = "toggle",
+                        name = L["Clamp to Screen"] or "Clamp to Screen",
+                        desc = L["Constrain chat frames inside screen boundaries. Disable to freely move the chat frame directly against or past the monitor edges."] or "Constrain chat frames inside screen boundaries. Disable to freely move the chat frame directly against or past the monitor edges.",
+                        order = 8,
+                        get = function() return self.db.clampToScreen == true end,
+                        set = function(_, val)
+                            self.db.clampToScreen = val
+                            if self.ApplyScreenClamping then
+                                self:ApplyScreenClamping()
+                            end
+                        end,
+                    },
                 },
             },
             typography = {
@@ -110,10 +259,22 @@ function ChatMod:GetOptions()
                 order = 3,
                 inline = true,
                 args = {
+                    font = {
+                        type = "select",
+                        dialogControl = "LSM30_Font",
+                        name = L["Font"] or "Font",
+                        order = 1,
+                        values = _G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font or {},
+                        get = function() return self.db.font or "Expressway" end,
+                        set = function(_, val)
+                            self.db.font = val
+                            self:SkinAllChatFrames()
+                        end,
+                    },
                     fontSize = {
                         type = "range",
                         name = L["Font Size"] or "Font Size",
-                        order = 1,
+                        order = 2,
                         min = 8,
                         max = 24,
                         step = 1,
@@ -126,7 +287,7 @@ function ChatMod:GetOptions()
                     fontOutline = {
                         type = "select",
                         name = L["Font Outline"] or "Font Outline",
-                        order = 2,
+                        order = 3,
                         values = {
                             ["NONE"] = L["None"] or "None",
                             ["OUTLINE"] = L["Outline"] or "Outline",
@@ -135,6 +296,17 @@ function ChatMod:GetOptions()
                         get = function() return self.db.fontOutline or "OUTLINE" end,
                         set = function(_, val)
                             self.db.fontOutline = val
+                            self:SkinAllChatFrames()
+                        end,
+                    },
+                    showFontShadow = {
+                        type = "toggle",
+                        name = L["Enable Text Shadow"] or "Enable Text Shadow",
+                        desc = L["Enables Blizzard's default offset text shadow. Keep disabled when Outline is active for crisp typography."] or "Enables Blizzard's default offset text shadow. Keep disabled when Outline is active for crisp typography.",
+                        order = 4,
+                        get = function() return self.db.showFontShadow == true end,
+                        set = function(_, val)
+                            self.db.showFontShadow = val
                             self:SkinAllChatFrames()
                         end,
                     },

@@ -171,11 +171,33 @@ function UF:CreateClassPower(frame)
         end
     end)
 
-    -- Runes OnUpdate Loop (Continuous Value Refill + Timer)
+    -- Runes OnUpdate Loop (Continuous Value Refill + Throttled Sort/Timer)
     local RuneData = {}
     for i = 1, 6 do RuneData[i] = {} end
 
+    local function RuneSortComparator(a, b)
+        if a.ready and not b.ready then return true end
+        if not a.ready and b.ready then return false end
+        if not a.ready and not b.ready then
+            if math.abs(a.remain - b.remain) > 0.01 then
+                return a.remain < b.remain
+            end
+            return a.index < b.index
+        end
+        return a.index < b.index
+    end
+
+    local runeThrottle = 0
     local function OnUpdateRunes(sf, elapsed)
+        local now = GetTime()
+        runeThrottle = runeThrottle + (elapsed or 0.016)
+        local shouldSort = (runeThrottle >= 0.05)
+        if shouldSort then
+            runeThrottle = 0
+        end
+
+        local anyCooldown = false
+
         -- Gather rune data
         for i = 1, 6 do
             local start, duration, runeReady = GetRuneCooldown(i)
@@ -185,24 +207,35 @@ function UF:CreateClassPower(frame)
             RuneData[i].ready = runeReady
             local isSecretRune = (issecretvalue and (issecretvalue(start) or issecretvalue(duration))) or (canaccessvalue and (not canaccessvalue(start) or not canaccessvalue(duration)))
             if not isSecretRune and not runeReady and start and duration then
-                RuneData[i].remain = (start + duration) - GetTime()
+                RuneData[i].remain = (start + duration) - now
+                anyCooldown = true
             else
                 RuneData[i].remain = 0
             end
         end
 
-        -- Sort: Ready ones left, cooling down sorted by remaining time
-        table.sort(RuneData, function(a, b)
-            if a.ready and not b.ready then return true end
-            if not a.ready and b.ready then return false end
-            if not a.ready and not b.ready then
-                if math.abs(a.remain - b.remain) > 0.01 then
-                    return a.remain < b.remain
+        -- Quick pre-check: If all runes are ready, order is already 1..6 (zero sort needed).
+        -- If cooldowns exist, check if already in sorted order to avoid invoking table.sort.
+        if shouldSort and anyCooldown then
+            local needsSort = false
+            for i = 1, 5 do
+                local a = RuneData[i]
+                local b = RuneData[i + 1]
+                if not a.ready and b.ready then
+                    needsSort = true
+                    break
+                elseif a.ready and b.ready and a.index > b.index then
+                    needsSort = true
+                    break
+                elseif not a.ready and not b.ready and (a.remain > b.remain + 0.01) then
+                    needsSort = true
+                    break
                 end
-                return a.index < b.index
             end
-            return a.index < b.index
-        end)
+            if needsSort then
+                table.sort(RuneData, RuneSortComparator)
+            end
+        end
 
         -- Apply to UI Points
         for i = 1, 6 do
@@ -212,25 +245,31 @@ function UF:CreateClassPower(frame)
                 point:SetMinMaxValues(0, 1)
                 point:SetValue(1)
                 point:SetAlpha(1)
-                point.Timer:SetText("")
+                if shouldSort then
+                    point.Timer:SetText("")
+                end
             elseif data.start and data.duration then
                 point:SetAlpha(1)
 
-                local current = GetTime() - data.start
+                local current = now - data.start
                 point:SetMinMaxValues(0, data.duration)
                 point:SetValue(current)
 
-                -- Timer Logic
-                local remain = data.duration - current
-                if remain > 0 then
-                    point.Timer:SetText(string.format("%.1f", remain))
-                else
-                    point.Timer:SetText("")
+                -- Timer Logic (Throttled to 20Hz)
+                if shouldSort then
+                    local remain = data.duration - current
+                    if remain > 0 then
+                        point.Timer:SetText(string.format("%.1f", remain))
+                    else
+                        point.Timer:SetText("")
+                    end
                 end
             else
                 point:SetMinMaxValues(0, 1)
                 point:SetValue(0)
-                point.Timer:SetText("")
+                if shouldSort then
+                    point.Timer:SetText("")
+                end
             end
         end
     end

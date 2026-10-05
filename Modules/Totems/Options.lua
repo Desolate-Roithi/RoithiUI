@@ -6,6 +6,23 @@ local Totems = RoithiUI:GetModule("Totems", true)
 if not Totems then return end
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
 
+local function GetKeybind(action)
+    return (_G.GetBindingKey and _G.GetBindingKey(action)) or ""
+end
+
+local function ApplyKeybind(action, val)
+    local oldKey = _G.GetBindingKey and _G.GetBindingKey(action)
+    if oldKey and _G.SetBinding then
+        _G.SetBinding(oldKey)
+    end
+    if val and val ~= "" and _G.SetBinding then
+        _G.SetBinding(val, action)
+    end
+    if _G.SaveBindings and _G.GetCurrentBindingSet then
+        _G.SaveBindings(_G.GetCurrentBindingSet())
+    end
+end
+
 function Totems:GetOptions()
     local options = {
         type = "group",
@@ -253,10 +270,53 @@ function Totems:GetOptions()
                 order = 6,
                 inline = true,
                 args = {
+                    placeCurrentTotem = {
+                        type = "keybinding",
+                        name = L["Place Selected Totem"] or "Place Selected Totem",
+                        desc = L["Keybind to place or cast the currently selected totem or spell."] or "Keybind to place or cast the currently selected totem or spell.",
+                        order = 1,
+                        get = function() return GetKeybind("CLICK RoithiTotemButton_current:LeftButton") end,
+                        set = function(_, val)
+                            ApplyKeybind("CLICK RoithiTotemButton_current:LeftButton", val)
+                            if self.UpdateHotkeys then
+                                self:UpdateHotkeys()
+                            end
+                        end,
+                    },
+                    cycleCategory = {
+                        type = "keybinding",
+                        name = L["Cycle Category"] or "Cycle Category",
+                        desc = L["Switch between Earth, Fire, Water, Air, Shield, and Weapon categories."] or "Switch between Earth, Fire, Water, Air, Shield, and Weapon categories.",
+                        order = 2,
+                        get = function() return GetKeybind("ROITHI_TOTEM_CYCLE_TYPE") end,
+                        set = function(_, val)
+                            ApplyKeybind("ROITHI_TOTEM_CYCLE_TYPE", val)
+                        end,
+                    },
+                    cycleSpell = {
+                        type = "keybinding",
+                        name = L["Cycle Spell in Category"] or "Cycle Spell in Category",
+                        desc = L["Cycle through available spells in the currently active category."] or "Cycle through available spells in the currently active category.",
+                        order = 3,
+                        get = function() return GetKeybind("ROITHI_TOTEM_CYCLE_SPELL") end,
+                        set = function(_, val)
+                            ApplyKeybind("ROITHI_TOTEM_CYCLE_SPELL", val)
+                        end,
+                    },
+                    recallAll = {
+                        type = "keybinding",
+                        name = L["Unsummon All Totems"] or "Unsummon All Totems",
+                        desc = L["Calls Totemic Recall or destroys all active totems."] or "Calls Totemic Recall or destroys all active totems.",
+                        order = 4,
+                        get = function() return GetKeybind("CLICK RoithiTotemRecallButton:LeftButton") end,
+                        set = function(_, val)
+                            ApplyKeybind("CLICK RoithiTotemRecallButton:LeftButton", val)
+                        end,
+                    },
                     info = {
                         type = "description",
-                        name = L["Configure keybindings in WoW's native Keybinding menu under the 'RoithiUI Totem Bar' category.\n\nSupported Keybind Actions:\n- Cycle Category: Switch between Earth, Fire, Water, Air, Shield, and Weapon\n- Cycle Spell: Cycle through known spells in the active category\n- Cast Current: Cast the selected spell of the active category\n- Cast Earth / Fire / Water / Air / Shield / Weapon: Dedicated binds for each slot\n- Unsummon All Totems: Calls Totemic Recall or destroys all active totems\n- Unsummon Element: Dismisses specific active totem element\n\nRight-Click any slot button out of combat to open the spell flyout selector."],
-                        order = 1,
+                        name = L["\nAdditional slot-specific keybinds (Cast Earth, Fire, etc.) can be bound using Quick Keybind mode (|cffffd100/kb|r) or via WoW's native Keybinding menu under the 'RoithiUI Totem Bar' category.\n\nRight-Click any slot button out of combat to open the spell flyout selector."],
+                        order = 10,
                     },
                 },
             },

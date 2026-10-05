@@ -312,11 +312,7 @@ local function OnCastbarUpdate(self, elapsed)
     if not self.casting and not self.channeling then return end
     if not self.durationObj then return end
 
-    if self.SetTimerDuration then
-        local dir = self.channeling and (_G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarTimerDirection.RemainingTime or 1) or (_G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarTimerDirection.ElapsedTime or 0)
-        local interp = _G.Enum and _G.Enum.StatusBarInterpolation and _G.Enum.StatusBarInterpolation.Immediate or 0
-        self:SetTimerDuration(self.durationObj, interp, dir)
-    else
+    if not self.SetTimerDuration then
         local total = self.durationObj:GetTotalDuration()
         local rem = self.durationObj:GetRemainingDuration()
         local isSecret = (issecretvalue and issecretvalue(total)) or (canaccessvalue and not canaccessvalue(total))
@@ -329,8 +325,12 @@ local function OnCastbarUpdate(self, elapsed)
     end
 
     if self.TimeFS then
-        local rem = self.durationObj:GetRemainingDuration()
-        self.TimeFS:SetText(FormatDuration(rem))
+        self.timeThrottle = (self.timeThrottle or 0) + (elapsed or 0.016)
+        if self.timeThrottle >= 0.05 then
+            self.timeThrottle = 0
+            local rem = self.durationObj:GetRemainingDuration()
+            self.TimeFS:SetText(FormatDuration(rem))
+        end
     end
 end
 

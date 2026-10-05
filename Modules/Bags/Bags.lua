@@ -38,6 +38,13 @@ function BagsMod:OnInitialize()
 end
 
 function BagsMod:OnEnable()
+    self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Bags or self.defaultSettings
+    if not self.db.bagBar then
+        self.db.bagBar = CopyTable(self.defaultSettings.bagBar)
+    end
+    if not self.db.bagWindow then
+        self.db.bagWindow = CopyTable(self.defaultSettings.bagWindow)
+    end
     if self.db.enabled == false then return end
 
     self:RegisterEvent("BAG_UPDATE_DELAYED", "OnBagUpdate")
@@ -1193,20 +1200,22 @@ function BagsMod:AcquireItemSlot(index)
     if slot.SetBackdrop then
         slot:SetBackdrop({
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-            edgeFile = "Interface\\Buttons\\WHITE8x8",
-            edgeSize = 1,
         })
         slot:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
-        slot:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
     end
 
-    -- Icon texture
+    -- Icon texture (fills slot, border overlays on top)
     local icon = slot.icon or slot.Icon or (slot.GetName and _G[slot:GetName() .. "IconTexture"])
     if not icon then
         icon = slot:CreateTexture(nil, "ARTWORK")
-        icon:SetAllPoints(slot)
-        slot.icon = icon
     end
+    if icon.ClearAllPoints then icon:ClearAllPoints() end
+    if icon.SetPoint then
+        icon:SetPoint("TOPLEFT", slot, "TOPLEFT", 1, -1)
+        icon:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -1, 1)
+    end
+    slot.icon = icon
+    slot.Icon = icon
     if slot.IconMask and icon.RemoveMaskTexture then
         pcall(icon.RemoveMaskTexture, icon, slot.IconMask)
     end
@@ -1217,13 +1226,64 @@ function BagsMod:AcquireItemSlot(index)
         icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     end
 
+    -- Suppress Blizzard native borders, slots, and quality overlays to eliminate double borders
+    if slot.IconBorder then
+        slot.IconBorder:SetAlpha(0)
+        if slot.IconBorder.Hide then slot.IconBorder:Hide() end
+    end
+    local norm = slot.GetNormalTexture and slot:GetNormalTexture()
+    if norm then
+        if norm.SetTexture then norm:SetTexture(nil) end
+        if norm.SetAlpha then norm:SetAlpha(0) end
+    end
+    if slot.NormalTexture then
+        if slot.NormalTexture.SetTexture then slot.NormalTexture:SetTexture(nil) end
+        if slot.NormalTexture.SetAlpha then slot.NormalTexture:SetAlpha(0) end
+    end
+    for _, region in ipairs({ slot:GetRegions() }) do
+        if region.IsObjectType and region:IsObjectType("Texture") and region ~= icon then
+            local tex = region.GetTexture and region:GetTexture()
+            local atlas = region.GetAtlas and region:GetAtlas()
+            local str = (type(tex) == "string" and tex or "") .. (type(atlas) == "string" and atlas or "")
+            local sLower = str:lower()
+            if sLower:find("border") or sLower:find("normal") or sLower:find("slot") or sLower:find("glow") or sLower:find("ring") or sLower:find("itemslotbackground") then
+                region:SetAlpha(0)
+                if region.SetTexture then region:SetTexture(nil) end
+            end
+        end
+    end
+
+    -- 1px overlay border to guarantee border renders above the icon
+    if not slot.roithiBorder then
+        local border = CreateFrame("Frame", nil, slot, "BackdropTemplate")
+        border:SetAllPoints(slot)
+        border:SetFrameLevel(slot:GetFrameLevel() + 5)
+        border:EnableMouse(false)
+        border:SetBackdrop({
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        border:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
+        slot.roithiBorder = border
+
+        if not slot.roithiBorderHooked and hooksecurefunc then
+            hooksecurefunc(slot, "SetBackdropBorderColor", function(s, r, g, b, a)
+                if s.roithiBorder and s.roithiBorder.SetBackdropBorderColor then
+                    s.roithiBorder:SetBackdropBorderColor(r, g, b, a)
+                end
+            end)
+            slot.roithiBorderHooked = true
+        end
+    end
+
     -- Count text
     local count = slot.Count or slot.count
     if not count then
         count = slot:CreateFontString(nil, "OVERLAY")
         count:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -2, 2)
-        slot.count = count
     end
+    slot.count = count
+    slot.Count = count
     if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(count, "Friz Quadrata TT", 10, "OUTLINE")
     else
@@ -1268,6 +1328,33 @@ function BagsMod:AcquireItemSlot(index)
         newOverlay:SetAlpha(0.65)
         newOverlay:Hide()
         slot.newOverlay = newOverlay
+    end
+
+    if slot.NewItemTexture then slot.NewItemTexture:Hide() end
+    if slot.BattlepayItemTexture then slot.BattlepayItemTexture:Hide() end
+    if slot.newitemglowAnim and slot.newitemglowAnim.Stop then slot.newitemglowAnim:Stop() end
+    if slot.flashAnim and slot.flashAnim.Stop then slot.flashAnim:Stop() end
+
+    slot.UpdateNewItem = function(s)
+        if not s.itemData then
+            if s.NewItemTexture then s.NewItemTexture:Hide() end
+            if s.BattlepayItemTexture then s.BattlepayItemTexture:Hide() end
+            if s.newitemglowAnim and s.newitemglowAnim.Stop then s.newitemglowAnim:Stop() end
+            if s.flashAnim and s.flashAnim.Stop then s.flashAnim:Stop() end
+            if s.newOverlay then s.newOverlay:Hide() end
+            return
+        end
+        if s.newOverlay then
+            if s.itemData.isNew then
+                s.newOverlay:Show()
+            else
+                s.newOverlay:Hide()
+            end
+        end
+        if s.NewItemTexture then s.NewItemTexture:Hide() end
+        if s.BattlepayItemTexture then s.BattlepayItemTexture:Hide() end
+        if s.newitemglowAnim and s.newitemglowAnim.Stop then s.newitemglowAnim:Stop() end
+        if s.flashAnim and s.flashAnim.Stop then s.flashAnim:Stop() end
     end
 
     -- Click & Drag handling
@@ -1456,6 +1543,9 @@ function BagsMod:UpdateInventory()
             else
                 self.knownSlots[slotKey] = nil
                 self.newSlots[slotKey] = nil
+                if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
+                    pcall(_G.C_NewItems.RemoveNewItem, bag, slot)
+                end
                 if (activeCat == "ALL" and (isNormalBag or isReagentBag))
                     or (activeCat == "REAGENTS" and isReagentBag)
                     or (activeCat == "KEYRING" and isKeyringBag)
@@ -1589,6 +1679,15 @@ function BagsMod:UpdateInventory()
 
             local itemData = entry.itemData
             if itemData then
+                if slotFrame.IconBorder then
+                    slotFrame.IconBorder:SetAlpha(0)
+                    if slotFrame.IconBorder.Hide then slotFrame.IconBorder:Hide() end
+                end
+                local normTex = slotFrame.GetNormalTexture and slotFrame:GetNormalTexture()
+                if normTex then
+                    if normTex.SetTexture then normTex:SetTexture(nil) end
+                    if normTex.SetAlpha then normTex:SetAlpha(0) end
+                end
                 local isMatch = true
                 if isSearching then
                     isMatch = self:MatchesSearchQuery(itemData, self.searchText)
@@ -1598,18 +1697,21 @@ function BagsMod:UpdateInventory()
                 if slotFrame.SetItemButtonTexture then
                     slotFrame:SetItemButtonTexture(tex)
                 end
-                slotFrame.icon:SetTexture(tex)
-                slotFrame.icon:Show()
+                local iconTex = slotFrame.icon or slotFrame.Icon
+                if iconTex then
+                    iconTex:SetTexture(tex)
+                    iconTex:Show()
+                end
 
                 if isSearching and not isMatch then
                     -- Dim non-matching items
                     slotFrame:SetAlpha(0.2)
-                    if slotFrame.icon.SetDesaturated then slotFrame.icon:SetDesaturated(true) end
+                    if iconTex and iconTex.SetDesaturated then iconTex:SetDesaturated(true) end
                     slotFrame:SetBackdropBorderColor(0.15, 0.15, 0.15, 0.5)
                 else
                     -- Highlight matching items
                     slotFrame:SetAlpha(1.0)
-                    if slotFrame.icon.SetDesaturated then slotFrame.icon:SetDesaturated(false) end
+                    if iconTex and iconTex.SetDesaturated then iconTex:SetDesaturated(false) end
                     if isSearching then
                         slotFrame:SetBackdropBorderColor(1.0, 0.82, 0.0, 1.0)
                     else
@@ -1623,46 +1725,72 @@ function BagsMod:UpdateInventory()
                 end
 
                 -- Count
-                if itemData.count and itemData.count > 1 then
-                    slotFrame.count:SetText(itemData.count)
-                    slotFrame.count:Show()
-                else
-                    slotFrame.count:Hide()
+                local countText = slotFrame.count or slotFrame.Count
+                if countText then
+                    if itemData.count and itemData.count > 1 then
+                        countText:SetText(itemData.count)
+                        countText:Show()
+                    else
+                        countText:Hide()
+                    end
                 end
 
                 -- Item Level
-                if self.db.showItemLevel and itemData.itemLevel and itemData.itemLevel > 1 and (itemData.classID == 2 or itemData.classID == 4) then
-                    slotFrame.ilvl:SetText(itemData.itemLevel)
-                    slotFrame.ilvl:Show()
-                else
-                    slotFrame.ilvl:Hide()
+                if slotFrame.ilvl then
+                    if self.db.showItemLevel and itemData.itemLevel and itemData.itemLevel > 1 and (itemData.classID == 2 or itemData.classID == 4) then
+                        slotFrame.ilvl:SetText(itemData.itemLevel)
+                        slotFrame.ilvl:Show()
+                    else
+                        slotFrame.ilvl:Hide()
+                    end
                 end
 
                 -- Favorites indicator
-                local favs = self.db.favorites or {}
-                if favs[itemData.itemID] then
-                    slotFrame.fav:Show()
-                else
-                    slotFrame.fav:Hide()
+                if slotFrame.fav then
+                    local favs = self.db.favorites or {}
+                    if favs[itemData.itemID] then
+                        slotFrame.fav:Show()
+                    else
+                        slotFrame.fav:Hide()
+                    end
                 end
 
                 -- New item highlight
-                if itemData.isNew then
-                    slotFrame.newOverlay:Show()
-                else
-                    slotFrame.newOverlay:Hide()
+                if slotFrame.newOverlay then
+                    if itemData.isNew then
+                        slotFrame.newOverlay:Show()
+                    else
+                        slotFrame.newOverlay:Hide()
+                    end
                 end
 
                 slotFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
             else
                 -- Empty slot
-                slotFrame.icon:Hide()
-                if slotFrame.icon.SetTexture then slotFrame.icon:SetTexture(nil) end
+                if slotFrame.IconBorder then
+                    slotFrame.IconBorder:SetAlpha(0)
+                    if slotFrame.IconBorder.Hide then slotFrame.IconBorder:Hide() end
+                end
+                local normEmpty = slotFrame.GetNormalTexture and slotFrame:GetNormalTexture()
+                if normEmpty then
+                    if normEmpty.SetTexture then normEmpty:SetTexture(nil) end
+                    if normEmpty.SetAlpha then normEmpty:SetAlpha(0) end
+                end
+                local iconTex = slotFrame.icon or slotFrame.Icon
+                if iconTex then
+                    iconTex:Hide()
+                    if iconTex.SetTexture then iconTex:SetTexture(nil) end
+                end
                 if slotFrame.SetItemButtonTexture then slotFrame:SetItemButtonTexture(nil) end
-                slotFrame.count:Hide()
-                slotFrame.ilvl:Hide()
-                slotFrame.fav:Hide()
-                slotFrame.newOverlay:Hide()
+                local countText = slotFrame.count or slotFrame.Count
+                if countText then countText:Hide() end
+                if slotFrame.ilvl then slotFrame.ilvl:Hide() end
+                if slotFrame.fav then slotFrame.fav:Hide() end
+                if slotFrame.newOverlay then slotFrame.newOverlay:Hide() end
+                if slotFrame.NewItemTexture then slotFrame.NewItemTexture:Hide() end
+                if slotFrame.BattlepayItemTexture then slotFrame.BattlepayItemTexture:Hide() end
+                if slotFrame.newitemglowAnim and slotFrame.newitemglowAnim.Stop then slotFrame.newitemglowAnim:Stop() end
+                if slotFrame.flashAnim and slotFrame.flashAnim.Stop then slotFrame.flashAnim:Stop() end
                 if isSearching then
                     slotFrame:SetAlpha(0.2)
                 else

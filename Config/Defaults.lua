@@ -1121,8 +1121,8 @@ ns.Defaults = {
                     },
                 },
                 width = 200,
-                x = 504,
-                y = 12,
+                x = 345,
+                y = 11,
             },
             focustarget = {
                 aurasEnabled = false,
@@ -1329,8 +1329,8 @@ ns.Defaults = {
                     },
                 },
                 width = 120,
-                x = -363,
-                y = 34,
+                x = -319,
+                y = 31,
             },
             player = {
                 ShowOnlyPlayer = false,

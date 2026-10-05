@@ -214,6 +214,9 @@ function Totems:OnEnable()
     if self.SetupSecureKeybindButtons then
         self:SetupSecureKeybindButtons()
     end
+    if self.HookQuickKeybindFrame then
+        self:HookQuickKeybindFrame()
+    end
 
     self:RegisterEvent("PLAYER_TOTEM_UPDATE", "OnTotemUpdate")
     self:RegisterEvent("SPELLS_CHANGED", "OnSpellsChanged")
@@ -223,6 +226,7 @@ function Totems:OnEnable()
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatEnter")
     self:RegisterEvent("UPDATE_BINDINGS", "OnUpdateBindings")
+    self:RegisterEvent("ADDON_LOADED", "OnAddonLoaded")
 
     if self.UpdateHotkeys then
         self:UpdateHotkeys()
@@ -234,6 +238,9 @@ end
 
 function Totems:OnDisable()
     self:UnregisterAllEvents()
+    if self.UpdateQuickKeybindMode then
+        self:UpdateQuickKeybindMode(false)
+    end
     if self.ticker then
         self:CancelTimer(self.ticker)
         self.ticker = nil
@@ -245,6 +252,14 @@ function Totems:OnDisable()
         self.flyout:Hide()
     end
     self:RestoreBlizzardTotems()
+end
+
+function Totems:OnAddonLoaded(event, loadedAddon)
+    if loadedAddon == "Blizzard_QuickKeybind" then
+        if self.HookQuickKeybindFrame then
+            self:HookQuickKeybindFrame()
+        end
+    end
 end
 
 function Totems:BuildLearnedSpellsCache()
@@ -412,6 +427,9 @@ function Totems:CreateTotemBar()
         if cd.SetHideCountdownNumbers then
             cd:SetHideCountdownNumbers(false)
         end
+        if cd.EnableMouse then
+            cd:EnableMouse(false)
+        end
         cd.noCooldownCount = nil
         cd.noOCC = nil
         btn.cooldown = cd
@@ -430,6 +448,7 @@ function Totems:CreateTotemBar()
         local fsTimer = btn:CreateFontString(nil, "OVERLAY")
         fsTimer:SetPoint("TOP", btn, "BOTTOM", 0, -2)
         fsTimer:SetFont(fontPath, self.db.fontSize or 11, "OUTLINE")
+        fsTimer:SetTextColor(1, 1, 1, 1)
         fsTimer:SetJustifyH("CENTER")
         btn.timerText = fsTimer
 
@@ -496,6 +515,8 @@ function Totems:CreateTotemBar()
             GameTooltip:Hide()
         end)
         ext:SetScript("OnClick", function()
+            local inQuickKeybind = _G.KeybindFrames_InQuickKeybindMode and _G.KeybindFrames_InQuickKeybindMode()
+            if inQuickKeybind then return end
             self:ToggleFlyout(btn)
         end)
         btn.extender = ext
@@ -510,6 +531,9 @@ function Totems:CreateTotemBar()
 
         local selBorder = CreateFrame("Frame", nil, btn, "BackdropTemplate")
         selBorder:SetAllPoints(btn)
+        if selBorder.EnableMouse then
+            selBorder:EnableMouse(false)
+        end
         selBorder:SetBackdrop({
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = 2,
@@ -519,9 +543,123 @@ function Totems:CreateTotemBar()
         selBorder:Hide()
         btn.selectionBorder = selBorder
 
-        -- Flyout Selector on Right Click (for non-totem slots like shield/weapon) and Selection on Left Click
+        -- Quick Keybind integration
+        btn.commandName = "CLICK " .. btn:GetName() .. ":LeftButton"
+        btn.quickKeybindHighlightAtlas = "UI-HUD-ActionBar-IconFrame-Mouseover"
+
+        local qkHighlight = btn:CreateTexture(nil, "OVERLAY", nil, 7)
+        qkHighlight:SetAllPoints(btn)
+        if qkHighlight.SetAtlas then
+            qkHighlight:SetAtlas("UI-HUD-ActionBar-IconFrame-Mouseover")
+        else
+            qkHighlight:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+        end
+        qkHighlight:SetBlendMode("ADD")
+        qkHighlight:SetAlpha(0.5)
+        qkHighlight:Hide()
+        btn.QuickKeybindHighlightTexture = qkHighlight
+
+        btn.DoModeChange = function(bSelf, isInQuickbindMode)
+            if bSelf.QuickKeybindHighlightTexture then
+                bSelf.QuickKeybindHighlightTexture:SetShown(isInQuickbindMode)
+                if isInQuickbindMode then
+                    bSelf.QuickKeybindHighlightTexture:SetAlpha(0.5)
+                end
+            end
+        end
+
+        btn.QuickKeybindButtonSetTooltip = function(bSelf)
+            if not bSelf.commandName then return end
+            local inQuickKeybind = _G.KeybindFrames_InQuickKeybindMode and _G.KeybindFrames_InQuickKeybindMode()
+            if not inQuickKeybind then return end
+            local qkTooltip = _G.QuickKeybindTooltip
+            if not qkTooltip then return end
+
+            qkTooltip:SetOwner(bSelf, "ANCHOR_RIGHT")
+            local bindName = (_G.GetBindingName and _G.GetBindingName(bSelf.commandName)) or bSelf.commandName
+            if _G.GameTooltip_AddHighlightLine then
+                _G.GameTooltip_AddHighlightLine(qkTooltip, bindName)
+            else
+                qkTooltip:AddLine(bindName, 1, 1, 1)
+            end
+
+            local key1 = (_G.GetBindingKeyForAction and _G.GetBindingKeyForAction(bSelf.commandName))
+                or (_G.GetBindingKey and _G.GetBindingKey(bSelf.commandName))
+            if key1 and key1 ~= "" then
+                if _G.GameTooltip_AddInstructionLine then
+                    _G.GameTooltip_AddInstructionLine(qkTooltip, key1)
+                    _G.GameTooltip_AddNormalLine(qkTooltip, _G.ESCAPE_TO_UNBIND or "Press ESC to unbind.")
+                else
+                    qkTooltip:AddLine(key1, 0.1, 1.0, 0.1)
+                    qkTooltip:AddLine(_G.ESCAPE_TO_UNBIND or "Press ESC to unbind.", 0.8, 0.8, 0.8)
+                end
+            else
+                if _G.GameTooltip_AddErrorLine then
+                    _G.GameTooltip_AddErrorLine(qkTooltip, _G.NOT_BOUND or "Not Bound")
+                    _G.GameTooltip_AddNormalLine(qkTooltip, _G.PRESS_KEY_TO_BIND or "Press a key to bind.")
+                else
+                    qkTooltip:AddLine(_G.NOT_BOUND or "Not Bound", 1.0, 0.2, 0.2)
+                    qkTooltip:AddLine(_G.PRESS_KEY_TO_BIND or "Press a key to bind.", 0.8, 0.8, 0.8)
+                end
+            end
+            qkTooltip:Show()
+        end
+
+        btn.QuickKeybindButtonOnUpdate = function() end
+
+        if btn.EnableMouseWheel then
+            btn:EnableMouseWheel(true)
+        end
         if btn.HookScript then
+            btn:HookScript("OnEnter", function(s)
+                local inQuickKeybind = _G.KeybindFrames_InQuickKeybindMode and _G.KeybindFrames_InQuickKeybindMode()
+                if inQuickKeybind and _G.QuickKeybindFrame then
+                    _G.QuickKeybindFrame:SetSelected(s.commandName, s)
+                    s:QuickKeybindButtonSetTooltip()
+                    if s.QuickKeybindHighlightTexture then
+                        s.QuickKeybindHighlightTexture:SetAlpha(1.0)
+                    end
+                else
+                    self:ShowTotemSlotTooltip(s)
+                end
+            end)
+
+            btn:HookScript("OnLeave", function(s)
+                local inQuickKeybind = _G.KeybindFrames_InQuickKeybindMode and _G.KeybindFrames_InQuickKeybindMode()
+                if inQuickKeybind and _G.QuickKeybindFrame then
+                    _G.QuickKeybindFrame:SetSelected(nil, nil)
+                    if s.QuickKeybindHighlightTexture then
+                        s.QuickKeybindHighlightTexture:SetAlpha(0.5)
+                    end
+                    if _G.QuickKeybindTooltip then
+                        _G.QuickKeybindTooltip:Hide()
+                    end
+                else
+                    if _G.GameTooltip then
+                        _G.GameTooltip:Hide()
+                    end
+                end
+            end)
+
+            btn:HookScript("OnMouseWheel", function(_, delta)
+                local inQuickKeybind = _G.KeybindFrames_InQuickKeybindMode and _G.KeybindFrames_InQuickKeybindMode()
+                if inQuickKeybind and _G.QuickKeybindFrame then
+                    _G.QuickKeybindFrame:OnMouseWheel(delta)
+                end
+            end)
+
+            btn:HookScript("OnClick", function(_, mouseBtn, down)
+                if down then return end
+                local inQuickKeybind = _G.KeybindFrames_InQuickKeybindMode and _G.KeybindFrames_InQuickKeybindMode()
+                if inQuickKeybind and _G.QuickKeybindFrame and mouseBtn ~= "LeftButton" and mouseBtn ~= "RightButton" then
+                    _G.QuickKeybindFrame:OnKeyDown(mouseBtn)
+                end
+            end)
+
+            -- Flyout Selector on Right Click (for non-totem slots like shield/weapon) and Selection on Left Click
             btn:HookScript("OnMouseDown", function(buttonSelf, mouseBtn)
+                local inQuickKeybind = _G.KeybindFrames_InQuickKeybindMode and _G.KeybindFrames_InQuickKeybindMode()
+                if inQuickKeybind then return end
                 if not InCombatLockdown() then
                     if mouseBtn == "RightButton" then
                         local info = self.categoryInfo[catKey]
@@ -535,10 +673,16 @@ function Totems:CreateTotemBar()
                         if self.UpdateCurrentActionButton then
                             self:UpdateCurrentActionButton()
                         end
+                        if self.UpdateHotkeys then
+                            self:UpdateHotkeys()
+                        end
                     end
                 end
             end)
         end
+
+        local isQuickKeybind = _G.KeybindFrames_InQuickKeybindMode and _G.KeybindFrames_InQuickKeybindMode()
+        btn:DoModeChange(isQuickKeybind)
 
         self.buttons[catKey] = btn
     end
@@ -609,6 +753,51 @@ function Totems:CreateFlyoutMenu()
 
     flyout.spellButtons = {}
     self.flyout = flyout
+end
+
+function Totems:CloseFlyout()
+    if self.flyout and self.flyout:IsShown() then
+        self.flyout:Hide()
+        if self.flyout.currentAnchor then
+            self:UpdateExtenderArrow(self.flyout.currentAnchor, false)
+        end
+    end
+end
+
+function Totems:ShowTotemSlotTooltip(btn)
+    if not btn or not btn.categoryKey then return end
+    local catKey = btn.categoryKey
+    local spellId = self.db and self.db.selectedSpells and self.db.selectedSpells[catKey]
+    if not spellId then
+        local spells = self.availableSpells and self.availableSpells[catKey]
+        if spells and spells[1] then
+            spellId = spells[1].id
+        end
+    end
+
+    if _G.GameTooltip and _G.GameTooltip.SetOwner then
+        _G.GameTooltip:SetOwner(btn, "ANCHOR_TOP")
+        if spellId and _G.GameTooltip.SetSpellByID then
+            _G.GameTooltip:SetSpellByID(spellId)
+        elseif spellId and _G.GameTooltip.SetText then
+            local spellName = nil
+            if _G.C_Spell and _G.C_Spell.GetSpellInfo then
+                local info = _G.C_Spell.GetSpellInfo(spellId)
+                if info and info.name then spellName = info.name end
+            elseif _G.GetSpellInfo then
+                spellName = _G.GetSpellInfo(spellId)
+            end
+            if spellName then
+                _G.GameTooltip:SetText(spellName, 1, 1, 1)
+            end
+        else
+            local catInfo = self.categoryInfo and self.categoryInfo[catKey]
+            local title = catInfo and catInfo.name or catKey
+            _G.GameTooltip:SetText(title, 1, 1, 1)
+            _G.GameTooltip:AddLine(L["Right-click to select spell, left-click to cast."], 0.8, 0.8, 0.8, true)
+        end
+        _G.GameTooltip:Show()
+    end
 end
 
 function Totems:ToggleFlyout(anchorButton)
@@ -999,7 +1188,11 @@ function Totems:UpdateSpellCooldown(catKey)
     if isSecret then
         btn.cooldownEnd = nil
         if btn.cooldownText then btn.cooldownText:Hide() end
-        CooldownFrame_Set(btn.cooldown, start, duration, enabled)
+        if enabled and btn.cooldown.SetCooldown then
+            pcall(btn.cooldown.SetCooldown, btn.cooldown, start, duration)
+        elseif btn.cooldown.Clear then
+            btn.cooldown:Clear()
+        end
     elseif start and duration and duration > 1.5 then
         btn.cooldownEnd = start + duration
         CooldownFrame_Set(btn.cooldown, start, duration, enabled)
@@ -1060,12 +1253,38 @@ function Totems:UpdateShieldSlot()
     local expiration = 0
     local count = 0
 
-    local shieldSpells = { [324] = true, [52127] = true, [974] = true }
-    if UnitAura then
+    local shieldSpells = {
+        -- Lightning Shield
+        [324] = true, [325] = true, [905] = true, [945] = true, [8134] = true,
+        [10431] = true, [10432] = true, [25464] = true, [25472] = true, [49280] = true,
+        [49281] = true, [192106] = true, [383648] = true,
+        -- Water Shield
+        [52127] = true, [52129] = true, [52131] = true, [52134] = true, [52136] = true,
+        [52138] = true, [52140] = true, [52142] = true, [24398] = true, [33736] = true,
+        -- Earth Shield
+        [974] = true, [32593] = true, [32594] = true, [49283] = true, [49284] = true,
+        [204288] = true,
+    }
+
+    -- 1. Modern WoW / Midnight 12.0/12.1 safe query (AllowedWhenTainted)
+    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        for spellId in pairs(shieldSpells) do
+            local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellId)
+            if ok and aura then
+                isActive = true
+                count = aura.applications or aura.charges or 0
+                expiration = aura.expirationTime or 0
+                break
+            end
+        end
+    end
+
+    -- 2. Legacy Classic Era fallback (OOC-only: UnitAura->GetAuraDataByIndex is secret-restricted when tainted)
+    if not isActive and UnitAura and not InCombatLockdown() then
         for i = 1, 40 do
-            local name, _, buffCount, _, _, expirationTime, _, _, _, spellId = UnitAura("player", i, "HELPFUL")
-            if not name then break end
-            if shieldSpells[spellId] or (name and (name:find("Shield") or name:find("Schild"))) then
+            local ok, name, _, buffCount, _, _, expirationTime, _, _, _, spellId = pcall(UnitAura, "player", i, "HELPFUL")
+            if not ok or not name then break end
+            if (spellId and shieldSpells[spellId]) or (name and (name:find("Shield") or name:find("Schild") or name:find("Bouclier") or name:find("Escudo"))) then
                 isActive = true
                 count = buffCount or 0
                 expiration = expirationTime or 0
@@ -1096,13 +1315,19 @@ function Totems:UpdateWeaponSlot()
     local count = 0
 
     if GetWeaponEnchantInfo then
-        local hasMainHandEnchant, mainHandExpiration, mainHandCharges = GetWeaponEnchantInfo()
-        if hasMainHandEnchant then
+        local hasMH, mhExp, mhCount, _, hasOH, ohExp, ohCount = GetWeaponEnchantInfo()
+        if hasMH then
             isActive = true
-            if mainHandExpiration and mainHandExpiration > 0 then
-                expiration = GetTime() + (mainHandExpiration / 1000)
+            if mhExp and mhExp > 0 then
+                expiration = GetTime() + (mhExp / 1000)
             end
-            count = mainHandCharges or 0
+            count = mhCount or 0
+        elseif hasOH then
+            isActive = true
+            if ohExp and ohExp > 0 then
+                expiration = GetTime() + (ohExp / 1000)
+            end
+            count = ohCount or 0
         end
     end
 
@@ -1172,6 +1397,11 @@ end
 
 function Totems:OnTick()
     local now = GetTime()
+    if not self.lastSlotSync or (now - self.lastSlotSync >= 1.0) then
+        self.lastSlotSync = now
+        self:UpdateWeaponSlot()
+        self:UpdateShieldSlot()
+    end
     for _, catKey in ipairs(self.categories) do
         local btn = self.buttons[catKey]
         local state = self.slotStates and self.slotStates[catKey]
@@ -1202,13 +1432,16 @@ function Totems:OnTick()
                     end
                 end
                 if isExpActive then
-                    if self.db.showDuration then
+                    if self.db.showDuration ~= false then
                         btn.timerText:SetText(FormatTimeSeconds(state.expirationTime - now))
+                        btn.timerText:Show()
                     else
                         btn.timerText:SetText("")
+                        btn.timerText:Hide()
                     end
                 else
                     btn.timerText:SetText("")
+                    btn.timerText:Hide()
                     if isTimedOut then
                         -- Timed out: refresh this slot
                         state.isActive = false

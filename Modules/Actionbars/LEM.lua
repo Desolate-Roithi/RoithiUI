@@ -140,9 +140,22 @@ function AB:SetupLEM()
             })
         end
     end
+
+    if LEM.RegisterCallback and not self.lemCallbackRegistered then
+        LEM:RegisterCallback("enter", function()
+            self:SetButtonsMouseInteractivity(false)
+        end)
+        LEM:RegisterCallback("exit", function()
+            self:SetButtonsMouseInteractivity(true)
+        end)
+        self.lemCallbackRegistered = true
+    end
 end
 
 function AB:TeardownLEM()
+    if self.SetButtonsMouseInteractivity then
+        self:SetButtonsMouseInteractivity(true)
+    end
     if not LEM or not LEM.frameSelections then return end
     for _, container in pairs(self.bars) do
         local sel = LEM.frameSelections[container]
