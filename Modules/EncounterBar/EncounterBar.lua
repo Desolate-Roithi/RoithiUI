@@ -618,3 +618,25 @@ EB.defaultSettings = {
     y        = -100,
 }
 
+function EB:RefreshProfile()
+    local profile = RoithiUI.db and RoithiUI.db.profile
+    self.db = profile and profile.EncounterResource or self.defaultSettings
+    local bar = _G.RoithiEncounterResource
+    if bar and self.db then
+        bar:SetSize(self.db.width or 250, self.db.height or 20)
+        bar:ClearAllPoints()
+        bar:SetPoint(self.db.point or "TOP", UIParent, self.db.point or "TOP", self.db.x or 0, self.db.y or -100)
+        if self.db.texture and LSM then
+            bar:SetStatusBarTexture(LSM:Fetch("statusbar", self.db.texture) or "Interface\\TargetingFrame\\UI-StatusBar")
+        end
+        if bar.Text and self.db.fontSize and LibRoithi and LibRoithi.mixins then
+            LibRoithi.mixins:SetFont(bar.Text, "Friz Quadrata TT", self.db.fontSize, "OUTLINE")
+        end
+        local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
+        if LEM and LEM.RefreshFrameSettings then
+            LEM:RefreshFrameSettings(bar)
+        end
+    end
+end
+EB.RefreshSettings = EB.RefreshProfile
+

@@ -138,6 +138,70 @@ function ChatMod:GetOptions()
                     },
                 },
             },
+            position = {
+                type = "group",
+                name = L["Position & Dimensions"] or "Position & Dimensions",
+                order = 1.5,
+                inline = true,
+                args = {
+                    x = {
+                        type = "range",
+                        name = L["X Position"] or "X Position",
+                        desc = L["Horizontal offset from the anchor point."] or "Horizontal offset from the anchor point.",
+                        order = 1,
+                        min = -2500,
+                        max = 2500,
+                        step = 1,
+                        get = function() return self.db.x or 0 end,
+                        set = function(_, val)
+                            self.db.x = val
+                            if self.ApplyChatPosition then self:ApplyChatPosition() end
+                        end,
+                    },
+                    y = {
+                        type = "range",
+                        name = L["Y Position"] or "Y Position",
+                        desc = L["Vertical offset from the anchor point."] or "Vertical offset from the anchor point.",
+                        order = 2,
+                        min = -1500,
+                        max = 1500,
+                        step = 1,
+                        get = function() return self.db.y or 30 end,
+                        set = function(_, val)
+                            self.db.y = val
+                            if self.ApplyChatPosition then self:ApplyChatPosition() end
+                        end,
+                    },
+                    width = {
+                        type = "range",
+                        name = L["Width"] or "Width",
+                        desc = L["Width of the main chat frame."] or "Width of the main chat frame.",
+                        order = 3,
+                        min = 200,
+                        max = 1000,
+                        step = 5,
+                        get = function() return self.db.width or 460 end,
+                        set = function(_, val)
+                            self.db.width = val
+                            if self.ApplyChatPosition then self:ApplyChatPosition() end
+                        end,
+                    },
+                    height = {
+                        type = "range",
+                        name = L["Height"] or "Height",
+                        desc = L["Height of the main chat frame."] or "Height of the main chat frame.",
+                        order = 4,
+                        min = 100,
+                        max = 800,
+                        step = 5,
+                        get = function() return self.db.height or 200 end,
+                        set = function(_, val)
+                            self.db.height = val
+                            if self.ApplyChatPosition then self:ApplyChatPosition() end
+                        end,
+                    },
+                },
+            },
             background = {
                 type = "group",
                 name = L["Background Panel"] or "Background Panel",
@@ -436,6 +500,90 @@ function ChatMod:GetOptions()
                     },
                 },
             },
+        },
+    }
+end
+
+function ChatMod:GetLEMFrameSettings()
+    local LEM = LibStub("LibEditMode-Roithi", true) or LibStub("LibEditMode-1.0", true)
+    if not LEM or not LEM.SettingType then return {} end
+
+    return {
+        {
+            name = L["X Position"] or "X Position",
+            kind = LEM.SettingType.Slider,
+            default = 0,
+            minValue = -2500,
+            maxValue = 2500,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.0f", v) end,
+            get = function() return self.db.x or 0 end,
+            set = function(_, val)
+                self.db.x = val
+                if self.ApplyChatPosition then self:ApplyChatPosition() end
+            end,
+        },
+        {
+            name = L["Y Position"] or "Y Position",
+            kind = LEM.SettingType.Slider,
+            default = 30,
+            minValue = -1500,
+            maxValue = 1500,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.0f", v) end,
+            get = function() return self.db.y or 30 end,
+            set = function(_, val)
+                self.db.y = val
+                if self.ApplyChatPosition then self:ApplyChatPosition() end
+            end,
+        },
+        {
+            name = L["Width"] or "Width",
+            kind = LEM.SettingType.Slider,
+            default = 460,
+            minValue = 200,
+            maxValue = 1000,
+            valueStep = 5,
+            formatter = function(v) return string.format("%.0f", v) end,
+            get = function() return self.db.width or 460 end,
+            set = function(_, val)
+                self.db.width = val
+                if self.ApplyChatPosition then self:ApplyChatPosition() end
+            end,
+        },
+        {
+            name = L["Height"] or "Height",
+            kind = LEM.SettingType.Slider,
+            default = 200,
+            minValue = 100,
+            maxValue = 800,
+            valueStep = 5,
+            formatter = function(v) return string.format("%.0f", v) end,
+            get = function() return self.db.height or 200 end,
+            set = function(_, val)
+                self.db.height = val
+                if self.ApplyChatPosition then self:ApplyChatPosition() end
+            end,
+        },
+        {
+            name = L["Show Background"] or "Show Background",
+            kind = LEM.SettingType.Checkbox,
+            default = true,
+            get = function() return self.db.showBackground ~= false end,
+            set = function(_, val)
+                self.db.showBackground = val
+                if self.UpdateBackgroundStyle then self:UpdateBackgroundStyle() end
+            end,
+        },
+        {
+            name = L["Clamp to Screen"] or "Clamp to Screen",
+            kind = LEM.SettingType.Checkbox,
+            default = false,
+            get = function() return self.db.clampToScreen == true end,
+            set = function(_, val)
+                self.db.clampToScreen = val
+                if self.ApplyScreenClamping then self:ApplyScreenClamping() end
+            end,
         },
     }
 end

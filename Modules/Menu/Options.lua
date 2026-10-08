@@ -140,10 +140,10 @@ function MenuMod:GetOptions()
                     },
                     showBackground = {
                         type = "toggle",
-                        name = L["Show Background"] or "Show Background",
-                        desc = L["Display a solid background frame behind the menu."] or "Display a solid background frame.",
+                        name = L["Show Button Background"] or "Show Button Background",
+                        desc = L["Display background frames behind individual buttons."] or "Display background frames behind individual buttons.",
                         order = 8,
-                        get = function() return self.db.showBackground == true end,
+                        get = function() return self.db.showBackground ~= false end,
                         set = function(_, val)
                             self.db.showBackground = val
                             self:UpdateContainerBackdrop()

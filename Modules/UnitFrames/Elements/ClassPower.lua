@@ -241,11 +241,17 @@ function UF:CreateClassPower(frame)
         for i = 1, 6 do
             local point = element.points[i]
             local data = RuneData[i]
+            local runeChanged = (point.lastRuneIndex ~= data.index)
+            if shouldSort then
+                point.lastRuneIndex = data.index
+            end
+
             if data.ready then
                 point:SetMinMaxValues(0, 1)
                 point:SetValue(1)
                 point:SetAlpha(1)
-                if shouldSort then
+                if shouldSort and (runeChanged or point.lastTenths ~= 0) then
+                    point.lastTenths = 0
                     point.Timer:SetText("")
                 end
             elseif data.start and data.duration then
@@ -255,19 +261,24 @@ function UF:CreateClassPower(frame)
                 point:SetMinMaxValues(0, data.duration)
                 point:SetValue(current)
 
-                -- Timer Logic (Throttled to 20Hz)
+                -- Timer Logic (Throttled to 20Hz, SetFormattedText in C, zero Lua string garbage)
                 if shouldSort then
                     local remain = data.duration - current
-                    if remain > 0 then
-                        point.Timer:SetText(string.format("%.1f", remain))
-                    else
-                        point.Timer:SetText("")
+                    local tenths = (remain > 0) and math.floor(remain * 10) or 0
+                    if runeChanged or point.lastTenths ~= tenths then
+                        point.lastTenths = tenths
+                        if tenths > 0 then
+                            point.Timer:SetFormattedText("%.1f", remain)
+                        else
+                            point.Timer:SetText("")
+                        end
                     end
                 end
             else
                 point:SetMinMaxValues(0, 1)
                 point:SetValue(0)
-                if shouldSort then
+                if shouldSort and (runeChanged or point.lastTenths ~= 0) then
+                    point.lastTenths = 0
                     point.Timer:SetText("")
                 end
             end

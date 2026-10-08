@@ -436,6 +436,7 @@ function ObjectivesMod:GetLEMFrameSettings()
             set = function(_, val)
                 self.db.attachedToMinimap = val
                 self:ApplyPosition()
+                self:ApplyScaleAndHeight()
                 if LEM.RefreshFrameSettings and _G.ObjectiveTrackerFrame then
                     LEM:RefreshFrameSettings(_G.ObjectiveTrackerFrame)
                 end
@@ -459,6 +460,7 @@ function ObjectivesMod:GetLEMFrameSettings()
             maxValue = 2500,
             valueStep = 1,
             formatter = function(v) return string.format("%.0f", v) end,
+            disabled = function() return self.db.attachedToMinimap ~= false end,
             get = function() return self.db.x or -50 end,
             set = function(_, val)
                 self.db.x = val
@@ -474,6 +476,7 @@ function ObjectivesMod:GetLEMFrameSettings()
             maxValue = 1500,
             valueStep = 1,
             formatter = function(v) return string.format("%.0f", v) end,
+            disabled = function() return self.db.attachedToMinimap ~= false end,
             get = function() return self.db.y or -200 end,
             set = function(_, val)
                 self.db.y = val

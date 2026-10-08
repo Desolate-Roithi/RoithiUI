@@ -13,6 +13,11 @@ MenuMod.dbKey = "Menu"
 local isForever = ns.IsForever
 local isRetail = ns.IsRetail
 
+local NORMAL_ICON_COLOR = 0.9
+local HOVER_ICON_COLOR = 1.0
+MenuMod.NORMAL_ICON_COLOR = NORMAL_ICON_COLOR
+MenuMod.HOVER_ICON_COLOR = HOVER_ICON_COLOR
+
 local RETAIL_MICRO_BUTTONS = {
     "CharacterMicroButton",
     "ProfessionMicroButton",
@@ -239,6 +244,7 @@ function MenuMod:SetupMicroMenu()
     if _G.UpdateMicroButtons and not self.updateMicroButtonsHooked and hooksecurefunc then
         hooksecurefunc("UpdateMicroButtons", function()
             if self.db and self.db.enabled ~= false and self.db.styleMicroMenu ~= false then
+                self:StyleAllMicroButtons()
                 self:LayoutMicroMenu()
             end
         end)
@@ -246,6 +252,7 @@ function MenuMod:SetupMicroMenu()
     end
 
     local container = CreateFrame("Frame", "RoithiMicroMenu", UIParent, "BackdropTemplate")
+    if container.SetFrameStrata then container:SetFrameStrata("BACKGROUND") end
     if container.SetClampedToScreen then container:SetClampedToScreen(true) end
     if container.SetMovable then container:SetMovable(true) end
     if container.EnableMouse then container:EnableMouse(true) end
@@ -415,9 +422,24 @@ function MenuMod:StyleMicroButton(btn)
     -- Ensure normal texture and portrait are visible, fitted to button, and at full alpha & brightness
     local norm = btn.GetNormalTexture and btn:GetNormalTexture()
     if norm then
+        local atlas = norm.GetAtlas and norm:GetAtlas()
+        if atlas then
+            if atlas:find("%-Disabled$") then
+                norm:SetAtlas(atlas:gsub("%-Disabled$", "-Mouseover"))
+            elseif atlas:find("%-Up$") then
+                norm:SetAtlas(atlas:gsub("%-Up$", "-Mouseover"))
+            end
+        end
+        local tex = norm.GetTexture and norm:GetTexture()
+        if type(tex) == "string" and tex:find("Disabled") then
+            norm:SetTexture(tex:gsub("Disabled", "Up"))
+        end
         if norm.SetAlpha then norm:SetAlpha(1) end
         if norm.SetDesaturated then norm:SetDesaturated(false) end
-        if norm.SetVertexColor then norm:SetVertexColor(1, 1, 1, 1) end
+        local isGuildTabard = (btn.Emblem and btn.Emblem.IsShown and btn.Emblem:IsShown())
+        if not isGuildTabard and norm.SetVertexColor then
+            norm:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, 1)
+        end
         if norm.ClearAllPoints then norm:ClearAllPoints() end
         if norm.SetAllPoints then norm:SetAllPoints(btn) end
     end
@@ -428,6 +450,21 @@ function MenuMod:StyleMicroButton(btn)
     end
     local disabled = btn.GetDisabledTexture and btn:GetDisabledTexture()
     if disabled then
+        local atlas = disabled.GetAtlas and disabled:GetAtlas()
+        if atlas then
+            if atlas:find("%-Disabled$") then
+                disabled:SetAtlas(atlas:gsub("%-Disabled$", "-Mouseover"))
+            elseif atlas:find("%-Up$") then
+                disabled:SetAtlas(atlas:gsub("%-Up$", "-Mouseover"))
+            end
+        end
+        local tex = disabled.GetTexture and disabled:GetTexture()
+        if type(tex) == "string" and tex:find("Disabled") then
+            disabled:SetTexture(tex:gsub("Disabled", "Up"))
+        end
+        if disabled.SetDesaturated then disabled:SetDesaturated(false) end
+        if disabled.SetVertexColor then disabled:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, 1) end
+        if disabled.SetAlpha then disabled:SetAlpha(1) end
         if disabled.ClearAllPoints then disabled:ClearAllPoints() end
         if disabled.SetAllPoints then disabled:SetAllPoints(btn) end
     end
@@ -446,7 +483,7 @@ function MenuMod:StyleMicroButton(btn)
         end
         if btn.Portrait.SetAlpha then btn.Portrait:SetAlpha(1) end
         if btn.Portrait.SetDesaturated then btn.Portrait:SetDesaturated(false) end
-        if btn.Portrait.SetVertexColor then btn.Portrait:SetVertexColor(1, 1, 1, 1) end
+        if btn.Portrait.SetVertexColor then btn.Portrait:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, 1) end
         if btn.Portrait.Show then btn.Portrait:Show() end
     end
 
@@ -455,12 +492,50 @@ function MenuMod:StyleMicroButton(btn)
         btn.PortraitMask:Hide()
     end
 
-    local emblem = btn.Emblem or btn.Tabard or (btn.GetName and _G[btn:GetName() .. "Tabard"])
-    if emblem then
-        if emblem.ClearAllPoints then emblem:ClearAllPoints() end
-        if emblem.SetPoint then emblem:SetPoint("CENTER", btn, "CENTER", 0, 0) end
-        if emblem.SetSize then emblem:SetSize(btn:GetWidth() - 2, btn:GetHeight() - 2) end
-        if emblem.SetAlpha then emblem:SetAlpha(1) end
+    -- Guild Emblem & Tabard handling:
+    -- Blizzard's native Emblem size is 12x14. Never stretch it to full button dimensions (btn:GetWidth()-2),
+    -- which causes the guild crest cross to stretch excessively and hide the button background.
+    local btnW = (btn.GetWidth and btn:GetWidth()) or 28
+    local btnH = (btn.GetHeight and btn:GetHeight()) or 38
+    local emblemW = math.max(10, math.min(14, math.floor(btnW * (12 / 28))))
+    local emblemH = math.max(12, math.min(16, math.floor(btnH * (14 / 38))))
+
+    if btn.Emblem then
+        if btn.Emblem.ClearAllPoints then btn.Emblem:ClearAllPoints() end
+        if btn.Emblem.SetPoint then btn.Emblem:SetPoint("CENTER", btn, "CENTER", 0, 1) end
+        if btn.Emblem.SetSize then btn.Emblem:SetSize(emblemW, emblemH) end
+        if btn.Emblem.SetAlpha then btn.Emblem:SetAlpha(1) end
+    end
+
+    if btn.HighlightEmblem then
+        if btn.HighlightEmblem.ClearAllPoints then btn.HighlightEmblem:ClearAllPoints() end
+        if btn.HighlightEmblem.SetPoint then btn.HighlightEmblem:SetPoint("CENTER", btn, "CENTER", 0, 1) end
+        if btn.HighlightEmblem.SetSize then btn.HighlightEmblem:SetSize(emblemW, emblemH) end
+    end
+
+    local tabard = btn.Tabard or (btn.GetName and _G[btn:GetName() .. "Tabard"])
+    if tabard and tabard ~= btn.Emblem then
+        if tabard.ClearAllPoints then tabard:ClearAllPoints() end
+        if tabard.SetPoint then tabard:SetPoint("CENTER", btn, "CENTER", 0, 1) end
+        if tabard.SetSize then tabard:SetSize(emblemW, emblemH) end
+        if tabard.emblem and tabard.emblem.SetSize then tabard.emblem:SetSize(emblemW, emblemH) end
+        if tabard.background and tabard.background.SetSize then tabard.background:SetSize(emblemW, emblemH) end
+    end
+
+    if btn.UpdateTabard and not self.btnHooks[btn.UpdateTabard] and hooksecurefunc then
+        self.btnHooks[btn.UpdateTabard] = true
+        hooksecurefunc(btn, "UpdateTabard", function()
+            local bW = (btn.GetWidth and btn:GetWidth()) or 28
+            local bH = (btn.GetHeight and btn:GetHeight()) or 38
+            local eW = math.max(10, math.min(14, math.floor(bW * (12 / 28))))
+            local eH = math.max(12, math.min(16, math.floor(bH * (14 / 38))))
+            if btn.Emblem and btn.Emblem.SetSize then
+                btn.Emblem:SetSize(eW, eH)
+            end
+            if btn.HighlightEmblem and btn.HighlightEmblem.SetSize then
+                btn.HighlightEmblem:SetSize(eW, eH)
+            end
+        end)
     end
 
     -- 1px Custom dark backdrop behind button (parented to container, never mutating btn)
@@ -469,6 +544,8 @@ function MenuMod:StyleMicroButton(btn)
     if not bg then
         local parentFrame = self.container or (btn.GetParent and btn:GetParent()) or UIParent
         bg = CreateFrame("Frame", nil, parentFrame, "BackdropTemplate")
+        if bg.SetFrameStrata then bg:SetFrameStrata("BACKGROUND") end
+        if bg.EnableMouse then bg:EnableMouse(false) end
         if bg.SetAllPoints then bg:SetAllPoints(btn) end
         if bg.SetFrameLevel and btn.GetFrameLevel then
             bg:SetFrameLevel(math.max(0, btn:GetFrameLevel() - 1))
@@ -479,13 +556,19 @@ function MenuMod:StyleMicroButton(btn)
                 edgeFile = "Interface\\Buttons\\WHITE8x8",
                 edgeSize = 1,
             })
-            bg:SetBackdropColor(0.1, 0.1, 0.1, 0.85)
+            local bgColor = (self.db and self.db.backgroundColor) or { r = 0.05, g = 0.05, b = 0.05, a = 0.85 }
+            bg:SetBackdropColor(bgColor.r, bgColor.g, bgColor.b, bgColor.a or 0.85)
             bg:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
         end
         self.backdrops[btn] = bg
     else
-        if bg.Show then bg:Show() end
+        if bg.SetFrameStrata then bg:SetFrameStrata("BACKGROUND") end
         if bg.SetAllPoints then bg:SetAllPoints(btn) end
+    end
+    if self.db and self.db.showBackground and (btn.IsShown == nil or btn:IsShown()) then
+        if bg.Show then bg:Show() end
+    else
+        if bg.Hide then bg:Hide() end
     end
 
     -- Hook mouseover events using internal tracking table (zero property mutations on secure btn)
@@ -494,25 +577,159 @@ function MenuMod:StyleMicroButton(btn)
         btn:HookScript("OnEnter", function()
             self:OnContainerEnter()
             local b = self.backdrops and self.backdrops[btn]
-            if b and b.SetBackdropBorderColor then
+            if b and self.db and self.db.showBackground and b.SetBackdropBorderColor then
                 b:SetBackdropBorderColor(1.0, 0.82, 0.0, 1.0)
             end
             local n = btn.GetNormalTexture and btn:GetNormalTexture()
-            if n and n.SetAlpha then n:SetAlpha(1) end
+            if n then
+                if n.SetAlpha then n:SetAlpha(1) end
+                if n.SetVertexColor then n:SetVertexColor(HOVER_ICON_COLOR, HOVER_ICON_COLOR, HOVER_ICON_COLOR, 1) end
+            end
+            if btn.Portrait and btn.Portrait.SetVertexColor then
+                btn.Portrait:SetVertexColor(HOVER_ICON_COLOR, HOVER_ICON_COLOR, HOVER_ICON_COLOR, 1)
+            end
             local h = btn.GetHighlightTexture and btn:GetHighlightTexture()
             if h and h.SetAlpha then h:SetAlpha(0) end
         end)
         btn:HookScript("OnLeave", function()
             self:OnContainerLeave()
             local b = self.backdrops and self.backdrops[btn]
-            if b and b.SetBackdropBorderColor then
+            if b and self.db and self.db.showBackground and b.SetBackdropBorderColor then
                 b:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
             end
             local n = btn.GetNormalTexture and btn:GetNormalTexture()
-            if n and n.SetAlpha then n:SetAlpha(1) end
+            if n then
+                if n.SetAlpha then n:SetAlpha(1) end
+            local isGuildTabard = (btn.Emblem and btn.Emblem.IsShown and btn.Emblem:IsShown())
+            if not isGuildTabard and n.SetVertexColor then
+                n:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, 1)
+            end
+            end
+            if btn.Portrait and btn.Portrait.SetVertexColor then
+                btn.Portrait:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, 1)
+            end
         end)
         self.hookedButtons[btn] = true
     end
+
+    -- Enforce full alpha and hook SetAlpha / SetNormalAtlas / SetDisabledAtlas to prevent Blizzard dimming
+    self.btnHooks = self.btnHooks or {}
+    self.settingAlpha = self.settingAlpha or {}
+    self.settingAtlas = self.settingAtlas or {}
+    self.settingTex = self.settingTex or {}
+    self.settingDesat = self.settingDesat or {}
+    self.settingColor = self.settingColor or {}
+    if not self.btnHooks[btn] and hooksecurefunc then
+        if btn.SetAlpha then
+            hooksecurefunc(btn, "SetAlpha", function(b, a)
+                if a < 1 and not self.settingAlpha[b] then
+                    self.settingAlpha[b] = true
+                    b:SetAlpha(1)
+                    self.settingAlpha[b] = nil
+                end
+            end)
+        end
+        if btn.SetNormalAtlas then
+            hooksecurefunc(btn, "SetNormalAtlas", function(b, atlasName)
+                if atlasName and not self.settingAtlas[b] then
+                    if atlasName:find("%-Up$") or atlasName:find("%-Disabled$") then
+                        self.settingAtlas[b] = true
+                        b:SetNormalAtlas(atlasName:gsub("%-Disabled$", "-Mouseover"):gsub("%-Up$", "-Mouseover"))
+                        self.settingAtlas[b] = nil
+                    end
+                end
+            end)
+        end
+        if btn.SetDisabledAtlas then
+            hooksecurefunc(btn, "SetDisabledAtlas", function(b, atlas)
+                if atlas and not self.settingAtlas[b] then
+                    if atlas:find("%-Disabled$") or atlas:find("%-Up$") then
+                        self.settingAtlas[b] = true
+                        b:SetDisabledAtlas(atlas:gsub("%-Disabled$", "-Mouseover"):gsub("%-Up$", "-Mouseover"))
+                        self.settingAtlas[b] = nil
+                    end
+                end
+            end)
+        end
+        if btn.SetDisabledTexture then
+            hooksecurefunc(btn, "SetDisabledTexture", function(b, tex)
+                if type(tex) == "string" and tex:find("Disabled") and not self.settingTex[b] then
+                    self.settingTex[b] = true
+                    b:SetDisabledTexture(tex:gsub("Disabled", "Up"))
+                    self.settingTex[b] = nil
+                end
+            end)
+        end
+        if btn.SetButtonState then
+            hooksecurefunc(btn, "SetButtonState", function(b)
+                local n = b.GetNormalTexture and b:GetNormalTexture()
+                if n then
+                    if n.SetDesaturated then n:SetDesaturated(false) end
+                    local isGuildTabard = (b.Emblem and b.Emblem.IsShown and b.Emblem:IsShown())
+                    if not isGuildTabard and n.SetVertexColor then
+                        n:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, 1)
+                    end
+                    if n.SetAlpha then n:SetAlpha(1) end
+                end
+            end)
+        end
+        self.btnHooks[btn] = true
+    end
+    if norm and not self.btnHooks[norm] and hooksecurefunc then
+        self.btnHooks[norm] = true
+        if norm.SetAtlas then
+            hooksecurefunc(norm, "SetAtlas", function(t, atlasName)
+                if atlasName and not self.settingAtlas[t] then
+                    if atlasName:find("%-Up$") or atlasName:find("%-Disabled$") then
+                        self.settingAtlas[t] = true
+                        t:SetAtlas(atlasName:gsub("%-Disabled$", "-Mouseover"):gsub("%-Up$", "-Mouseover"))
+                        self.settingAtlas[t] = nil
+                    end
+                end
+            end)
+        end
+        if norm.SetDesaturated then
+            hooksecurefunc(norm, "SetDesaturated", function(t, desat)
+                if desat and not self.settingDesat[t] then
+                    self.settingDesat[t] = true
+                    t:SetDesaturated(false)
+                    self.settingDesat[t] = nil
+                end
+            end)
+        end
+        if norm.SetVertexColor then
+            hooksecurefunc(norm, "SetVertexColor", function(t, r, g, b, a)
+                local isGuildTabard = (btn.Emblem and btn.Emblem.IsShown and btn.Emblem:IsShown())
+                if not isGuildTabard and (r < (NORMAL_ICON_COLOR - 0.1) or g < (NORMAL_ICON_COLOR - 0.1) or b < (NORMAL_ICON_COLOR - 0.1)) and not self.settingColor[t] then
+                    self.settingColor[t] = true
+                    t:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, a or 1)
+                    self.settingColor[t] = nil
+                end
+            end)
+        end
+    end
+    if btn.Portrait and not self.btnHooks[btn.Portrait] and hooksecurefunc then
+        self.btnHooks[btn.Portrait] = true
+        if btn.Portrait.SetDesaturated then
+            hooksecurefunc(btn.Portrait, "SetDesaturated", function(t, desat)
+                if desat and not self.settingDesat[t] then
+                    self.settingDesat[t] = true
+                    t:SetDesaturated(false)
+                    self.settingDesat[t] = nil
+                end
+            end)
+        end
+        if btn.Portrait.SetVertexColor then
+            hooksecurefunc(btn.Portrait, "SetVertexColor", function(t, r, g, b, a)
+                if (r < (NORMAL_ICON_COLOR - 0.1) or g < (NORMAL_ICON_COLOR - 0.1) or b < (NORMAL_ICON_COLOR - 0.1)) and not self.settingColor[t] then
+                    self.settingColor[t] = true
+                    t:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, a or 1)
+                    self.settingColor[t] = nil
+                end
+            end)
+        end
+    end
+    if btn.SetAlpha then btn:SetAlpha(1) end
 end
 
 function MenuMod:StyleAllMicroButtons()
@@ -575,23 +792,23 @@ function MenuMod:LayoutMicroMenu()
 end
 
 function MenuMod:UpdateContainerBackdrop()
+    if self.backdrops then
+        local bgColor = (self.db and self.db.backgroundColor) or { r = 0.05, g = 0.05, b = 0.05, a = 0.85 }
+        for btn, bg in pairs(self.backdrops) do
+            if self.db and self.db.showBackground and (btn.IsShown == nil or btn:IsShown()) then
+                if bg.Show then bg:Show() end
+                if bg.SetFrameStrata then bg:SetFrameStrata("BACKGROUND") end
+                if bg.SetBackdropColor then
+                    bg:SetBackdropColor(bgColor.r, bgColor.g, bgColor.b, bgColor.a or 0.85)
+                end
+            else
+                if bg.Hide then bg:Hide() end
+            end
+        end
+    end
     if not self.container then return end
-    if self.db and self.db.showBackground then
-        if self.container.SetBackdrop then
-            self.container:SetBackdrop({
-                bgFile = "Interface\\Buttons\\WHITE8X8",
-                edgeFile = "Interface\\Buttons\\WHITE8X8",
-                edgeSize = 1,
-            })
-            local c = self.db.backgroundColor or { r = 0.05, g = 0.05, b = 0.05, a = 0.85 }
-            self.container:SetBackdropColor(c.r, c.g, c.b, c.a or 0.85)
-            local bc = self.db.borderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
-            self.container:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a or 1.0)
-        end
-    else
-        if self.container.SetBackdrop then
-            self.container:SetBackdrop(nil)
-        end
+    if self.container.SetBackdrop then
+        self.container:SetBackdrop(nil)
     end
 end
 
@@ -656,3 +873,20 @@ function MenuMod:OnContainerLeave()
         end)
     end
 end
+
+function MenuMod:RefreshSettings()
+    self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Menu or self.defaultSettings
+    if self.container then
+        local pt = self.db.point or "BOTTOMRIGHT"
+        if self.container.ClearAllPoints then self.container:ClearAllPoints() end
+        if self.container.SetPoint then
+            self.container:SetPoint(pt, UIParent, pt, self.db.x or -280, self.db.y or 0)
+        end
+    end
+    self:StyleAllMicroButtons()
+    self:LayoutMicroMenu()
+    if LEM and LEM.RefreshFrameSettings and self.container then
+        LEM:RefreshFrameSettings(self.container)
+    end
+end
+MenuMod.RefreshProfile = MenuMod.RefreshSettings

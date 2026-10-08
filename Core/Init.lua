@@ -5,18 +5,20 @@ local isDev = string.match(addonName, "%-Dev$")
 local prodName = "RoithiUI"
 local otherName = isDev and prodName or "RoithiUI-Dev"
 
-if C_AddOns.IsAddOnLoaded(otherName) then
+if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded(otherName) then
     ns.skipLoad = true
     return
 end
 
-if isDev then
+if isDev and C_AddOns and C_AddOns.GetAddOnEnableState then
     local state = C_AddOns.GetAddOnEnableState((UnitName("player") or "player"), prodName)
     if state and state > 0 then
         ns.skipLoad = true
-        C_Timer.After(5, function()
-            print("|cffff0000[" .. addonName .. "]|r |cff00ccffAborted:|r Production version (" .. prodName .. ") is also enabled. Please disable one.")
-        end)
+        if C_Timer and C_Timer.After then
+            C_Timer.After(5, function()
+                print("|cffff0000[" .. addonName .. "]|r |cff00ccffAborted:|r Production version (" .. prodName .. ") is also enabled. Please disable one.")
+            end)
+        end
         return
     end
 end
@@ -261,8 +263,17 @@ function RoithiUI:OnInitialize()
 end
 
 function RoithiUI:RefreshProfile()
-    if ns and ns.RefreshAllCastbars then ns.RefreshAllCastbars() end
+    -- 1. Sync module enable/disable states according to the new profile
+    if self.ModuleManager and self.ModuleManager.EnableModules then
+        self.ModuleManager:EnableModules()
+    end
 
+    -- 2. Castbars
+    if ns and ns.RefreshAllCastbars then
+        ns.RefreshAllCastbars()
+    end
+
+    -- 3. UnitFrames
     local UF = self:GetModule("UnitFrames", true)
     if UF then
         if UF.units then
@@ -286,9 +297,85 @@ function RoithiUI:RefreshProfile()
         end
     end
 
+    -- 4. Minimap & AddonBar (must refresh before Objectives so Objectives can anchor)
+    local MM = self:GetModule("Minimap", true)
+    if MM and MM.RefreshProfile then
+        MM:RefreshProfile()
+    end
+
+    -- 5. Objectives
+    local OBJ = self:GetModule("Objectives", true)
+    if OBJ and OBJ.RefreshSettings then
+        OBJ:RefreshSettings()
+    end
+
+    -- 6. Micro Menu
+    local Menu = self:GetModule("Menu", true)
+    if Menu and Menu.RefreshSettings then
+        Menu:RefreshSettings()
+    end
+
+    -- 7. Actionbars
+    local AB = self:GetModule("Actionbars", true)
+    if AB and AB.RefreshProfile then
+        AB:RefreshProfile()
+    end
+
+    -- 8. Bags
+    local Bags = self:GetModule("Bags", true)
+    if Bags and Bags.RefreshProfile then
+        Bags:RefreshProfile()
+    end
+
+    -- 9. Chat
+    local Chat = self:GetModule("Chat", true)
+    if Chat and Chat.RefreshSettings then
+        Chat:RefreshSettings()
+    end
+
+    -- 10. SwingTimer
+    local ST = self:GetModule("SwingTimer", true)
+    if ST and ST.RefreshProfile then
+        ST:RefreshProfile()
+    end
+
+    -- 11. Totems
+    local Totems = self:GetModule("Totems", true)
+    if Totems and Totems.RefreshProfile then
+        Totems:RefreshProfile()
+    end
+
+    -- 12. CooldownManager
+    local CDM = self:GetModule("CooldownManager", true)
+    if CDM and CDM.RefreshProfile then
+        CDM:RefreshProfile()
+    end
+
+    -- 13. EncounterBar
     local EB = self:GetModule("EncounterBar", true)
-    if EB and EB.OnEnable then
+    if EB and EB.RefreshProfile then
+        EB:RefreshProfile()
+    elseif EB and EB.OnEnable then
         EB:OnEnable()
+    end
+
+    -- 14. Fallback for any other modules
+    if self.IterateModules then
+        for name, module in self:IterateModules() do
+            if module:IsEnabled() and module ~= UF and module ~= MM and module ~= OBJ and module ~= Menu and module ~= AB and module ~= Bags and module ~= Chat and module ~= ST and module ~= Totems and module ~= CDM and module ~= EB then
+                local dbKey = module.dbKey or name
+                if self.db.profile and self.db.profile[dbKey] then
+                    module.db = self.db.profile[dbKey]
+                end
+                if module.RefreshProfile then
+                    module:RefreshProfile()
+                elseif module.RefreshSettings then
+                    module:RefreshSettings()
+                elseif module.UpdateLayout then
+                    module:UpdateLayout()
+                end
+            end
+        end
     end
 
     -- Refresh AceConfigRegistry to match new DB

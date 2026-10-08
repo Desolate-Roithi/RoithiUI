@@ -25,6 +25,8 @@ CDM.defaultSettings = {
     font = "Friz Quadrata TT",
     cooldownFontSize = 14,
     cooldownFontOutline = "OUTLINE",
+    cooldownOffsetX = 0,
+    cooldownOffsetY = 0,
     stackAnchor = "BOTTOMRIGHT",
     stackOffsetX = -2,
     stackOffsetY = 2,
@@ -38,6 +40,13 @@ CDM.defaultSettings = {
             growthDirection = "RIGHT",
             align = "CENTER",
             centerIncompleteRows = true,
+            cooldownFontSize = 14,
+            cooldownOffsetX = 0,
+            cooldownOffsetY = 0,
+            stackAnchor = "BOTTOMRIGHT",
+            stackFontSize = 11,
+            stackOffsetX = -2,
+            stackOffsetY = 2,
         },
         Utility = {
             enabled = true,
@@ -46,6 +55,13 @@ CDM.defaultSettings = {
             growthDirection = "RIGHT",
             align = "CENTER",
             centerIncompleteRows = true,
+            cooldownFontSize = 12,
+            cooldownOffsetX = 0,
+            cooldownOffsetY = 0,
+            stackAnchor = "BOTTOMRIGHT",
+            stackFontSize = 11,
+            stackOffsetX = -2,
+            stackOffsetY = 2,
         },
         BuffIcon = {
             enabled = true,
@@ -54,6 +70,13 @@ CDM.defaultSettings = {
             growthDirection = "RIGHT",
             align = "CENTER",
             centerIncompleteRows = true,
+            cooldownFontSize = 12,
+            cooldownOffsetX = 0,
+            cooldownOffsetY = 0,
+            stackAnchor = "BOTTOMRIGHT",
+            stackFontSize = 11,
+            stackOffsetX = -2,
+            stackOffsetY = 2,
         },
         BuffBar = {
             enabled = true,
@@ -191,12 +214,31 @@ function CDM:HookCooldownViewerSettings()
         local ACD = LibStub and LibStub("AceConfigDialog-3.0", true)
         if ACD then
             ACD:Open("RoithiUI")
-            ACD:SelectGroup("RoithiUI", "CooldownManager")
+            ACD:SelectGroup("RoithiUI", "combat", "cooldownmanager")
         end
     end)
     self.settingsTab = tab
     _G.RoithiUI_CDM_SettingsTab = tab
     self.settingsTabCreated = true
+end
+
+function CDM:OpenBlizzardSettings()
+    if InCombatLockdown() then
+        RoithiUI:Print(L["Cannot open cooldown settings while in combat."] or "Cannot open cooldown settings while in combat.")
+        return
+    end
+    if C_AddOns and C_AddOns.LoadAddOn and not (C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Blizzard_CooldownViewer")) then
+        pcall(C_AddOns.LoadAddOn, "Blizzard_CooldownViewer")
+    end
+    if _G.CooldownViewerSettings then
+        if _G.CooldownViewerSettings.ShowUIPanel then
+            _G.CooldownViewerSettings:ShowUIPanel(false)
+        elseif _G.CooldownViewerSettings.Show then
+            _G.CooldownViewerSettings:Show()
+        end
+    else
+        RoithiUI:Print(L["Blizzard Cooldown Viewer is not available."] or "Blizzard Cooldown Viewer is not available.")
+    end
 end
 
 function CDM:SetupEditMode()
@@ -213,8 +255,14 @@ function CDM:SetupEditMode()
                         local ACD = LibStub and LibStub("AceConfigDialog-3.0", true)
                         if ACD then
                             ACD:Open("RoithiUI")
-                            ACD:SelectGroup("RoithiUI", "CooldownManager")
+                            ACD:SelectGroup("RoithiUI", "combat", "cooldownmanager")
                         end
+                    end,
+                },
+                {
+                    text = L["Create / Edit Bars"] or "Create / Edit Bars",
+                    click = function()
+                        CDM:OpenBlizzardSettings()
                     end,
                 },
             })
@@ -403,3 +451,10 @@ function CDM:RestoreAllItems()
         end
     end
 end
+
+function CDM:RefreshProfile()
+    self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.CooldownManager or self.defaultSettings
+    self:RefreshAllViewerLayouts()
+    self:StyleAllActiveItems()
+end
+CDM.RefreshSettings = CDM.RefreshProfile

@@ -33,7 +33,7 @@ local function GetOrCreateAuraMover(container, unit, containerSuffix)
     RADLog("Creating AuraMover [%s]", moverKey)
 
     mover = CreateFrame("Frame", moverKey, UIParent)
-    if mover.SetFrameStrata then mover:SetFrameStrata("DIALOG") end
+    if mover.SetFrameStrata then mover:SetFrameStrata("HIGH") end
     if mover.SetFrameLevel then mover:SetFrameLevel(200) end
     if mover.SetClampedToScreen then mover:SetClampedToScreen(true) end
     if mover.SetMovable then mover:SetMovable(true) end
@@ -313,7 +313,7 @@ local function UpdateAuraMover(
         return
     end
 
-    if mover.SetFrameStrata then mover:SetFrameStrata("DIALOG") end
+    if mover.SetFrameStrata then mover:SetFrameStrata("HIGH") end
     if mover.SetFrameLevel then mover:SetFrameLevel(200) end
 
     ---------------------------------------------------------------------------

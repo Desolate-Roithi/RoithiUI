@@ -1071,7 +1071,7 @@ function AB:LayoutBarInternal(barKey)
     end
 
     local perLine
-    if db.numRows and db.numRows > 1 then
+    if db.numRows then
         perLine = math.ceil(displayCount / db.numRows)
     else
         perLine = db.buttonsPerRow or #buttons

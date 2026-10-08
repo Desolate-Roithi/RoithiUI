@@ -165,6 +165,17 @@ commandHandlers = {
             self:Print("Usage: /roithi test [boss]")
         end
     end,
+    ["cdm"] = function(self, arg)
+        local sub = arg and arg:lower() or ""
+        if sub == "bars" or sub == "bar" or sub == "edit" or sub == "bliz" or sub == "create" then
+            local CDM = RoithiUI:GetModule("CooldownManager", true)
+            if CDM and CDM.OpenBlizzardSettings then
+                CDM:OpenBlizzardSettings()
+            end
+        else
+            self:OpenSettings("cdm")
+        end
+    end,
 }
 
 -- ----------------------------------------------------------------------------

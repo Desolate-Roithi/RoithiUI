@@ -405,13 +405,6 @@ function SwingTimer:GetPlayerLEMFrameSettings()
     if not LEM then return {} end
     local sliderType = (LEM.SettingType and LEM.SettingType.Slider) or 2
     local checkType = (LEM.SettingType and LEM.SettingType.Checkbox) or 1
-    local dropType = (LEM.SettingType and LEM.SettingType.Dropdown) or 3
-
-    local ANCHOR_VALUES = {
-        { text = "LEFT", value = "LEFT" },
-        { text = "CENTER", value = "CENTER" },
-        { text = "RIGHT", value = "RIGHT" },
-    }
 
     local pCfg = self.db.player or self.defaultSettings.player
 
@@ -490,110 +483,6 @@ function SwingTimer:GetPlayerLEMFrameSettings()
                 if self.isInEditMode then self:ShowSampleBars(true) end
             end,
         },
-        {
-            name = L["Show Label"] or "Show Label",
-            kind = checkType,
-            get = function()
-                if pCfg.showLabel ~= nil then return pCfg.showLabel == true end
-                return pCfg.showText ~= false
-            end,
-            set = function(_, val)
-                pCfg.showLabel = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Show Timer"] or "Show Timer",
-            kind = checkType,
-            get = function()
-                if pCfg.showTimer ~= nil then return pCfg.showTimer == true end
-                return pCfg.showText ~= false
-            end,
-            set = function(_, val)
-                pCfg.showTimer = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Label Anchor"] or "Label Anchor",
-            kind = dropType,
-            values = ANCHOR_VALUES,
-            get = function() return pCfg.labelAnchor or "LEFT" end,
-            set = function(_, val)
-                pCfg.labelAnchor = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Timer Anchor"] or "Timer Anchor",
-            kind = dropType,
-            values = ANCHOR_VALUES,
-            get = function() return pCfg.timerAnchor or "RIGHT" end,
-            set = function(_, val)
-                pCfg.timerAnchor = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Label X Offset"] or "Label X Offset",
-            kind = sliderType,
-            minValue = -50,
-            maxValue = 50,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return pCfg.labelX or 4 end,
-            set = function(_, val)
-                pCfg.labelX = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Label Y Offset"] or "Label Y Offset",
-            kind = sliderType,
-            minValue = -50,
-            maxValue = 50,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return pCfg.labelY or 0 end,
-            set = function(_, val)
-                pCfg.labelY = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Timer X Offset"] or "Timer X Offset",
-            kind = sliderType,
-            minValue = -50,
-            maxValue = 50,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return pCfg.timerX or -4 end,
-            set = function(_, val)
-                pCfg.timerX = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Timer Y Offset"] or "Timer Y Offset",
-            kind = sliderType,
-            minValue = -50,
-            maxValue = 50,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return pCfg.timerY or 0 end,
-            set = function(_, val)
-                pCfg.timerY = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
     }
 end
 
@@ -601,14 +490,6 @@ function SwingTimer:GetTargetLEMFrameSettings()
     local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
     if not LEM then return {} end
     local sliderType = (LEM.SettingType and LEM.SettingType.Slider) or 2
-    local checkType = (LEM.SettingType and LEM.SettingType.Checkbox) or 1
-    local dropType = (LEM.SettingType and LEM.SettingType.Dropdown) or 3
-
-    local ANCHOR_VALUES = {
-        { text = "LEFT", value = "LEFT" },
-        { text = "CENTER", value = "CENTER" },
-        { text = "RIGHT", value = "RIGHT" },
-    }
 
     local tCfg = self.db.target or self.defaultSettings.target
 
@@ -663,110 +544,6 @@ function SwingTimer:GetTargetLEMFrameSettings()
             get = function() return tCfg.height or 12 end,
             set = function(_, val)
                 tCfg.height = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Show Label"] or "Show Label",
-            kind = checkType,
-            get = function()
-                if tCfg.showLabel ~= nil then return tCfg.showLabel == true end
-                return tCfg.showText ~= false
-            end,
-            set = function(_, val)
-                tCfg.showLabel = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Show Timer"] or "Show Timer",
-            kind = checkType,
-            get = function()
-                if tCfg.showTimer ~= nil then return tCfg.showTimer == true end
-                return tCfg.showText ~= false
-            end,
-            set = function(_, val)
-                tCfg.showTimer = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Label Anchor"] or "Label Anchor",
-            kind = dropType,
-            values = ANCHOR_VALUES,
-            get = function() return tCfg.labelAnchor or "LEFT" end,
-            set = function(_, val)
-                tCfg.labelAnchor = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Timer Anchor"] or "Timer Anchor",
-            kind = dropType,
-            values = ANCHOR_VALUES,
-            get = function() return tCfg.timerAnchor or "RIGHT" end,
-            set = function(_, val)
-                tCfg.timerAnchor = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Label X Offset"] or "Label X Offset",
-            kind = sliderType,
-            minValue = -50,
-            maxValue = 50,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return tCfg.labelX or 4 end,
-            set = function(_, val)
-                tCfg.labelX = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Label Y Offset"] or "Label Y Offset",
-            kind = sliderType,
-            minValue = -50,
-            maxValue = 50,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return tCfg.labelY or 0 end,
-            set = function(_, val)
-                tCfg.labelY = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Timer X Offset"] or "Timer X Offset",
-            kind = sliderType,
-            minValue = -50,
-            maxValue = 50,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return tCfg.timerX or -4 end,
-            set = function(_, val)
-                tCfg.timerX = val
-                self:UpdateLayout()
-                if self.isInEditMode then self:ShowSampleBars(true) end
-            end,
-        },
-        {
-            name = L["Timer Y Offset"] or "Timer Y Offset",
-            kind = sliderType,
-            minValue = -50,
-            maxValue = 50,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return tCfg.timerY or 0 end,
-            set = function(_, val)
-                tCfg.timerY = val
                 self:UpdateLayout()
                 if self.isInEditMode then self:ShowSampleBars(true) end
             end,

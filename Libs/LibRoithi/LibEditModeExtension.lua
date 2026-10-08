@@ -167,7 +167,17 @@ end
 
 -- 3. Persistent LEM Dialog Position Saving & Restoring
 local function SetupPersistentDialogPosition(dialog)
-    if not dialog or dialog.isPositionHooked then return end
+    if not dialog then return end
+    if dialog.SetFrameStrata then dialog:SetFrameStrata("FULLSCREEN_DIALOG") end
+    if dialog.SetFrameLevel then dialog:SetFrameLevel(1500) end
+    if dialog.HookScript and not dialog.isStrataHooked then
+        dialog.isStrataHooked = true
+        dialog:HookScript("OnShow", function(s)
+            if s.SetFrameStrata then s:SetFrameStrata("FULLSCREEN_DIALOG") end
+            if s.SetFrameLevel then s:SetFrameLevel(1500) end
+        end)
+    end
+    if dialog.isPositionHooked then return end
     dialog.isPositionHooked = true
 
     dialog:HookScript("OnDragStop", function(self)
@@ -201,6 +211,11 @@ end
 
 if lib.internal and lib.internal.dialog then
     SetupPersistentDialogPosition(lib.internal.dialog)
+end
+
+if lib.internal and lib.internal.extension then
+    if lib.internal.extension.SetFrameStrata then lib.internal.extension:SetFrameStrata("FULLSCREEN_DIALOG") end
+    if lib.internal.extension.SetFrameLevel then lib.internal.extension:SetFrameLevel(1500) end
 end
 
 if lib.internal and lib.internal.CreateDialog then

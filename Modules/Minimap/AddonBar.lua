@@ -543,6 +543,12 @@ function MinimapMod:CreateAddonBarExpander()
 
     local expander = CreateFrame("Button", "RoithiAddonBarExpander", self.addonBar, "BackdropTemplate")
     expander:SetSize(30, 14)
+    if expander.SetFrameStrata then
+        expander:SetFrameStrata("HIGH")
+    end
+    if expander.SetFrameLevel then
+        expander:SetFrameLevel(75)
+    end
     if expander.SetBackdrop then
         expander:SetBackdrop({
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
@@ -657,7 +663,7 @@ function MinimapMod:CreateAddonBar()
         bar:SetFrameStrata("HIGH")
     end
     if bar.SetFrameLevel then
-        bar:SetFrameLevel(20)
+        bar:SetFrameLevel(70)
     end
     bar:SetClampedToScreen(true)
     bar:SetMovable(true)
@@ -1172,7 +1178,7 @@ function MinimapMod:UpdateAddonBarLayout()
                     local iconTex = FindButtonIcon(btn) or "Interface\\Icons\\INV_Misc_QuestionMark"
                     if custom.icon.SetTexture then custom.icon:SetTexture(iconTex) end
                     if custom.icon.SetAllPoints then custom.icon:SetAllPoints(custom) end
-                    if custom.icon.SetTexCoord then custom.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+                    if custom.icon.SetTexCoord then pcall(custom.icon.SetTexCoord, custom.icon, 0.08, 0.92, 0.08, 0.92) end
                 end
 
                 custom:EnableMouse(false)
@@ -1191,7 +1197,7 @@ function MinimapMod:UpdateAddonBarLayout()
                 local iconTex = FindButtonIcon(btn) or (btn.icon and btn.icon.GetTexture and btn.icon:GetTexture()) or "Interface\\Icons\\INV_Gizmo_02"
                 if custom.icon.SetTexture then custom.icon:SetTexture(iconTex) end
                 if custom.icon.SetAllPoints then custom.icon:SetAllPoints(custom) end
-                if custom.icon.SetTexCoord then custom.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+                if custom.icon.SetTexCoord then pcall(custom.icon.SetTexCoord, custom.icon, 0.08, 0.92, 0.08, 0.92) end
             end
 
             local function CleanTexture(region)
@@ -1227,13 +1233,13 @@ function MinimapMod:UpdateAddonBarLayout()
 
             local bIcon = btn.icon or btn.Icon or _G[btn:GetName() and (btn:GetName() .. "Icon")]
             if bIcon and bIcon.SetTexCoord then
-                bIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                pcall(bIcon.SetTexCoord, bIcon, 0.08, 0.92, 0.08, 0.92)
                 if bIcon.ClearAllPoints then bIcon:ClearAllPoints() end
                 if bIcon.SetAllPoints then bIcon:SetAllPoints(btn) end
             end
 
-            local barLevel = (self.addonBar and self.addonBar.GetFrameLevel and self.addonBar:GetFrameLevel()) or 20
-            local barStrata = (self.addonBar and self.addonBar.GetFrameStrata and self.addonBar:GetFrameStrata()) or "HIGH"
+            local barLevel = (self.addonBar and self.addonBar.GetFrameLevel and self.addonBar:GetFrameLevel()) or 70
+    local barStrata = (self.addonBar and self.addonBar.GetFrameStrata and self.addonBar:GetFrameStrata()) or "HIGH"
 
             if custom.SetFrameStrata then
                 custom:SetFrameStrata(barStrata)
@@ -1387,7 +1393,7 @@ function MinimapMod:UpdateAddonBarLayout()
     elseif growDir == "UP_RIGHT" then
         primAxis, primSign, secSign = "Y", 1, 1
     else
-        primAxis, primSign, secSign = "X", -1, -1
+        primAxis, primSign, secSign = "Y", 1, -1
     end
 
     -- Screen-edge capacity detection

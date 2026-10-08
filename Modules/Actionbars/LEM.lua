@@ -109,33 +109,27 @@ function AB:SetupLEM()
                     end,
                 },
                 {
-                    name = L["Buttons Per Row"],
-                    kind = LEM.SettingType.Slider,
-                    minValue = 1,
-                    maxValue = 12,
-                    valueStep = 1,
-                    formatter = function(v) return string.format("%.0f", v) end,
-                    get = function() return self.db[barKey] and self.db[barKey].buttonsPerRow or 12 end,
-                    set = function(_, val)
-                        self.db[barKey] = self.db[barKey] or {}
-                        self.db[barKey].buttonsPerRow = val
-                        self.db[barKey].numRows = nil
-                        self:LayoutBar(barKey)
-                    end,
-                },
-                {
                     name = L["Number of Rows"] or "Number of Rows",
                     kind = LEM.SettingType.Slider,
                     minValue = 1,
-                    maxValue = 12,
+                    maxValue = maxBarCount,
                     valueStep = 1,
-                    formatter = function(v) return string.format("%.0f", v) end,
-                    get = function() return self.db[barKey] and self.db[barKey].numRows or 1 end,
+                    formatter = function(v)
+                        local maxBtn = self.db[barKey] and self.db[barKey].maxButtons or maxBarCount
+                        local nearest = self:GetNearestDivisor(v, maxBtn)
+                        return string.format("%.0f", nearest)
+                    end,
+                    get = function()
+                        local maxBtn = self.db[barKey] and self.db[barKey].maxButtons or maxBarCount
+                        local cur = self.db[barKey] and self.db[barKey].numRows or 1
+                        return self:GetNearestDivisor(cur, maxBtn)
+                    end,
                     set = function(_, val)
                         self.db[barKey] = self.db[barKey] or {}
+                        local maxBtn = self.db[barKey] and self.db[barKey].maxButtons or maxBarCount
+                        val = self:GetNearestDivisor(val, maxBtn)
                         self.db[barKey].numRows = val
-                        local maxBtn = self.db[barKey].maxButtons or maxBarCount
-                        self.db[barKey].buttonsPerRow = math.ceil(maxBtn / val)
+                        self.db[barKey].buttonsPerRow = math.floor(maxBtn / val)
                         self:LayoutBar(barKey)
                     end,
                 },
@@ -152,6 +146,10 @@ function AB:SetupLEM()
                     set = function(_, val)
                         self.db[barKey] = self.db[barKey] or {}
                         self.db[barKey].maxButtons = val
+                        local curRows = self.db[barKey].numRows or 1
+                        local newRows = self:GetNearestDivisor(curRows, val)
+                        self.db[barKey].numRows = newRows
+                        self.db[barKey].buttonsPerRow = math.floor(val / newRows)
                         self:LayoutBar(barKey)
                     end,
                 })

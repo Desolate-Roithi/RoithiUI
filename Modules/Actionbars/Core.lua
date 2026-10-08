@@ -33,6 +33,35 @@ AB.defaultSettings = {
     zoneAction = { enabled = true, buttonSize = 52, maxButtons = 1, point = "CENTER", x = 0, y = -160, alpha = 1.0 },
 }
 
+function AB:GetValidDivisors(count)
+    local divisors = {}
+    count = tonumber(count) or 12
+    if count <= 0 then count = 1 end
+    for i = 1, count do
+        if count % i == 0 then
+            table.insert(divisors, i)
+        end
+    end
+    return divisors
+end
+
+function AB:GetNearestDivisor(val, count)
+    local divisors = self:GetValidDivisors(count)
+    if #divisors == 0 then return 1 end
+    val = tonumber(val) or 1
+    local best = divisors[1]
+    local minDiff = math.abs(val - best)
+    for i = 2, #divisors do
+        local d = divisors[i]
+        local diff = math.abs(val - d)
+        if diff < minDiff then
+            minDiff = diff
+            best = d
+        end
+    end
+    return best
+end
+
 function AB:ToggleQuickKeybind()
     if _G.InCombatLockdown and _G.InCombatLockdown() then
         if _G.UIErrorsFrame then
@@ -246,3 +275,32 @@ function AB:OnUpdateState()
         end
     end
 end
+
+function AB:RefreshProfile()
+    self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Actionbars or self.defaultSettings
+    for k, v in pairs(self.defaultSettings) do
+        if type(v) == "table" and not self.db[k] then
+            self.db[k] = SafeCopyTable(v)
+        end
+    end
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.queuedLayout = true
+        return
+    end
+    if self.LayoutAllBars then
+        self:LayoutAllBars()
+    end
+    if self.StyleAllBars then
+        self:StyleAllBars()
+    end
+    if self.UpdateAllEmptyButtons then
+        self:UpdateAllEmptyButtons()
+    end
+    local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
+    if LEM and LEM.RefreshFrameSettings and self.bars then
+        for _, bar in pairs(self.bars) do
+            LEM:RefreshFrameSettings(bar)
+        end
+    end
+end
+AB.RefreshSettings = AB.RefreshProfile

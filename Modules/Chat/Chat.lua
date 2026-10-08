@@ -5,6 +5,7 @@ local ChatMod = RoithiUI:NewModule("Chat", "AceEvent-3.0", "AceHook-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
 local LibRoithi = LibStub("LibRoithi-1.0")
 local LSM = LibStub("LibSharedMedia-3.0", true)
+local LEM = LibStub("LibEditMode-Roithi", true) or LibStub("LibEditMode-1.0", true)
 
 ChatMod.displayName = L["Chat"] or "Chat"
 ChatMod.description = L["Modern minimalist chat reskin with restylable background, edit box, and tabs."] or "Modern minimalist chat reskin with restylable background, edit box, and tabs."
@@ -13,6 +14,11 @@ ChatMod.dbKey = "Chat"
 
 ChatMod.defaultSettings = {
     enabled = true,
+    point = "BOTTOMLEFT",
+    x = 0,
+    y = 30,
+    width = 460,
+    height = 200,
     showBackground = true,
     backgroundColor = { r = 0.03, g = 0.045, b = 0.05, a = 0.65 },
     showBorder = true,
@@ -467,6 +473,7 @@ function ChatMod:OnEnable()
     self:ApplyTimestampFormat()
     self:UpdateButtonsDock()
     self:ApplyScreenClamping()
+    self:RegisterWithEditMode()
 
     -- Hook EditModeManagerFrame to ensure chat clamp insets never restrict edge movement
     if _G.EditModeManagerFrame and not self.editModeHooked and hooksecurefunc then
@@ -659,6 +666,94 @@ function ChatMod:UpdateBackgroundPosition()
 
     if self.UpdateEditModeSelection then
         self:UpdateEditModeSelection(cf1)
+    end
+end
+
+function ChatMod:ApplyChatPosition()
+    local cf1 = _G.ChatFrame1
+    if not cf1 then return end
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+
+    local pt = self.db.point or "BOTTOMLEFT"
+    local x = self.db.x or 0
+    local y = self.db.y or 30
+    local w = self.db.width or 460
+    local h = self.db.height or 200
+
+    cf1:ClearAllPoints()
+    cf1:SetPoint(pt, UIParent, pt, x, y)
+    if cf1.SetSize then
+        cf1:SetSize(w, h)
+    end
+
+    self:UpdateBackgroundPosition()
+    if self.UpdateButtonsDock then
+        self:UpdateButtonsDock()
+    end
+end
+
+function ChatMod:RegisterWithEditMode()
+    local cf1 = _G.ChatFrame1
+    if not cf1 or not LEM or cf1.roithiEditModeRegistered then return end
+    cf1.roithiEditModeRegistered = true
+
+    if cf1.SetMovable then cf1:SetMovable(true) end
+    if cf1.SetClampedToScreen then cf1:SetClampedToScreen(self.db.clampToScreen == true) end
+
+    cf1.editModeName = L["Chat"] or "Chat"
+    local defaults = { point = "BOTTOMLEFT", x = 0, y = 30 }
+
+    local function OnPositionChanged(f, _, point, x, y)
+        self.db.point = point
+        self.db.x = x
+        self.db.y = y
+        f:ClearAllPoints()
+        f:SetPoint(point, UIParent, point, x, y)
+        self:UpdateBackgroundPosition()
+        if self.UpdateButtonsDock then
+            self:UpdateButtonsDock()
+        end
+    end
+
+    if _G.Enum and _G.Enum.EditModeSystem and _G.Enum.EditModeSystem.ChatFrame and LEM.AddSystemSettings and self.GetLEMFrameSettings then
+        LEM:AddSystemSettings(_G.Enum.EditModeSystem.ChatFrame, self:GetLEMFrameSettings())
+        if LEM.AddSystemButtons then
+            LEM:AddSystemButtons(_G.Enum.EditModeSystem.ChatFrame, {
+                {
+                    text = L["Open Full Settings"] or "Open Full Settings",
+                    click = function()
+                        if RoithiUI and RoithiUI.OpenSettings then
+                            RoithiUI:OpenSettings("chat")
+                        elseif LibStub("AceConfigDialog-3.0") then
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "interface_group", "chat")
+                            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                        end
+                    end,
+                },
+            })
+        end
+    end
+
+    if not (_G.Enum and _G.Enum.EditModeSystem and _G.Enum.EditModeSystem.ChatFrame) then
+        LEM:AddFrame(cf1, OnPositionChanged, defaults)
+        if LEM.AddFrameSettings and self.GetLEMFrameSettings then
+            LEM:AddFrameSettings(cf1, self:GetLEMFrameSettings())
+        end
+        if LEM.AddFrameSettingsButtons then
+            LEM:AddFrameSettingsButtons(cf1, {
+                {
+                    text = L["Open Full Settings"] or "Open Full Settings",
+                    click = function()
+                        if RoithiUI and RoithiUI.OpenSettings then
+                            RoithiUI:OpenSettings("chat")
+                        elseif LibStub("AceConfigDialog-3.0") then
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "interface_group", "chat")
+                            LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
+                        end
+                    end,
+                },
+            })
+        end
     end
 end
 
@@ -1792,8 +1887,8 @@ function ChatMod:GetOrCreateChatCopyWindow()
     eb:SetMaxLetters(0)
     eb:SetAutoFocus(false)
     eb:SetFontObject("ChatFontNormal")
-    if eb.SetSpacing then eb:SetSpacing(2) end
-    if eb.SetTextInsets then eb:SetTextInsets(4, 4, 2, 2) end
+    if eb.SetSpacing then eb:SetSpacing(0) end
+    if eb.SetTextInsets then eb:SetTextInsets(4, 4, 4, 4) end
     eb:SetWidth(550)
     eb:SetScript("OnEscapePressed", function() win:Hide() end)
 
@@ -1868,18 +1963,21 @@ function ChatMod:OpenChatCopyWindow(cf)
         for i = 1, num do
             local text = cf:GetMessageInfo(i)
             if text and text ~= "" then
+
                 local clean = tostring(text)
-                clean = clean:gsub("|T.-|t", "")
                 clean = clean:gsub("|c%x%x%x%x%x%x%x%x", "")
                 clean = clean:gsub("|r", "")
-                clean = clean:gsub("|H.-|h(.-)|h", "%1")
+                clean = clean:gsub("|T.-|t", "")
+                clean = clean:gsub("|A.-|a", "")
                 clean = clean:gsub("|K.-|k", "")
+                clean = clean:gsub("|H.-|h(.-)|h", "%1")
                 table.insert(lines, clean)
             end
         end
     end
 
     local fullText = table.concat(lines, "\n")
+    if win.editBox.SetTextColor then win.editBox:SetTextColor(0.95, 0.95, 0.95, 1) end
     win.editBox:SetText(fullText)
     win:Show()
 
@@ -1900,6 +1998,7 @@ end
 
 function ChatMod:RefreshSettings()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Chat or self.defaultSettings
+    self:ApplyChatPosition()
     self:UpdateBackgroundStyle()
     self:UpdateBackgroundPosition()
     self:SkinAllChatFrames()
@@ -1909,5 +2008,9 @@ function ChatMod:RefreshSettings()
     if cf1 and _G.ChatFrame1EditBox and self.RepositionEditBox then
         self:RepositionEditBox(_G.ChatFrame1EditBox, cf1)
     end
+    if LEM and LEM.RefreshFrameSettings and cf1 then
+        LEM:RefreshFrameSettings(cf1)
+    end
 end
+ChatMod.RefreshProfile = ChatMod.RefreshSettings
 

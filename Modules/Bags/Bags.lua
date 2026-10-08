@@ -33,6 +33,7 @@ function BagsMod:OnInitialize()
     self.knownItemIDs = {}
     self.newSlots = {}
     self.hoveredNewSlots = {}
+    self.dismissedNewHighlights = {}
     self.knownSlots = {}
     self.searchText = ""
     self:RegisterPopups()
@@ -348,14 +349,35 @@ function BagsMod:IsSlotNew(bag, slot, itemData)
     return false
 end
 
+function BagsMod:ShouldShowNewHighlight(bag, slot, itemData)
+    if not itemData or not itemData.isNew then return false end
+    local b = bag or itemData.bag
+    local s = slot or itemData.slot
+    if not b or not s then return false end
+    local slotKey = GetSlotKey(b, s)
+    if self.dismissedNewHighlights and self.dismissedNewHighlights[slotKey] then
+        return false
+    end
+    if self.hoveredNewSlots and self.hoveredNewSlots[slotKey] then
+        return false
+    end
+    return true
+end
+
 function BagsMod:SetSlotNew(bag, slot, isNew)
     if not bag or not slot then return end
     local slotKey = GetSlotKey(bag, slot)
     self.newSlots = self.newSlots or {}
     if isNew then
         self.newSlots[slotKey] = true
+        if self.dismissedNewHighlights then
+            self.dismissedNewHighlights[slotKey] = nil
+        end
     else
         self.newSlots[slotKey] = nil
+        if self.dismissedNewHighlights then
+            self.dismissedNewHighlights[slotKey] = nil
+        end
     end
 end
 
@@ -367,6 +389,9 @@ function BagsMod:ClearNewSlot(bag, slot)
     end
     if self.hoveredNewSlots then
         self.hoveredNewSlots[slotKey] = nil
+    end
+    if self.dismissedNewHighlights then
+        self.dismissedNewHighlights[slotKey] = nil
     end
     if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
         pcall(_G.C_NewItems.RemoveNewItem, bag, slot)
@@ -398,9 +423,24 @@ function BagsMod:EvaluateQuestItemState(itemID, questID, isActive)
     }
 end
 
+local function HasBagShortcuts(tooltip)
+    if not tooltip or not tooltip.NumLines then return false end
+    local num = tooltip:NumLines()
+    for i = num, math.max(1, num - 5), -1 do
+        local line = _G[tooltip:GetName() .. "TextLeft" .. i]
+        if line and line.GetText then
+            local txt = line:GetText()
+            if txt and (txt:find("Favorited") or txt:find("Favorite>") or txt:find("Reassign")) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function AppendBagShortcuts(tooltip, itemID)
     if not itemID or not tooltip or not tooltip.AddLine then return end
-    if tooltip.roithiShortcutsAdded == itemID then return end
+    if HasBagShortcuts(tooltip) then return end
     local favs = (BagsMod and BagsMod.db and BagsMod.db.favorites) or {}
     local isFav = (favs[itemID] == true)
     tooltip:AddLine(" ")
@@ -411,7 +451,7 @@ local function AppendBagShortcuts(tooltip, itemID)
     end
     tooltip:AddLine("|cff00ccff<Shift + Right Click to Reassign Category>|r", 0.4, 0.8, 1.0)
     tooltip:AddLine("|cff00ff00<Drag item onto Category tab to Reassign>|r", 0.4, 0.9, 0.4)
-    tooltip.roithiShortcutsAdded = itemID
+    tooltip:Show()
 end
 
 function BagsMod:HookTooltipShortcuts()
@@ -423,7 +463,7 @@ function BagsMod:HookTooltipShortcuts()
                 local itemID = (owner.itemData and owner.itemData.itemID)
                     or (_G.C_Container and _G.C_Container.GetContainerItemID and _G.C_Container.GetContainerItemID(owner.bag, owner.slot))
                     or (_G.GetContainerItemID and _G.GetContainerItemID(owner.bag, owner.slot))
-                if itemID then
+                if itemID and not HasBagShortcuts(tooltip) then
                     AppendBagShortcuts(tooltip, itemID)
                 end
             end
@@ -435,7 +475,7 @@ function BagsMod:HookTooltipShortcuts()
                 local itemID = (owner.itemData and owner.itemData.itemID)
                     or (_G.C_Container and _G.C_Container.GetContainerItemID and _G.C_Container.GetContainerItemID(owner.bag, owner.slot))
                     or (_G.GetContainerItemID and _G.GetContainerItemID(owner.bag, owner.slot))
-                if itemID then
+                if itemID and not HasBagShortcuts(tooltip) then
                     AppendBagShortcuts(tooltip, itemID)
                 end
             end
@@ -465,6 +505,7 @@ function BagsMod:ScanInventoryOnce()
                 self.knownSlots[slotKey] = nil
                 self.newSlots[slotKey] = nil
                 if self.hoveredNewSlots then self.hoveredNewSlots[slotKey] = nil end
+                if self.dismissedNewHighlights then self.dismissedNewHighlights[slotKey] = nil end
             end
         end
     end
@@ -1195,6 +1236,11 @@ function BagsMod:CreateFooterBar()
         sortBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
         sortBtn:SetBackdropBorderColor(0.25, 0.25, 0.25, 1.0)
     end
+    local sortHl = sortBtn:CreateTexture(nil, "HIGHLIGHT")
+    sortHl:SetAllPoints(sortBtn)
+    sortHl:SetColorTexture(1, 1, 1, 0.15)
+    sortBtn:SetHighlightTexture(sortHl)
+
     local sortText = sortBtn:CreateFontString(nil, "OVERLAY")
     if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(sortText, "Friz Quadrata TT", 9, "OUTLINE")
@@ -1208,6 +1254,32 @@ function BagsMod:CreateFooterBar()
             _G.C_Container.SortBags()
         elseif _G.SortBags then
             _G.SortBags()
+        end
+    end)
+    sortBtn:SetScript("OnEnter", function(b)
+        if b.SetBackdropBorderColor then
+            b:SetBackdropBorderColor(1.0, 0.82, 0.0, 1.0)
+        end
+        if b.SetBackdropColor then
+            b:SetBackdropColor(0.2, 0.2, 0.2, 0.95)
+        end
+        if _G.GameTooltip then
+            _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
+            _G.GameTooltip:ClearLines()
+            _G.GameTooltip:AddLine(L["Cleanup Bags"] or "Cleanup Bags", 1, 1, 1)
+            _G.GameTooltip:AddLine(L["Sort and organize items in your bags."] or "Sort and organize items in your bags.", 0.7, 0.7, 0.7, true)
+            _G.GameTooltip:Show()
+        end
+    end)
+    sortBtn:SetScript("OnLeave", function(b)
+        if b.SetBackdropBorderColor then
+            b:SetBackdropBorderColor(0.25, 0.25, 0.25, 1.0)
+        end
+        if b.SetBackdropColor then
+            b:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+        end
+        if _G.GameTooltip then
+            _G.GameTooltip:Hide()
         end
     end)
     self.sortButton = sortBtn
@@ -1225,6 +1297,11 @@ function BagsMod:CreateFooterBar()
         junkBtn:SetBackdropColor(0.4, 0.1, 0.1, 0.8)
         junkBtn:SetBackdropBorderColor(0.8, 0.2, 0.2, 1.0)
     end
+    local junkHl = junkBtn:CreateTexture(nil, "HIGHLIGHT")
+    junkHl:SetAllPoints(junkBtn)
+    junkHl:SetColorTexture(1, 1, 1, 0.15)
+    junkBtn:SetHighlightTexture(junkHl)
+
     local junkText = junkBtn:CreateFontString(nil, "OVERLAY")
     if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(junkText, "Friz Quadrata TT", 9, "OUTLINE")
@@ -1235,6 +1312,32 @@ function BagsMod:CreateFooterBar()
     junkText:SetText(L["Sell Junk"])
     junkBtn:SetScript("OnClick", function()
         self:SellAllJunk()
+    end)
+    junkBtn:SetScript("OnEnter", function(b)
+        if b.SetBackdropBorderColor then
+            b:SetBackdropBorderColor(1.0, 0.4, 0.4, 1.0)
+        end
+        if b.SetBackdropColor then
+            b:SetBackdropColor(0.5, 0.15, 0.15, 0.95)
+        end
+        if _G.GameTooltip then
+            _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
+            _G.GameTooltip:ClearLines()
+            _G.GameTooltip:AddLine(L["Sell Junk"] or "Sell Junk", 1, 1, 1)
+            _G.GameTooltip:AddLine(L["Automatically sell all poor quality (grey) items."] or "Automatically sell all poor quality (grey) items.", 0.7, 0.7, 0.7, true)
+            _G.GameTooltip:Show()
+        end
+    end)
+    junkBtn:SetScript("OnLeave", function(b)
+        if b.SetBackdropBorderColor then
+            b:SetBackdropBorderColor(0.8, 0.2, 0.2, 1.0)
+        end
+        if b.SetBackdropColor then
+            b:SetBackdropColor(0.4, 0.1, 0.1, 0.8)
+        end
+        if _G.GameTooltip then
+            _G.GameTooltip:Hide()
+        end
     end)
     junkBtn:Hide()
     self.junkButton = junkBtn
@@ -1288,21 +1391,26 @@ function BagsMod:OnSlotEnter(s)
         local hasTradeTimer = self:HasActiveTradeTimer(s.bag, s.slot)
         local isNew = self:IsSlotNew(s.bag, s.slot)
 
-        if isNew and not hasTradeTimer then
-            self.hoveredNewSlots = self.hoveredNewSlots or {}
-            if not self.hoveredNewSlots[slotKey] then
-                local retentionMinutes = (self.db and self.db.newItemRetentionTimer) or 20
-                if retentionMinutes < 1 then retentionMinutes = 1 elseif retentionMinutes > 240 then retentionMinutes = 240 end
-                local now = _G.GetTime and _G.GetTime() or 0
-                self.hoveredNewSlots[slotKey] = now + (retentionMinutes * 60)
-                self.newSlots = self.newSlots or {}
-                self.newSlots[slotKey] = true
-            end
-            if s.itemData then
-                s.itemData.isNew = true
-            end
+        if isNew then
+            self.dismissedNewHighlights = self.dismissedNewHighlights or {}
+            self.dismissedNewHighlights[slotKey] = true
             if s.newOverlay then
-                s.newOverlay:Show()
+                s.newOverlay:Hide()
+            end
+
+            if not hasTradeTimer then
+                self.hoveredNewSlots = self.hoveredNewSlots or {}
+                if not self.hoveredNewSlots[slotKey] then
+                    local retentionMinutes = (self.db and self.db.newItemRetentionTimer) or 20
+                    if retentionMinutes < 1 then retentionMinutes = 1 elseif retentionMinutes > 240 then retentionMinutes = 240 end
+                    local now = _G.GetTime and _G.GetTime() or 0
+                    self.hoveredNewSlots[slotKey] = now + (retentionMinutes * 60)
+                    self.newSlots = self.newSlots or {}
+                    self.newSlots[slotKey] = true
+                end
+                if s.itemData then
+                    s.itemData.isNew = true
+                end
             end
         elseif not isNew and not hasTradeTimer then
             self:ClearNewSlot(s.bag, s.slot)
@@ -1319,7 +1427,6 @@ function BagsMod:OnSlotEnter(s)
     s.isRoithiBagSlot = true
     if s.bag and s.slot and _G.GameTooltip then
         _G.GameTooltip.roithiBagSlot = s
-        _G.GameTooltip.roithiShortcutsAdded = nil
         _G.GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
         local hasItem = false
         if _G.C_Container and _G.C_Container.GetContainerItemInfo then
@@ -1538,7 +1645,7 @@ function BagsMod:AcquireItemSlot(index)
             return
         end
         if s.newOverlay then
-            if s.itemData.isNew then
+            if self:ShouldShowNewHighlight(s.bag, s.slot, s.itemData) then
                 s.newOverlay:Show()
             else
                 s.newOverlay:Hide()
@@ -1610,13 +1717,17 @@ function BagsMod:AcquireItemSlot(index)
     end
 
 
+    -- Neutralize Blizzard's ContainerFrameItemButtonMixin.OnUpdate / UpdateTooltip to prevent
+    -- GameTooltip from being re-anchored away from ANCHOR_RIGHT and having lines wiped on next frame.
+    slot.UpdateTooltip = function() end
+    slot:SetScript("OnUpdate", nil)
+
     slot:SetScript("OnEnter", function(s)
         self:OnSlotEnter(s)
     end)
     slot:SetScript("OnLeave", function(s)
         if _G.GameTooltip then
             _G.GameTooltip.roithiBagSlot = nil
-            _G.GameTooltip.roithiShortcutsAdded = nil
             _G.GameTooltip:Hide()
         end
         if s and s.needsTabRefreshOnLeave then
@@ -1693,12 +1804,22 @@ function BagsMod:UpdateInventory()
                 elseif self.newSlots[slotKey] then
                     itemInfo.isNew = true
                 end
+                if self.knownSlots[slotKey] and self.knownSlots[slotKey] ~= itemInfo.itemID then
+                    if self.dismissedNewHighlights then
+                        self.dismissedNewHighlights[slotKey] = nil
+                    end
+                    if self.hoveredNewSlots then
+                        self.hoveredNewSlots[slotKey] = nil
+                    end
+                end
                 self.knownSlots[slotKey] = itemInfo.itemID
                 self.knownItemIDs[itemInfo.itemID] = true
                 table.insert(allItems, itemInfo)
             else
                 self.knownSlots[slotKey] = nil
                 self.newSlots[slotKey] = nil
+                if self.hoveredNewSlots then self.hoveredNewSlots[slotKey] = nil end
+                if self.dismissedNewHighlights then self.dismissedNewHighlights[slotKey] = nil end
                 if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
                     pcall(_G.C_NewItems.RemoveNewItem, bag, slot)
                 end
@@ -1927,7 +2048,7 @@ function BagsMod:UpdateInventory()
 
                 -- New item highlight
                 if slotFrame.newOverlay then
-                    if itemData.isNew then
+                    if self:ShouldShowNewHighlight(slotFrame.bag, slotFrame.slot, itemData) then
                         slotFrame.newOverlay:Show()
                     else
                         slotFrame.newOverlay:Hide()
@@ -2032,3 +2153,22 @@ function BagsMod:OnBagCooldownUpdate()
         end
     end
 end
+
+function BagsMod:RefreshProfile()
+    self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Bags or self.defaultSettings
+    if self.UpdateBagBarLayout then
+        self:UpdateBagBarLayout()
+    end
+    if self.mainFrame and self.mainFrame.ClearAllPoints and self.mainFrame.SetPoint then
+        local pos = self.db.mainBagPosition
+        if pos and pos.point then
+            self.mainFrame:ClearAllPoints()
+            self.mainFrame:SetPoint(pos.point, UIParent, pos.point, pos.x or 0, pos.y or 0)
+        end
+    end
+    local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
+    if LEM and LEM.RefreshFrameSettings and self.bagBar then
+        LEM:RefreshFrameSettings(self.bagBar)
+    end
+end
+BagsMod.RefreshSettings = BagsMod.RefreshProfile

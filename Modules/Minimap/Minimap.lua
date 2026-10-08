@@ -200,8 +200,8 @@ function MinimapMod:ReparentFramesAfterEditMode()
         local f = entry.frame
         if f then
             local isInteractive = (entry.key ~= "zoneTextAnchor" and entry.key ~= "coordsAnchor")
-            local targetStrata = isInteractive and "MEDIUM" or "LOW"
-            local targetLevel = isInteractive and 30 or 5
+            local targetStrata = "HIGH"
+            local targetLevel = isInteractive and 60 or 40
             local isDetached = (entry.key == "addonBar" and self.db.addonBarAttached == false) or (self.db.detached and self.db.detached[entry.key])
             if isDetached then
                 f:SetParent(UIParent)
@@ -829,10 +829,10 @@ function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
         f:SetScale(1.0)
         local isInteractive = (key ~= "zoneTextAnchor" and key ~= "coordsAnchor")
         if f.SetFrameStrata then
-            f:SetFrameStrata(isInteractive and "MEDIUM" or "LOW")
+            f:SetFrameStrata("HIGH")
         end
         if f.SetFrameLevel then
-            f:SetFrameLevel(isInteractive and 30 or 5)
+            f:SetFrameLevel(isInteractive and 60 or 40)
         end
         f:ClearAllPoints()
 
@@ -858,10 +858,10 @@ function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
         f:SetScale(1.0)
         local isInteractive = (key ~= "zoneTextAnchor" and key ~= "coordsAnchor")
         if f.SetFrameStrata then
-            f:SetFrameStrata(isInteractive and "MEDIUM" or "LOW")
+            f:SetFrameStrata("HIGH")
         end
         if f.SetFrameLevel then
-            f:SetFrameLevel(isInteractive and 30 or 5)
+            f:SetFrameLevel(isInteractive and 60 or 40)
         end
         f:ClearAllPoints()
 
@@ -1028,10 +1028,10 @@ local function CreateAnchorFrame(mod, key, name, editModeName, w, h, defaultPos)
         f:SetSize(w, h)
         local isInteractive = (key ~= "zoneTextAnchor" and key ~= "coordsAnchor")
         if f.SetFrameStrata then
-            f:SetFrameStrata(isInteractive and "MEDIUM" or "LOW")
+            f:SetFrameStrata("HIGH")
         end
         if f.SetFrameLevel then
-            f:SetFrameLevel(isInteractive and 30 or 5)
+            f:SetFrameLevel(isInteractive and 60 or 40)
         end
         f:SetClampedToScreen(true)
         f:SetMovable(true)
@@ -1430,20 +1430,38 @@ function MinimapMod:SharePlayerCoordinates()
         coordStr = string.format("/way %.1f %.1f", x * 100, y * 100)
     end
 
-    local editBox = _G.ChatEdit_GetActiveWindow and _G.ChatEdit_GetActiveWindow()
-    if not editBox then
-        if _G.ChatFrame1EditBox and _G.ChatFrame1EditBox.IsShown and _G.ChatFrame1EditBox:IsShown() then
-            editBox = _G.ChatFrame1EditBox
-        elseif _G.ChatEdit_OpenChat then
-            _G.ChatEdit_OpenChat("", _G.SELECTED_DOCK_FRAME)
-            editBox = _G.ChatEdit_GetActiveWindow and _G.ChatEdit_GetActiveWindow()
-        end
+    local copied = false
+    if _G.CopyToClipboard then
+        _G.CopyToClipboard(coordStr)
+        copied = true
+    elseif _G.C_System and _G.C_System.CopyToClipboard then
+        _G.C_System.CopyToClipboard(coordStr)
+        copied = true
     end
 
-    if editBox then
-        editBox:SetText(coordStr)
-        if editBox.HighlightText then editBox:HighlightText() end
-        if editBox.SetFocus then editBox:SetFocus() end
+    if copied then
+        local msg = string.format(L["Coordinates copied to clipboard: %s"] or "Coordinates copied to clipboard: %s", coordStr)
+        if _G.UIErrorsFrame and _G.UIErrorsFrame.AddMessage then
+            _G.UIErrorsFrame:AddMessage(msg, 0.2, 1.0, 0.2)
+        elseif _G.DEFAULT_CHAT_FRAME and _G.DEFAULT_CHAT_FRAME.AddMessage then
+            _G.DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00" .. msg .. "|r")
+        end
+    else
+        local editBox = _G.ChatEdit_GetActiveWindow and _G.ChatEdit_GetActiveWindow()
+        if not editBox then
+            if _G.ChatFrame1EditBox and _G.ChatFrame1EditBox.IsShown and _G.ChatFrame1EditBox:IsShown() then
+                editBox = _G.ChatFrame1EditBox
+            elseif _G.ChatEdit_OpenChat then
+                _G.ChatEdit_OpenChat("", _G.SELECTED_DOCK_FRAME)
+                editBox = _G.ChatEdit_GetActiveWindow and _G.ChatEdit_GetActiveWindow()
+            end
+        end
+
+        if editBox then
+            editBox:SetText(coordStr)
+            if editBox.HighlightText then editBox:HighlightText() end
+            if editBox.SetFocus then editBox:SetFocus() end
+        end
     end
 end
 
@@ -1466,7 +1484,7 @@ function MinimapMod:SetupCoordsWidget(anchor)
         if _G.GameTooltip then
             _G.GameTooltip:SetOwner(f, "ANCHOR_BOTTOM")
             _G.GameTooltip:AddLine(L["Minimap Coordinates"] or "Minimap Coordinates", 1, 1, 1)
-            _G.GameTooltip:AddLine(L["Click to insert map pin / way coordinates into chat."] or "Click to insert map pin / way coordinates into chat.", 0.2, 0.8, 1, true)
+            _G.GameTooltip:AddLine(L["Click to copy coordinates to clipboard."] or "Click to copy coordinates to clipboard.", 0.2, 0.8, 1, true)
             _G.GameTooltip:Show()
         end
     end)
@@ -2508,3 +2526,63 @@ if _G.SlashCmdList then
     end
     _G.SLASH_ROITHIDEBUG1 = "/roithidebug"
 end
+
+function MinimapMod:RefreshProfile()
+    self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap or self.defaultSettings
+    if self.db then
+        self.db.addonBarButtons = self.db.addonBarButtons or {}
+        self.db.addonBarButtonOrder = self.db.addonBarButtonOrder or {}
+        self.db.offsets = self.db.offsets or {}
+    end
+
+    if self.container then
+        local defaults = ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Minimap and ns.Defaults.profile.Minimap.container or { point = "TOPRIGHT", x = -20, y = -20 }
+        local offset = self.db.offsets and self.db.offsets["container"] or defaults
+        self.container:ClearAllPoints()
+        self.container:SetPoint(offset.point or defaults.point, UIParent, offset.point or defaults.point, offset.x or defaults.x, offset.y or defaults.y)
+    end
+
+    self:UpdateMinimapShape()
+    self:UpdateMinimapSize()
+    self:UpdateMinimapBorder()
+
+    local anchorKeys = {
+        "zoneTextAnchor",
+        "mailAnchor",
+        "trackingAnchor",
+        "lfgAnchor",
+        "landingAnchor",
+        "zoomInAnchor",
+        "zoomOutAnchor",
+        "calendarAnchor",
+    }
+    for _, key in ipairs(anchorKeys) do
+        if self[key] then
+            self:UpdateAnchorPosition(key)
+        end
+    end
+
+    self:UpdateAllElementVisibilities()
+    self:UpdateDataTextBarVisibility()
+    self:UpdateDataTextBarLayout()
+
+    if self.addonBar then
+        self:UpdateAddonBarVisibility()
+        self:UpdateAddonBarAttachment()
+        self:UpdateAddonBarLayout()
+        self:UpdateAddonBarAutohide()
+    end
+
+    local objMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Objectives", true)
+    if objMod and objMod.ApplyPosition then
+        objMod:ApplyPosition()
+    end
+
+    if LEM and LEM.RefreshFrameSettings and self.container then
+        LEM:RefreshFrameSettings(self.container)
+        if self.addonBar then
+            LEM:RefreshFrameSettings(self.addonBar)
+        end
+    end
+end
+MinimapMod.RefreshSettings = MinimapMod.RefreshProfile

@@ -202,7 +202,24 @@ function UF:CreateIndicators(frame)
         ApplySettings(frame.RoleIndicator, "role", 16, "TOPLEFT", nil, 14, 8)
         ApplySettings(frame.PhaseIndicator, "phase", 22, "CENTER", nil, 0, 0)
         ApplySettings(frame.ResurrectIndicator, "resurrect", 24, "CENTER", nil, 0, 0)
-        ApplySettings(frame.PvPIndicator, "pvp", 24, "CENTER", "TOPRIGHT", -10, 10)
+        local pvpDefPoint = (frame.unit == "player") and "TOPRIGHT" or "CENTER"
+        local pvpDefRel = (frame.unit == "player") and "TOPRIGHT" or "TOPRIGHT"
+        local pvpDefX = (frame.unit == "player") and 0 or -10
+        local pvpDefY = (frame.unit == "player") and 0 or 10
+        ApplySettings(frame.PvPIndicator, "pvp", 24, pvpDefPoint, pvpDefRel, pvpDefX, pvpDefY)
+
+        if frame.PvPTimerText and frame.PvPIndicator then
+            local timer = frame.PvPTimerText
+            local pvpTexture = frame.PvPIndicator
+            local s = (db and db.pvp) or {}
+            local pt = s.point or pvpDefPoint
+            timer:ClearAllPoints()
+            if pt and pt:find("RIGHT") then
+                timer:SetPoint("RIGHT", pvpTexture, "LEFT", -2, 0)
+            else
+                timer:SetPoint("LEFT", pvpTexture, "RIGHT", 2, 0)
+            end
+        end
         ApplySettings(frame.QuestIndicator, "quest", 20, "CENTER", "TOPLEFT", 10, 10)
         ApplySettings(frame.TankAssistIndicator, "tankassist", 16, "TOPLEFT", nil, 0, 16)
     end

@@ -88,7 +88,7 @@ for catKey, spellList in pairs(Totems.spellsDatabase) do
 end
 
 
-Totems.defaultSettings = {
+Totems.defaultSettings = (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Totems) or {
     enabled = true,
     showOnAllClasses = false,
     buttonSize = 36,
@@ -104,8 +104,8 @@ Totems.defaultSettings = {
     showShield = true,
     showWeapon = true,
     point = "BOTTOM",
-    x = 0,
-    y = 150,
+    x = -320,
+    y = 190,
     fontSize = 11,
     font = "Friz Quadrata TT",
     borderColor = { r = 0.2, g = 0.2, b = 0.2, a = 1.0 },
@@ -1403,108 +1403,21 @@ function Totems:UpdateShieldSlot()
     self:UpdateSlotBorder("shield")
 end
 
-local SHAMAN_WEAPON_BUFFS = {
-    -- Modern WoW (Retail / Midnight 12.0/12.1)
-    [33757] = true,   -- Windfury Weapon
-    [318038] = true,  -- Flametongue Weapon
-    [382021] = true,  -- Earthliving Weapon
-    [382022] = true,  -- Earthliving Weapon (alternate)
-    [382024] = true,  -- Tidecaller's Guard
-    -- Classic / TBC / WotLK / Cataclysm IDs
-    [8232] = true, [8235] = true, [10486] = true, [16362] = true, [25505] = true, [58804] = true,
-    [8024] = true, [8027] = true, [8030] = true, [16339] = true, [16341] = true, [16342] = true, [25489] = true, [58789] = true, [58790] = true,
-    [8017] = true, [8018] = true, [8019] = true, [10399] = true, [16314] = true, [16315] = true, [16316] = true,
-    [8033] = true, [8038] = true, [10459] = true, [16355] = true, [16356] = true, [25500] = true, [58796] = true,
-    [51730] = true, [51988] = true, [51991] = true, [51992] = true, [51993] = true, [51994] = true,
-}
 
 function Totems:UpdateWeaponSlot()
-    local state = self.slotStates.weapon
-    local btn = self.buttons.weapon
-    local isActive = false
-    local expiration = 0
-    local count = 0
-
-    -- 1. Modern WoW / Midnight 12.0/12.1 player aura check (AllowedWhenTainted)
-    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-        for spellId in pairs(SHAMAN_WEAPON_BUFFS) do
-            local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellId)
-            if ok and aura then
-                isActive = true
-                count = aura.applications or aura.charges or 0
-                expiration = aura.expirationTime or 0
-                break
-            end
-        end
+    local state = self.slotStates and self.slotStates.weapon
+    if state then
+        state.isActive = false
+        state.expirationTime = 0
+        state.count = 0
     end
 
-    -- 2. Modern WoW C_PaperDollInfo temporary enchant check (INVSLOT_MAINHAND=16, INVSLOT_OFFHAND=17)
-    if not isActive and _G.C_PaperDollInfo and _G.C_PaperDollInfo.GetTemporaryEnchantmentInfo then
-        local mhSlot = (_G.INVSLOT_MAINHAND or 16)
-        local ohSlot = (_G.INVSLOT_OFFHAND or 17)
-        local okMh, mhInfo = pcall(_G.C_PaperDollInfo.GetTemporaryEnchantmentInfo, mhSlot)
-        local okOh, ohInfo = pcall(_G.C_PaperDollInfo.GetTemporaryEnchantmentInfo, ohSlot)
-
-        if okMh and mhInfo then
-            isActive = true
-            count = mhInfo.chargesRemaining or 0
-            if mhInfo.hasExpirationTime and mhInfo.remainingTimeMs and mhInfo.remainingTimeMs > 0 then
-                expiration = GetTime() + (mhInfo.remainingTimeMs / 1000)
-            end
-        elseif okOh and ohInfo then
-            isActive = true
-            count = ohInfo.chargesRemaining or 0
-            if ohInfo.hasExpirationTime and ohInfo.remainingTimeMs and ohInfo.remainingTimeMs > 0 then
-                expiration = GetTime() + (ohInfo.remainingTimeMs / 1000)
-            end
-        end
-    end
-
-    -- 3. Legacy / Classic Era GetWeaponEnchantInfo fallback
-    if not isActive and GetWeaponEnchantInfo then
-        local ok, hasMH, mhExp, mhCount, _, hasOH, ohExp, ohCount = pcall(GetWeaponEnchantInfo)
-        if ok then
-            if hasMH then
-                isActive = true
-                if mhExp and mhExp > 0 then
-                    expiration = GetTime() + (mhExp / 1000)
-                end
-                count = mhCount or 0
-            elseif hasOH then
-                isActive = true
-                if ohExp and ohExp > 0 then
-                    expiration = GetTime() + (ohExp / 1000)
-                end
-                count = ohCount or 0
-            end
-        end
-    end
-
-    -- 4. Legacy Classic Era UnitAura fallback (OOC-only: UnitAura is secret-restricted when tainted in combat)
-    if not isActive and UnitAura and not InCombatLockdown() then
-        for i = 1, 40 do
-            local ok, name, _, buffCount, _, _, expirationTime, _, _, _, spellId = pcall(UnitAura, "player", i, "HELPFUL")
-            if not ok or not name then break end
-            if (spellId and SHAMAN_WEAPON_BUFFS[spellId]) or
-               (name and (name:find("Windfury") or name:find("Flametongue") or name:find("Rockbiter") or name:find("Frostbrand") or name:find("Earthliving")
-                          or name:find("Windzorn") or name:find("Flammenzunge") or name:find("Felsbeißer") or name:find("Frostbrand") or name:find("Erdenleben"))) then
-                isActive = true
-                count = buffCount or 0
-                expiration = expirationTime or 0
-                break
-            end
-        end
-    end
-
-    state.isActive = isActive
-    state.expirationTime = expiration
-    state.count = count
-
+    local btn = self.buttons and self.buttons.weapon
     if btn then
-        if count and count > 1 then
-            btn.countText:SetText(tostring(count))
-        else
-            btn.countText:SetText("")
+        if btn.countText then btn.countText:SetText("") end
+        if btn.timerText then
+            btn.timerText:SetText("")
+            btn.timerText:Hide()
         end
     end
     self:UpdateSlotBorder("weapon")
@@ -1525,7 +1438,7 @@ function Totems:UpdateSlotBorder(catKey)
             btn.selectionBorder:Show()
         end
         btn:SetBackdropBorderColor(1.0, 0.85, 0.0, 1.0)
-    elseif state and state.isActive then
+    elseif catKey ~= "weapon" and state and state.isActive then
         if btn.selectionHighlight then btn.selectionHighlight:Hide() end
         if btn.selectionBorder then
             local c = self.db.activeBorderColor or { r = 0.2, g = 0.8, b = 0.2, a = 1.0 }
@@ -1585,7 +1498,12 @@ function Totems:OnTick()
                     btn.cooldownText:Hide()
                 end
             end
-            if state then
+            if catKey == "weapon" then
+                if btn.timerText then
+                    btn.timerText:SetText("")
+                    btn.timerText:Hide()
+                end
+            elseif state then
                 local isExpActive = false
                 local isTimedOut = false
                 if state.isActive and state.expirationTime then
@@ -1616,8 +1534,6 @@ function Totems:OnTick()
                             self:UpdateTotemSlots()
                         elseif catKey == "shield" then
                             self:UpdateShieldSlot()
-                        elseif catKey == "weapon" then
-                            self:UpdateWeaponSlot()
                         end
                     end
                 end
@@ -1704,12 +1620,12 @@ function Totems:SetupLEM()
                 maxValue = 2500,
                 valueStep = 1,
                 formatter = function(v) return string.format("%.0f", v) end,
-                get = function() return self.db.x or 0 end,
+                get = function() return self.db.x or -320 end,
                 set = function(_, val)
                     self.db.x = val
                     local p = self.db.point or "BOTTOM"
                     self.bar:ClearAllPoints()
-                    self.bar:SetPoint(p, UIParent, p, val, self.db.y or 150)
+                    self.bar:SetPoint(p, UIParent, p, val, self.db.y or 190)
                 end,
             },
             {
@@ -1719,12 +1635,12 @@ function Totems:SetupLEM()
                 maxValue = 1500,
                 valueStep = 1,
                 formatter = function(v) return string.format("%.0f", v) end,
-                get = function() return self.db.y or 150 end,
+                get = function() return self.db.y or 190 end,
                 set = function(_, val)
                     self.db.y = val
                     local p = self.db.point or "BOTTOM"
                     self.bar:ClearAllPoints()
-                    self.bar:SetPoint(p, UIParent, p, self.db.x or 0, val)
+                    self.bar:SetPoint(p, UIParent, p, self.db.x or -320, val)
                 end,
             },
             {
@@ -1786,3 +1702,19 @@ function Totems:SetupLEM()
         })
     end
 end
+
+function Totems:RefreshProfile()
+    self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Totems or self.defaultSettings
+    if self.bar and self.bar.ClearAllPoints and self.bar.SetPoint then
+        local def = ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Totems or { point = "BOTTOM", x = 0, y = 265 }
+        local pt = self.db.point or def.point
+        self.bar:ClearAllPoints()
+        self.bar:SetPoint(pt, UIParent, pt, self.db.x or def.x, self.db.y or def.y)
+    end
+    self:UpdateBarLayout()
+    local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
+    if LEM and LEM.RefreshFrameSettings and self.bar then
+        LEM:RefreshFrameSettings(self.bar)
+    end
+end
+Totems.RefreshSettings = Totems.RefreshProfile

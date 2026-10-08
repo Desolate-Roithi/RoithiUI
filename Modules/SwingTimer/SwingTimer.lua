@@ -608,14 +608,18 @@ function SwingTimer:SetupEditMode()
         local defaultPlayerPos = { point = defPlayer.point, x = defPlayer.x, y = defPlayer.y }
         LEM:AddFrame(self.playerFrame, function(f, _, newPoint, newX, newY)
             pCfg.point = newPoint
-            pCfg.x = newX
-            pCfg.y = newY
+            pCfg.x = math.floor(newX * 100 + 0.5) / 100
+            pCfg.y = math.floor(newY * 100 + 0.5) / 100
             if f and f.ClearAllPoints and f.SetPoint then
                 f:ClearAllPoints()
-                f:SetPoint(newPoint, UIParent, newPoint, newX, newY)
+                f:SetPoint(newPoint, UIParent, newPoint, pCfg.x, pCfg.y)
             end
             self:UpdateLayout()
-        end, defaultPlayerPos)
+            if self.isInEditMode then self:ShowSampleBars(true) end
+            if LEM and LEM.RefreshFrameSettings then
+                LEM:RefreshFrameSettings(f)
+            end
+        end, defaultPlayerPos, L["Player Swing Timer"] or "Player Swing Timer")
 
         if LEM.frameSelections and LEM.frameSelections[self.playerFrame] then
             local sel = LEM.frameSelections[self.playerFrame]
@@ -655,14 +659,18 @@ function SwingTimer:SetupEditMode()
         local defaultTargetPos = { point = defTarget.point, x = defTarget.x, y = defTarget.y }
         LEM:AddFrame(self.targetFrame, function(f, _, newPoint, newX, newY)
             tCfg.point = newPoint
-            tCfg.x = newX
-            tCfg.y = newY
+            tCfg.x = math.floor(newX * 100 + 0.5) / 100
+            tCfg.y = math.floor(newY * 100 + 0.5) / 100
             if f and f.ClearAllPoints and f.SetPoint then
                 f:ClearAllPoints()
-                f:SetPoint(newPoint, UIParent, newPoint, newX, newY)
+                f:SetPoint(newPoint, UIParent, newPoint, tCfg.x, tCfg.y)
             end
             self:UpdateLayout()
-        end, defaultTargetPos)
+            if self.isInEditMode then self:ShowSampleBars(true) end
+            if LEM and LEM.RefreshFrameSettings then
+                LEM:RefreshFrameSettings(f)
+            end
+        end, defaultTargetPos, L["Target Swing Timer"] or "Target Swing Timer")
 
         if LEM.frameSelections and LEM.frameSelections[self.targetFrame] then
             local sel = LEM.frameSelections[self.targetFrame]
@@ -706,8 +714,16 @@ function SwingTimer:SetupEditMode()
     if LEM.RegisterCallback and not self.lemCallbackRegistered then
         LEM:RegisterCallback("enter", function()
             self.isInEditMode = true
-            SetClickthrough(self.playerFrame, true)
-            SetClickthrough(self.targetFrame, true)
+            SetClickthrough(self.playerFrame, false)
+            SetClickthrough(self.targetFrame, false)
+            if self.playerFrame then
+                self.playerFrame:EnableMouse(true)
+                self.playerFrame:SetMovable(true)
+            end
+            if self.targetFrame then
+                self.targetFrame:EnableMouse(true)
+                self.targetFrame:SetMovable(true)
+            end
             for _, f in ipairs({ self.playerFrame, self.targetFrame }) do
                 if f and LEM.frameSelections and LEM.frameSelections[f] then
                     local sel = LEM.frameSelections[f]
@@ -725,6 +741,8 @@ function SwingTimer:SetupEditMode()
         end)
         LEM:RegisterCallback("exit", function()
             self.isInEditMode = false
+            if self.playerFrame then self.playerFrame:SetMovable(false) end
+            if self.targetFrame then self.targetFrame:SetMovable(false) end
             SetClickthrough(self.playerFrame, true)
             SetClickthrough(self.targetFrame, true)
             self:ShowSampleBars(false)
@@ -1475,3 +1493,13 @@ function SwingTimer:OnLeaveCombat()
         if self.targetFrame then self.targetFrame:Hide() end
     end
 end
+
+function SwingTimer:RefreshProfile()
+    self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.SwingTimer or self.defaultSettings
+    self:UpdateLayout()
+    if LEM and LEM.RefreshFrameSettings then
+        if self.playerFrame then LEM:RefreshFrameSettings(self.playerFrame) end
+        if self.targetFrame then LEM:RefreshFrameSettings(self.targetFrame) end
+    end
+end
+SwingTimer.RefreshSettings = SwingTimer.RefreshProfile

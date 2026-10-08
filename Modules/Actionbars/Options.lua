@@ -316,43 +316,36 @@ function AB:GetOptions()
                     self:LayoutBar(bKey)
                 end,
             },
-            buttonsPerRow = {
-                type = "range",
-                name = L["Buttons Per Row"],
-                order = 9,
-                min = 1,
-                max = 12,
-                step = 1,
-                get = function()
-                    local bKey = self.selectedBar or "bar1"
-                    return self.db[bKey] and self.db[bKey].buttonsPerRow or 12
-                end,
-                set = function(_, val)
-                    local bKey = self.selectedBar or "bar1"
-                    self.db[bKey] = self.db[bKey] or {}
-                    self.db[bKey].buttonsPerRow = val
-                    self.db[bKey].numRows = nil
-                    self:LayoutBar(bKey)
-                end,
-            },
             numRows = {
-                type = "range",
+                type = "select",
                 name = L["Number of Rows"] or "Number of Rows",
-                order = 9.2,
-                min = 1,
-                max = 12,
-                step = 1,
-                get = function()
+                order = 9,
+                values = function()
                     local bKey = self.selectedBar or "bar1"
-                    return self.db[bKey] and self.db[bKey].numRows or 1
-                end,
-                set = function(_, val)
-                    local bKey = self.selectedBar or "bar1"
-                    self.db[bKey] = self.db[bKey] or {}
-                    self.db[bKey].numRows = val
                     local cfg = self.BAR_CONFIGS and self.BAR_CONFIGS[bKey]
                     local maxBtn = (self.db[bKey] and self.db[bKey].maxButtons) or (cfg and cfg.count) or 12
-                    self.db[bKey].buttonsPerRow = math.ceil(maxBtn / val)
+                    local divisors = self:GetValidDivisors(maxBtn)
+                    local vals = {}
+                    for _, d in ipairs(divisors) do
+                        vals[d] = tostring(d)
+                    end
+                    return vals
+                end,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    local cfg = self.BAR_CONFIGS and self.BAR_CONFIGS[bKey]
+                    local maxBtn = (self.db[bKey] and self.db[bKey].maxButtons) or (cfg and cfg.count) or 12
+                    local cur = self.db[bKey] and self.db[bKey].numRows or 1
+                    return self:GetNearestDivisor(cur, maxBtn)
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    local cfg = self.BAR_CONFIGS and self.BAR_CONFIGS[bKey]
+                    local maxBtn = (self.db[bKey] and self.db[bKey].maxButtons) or (cfg and cfg.count) or 12
+                    val = self:GetNearestDivisor(val, maxBtn)
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].numRows = val
+                    self.db[bKey].buttonsPerRow = math.floor(maxBtn / val)
                     self:LayoutBar(bKey)
                 end,
             },
@@ -377,8 +370,13 @@ function AB:GetOptions()
                     local bKey = self.selectedBar or "bar1"
                     local cfg = self.BAR_CONFIGS and self.BAR_CONFIGS[bKey]
                     local maxCount = cfg and cfg.count or 12
+                    local clampedVal = math.min(val, maxCount)
                     self.db[bKey] = self.db[bKey] or {}
-                    self.db[bKey].maxButtons = math.min(val, maxCount)
+                    self.db[bKey].maxButtons = clampedVal
+                    local curRows = self.db[bKey].numRows or 1
+                    local newRows = self:GetNearestDivisor(curRows, clampedVal)
+                    self.db[bKey].numRows = newRows
+                    self.db[bKey].buttonsPerRow = math.floor(clampedVal / newRows)
                     self:LayoutBar(bKey)
                 end,
             },

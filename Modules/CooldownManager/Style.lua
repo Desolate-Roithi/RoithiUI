@@ -74,12 +74,34 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
 
     local vConf = self.db.viewers and self.db.viewers[viewerKey]
 
-    -- Cooldown frame countdown font
+    -- Cooldown frame countdown font & position
     local cd = itemFrame.Cooldown or (itemFrame.GetCooldownFrame and itemFrame:GetCooldownFrame())
-    if cd and cd.SetCountdownFont then
+    if cd then
         local fontName = (vConf and vConf.font) or self.db.font
         local fontPath = GetActiveFont(fontName)
-        pcall(cd.SetCountdownFont, cd, fontPath)
+        if cd.SetCountdownFont then
+            pcall(cd.SetCountdownFont, cd, fontPath)
+        end
+        local cdFS = cd.GetCountdownFontString and cd:GetCountdownFontString()
+        if cdFS then
+            local cdSize = (vConf and vConf.cooldownFontSize) or self.db.cooldownFontSize or 14
+            local cdOutline = (vConf and vConf.cooldownFontOutline) or self.db.cooldownFontOutline or "OUTLINE"
+            if cdSize == 0 then
+                if cdFS.SetFontHeight then cdFS:SetFontHeight(0) end
+                if cdFS.Hide then cdFS:Hide() end
+            else
+                if cdFS.Show then cdFS:Show() end
+                if cdFS.SetFont then
+                    cdFS:SetFont(fontPath, cdSize, cdOutline)
+                end
+            end
+            local cdX = (vConf and vConf.cooldownOffsetX) or self.db.cooldownOffsetX or 0
+            local cdY = (vConf and vConf.cooldownOffsetY) or self.db.cooldownOffsetY or 0
+            if cdFS.ClearAllPoints and cdFS.SetPoint then
+                cdFS:ClearAllPoints()
+                cdFS:SetPoint("CENTER", cd, "CENTER", cdX, cdY)
+            end
+        end
     end
 
     -- Stack / Charge count fontstring styling
