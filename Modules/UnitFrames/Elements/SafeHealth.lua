@@ -45,7 +45,8 @@ local function Update(self, event, unit)
 
     if not isPlayer and UnitGUID and unit == "targettarget" then
         local guid = UnitGUID(unit)
-        if guid and (guid:find("^Player%-") or guid:find("^Item%-")) then
+        local isSecretGuid = (issecretvalue and issecretvalue(guid)) or (canaccessvalue and not canaccessvalue(guid))
+        if not isSecretGuid and guid and type(guid) == "string" and (guid:find("^Player%-") or guid:find("^Item%-")) then
             isPlayer = true
         end
     end

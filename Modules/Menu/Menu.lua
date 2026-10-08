@@ -66,9 +66,9 @@ MenuMod.defaultSettings = {
     alpha = 1.0,
     mouseover = false,
     mouseoverAlpha = 0.0,
-    point = "CENTER",
+    point = "BOTTOMLEFT",
     x = 4,
-    y = -235,
+    y = 235,
 }
 
 function MenuMod:OnInitialize()
@@ -93,6 +93,25 @@ function MenuMod:OnEnable()
 
     if self.db.styleMicroMenu ~= false then
         self:SetupMicroMenu()
+    end
+
+    if not self.updateButtonsHooked and hooksecurefunc and _G.UpdateMicroButtons then
+        hooksecurefunc("UpdateMicroButtons", function()
+            if self:IsEnabled() and self.db.styleMicroMenu ~= false then
+                for _, b in ipairs(self:GetMicroButtons()) do
+                    local nt = b.GetNormalTexture and b:GetNormalTexture()
+                    if nt then
+                        if nt.SetDesaturated then nt:SetDesaturated(false) end
+                        if nt.SetVertexColor then nt:SetVertexColor(1, 1, 1, 1) end
+                    end
+                    if b.Portrait then
+                        if b.Portrait.SetDesaturated then b.Portrait:SetDesaturated(false) end
+                        if b.Portrait.SetVertexColor then b.Portrait:SetVertexColor(1, 1, 1, 1) end
+                    end
+                end
+            end
+        end)
+        self.updateButtonsHooked = true
     end
 end
 
@@ -235,7 +254,7 @@ function MenuMod:SetupMicroMenu()
         container:SetScript("OnLeave", function() self:OnContainerLeave() end)
     end
 
-    local pt = self.db.point or "BOTTOMRIGHT"
+    local pt = self.db.point or "BOTTOMLEFT"
     local btnW = self.db.buttonWidth or 24
     local btnH = self.db.buttonHeight or 32
     local spacing = self.db.spacing or 2
@@ -247,14 +266,15 @@ function MenuMod:SetupMicroMenu()
 
     if container.ClearAllPoints then container:ClearAllPoints() end
     if container.SetPoint then
-        container:SetPoint(pt, UIParent, pt, self.db.x or -280, self.db.y or 0)
+        container:SetPoint(pt, UIParent, pt, self.db.x or 4, self.db.y or 235)
     end
 
     self.container = container
 
     if LEM and LEM.AddFrame then
         container.editModeName = L["Micro Menu"]
-        local defaults = { point = pt, x = self.db.x or -280, y = self.db.y or 0 }
+        local def = ns.Defaults.profile.Menu
+        local defaults = { point = def.point, x = def.x, y = def.y }
         LEM:AddFrame(container, function(f, _, newPoint, newX, newY)
             self.db.point = newPoint
             self.db.x = newX
@@ -277,12 +297,12 @@ function MenuMod:SetupMicroMenu()
                     maxValue = 2500,
                     valueStep = 1,
                     formatter = function(v) return string.format("%.0f", v) end,
-                    get = function() return self.db.x or -280 end,
+                    get = function() return self.db.x or 4 end,
                     set = function(_, val)
                         self.db.x = val
-                        local p = self.db.point or "BOTTOMRIGHT"
+                        local p = self.db.point or "BOTTOMLEFT"
                         container:ClearAllPoints()
-                        container:SetPoint(p, UIParent, p, val, self.db.y or 0)
+                        container:SetPoint(p, UIParent, p, val, self.db.y or 235)
                         self:LayoutMicroMenu()
                     end,
                 },
@@ -293,12 +313,12 @@ function MenuMod:SetupMicroMenu()
                     maxValue = 1500,
                     valueStep = 1,
                     formatter = function(v) return string.format("%.0f", v) end,
-                    get = function() return self.db.y or 0 end,
+                    get = function() return self.db.y or 235 end,
                     set = function(_, val)
                         self.db.y = val
-                        local p = self.db.point or "BOTTOMRIGHT"
+                        local p = self.db.point or "BOTTOMLEFT"
                         container:ClearAllPoints()
-                        container:SetPoint(p, UIParent, p, self.db.x or -280, val)
+                        container:SetPoint(p, UIParent, p, self.db.x or 4, val)
                         self:LayoutMicroMenu()
                     end,
                 },
@@ -392,10 +412,12 @@ function MenuMod:StyleMicroButton(btn)
         btn.QuickKeybindHighlightTexture:SetAlpha(0)
     end
 
-    -- Ensure normal texture and portrait are visible, fitted to button, and at full alpha
+    -- Ensure normal texture and portrait are visible, fitted to button, and at full alpha & brightness
     local norm = btn.GetNormalTexture and btn:GetNormalTexture()
     if norm then
         if norm.SetAlpha then norm:SetAlpha(1) end
+        if norm.SetDesaturated then norm:SetDesaturated(false) end
+        if norm.SetVertexColor then norm:SetVertexColor(1, 1, 1, 1) end
         if norm.ClearAllPoints then norm:ClearAllPoints() end
         if norm.SetAllPoints then norm:SetAllPoints(btn) end
     end
@@ -423,6 +445,8 @@ function MenuMod:StyleMicroButton(btn)
             btn.Portrait:SetTexCoord(0.18, 0.82, 0.18, 0.82)
         end
         if btn.Portrait.SetAlpha then btn.Portrait:SetAlpha(1) end
+        if btn.Portrait.SetDesaturated then btn.Portrait:SetDesaturated(false) end
+        if btn.Portrait.SetVertexColor then btn.Portrait:SetVertexColor(1, 1, 1, 1) end
         if btn.Portrait.Show then btn.Portrait:Show() end
     end
 
@@ -455,7 +479,7 @@ function MenuMod:StyleMicroButton(btn)
                 edgeFile = "Interface\\Buttons\\WHITE8x8",
                 edgeSize = 1,
             })
-            bg:SetBackdropColor(0, 0, 0, 0)
+            bg:SetBackdropColor(0.1, 0.1, 0.1, 0.85)
             bg:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
         end
         self.backdrops[btn] = bg

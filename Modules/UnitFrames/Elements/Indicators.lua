@@ -97,6 +97,43 @@ function UF:CreateIndicators(frame)
     pvp:Hide()
     frame.PvPIndicator = pvp
 
+    local pvpTimer = parent:CreateFontString(nil, "OVERLAY")
+    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        LibRoithi.mixins:SetFont(pvpTimer, "Expressway", 10, "OUTLINE")
+    else
+        pvpTimer:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+    end
+    pvpTimer:SetPoint("LEFT", pvp, "RIGHT", 2, 0)
+    pvpTimer:Hide()
+    frame.PvPTimerText = pvpTimer
+
+    if not frame.pvpTicker then
+        local ticker = CreateFrame("Frame", nil, frame)
+        ticker.elapsed = 0
+        ticker:SetScript("OnUpdate", function(tickerFrame, elapsed)
+            tickerFrame.elapsed = (tickerFrame.elapsed or 0) + elapsed
+            if tickerFrame.elapsed >= 0.5 then
+                tickerFrame.elapsed = 0
+                local timerText = frame.PvPTimerText
+                if timerText and frame.unit == "player" and frame.PvPIndicator and frame.PvPIndicator:IsShown() and _G.GetPVPTimer then
+                    local ok, pvpTime = pcall(_G.GetPVPTimer)
+                    if ok and pvpTime and pvpTime > 0 and pvpTime < 301000 then
+                        local totalSec = math.floor(pvpTime / 1000)
+                        local m = math.floor(totalSec / 60)
+                        local s = totalSec % 60
+                        timerText:SetText(string.format("%d:%02d", m, s))
+                        if not timerText:IsShown() then timerText:Show() end
+                    else
+                        timerText:Hide()
+                    end
+                else
+                    if timerText and timerText:IsShown() then timerText:Hide() end
+                end
+            end
+        end)
+        frame.pvpTicker = ticker
+    end
+
     -- 10. Quest Indicator
     local quest = parent:CreateTexture(nil, "OVERLAY")
     quest:SetSize(20, 20)
@@ -214,19 +251,19 @@ function UF:CreateIndicators(frame)
         end
 
         -- Resurrect
-        ShowIndicator(res, "resurrect", UnitHasIncomingResurrection(unit))
+        ShowIndicator(res, "resurrect", UnitHasIncomingResurrection and UnitHasIncomingResurrection(unit))
 
         -- Phase
-        ShowIndicator(phase, "phase", UnitPhaseReason(unit))
+        ShowIndicator(phase, "phase", UnitPhaseReason and UnitPhaseReason(unit))
 
         -- Combat
-        ShowIndicator(combat, "combat", UnitAffectingCombat(unit))
+        ShowIndicator(combat, "combat", UnitAffectingCombat and UnitAffectingCombat(unit))
 
         -- Resting
-        ShowIndicator(resting, "resting", unit == "player" and IsResting())
+        ShowIndicator(resting, "resting", unit == "player" and IsResting and IsResting())
 
         -- Leader
-        ShowIndicator(leader, "leader", UnitIsGroupLeader(unit))
+        ShowIndicator(leader, "leader", UnitIsGroupLeader and UnitIsGroupLeader(unit))
 
         -- Raid Target
         local raidIndex = GetRaidTargetIndex(unit)
@@ -318,6 +355,24 @@ function UF:CreateIndicators(frame)
             pvp:Hide()
         end
 
+        local pvpTimerFS = frame.PvPTimerText
+        if pvpTimerFS then
+            if unit == "player" and pvp:IsShown() and _G.GetPVPTimer then
+                local ok, pvpTime = pcall(_G.GetPVPTimer)
+                if ok and pvpTime and pvpTime > 0 and pvpTime < 301000 then
+                    local totalSec = math.floor(pvpTime / 1000)
+                    local m = math.floor(totalSec / 60)
+                    local s = totalSec % 60
+                    pvpTimerFS:SetText(string.format("%d:%02d", m, s))
+                    pvpTimerFS:Show()
+                else
+                    pvpTimerFS:Hide()
+                end
+            else
+                pvpTimerFS:Hide()
+            end
+        end
+
         -- Quest
         ShowIndicator(quest, "quest", UnitIsQuestBoss and UnitIsQuestBoss(unit))
 
@@ -380,6 +435,9 @@ function UF:CreateIndicators(frame)
     frame:RegisterEvent("INCOMING_RESURRECT_CHANGED", UpdateIndicators)
     frame:RegisterEvent("UNIT_TARGET", UpdateIndicators)
     frame:RegisterEvent("UPDATE_MOUSEOVER_UNIT", UpdateIndicators, true)
+    if frame.unit == "player" then
+        frame:RegisterEvent("PLAYER_FLAGS_CHANGED", UpdateIndicators, true)
+    end
 
     -- Initial
     UpdateIndicators()

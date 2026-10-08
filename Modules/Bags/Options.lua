@@ -42,6 +42,19 @@ function BagsMod:GetOptions()
                             self.db.autoSellJunk = val
                         end,
                     },
+                    newItemRetentionTimer = {
+                        type = "range",
+                        name = L["New Item Retention (Minutes)"],
+                        desc = L["How long items remain flagged as new after hovering over them (1 minute to 240 minutes / 4 hours)."],
+                        order = 3,
+                        min = 1,
+                        max = 240,
+                        step = 1,
+                        get = function() return self.db.newItemRetentionTimer or 20 end,
+                        set = function(_, val)
+                            self.db.newItemRetentionTimer = val
+                        end,
+                    },
                 },
             },
             bagBar = {

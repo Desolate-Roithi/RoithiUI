@@ -116,7 +116,12 @@ function UF:CreateAdditionalPower(frame)
         -- Name for Selection Overlay
         addPower.editModeName = "Additional Power"
 
-        local defaults = { point = "CENTER", x = 0, y = -120 }
+        local defUnit = ns.Defaults.profile.UnitFrames[frame.unit] or ns.Defaults.profile.UnitFrames.player
+        local defaults = {
+            point = defUnit.additionalPowerPoint,
+            x = defUnit.additionalPowerX,
+            y = defUnit.additionalPowerY,
+        }
 
         local function OnPosChanged(f, layoutName, point, x, y)
             local unit = frame.unit

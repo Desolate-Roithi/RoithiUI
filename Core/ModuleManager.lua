@@ -5,6 +5,20 @@ local ModuleManager = {}
 ns.ModuleManager = ModuleManager
 RoithiUI.ModuleManager = ModuleManager
 
+local function MergeMissingDefaults(target, source)
+    for k, v in pairs(source) do
+        if target[k] == nil then
+            if type(v) == "table" then
+                target[k] = CopyTable(v)
+            else
+                target[k] = v
+            end
+        elseif type(target[k]) == "table" and type(v) == "table" then
+            MergeMissingDefaults(target[k], v)
+        end
+    end
+end
+
 -- Compile defaults from all modules before AceDB is initialized
 function ModuleManager:CompileDefaults(defaultsTable)
     if not defaultsTable.profile then
@@ -18,7 +32,11 @@ function ModuleManager:CompileDefaults(defaultsTable)
         -- Register default settings if defined on the module
         if module.defaultSettings then
             local key = module.dbKey or name
-            defaultsTable.profile[key] = CopyTable(module.defaultSettings)
+            if not defaultsTable.profile[key] then
+                defaultsTable.profile[key] = CopyTable(module.defaultSettings)
+            else
+                MergeMissingDefaults(defaultsTable.profile[key], module.defaultSettings)
+            end
         end
         -- Default to Enabled = true for modules
         if defaultsTable.profile.EnabledModules[name] == nil then

@@ -109,6 +109,8 @@ function CDM:HookAllViewers()
             self.hookedViewers[viewerKey] = true
         end
     end
+    self:HookCooldownViewerSettings()
+    self:SetupEditMode()
 end
 
 function CDM:HookViewer(viewerKey, viewer)
@@ -132,12 +134,92 @@ function CDM:HookViewer(viewerKey, viewer)
         end)
     end
 
+    if viewer.OnResetItemFrame and hooksecurefunc and not viewer.roithiResetHooked then
+        hooksecurefunc(viewer, "OnResetItemFrame", function(v, itemFrame)
+            if self:IsEnabled() and self.db and self.db.enabled ~= false then
+                self:OnResetItemFrame(viewerKey, itemFrame)
+            end
+        end)
+        viewer.roithiResetHooked = true
+    end
+
     if viewer.RefreshLayout and hooksecurefunc then
         hooksecurefunc(viewer, "RefreshLayout", function(v)
             if self:IsEnabled() and self.db and self.db.enabled ~= false then
                 self:OnViewerLayoutRefreshed(viewerKey, v)
             end
         end)
+    end
+end
+
+function CDM:OnResetItemFrame(viewerKey, itemFrame)
+    if not itemFrame or not self:IsEnabled() or (self.db and self.db.enabled == false) then return end
+    self:StyleItemFrame(viewerKey, itemFrame)
+end
+
+function CDM:HookCooldownViewerSettings()
+    if not _G.CooldownViewerSettings or self.settingsTabCreated then return end
+    local parent = _G.CooldownViewerSettings
+    local groupBuffsTab = parent.GroupBuffsTab
+    if not groupBuffsTab then return end
+
+    local tab = CreateFrame("Button", "RoithiUI_CDM_SettingsTab", parent, "LargeSideTabButtonTemplate")
+    if not tab then
+        tab = CreateFrame("Button", "RoithiUI_CDM_SettingsTab", parent)
+    end
+    tab:SetSize(32, 32)
+    tab:ClearAllPoints()
+    tab:SetPoint("TOP", groupBuffsTab, "BOTTOM", 0, -3)
+
+    local icon = tab.Icon or tab:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(22, 22)
+    icon:SetPoint("CENTER")
+    icon:SetTexture("Interface\\Icons\\INV_Misc_Gear_01")
+    tab.Icon = icon
+
+    tab:SetScript("OnEnter", function(btn)
+        if _G.GameTooltip then
+            _G.GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+            _G.GameTooltip:SetText(L["RoithiUI Cooldown Manager"] or "RoithiUI Cooldown Manager")
+            _G.GameTooltip:Show()
+        end
+    end)
+    tab:SetScript("OnLeave", function()
+        if _G.GameTooltip then _G.GameTooltip:Hide() end
+    end)
+    tab:SetScript("OnClick", function()
+        local ACD = LibStub and LibStub("AceConfigDialog-3.0", true)
+        if ACD then
+            ACD:Open("RoithiUI")
+            ACD:SelectGroup("RoithiUI", "CooldownManager")
+        end
+    end)
+    self.settingsTab = tab
+    _G.RoithiUI_CDM_SettingsTab = tab
+    self.settingsTabCreated = true
+end
+
+function CDM:SetupEditMode()
+    local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
+    if not LEM or not LEM.AddFrameSettingsButtons then return end
+
+    for _, globalName in pairs(self.VIEWER_KEYS) do
+        local viewer = _G[globalName]
+        if viewer and not viewer.roithiEditModeHooked then
+            LEM:AddFrameSettingsButtons(viewer, {
+                {
+                    text = L["RoithiUI Cooldown Settings"] or "RoithiUI Cooldown Settings",
+                    click = function()
+                        local ACD = LibStub and LibStub("AceConfigDialog-3.0", true)
+                        if ACD then
+                            ACD:Open("RoithiUI")
+                            ACD:SelectGroup("RoithiUI", "CooldownManager")
+                        end
+                    end,
+                },
+            })
+            viewer.roithiEditModeHooked = true
+        end
     end
 end
 

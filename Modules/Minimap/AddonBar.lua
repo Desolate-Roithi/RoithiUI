@@ -1,4 +1,5 @@
 local addonName, AT = ...
+local ns = AT
 if AT.skipLoad then return end
 local RoithiUI = AT.RoithiUI or _G.RoithiUI
 local MinimapMod = RoithiUI:GetModule("Minimap")
@@ -239,6 +240,14 @@ local function ProtectButton(button)
         end
     end
 
+    local oldClearAllPoints = button.ClearAllPoints
+    button.oldClearAllPoints = oldClearAllPoints
+    button.ClearAllPoints = function(self)
+        if self.isAligning or (MinimapMod.db and MinimapMod.db.showAddonBar == false) then
+            oldClearAllPoints(self)
+        end
+    end
+
     button.isProtected = true
 end
 
@@ -251,6 +260,10 @@ local function UnprotectButton(button)
     if button.oldSetParent then
         button.SetParent = button.oldSetParent
         button.oldSetParent = nil
+    end
+    if button.oldClearAllPoints then
+        button.ClearAllPoints = button.oldClearAllPoints
+        button.oldClearAllPoints = nil
     end
     button.isProtected = nil
 end
@@ -516,15 +529,9 @@ function MinimapMod:CreateFlyoutTrigger()
         self:OnBarEnter()
         self.flyoutHovered = true
         self:UpdateAddonBarLayout()
-        if _G.GameTooltip then
-            _G.GameTooltip:SetOwner(ft, "ANCHOR_LEFT")
-            _G.GameTooltip:SetText(L["Hover to expand all addon buttons"] or "Hover to expand all addon buttons", 1, 1, 1)
-            _G.GameTooltip:Show()
-        end
     end)
 
     ft:SetScript("OnLeave", function()
-        if _G.GameTooltip then _G.GameTooltip:Hide() end
         self:OnBarLeave()
     end)
 
@@ -671,7 +678,7 @@ function MinimapMod:CreateAddonBar()
     self:CreateAddonBarExpander()
     self:UpdateAddonBarAttachment()
 
-    local defaults = { point = "BOTTOMLEFT", x = 10, y = 100 }
+    local defaults = ns.Defaults.profile.Minimap.defaultAnchorPositions.addonBar
 
     if LEM then
         bar.editModeName = L["Addon Button Bar"]
@@ -821,12 +828,12 @@ function MinimapMod:CreateAddonBar()
             {
                 name = L["Breakpoint (Button Amount)"] or "Breakpoint (Button Amount)",
                 kind = LEM.SettingType.Slider,
-                default = 5,
+                default = 6,
                 minValue = 1,
                 maxValue = 20,
                 valueStep = 1,
                 formatter = function(v) return string.format("%.0f", v) end,
-                get = function() return self.db.addonBarBreakpoint or self.db.addonBarColumns or 5 end,
+                get = function() return self.db.addonBarBreakpoint or self.db.addonBarColumns or 6 end,
                 set = function(_, val)
                     self.db.addonBarBreakpoint = val
                     self.db.addonBarColumns = val
@@ -1056,6 +1063,55 @@ function MinimapMod:ScanAddonButtons()
 
     self:UpdateAddonBarLayout()
     self:UpdateAddonBarOptions()
+
+    local objMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Objectives", true)
+    if objMod and objMod.ApplyPosition then
+        objMod:ApplyPosition()
+    end
+end
+
+function MinimapMod:GetAddonBarExpandedWidth()
+    local cols = (self.db and self.db.addonBarColumns) or 1
+    local btnSize = (self.db and self.db.addonBarButtonSize) or 30
+    local spacing = (self.db and self.db.addonBarSpacing) or 4
+    local count = (self.activeButtons and #self.activeButtons) or 0
+    if count == 0 and self.scannedButtons then
+        for _ in pairs(self.scannedButtons) do count = count + 1 end
+    end
+    count = math.max(1, count)
+
+    local mode = (self.db and self.db.addonBarExpansionMode) or "STANDARD"
+    local visibleCount = (self.db and self.db.addonBarVisibleCount) or 3
+    if visibleCount < 1 then visibleCount = 3 end
+
+    local baseShown
+    if mode == "ALWAYS_BASE" then
+        baseShown = math.min(count, visibleCount)
+    elseif mode == "DIRECT_ALL" then
+        baseShown = count
+    else -- "STANDARD"
+        baseShown = math.min(count, visibleCount)
+    end
+    if baseShown < 1 then baseShown = 1 end
+
+    local userBreakpoint = (self.db and self.db.addonBarBreakpoint) or (cols > 1 and cols) or 1
+    if userBreakpoint < 1 then userBreakpoint = 1 end
+
+    local growDir = self.db and self.db.addonBarGrowDirection
+    if not growDir then
+        growDir = "UP_LEFT"
+    end
+
+    local primAxis = "X"
+    if growDir == "DOWN_LEFT" or growDir == "DOWN_RIGHT" or growDir == "UP_LEFT" or growDir == "UP_RIGHT" then
+        primAxis = "Y"
+    end
+
+    local primCount = math.min(baseShown, userBreakpoint)
+    local secCount = math.ceil(baseShown / userBreakpoint)
+    local totalCols = (primAxis == "X") and primCount or secCount
+
+    return totalCols * btnSize + (totalCols + 1) * spacing
 end
 
 function MinimapMod:UpdateAddonBarLayout()
@@ -1092,6 +1148,7 @@ function MinimapMod:UpdateAddonBarLayout()
     self.addonBar:SetBackdropColor(bg.r, bg.g, bg.b, bg.a)
 
     self.db.addonBarButtons = self.db.addonBarButtons or {}
+    self.scannedButtons = self.scannedButtons or {}
     for name, btn in pairs(self.scannedButtons) do
         local enabled = self.db.addonBarButtons[name] ~= false
         if enabled then
@@ -1129,6 +1186,13 @@ function MinimapMod:UpdateAddonBarLayout()
             custom:SetSize(btnSize, btnSize)
             custom:EnableMouse(false)
             custom:Show()
+
+            if custom.icon then
+                local iconTex = FindButtonIcon(btn) or (btn.icon and btn.icon.GetTexture and btn.icon:GetTexture()) or "Interface\\Icons\\INV_Gizmo_02"
+                if custom.icon.SetTexture then custom.icon:SetTexture(iconTex) end
+                if custom.icon.SetAllPoints then custom.icon:SetAllPoints(custom) end
+                if custom.icon.SetTexCoord then custom.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+            end
 
             local function CleanTexture(region)
                 if region and region:IsObjectType("Texture") then
@@ -1246,7 +1310,7 @@ function MinimapMod:UpdateAddonBarLayout()
         if self.expanderButton then self.expanderButton:Hide() end
         if self.flyoutTrigger then self.flyoutTrigger:Hide() end
         self.addonBar:SetSize(40, 40)
-        self.addonBar:SetAlpha(LEM and LEM:IsInEditMode() and 1 or 0)
+        self.addonBar:SetAlpha(LEM and LEM.IsInEditMode and LEM:IsInEditMode() and 1 or 0)
         return
     end
 
@@ -1297,13 +1361,7 @@ function MinimapMod:UpdateAddonBarLayout()
 
     local growDir = self.db.addonBarGrowDirection
     if not growDir then
-        if cols > 1 then
-            growDir = "RIGHT_DOWN"
-        elseif isAttached then
-            growDir = "UP_LEFT"
-        else
-            growDir = "DOWN_RIGHT"
-        end
+        growDir = "UP_LEFT"
     end
 
     local cellW = btnSize + spacing
@@ -1419,6 +1477,7 @@ function MinimapMod:UpdateAddonBarLayout()
     end
 
     local normalWidth = totalCols * btnSize + (totalCols + 1) * spacing
+    self.addonBar.expandedWidth = self:GetAddonBarExpandedWidth()
 
     if shownCount == 0 then
         if self.flyoutTrigger then self.flyoutTrigger:Hide() end
@@ -1729,7 +1788,7 @@ function MinimapMod:GetAddonBarOptions()
                 min = 1,
                 max = 20,
                 step = 1,
-                get = function() return self.db.addonBarBreakpoint or self.db.addonBarColumns or 5 end,
+                get = function() return self.db.addonBarBreakpoint or self.db.addonBarColumns or 6 end,
                 set = function(_, val)
                     self.db.addonBarBreakpoint = val
                     self.db.addonBarColumns = val

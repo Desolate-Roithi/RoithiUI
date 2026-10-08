@@ -36,9 +36,18 @@ local BLIZZARD_BAR_FRAMES = {
     zoneAction = { "ZoneAbilityFrame" },
 }
 
+local function IsRangeIndicator(text)
+    if not text or text == "" then return false end
+    if (_G.RANGE_INDICATOR and text == _G.RANGE_INDICATOR) or text == "·" or text == "•" or text:find("[\194\183\226\128\162]") then
+        return true
+    end
+    return false
+end
+AB.IsRangeIndicator = IsRangeIndicator
+
 local function FormatHotkey(text)
     if not text or text == "" then return "" end
-    if text == _G.RANGE_INDICATOR or text == "·" or text == "•" or text:find("[\194\183\226\128\162]") then
+    if IsRangeIndicator(text) then
         return ""
     end
     local formatted = text
@@ -85,8 +94,9 @@ local function ButtonHasAction(btn)
         local id = btn.GetID and btn:GetID()
         if id and _G.GetShapeshiftFormInfo then
             local texture = _G.GetShapeshiftFormInfo(id)
-            return texture ~= nil
+            if texture ~= nil then return true end
         end
+        return true
     end
     return false
 end
@@ -248,42 +258,66 @@ function AB:OnBarLeave(barKey)
     end
 end
 
-function AB:UpdateEmptyButtons(barKey)
-    local db = self.db[barKey] or {}
+function AB:UpdateEmptyButtons(barKey, customButtons)
+    local db = self.db and self.db[barKey] or {}
     if db.enabled == false then return end
 
-    local buttons = self:GetBarButtons(barKey)
+    local buttons = customButtons or self:GetBarButtons(barKey)
     local maxBtns = db.maxButtons or #buttons
     if maxBtns < 1 then maxBtns = 1 end
     local displayCount = math.min(#buttons, maxBtns)
-    local isEditMode = (LEM and LEM.isInEditMode) or false
-    if barKey == "stance" and not isEditMode then
+    if barKey == "stance" then
         local numForms = _G.GetNumShapeshiftForms and _G.GetNumShapeshiftForms() or 0
         displayCount = math.min(displayCount, numForms)
     end
-    local hideEmpty = db.hideEmpty == true and not self.showingGrid
+    local isQuickKeybind = (_G.QuickKeybindFrame and _G.QuickKeybindFrame.IsShown and _G.QuickKeybindFrame:IsShown()) or false
+    local isEditMode = false
+    if LEM and LEM.IsInEditMode and LEM:IsInEditMode() then
+        isEditMode = true
+    elseif _G.EditModeManagerFrame and _G.EditModeManagerFrame.IsShown and _G.EditModeManagerFrame:IsShown() then
+        isEditMode = true
+    end
+    local hideEmpty = db.hideEmpty == true and not self.showingGrid and not isQuickKeybind
 
     local inCombat = (_G.InCombatLockdown and _G.InCombatLockdown()) or false
 
     for i, btn in ipairs(buttons) do
-        if i > displayCount then
-            if btn.SetAlpha then btn:SetAlpha(0) end
-            if not inCombat and btn.Hide then btn:Hide() end
-            if btn.roithiBackdrop and btn.roithiBackdrop.Hide then btn.roithiBackdrop:Hide() end
-        elseif hideEmpty then
+        if i <= displayCount then
             local hasAct = ButtonHasAction(btn)
-            if hasAct then
-                if not inCombat and btn.Show and not btn:IsShown() then btn:Show() end
+            local canClick = hasAct or self.showingGrid or isQuickKeybind or isEditMode
+            if barKey == "stance" then
+                canClick = true
+            end
+            if not inCombat then
+                if btn.EnableMouse then btn:EnableMouse(canClick) end
+                if btn.SetMouseClickEnabled then btn:SetMouseClickEnabled(canClick) end
+                if btn.Show and not btn:IsShown() then btn:Show() end
+            else
+                self.queuedMouseUpdate = true
+            end
+
+            if hideEmpty then
+                if hasAct then
+                    if btn.SetAlpha then btn:SetAlpha(1) end
+                    if btn.roithiBackdrop and btn.roithiBackdrop.Show then btn.roithiBackdrop:Show() end
+                else
+                    if btn.SetAlpha then btn:SetAlpha(0) end
+                    if btn.roithiBackdrop and btn.roithiBackdrop.Hide then btn.roithiBackdrop:Hide() end
+                end
+            else
                 if btn.SetAlpha then btn:SetAlpha(1) end
                 if btn.roithiBackdrop and btn.roithiBackdrop.Show then btn.roithiBackdrop:Show() end
-            else
-                if btn.SetAlpha then btn:SetAlpha(0) end
-                if btn.roithiBackdrop and btn.roithiBackdrop.Hide then btn.roithiBackdrop:Hide() end
             end
         else
-            if not inCombat and btn.Show and not btn:IsShown() then btn:Show() end
-            if btn.SetAlpha then btn:SetAlpha(1) end
-            if btn.roithiBackdrop and btn.roithiBackdrop.Show then btn.roithiBackdrop:Show() end
+            if not inCombat then
+                if btn.EnableMouse then btn:EnableMouse(false) end
+                if btn.SetMouseClickEnabled then btn:SetMouseClickEnabled(false) end
+                if btn.Hide and btn:IsShown() then btn:Hide() end
+            else
+                self.queuedMouseUpdate = true
+            end
+            if btn.SetAlpha then btn:SetAlpha(0) end
+            if btn.roithiBackdrop and btn.roithiBackdrop.Hide then btn.roithiBackdrop:Hide() end
         end
     end
 end
@@ -294,20 +328,12 @@ function AB:UpdateAllEmptyButtons()
     end
 end
 
-local hiddenParent
-local function GetHiddenParent()
-    if not hiddenParent then
-        hiddenParent = CreateFrame("Frame", "RoithiUI_HiddenActionBars", UIParent)
-        hiddenParent:Hide()
-    end
-    return hiddenParent
-end
 
 function AB:SetupBars()
     for barKey, cfg in pairs(BAR_CONFIGS) do
         if not self.bars[barKey] then
             local f = CreateFrame("Frame", cfg.name, UIParent)
-            if f.SetFrameStrata then f:SetFrameStrata("HIGH") end
+            if f.SetFrameStrata then f:SetFrameStrata("MEDIUM") end
             if f.SetFrameLevel then f:SetFrameLevel(100) end
             if f.SetClampedToScreen then f:SetClampedToScreen(true) end
             if f.SetMovable then f:SetMovable(true) end
@@ -315,16 +341,16 @@ function AB:SetupBars()
             f.barKey = barKey
             self.bars[barKey] = f
 
-            local db = self.db[barKey] or {}
+            local db = (self.db and self.db[barKey]) or (self.defaultSettings and self.defaultSettings[barKey]) or {}
             local pt = db.point or "BOTTOM"
             if f.ClearAllPoints then f:ClearAllPoints() end
             if f.SetPoint then f:SetPoint(pt, UIParent, pt, db.x or 0, db.y or 0) end
         else
-            if self.bars[barKey].SetFrameStrata then self.bars[barKey]:SetFrameStrata("HIGH") end
+            if self.bars[barKey].SetFrameStrata then self.bars[barKey]:SetFrameStrata("MEDIUM") end
             if self.bars[barKey].SetFrameLevel then self.bars[barKey]:SetFrameLevel(100) end
         end
 
-        local db = self.db[barKey] or {}
+        local db = (self.db and self.db[barKey]) or (self.defaultSettings and self.defaultSettings[barKey]) or {}
         if db.enabled ~= false and self.bars[barKey].Show then
             if barKey == "pet" and not (_G.PetHasActionBar and _G.PetHasActionBar()) then
                 if self.bars[barKey].Hide then self.bars[barKey]:Hide() end
@@ -342,11 +368,7 @@ function AB:SetupBars()
 
     if _G.ExtraActionBarFrame and not self.extraActionBarHooked and hooksecurefunc then
         hooksecurefunc(_G.ExtraActionBarFrame, "Show", function()
-            if not _G.InCombatLockdown or not _G.InCombatLockdown() then
-                self:LayoutBar("extraAction")
-            end
-        end)
-        hooksecurefunc(_G.ExtraActionBarFrame, "Hide", function()
+            if self.layoutInProgress and self.layoutInProgress["extraAction"] then return end
             if not _G.InCombatLockdown or not _G.InCombatLockdown() then
                 self:LayoutBar("extraAction")
             end
@@ -356,11 +378,7 @@ function AB:SetupBars()
 
     if _G.ZoneAbilityFrame and not self.zoneAbilityHooked and hooksecurefunc then
         hooksecurefunc(_G.ZoneAbilityFrame, "Show", function()
-            if not _G.InCombatLockdown or not _G.InCombatLockdown() then
-                self:LayoutBar("zoneAction")
-            end
-        end)
-        hooksecurefunc(_G.ZoneAbilityFrame, "Hide", function()
+            if self.layoutInProgress and self.layoutInProgress["zoneAction"] then return end
             if not _G.InCombatLockdown or not _G.InCombatLockdown() then
                 self:LayoutBar("zoneAction")
             end
@@ -380,6 +398,7 @@ function AB:SetupBars()
 
     if not self.managePositionsHooked and hooksecurefunc and _G.UIParent_ManageFramePositions then
         hooksecurefunc("UIParent_ManageFramePositions", function()
+            if self.layoutInProgress and self.layoutInProgress["bar1"] then return end
             if self:IsEnabled() and not InCombatLockdown() then
                 self:LayoutBar("bar1")
             end
@@ -396,6 +415,12 @@ function AB:SetupBars()
                     if bf then
                         bf.defaultHideSelection = true
                         if bf.Selection then
+                            if not bf.roithiSelectionHooked and hooksecurefunc then
+                                bf.roithiSelectionHooked = true
+                                hooksecurefunc(bf.Selection, "Show", function(sel)
+                                    sel:Hide()
+                                end)
+                            end
                             bf.Selection:Hide()
                             if bf.Selection.EnableMouse then bf.Selection:EnableMouse(false) end
                         end
@@ -407,6 +432,16 @@ function AB:SetupBars()
             self:SetButtonsMouseInteractivity(true)
         end, self)
         self.editModeRegistered = true
+    end
+
+    if _G.QuickKeybindFrame and not self.quickKeybindHooked and hooksecurefunc then
+        hooksecurefunc(_G.QuickKeybindFrame, "Show", function()
+            self:UpdateAllEmptyButtons()
+        end)
+        hooksecurefunc(_G.QuickKeybindFrame, "Hide", function()
+            self:UpdateAllEmptyButtons()
+        end)
+        self.quickKeybindHooked = true
     end
 
     if not self.overlayHooksRegistered and hooksecurefunc then
@@ -602,7 +637,7 @@ function AB:UpdateOverlayContainment(button)
     end
 end
 
-function AB:StyleButton(button)
+function AB:StyleButton(button, explicitBarKey)
     if not button then return end
 
     -- Suppress Blizzard bulky style/placeholder artwork on Extra Action & Zone Ability buttons
@@ -703,13 +738,30 @@ function AB:StyleButton(button)
     self:UpdateOverlayContainment(button)
 
     -- 5. Keybind Hotkey Styling
+    local barKey = explicitBarKey or button.barKey
+    local barDb = (barKey and self.db and self.db[barKey]) or {}
+
+    -- 5. HotKey Styling
     local hotkey = button.HotKey or _G[button.GetName and button:GetName() and (button:GetName() .. "HotKey") or ""]
     if hotkey then
         if hotkey.EnableMouse then hotkey:EnableMouse(false) end
         if hotkey.SetMouseClickEnabled then hotkey:SetMouseClickEnabled(false) end
         if hotkey.SetMouseMotionEnabled then hotkey:SetMouseMotionEnabled(false) end
-        if hotkey.SetShown then
-            hotkey:SetShown(self.db.showHotkeys ~= false)
+        local showHotkeys = self.db.showHotkeys ~= false
+        if barDb.showHotkeys ~= nil then
+            showHotkeys = barDb.showHotkeys
+        end
+        local currentText = hotkey.GetText and hotkey:GetText()
+        local isRange = IsRangeIndicator(currentText)
+        if not isRange and hotkey.SetShown then
+            hotkey:SetShown(showHotkeys)
+        end
+        if hotkey.ClearAllPoints and hotkey.SetPoint then
+            local pos = barDb.hotkeyPosition or "TOPRIGHT"
+            local ox = barDb.hotkeyOffsetX or 0
+            local oy = barDb.hotkeyOffsetY or -2
+            hotkey:ClearAllPoints()
+            hotkey:SetPoint(pos, button, pos, ox, oy)
         end
         if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
             LibRoithi.mixins:SetFont(hotkey, self.db.font or "Friz Quadrata TT", self.db.fontSize or 11, "OUTLINE")
@@ -717,6 +769,25 @@ function AB:StyleButton(button)
         if not hotkey.roithiHooked and hooksecurefunc then
             hooksecurefunc(hotkey, "SetText", function(s, txt)
                 if s.roithiFormatting then return end
+                if IsRangeIndicator(txt) then
+                    if not button.roithiRangeDot then
+                        local dot = button:CreateTexture(nil, "OVERLAY")
+                        dot:SetSize(8, 8)
+                        local pos = barDb.hotkeyPosition or "TOPRIGHT"
+                        local ox = barDb.hotkeyOffsetX or -2
+                        local oy = barDb.hotkeyOffsetY or -2
+                        dot:SetPoint(pos, button, pos, ox, oy)
+                        dot:SetTexture("Interface\\Common\\Indicator-Red")
+                        button.roithiRangeDot = dot
+                    end
+                    if button.roithiRangeDot then button.roithiRangeDot:Show() end
+                    s.roithiFormatting = true
+                    s:SetText("")
+                    s.roithiFormatting = false
+                    return
+                else
+                    if button.roithiRangeDot then button.roithiRangeDot:Hide() end
+                end
                 local formatted = FormatHotkey(txt)
                 if formatted ~= txt then
                     s.roithiFormatting = true
@@ -726,7 +797,7 @@ function AB:StyleButton(button)
             end)
             hotkey.roithiHooked = true
         end
-        local currentText = hotkey.GetText and hotkey:GetText()
+        currentText = hotkey.GetText and hotkey:GetText()
         if currentText then
             local formatted = FormatHotkey(currentText)
             if formatted ~= currentText then
@@ -743,8 +814,19 @@ function AB:StyleButton(button)
         if name.EnableMouse then name:EnableMouse(false) end
         if name.SetMouseClickEnabled then name:SetMouseClickEnabled(false) end
         if name.SetMouseMotionEnabled then name:SetMouseMotionEnabled(false) end
+        local showMacro = self.db.showMacroText ~= false
+        if barDb.showMacroText ~= nil then
+            showMacro = barDb.showMacroText
+        end
         if name.SetShown then
-            name:SetShown(self.db.showMacroText ~= false)
+            name:SetShown(showMacro)
+        end
+        if name.ClearAllPoints and name.SetPoint then
+            local pos = barDb.macroPosition or "BOTTOM"
+            local ox = barDb.macroOffsetX or 0
+            local oy = barDb.macroOffsetY or 2
+            name:ClearAllPoints()
+            name:SetPoint(pos, button, pos, ox, oy)
         end
         if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
             LibRoithi.mixins:SetFont(name, self.db.font or "Friz Quadrata TT", math.max(8, (self.db.fontSize or 11) - 2), "OUTLINE")
@@ -757,8 +839,19 @@ function AB:StyleButton(button)
         if count.EnableMouse then count:EnableMouse(false) end
         if count.SetMouseClickEnabled then count:SetMouseClickEnabled(false) end
         if count.SetMouseMotionEnabled then count:SetMouseMotionEnabled(false) end
+        local showCount = self.db.showCount ~= false
+        if barDb.showCount ~= nil then
+            showCount = barDb.showCount
+        end
         if count.SetShown then
-            count:SetShown(self.db.showCount ~= false)
+            count:SetShown(showCount)
+        end
+        if count.ClearAllPoints and count.SetPoint then
+            local pos = barDb.countPosition or "BOTTOMRIGHT"
+            local ox = barDb.countOffsetX or -2
+            local oy = barDb.countOffsetY or 2
+            count:ClearAllPoints()
+            count:SetPoint(pos, button, pos, ox, oy)
         end
         if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
             LibRoithi.mixins:SetFont(count, self.db.font or "Friz Quadrata TT", math.max(8, (self.db.fontSize or 11) - 1), "OUTLINE")
@@ -823,37 +916,78 @@ function AB:UnstyleAllBars()
 end
 
 function AB:LayoutBar(barKey)
+    if not barKey then return end
     if _G.InCombatLockdown and _G.InCombatLockdown() then
         self.queuedLayout = true
         return
     end
 
+    self:SuppressBlizzardBarSelections()
+
+    if not self.layoutInProgress then self.layoutInProgress = {} end
+    if self.layoutInProgress[barKey] then return end
+    self.layoutInProgress[barKey] = true
+
+    local ok, err = pcall(self.LayoutBarInternal, self, barKey)
+    self.layoutInProgress[barKey] = nil
+    if not ok and err then
+        if _G.geterrorhandler then
+            _G.geterrorhandler()(err)
+        end
+    end
+end
+
+function AB:LayoutBarInternal(barKey)
     local container = self.bars[barKey]
     if not container then return end
 
-    local db = self.db[barKey]
+    local db = (self.db and self.db[barKey]) or (self.defaultSettings and self.defaultSettings[barKey])
+    if self.db and not self.db[barKey] and self.defaultSettings and self.defaultSettings[barKey] then
+        local copy = _G.CopyTable or function(t)
+            local d = {}
+            for k, v in pairs(t) do d[k] = type(v) == "table" and (_G.CopyTable and _G.CopyTable(v) or v) or v end
+            return d
+        end
+        self.db[barKey] = copy(self.defaultSettings[barKey])
+        db = self.db[barKey]
+    end
+
     local buttons = self:GetBarButtons(barKey)
     local blizzFrames = BLIZZARD_BAR_FRAMES[barKey]
 
-    if not db or db.enabled == false then
-        if container.Hide then container:Hide() end
-        for _, btn in ipairs(buttons) do
-            if btn.Hide then btn:Hide() end
-            if btn.SetAlpha then btn:SetAlpha(0) end
-        end
-        if blizzFrames then
-            for _, fname in ipairs(blizzFrames) do
-                local bf = _G[fname]
-                if bf then
-                    if bf.Hide then bf:Hide() end
-                    if bf.SetAlpha then bf:SetAlpha(0) end
-                    if bf.Selection and bf.Selection.Hide then bf.Selection:Hide() end
+    -- Suppress Blizzard native frames for this bar without reparenting or mutating internal manager properties
+    if blizzFrames then
+        for _, fname in ipairs(blizzFrames) do
+            local bf = _G[fname]
+            if bf then
+                if bf.SetAlpha then bf:SetAlpha(0) end
+                if bf.EnableMouse then bf:EnableMouse(false) end
+                if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+                    if bf.Hide and bf:IsShown() then bf:Hide() end
+                    if bf.Selection then
+                        if not bf.roithiSelectionHooked and hooksecurefunc then
+                            bf.roithiSelectionHooked = true
+                            hooksecurefunc(bf.Selection, "Show", function(sel)
+                                sel:Hide()
+                            end)
+                        end
+                        if bf.Selection.Hide and bf.Selection:IsShown() then bf.Selection:Hide() end
+                        if bf.Selection.EnableMouse then bf.Selection:EnableMouse(false) end
+                    end
                 end
             end
         end
+    end
+
+    if not db or db.enabled == false then
+        if container.Hide and container:IsShown() then container:Hide() end
+        for _, btn in ipairs(buttons) do
+            if btn.Hide and btn:IsShown() then btn:Hide() end
+            if btn.SetAlpha then btn:SetAlpha(0) end
+        end
         if LEM and LEM.frameSelections and LEM.frameSelections[container] then
             local sel = LEM.frameSelections[container]
-            if sel and sel.Hide then sel:Hide() end
+            if sel and sel.Hide and sel:IsShown() then sel:Hide() end
         end
         return
     end
@@ -902,9 +1036,9 @@ function AB:LayoutBar(barKey)
             _G.ExtraActionBarFrame:EnableMouse(active)
         end
         if not active then
-            if container.Hide then container:Hide() end
+            if container.Hide and container:IsShown() then container:Hide() end
             for _, btn in ipairs(buttons) do
-                if btn.Hide then btn:Hide() end
+                if btn.Hide and btn:IsShown() then btn:Hide() end
             end
             return
         end
@@ -913,9 +1047,9 @@ function AB:LayoutBar(barKey)
     -- 4. Zone Action Bar: Hide if not active and not in Edit Mode
     if barKey == "zoneAction" and not isEditMode then
         if not IsZoneActionActive() then
-            if container.Hide then container:Hide() end
+            if container.Hide and container:IsShown() then container:Hide() end
             for _, btn in ipairs(buttons) do
-                if btn.Hide then btn:Hide() end
+                if btn.Hide and btn:IsShown() then btn:Hide() end
             end
             return
         end
@@ -923,43 +1057,25 @@ function AB:LayoutBar(barKey)
 
     if container.Show then container:Show() end
 
-    -- Hide Blizzard native frames for this bar to prevent duplicate displays & Edit Mode outlines
-    if blizzFrames then
-        for _, fname in ipairs(blizzFrames) do
-            local bf = _G[fname]
-            if bf then
-                if not bf.roithiOriginalParent and bf.GetParent then
-                    bf.roithiOriginalParent = bf:GetParent()
-                end
-                if fname ~= "MainActionBar" and fname ~= "MainMenuBar" then
-                    local hp = GetHiddenParent()
-                    if bf.SetParent and hp then
-                        bf:SetParent(hp)
-                    end
-                end
-                bf.defaultHideSelection = true
-                if bf.SetAlpha then bf:SetAlpha(0) end
-                if bf.Hide then bf:Hide() end
-                if bf.Selection then
-                    if bf.Selection.Hide then bf.Selection:Hide() end
-                    if bf.Selection.EnableMouse then bf.Selection:EnableMouse(false) end
-                end
-            end
-        end
-    end
-
     local btnSize = db.buttonSize or 36
     local spacing = db.spacing or 4
     local isVertical = (db.orientation == "VERTICAL")
     local maxBtns = db.maxButtons or (BAR_CONFIGS[barKey] and BAR_CONFIGS[barKey].count) or #buttons
     if maxBtns < 1 then maxBtns = 1 end
     local displayCount = math.min(#buttons, maxBtns)
-    if barKey == "stance" and not isEditMode then
+    if barKey == "stance" then
         local numForms = _G.GetNumShapeshiftForms and _G.GetNumShapeshiftForms() or 0
-        displayCount = math.min(displayCount, numForms)
+        if numForms > 0 then
+            displayCount = math.min(displayCount, numForms)
+        end
     end
 
-    local perLine = db.buttonsPerRow or #buttons
+    local perLine
+    if db.numRows and db.numRows > 1 then
+        perLine = math.ceil(displayCount / db.numRows)
+    else
+        perLine = db.buttonsPerRow or #buttons
+    end
     if perLine < 1 then perLine = 1 end
 
     local layoutCount = math.max(1, displayCount)
@@ -1002,7 +1118,7 @@ function AB:LayoutBar(barKey)
                 btn:SetParent(container)
             end
             if btn.SetFrameStrata then
-                btn:SetFrameStrata("HIGH")
+                btn:SetFrameStrata("MEDIUM")
             end
             if container.GetFrameLevel and btn.SetFrameLevel then
                 btn:SetFrameLevel(container:GetFrameLevel() + 10)
@@ -1071,12 +1187,8 @@ function AB:RestoreBlizzardBars()
             for _, fname in ipairs(blizzFrames) do
                 local bf = _G[fname]
                 if bf then
-                    if bf.roithiOriginalParent and bf.SetParent then
-                        bf:SetParent(bf.roithiOriginalParent)
-                    elseif fname ~= "MainActionBar" and fname ~= "MainMenuBar" and bf.SetParent then
-                        bf:SetParent(UIParent)
-                    end
                     if bf.SetAlpha then bf:SetAlpha(1) end
+                    if bf.EnableMouse then bf:EnableMouse(true) end
                     if bf.Show then bf:Show() end
                     if bf.Selection and bf.Selection.Show then bf.Selection:Show() end
                     if bf.UpdateGridLayout then
@@ -1109,3 +1221,51 @@ function AB:RestoreBlizzardBars()
         _G.MainMenuBarArtFrame:Show()
     end
 end
+
+AB.UpdateBarLayout = AB.LayoutBar
+
+function AB:SuppressBlizzardBarSelections()
+    if self.blizzardSelectionsSuppressed then return end
+    self.blizzardSelectionsSuppressed = true
+    for _, bFrames in pairs(BLIZZARD_BAR_FRAMES) do
+        for _, fname in ipairs(bFrames) do
+            local bf = _G[fname]
+            if bf then
+                bf.defaultHideSelection = true
+                if bf.Selection then
+                    if not bf.roithiSelectionHooked and hooksecurefunc then
+                        bf.roithiSelectionHooked = true
+                        hooksecurefunc(bf.Selection, "Show", function(sel)
+                            sel:Hide()
+                        end)
+                    end
+                    bf.Selection:Hide()
+                    if bf.Selection.EnableMouse then bf.Selection:EnableMouse(false) end
+                end
+            end
+        end
+    end
+end
+
+local isResettingActionBarPage = false
+function AB:DisableActionPageSwitching()
+    local db = self.db and (self.db.disableBarPaging ~= nil and self.db.disableBarPaging or (self.db.general and self.db.general.disableBarPaging))
+    if _G.MainMenuBar and _G.MainMenuBar.EnableMouseWheel then
+        _G.MainMenuBar:EnableMouseWheel(db == false)
+    end
+    if not self.pageSwitchHooked and hooksecurefunc and _G.ChangeActionBarPage then
+        hooksecurefunc("ChangeActionBarPage", function(page)
+            if isResettingActionBarPage then return end
+            local pagingDisabled = self.db and (self.db.disableBarPaging ~= nil and self.db.disableBarPaging or (self.db.general and self.db.general.disableBarPaging))
+            if pagingDisabled ~= false and page ~= 1 then
+                if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+                    isResettingActionBarPage = true
+                    _G.ChangeActionBarPage(1)
+                    isResettingActionBarPage = false
+                end
+            end
+        end)
+        self.pageSwitchHooked = true
+    end
+end
+

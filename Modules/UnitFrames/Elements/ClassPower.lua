@@ -591,8 +591,12 @@ function UF:CreateClassPower(frame)
     if LEM then
         element.editModeName = (frame.editModeName or frame:GetName()) .. " Class Power"
 
-        -- Default position (detached)
-        local defaults = { point = "CENTER", x = 0, y = 0 }
+        local defUnit = ns.Defaults.profile.UnitFrames[frame.unit] or ns.Defaults.profile.UnitFrames.player
+        local defaults = {
+            point = defUnit.classPowerPoint,
+            x = defUnit.classPowerX,
+            y = defUnit.classPowerY,
+        }
 
         -- Callback: Called when LibEditMode tries to move the frame
         local function OnClassPowerPosChanged(f, layoutName, point, x, y)

@@ -32,6 +32,7 @@ function BagsMod:OnInitialize()
     self.newItems = {}
     self.knownItemIDs = {}
     self.newSlots = {}
+    self.hoveredNewSlots = {}
     self.knownSlots = {}
     self.searchText = ""
     self:RegisterPopups()
@@ -49,12 +50,15 @@ function BagsMod:OnEnable()
 
     self:RegisterEvent("BAG_UPDATE_DELAYED", "OnBagUpdate")
     self:RegisterEvent("BAG_UPDATE", "OnBagUpdate")
+    self:RegisterEvent("BAG_CONTAINER_UPDATE", "OnBagUpdate")
+    self:RegisterEvent("BAG_UPDATE_COOLDOWN", "OnBagCooldownUpdate")
     self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnBagUpdate")
     self:RegisterEvent("PLAYER_MONEY", "UpdateMoneyDisplay")
     self:RegisterEvent("MERCHANT_SHOW", "OnMerchantShow")
     self:RegisterEvent("MERCHANT_CLOSED", "OnMerchantClosed")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
 
+    self:HookTooltipShortcuts()
     self:SetupBagBar()
     self:HookBlizzardBagFunctions()
     self:ScanInventoryOnce()
@@ -320,6 +324,17 @@ function BagsMod:IsSlotNew(bag, slot, itemData)
         return true
     end
 
+    local now = _G.GetTime and _G.GetTime() or 0
+    if self.hoveredNewSlots and self.hoveredNewSlots[slotKey] then
+        if now < self.hoveredNewSlots[slotKey] then
+            return true
+        else
+            self.hoveredNewSlots[slotKey] = nil
+            self:ClearNewSlot(bag, slot)
+            return false
+        end
+    end
+
     -- If slot was explicitly marked new during session
     if self.newSlots and self.newSlots[slotKey] == true then
         return true
@@ -350,9 +365,83 @@ function BagsMod:ClearNewSlot(bag, slot)
     if self.newSlots then
         self.newSlots[slotKey] = nil
     end
+    if self.hoveredNewSlots then
+        self.hoveredNewSlots[slotKey] = nil
+    end
     if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
         pcall(_G.C_NewItems.RemoveNewItem, bag, slot)
     end
+end
+
+function BagsMod:EvaluateQuestItemState(itemID, questID, isActive)
+    local isQuest = (isActive == true or questID ~= nil)
+    local showQuestBang = false
+    local showQuestBorder = false
+
+    if isActive then
+        local isAlreadyOnQuest = questID and _G.C_QuestLog and _G.C_QuestLog.IsOnQuest and _G.C_QuestLog.IsOnQuest(questID)
+        local isQuestDone = questID and _G.C_QuestLog and _G.C_QuestLog.IsQuestFlaggedCompleted and _G.C_QuestLog.IsQuestFlaggedCompleted(questID)
+        if isAlreadyOnQuest or isQuestDone then
+            showQuestBang = false
+            showQuestBorder = (isAlreadyOnQuest == true)
+        else
+            showQuestBang = true
+        end
+    elseif isQuest then
+        showQuestBorder = true
+    end
+
+    return {
+        isQuest = isQuest,
+        showQuestBang = showQuestBang,
+        showQuestBorder = showQuestBorder,
+    }
+end
+
+local function AppendBagShortcuts(tooltip, itemID)
+    if not itemID or not tooltip or not tooltip.AddLine then return end
+    if tooltip.roithiShortcutsAdded == itemID then return end
+    local favs = (BagsMod and BagsMod.db and BagsMod.db.favorites) or {}
+    local isFav = (favs[itemID] == true)
+    tooltip:AddLine(" ")
+    if isFav then
+        tooltip:AddLine("|cffffd100★ Favorited|r |cffaaaaaa(Alt + Right Click to remove)|r", 1, 1, 1)
+    else
+        tooltip:AddLine("|cff888888<Alt + Right Click to Favorite>|r", 0.7, 0.7, 0.7)
+    end
+    tooltip:AddLine("|cff00ccff<Shift + Right Click to Reassign Category>|r", 0.4, 0.8, 1.0)
+    tooltip:AddLine("|cff00ff00<Drag item onto Category tab to Reassign>|r", 0.4, 0.9, 0.4)
+    tooltip.roithiShortcutsAdded = itemID
+end
+
+function BagsMod:HookTooltipShortcuts()
+    if self.tooltipShortcutsHooked then return end
+    if _G.TooltipDataProcessor and _G.TooltipDataProcessor.AddTooltipPostCall and _G.Enum and _G.Enum.TooltipDataType then
+        _G.TooltipDataProcessor.AddTooltipPostCall(_G.Enum.TooltipDataType.Item, function(tooltip, _)
+            local owner = tooltip:GetOwner()
+            if owner and (owner.isRoithiBagSlot or tooltip.roithiBagSlot == owner) then
+                local itemID = (owner.itemData and owner.itemData.itemID)
+                    or (_G.C_Container and _G.C_Container.GetContainerItemID and _G.C_Container.GetContainerItemID(owner.bag, owner.slot))
+                    or (_G.GetContainerItemID and _G.GetContainerItemID(owner.bag, owner.slot))
+                if itemID then
+                    AppendBagShortcuts(tooltip, itemID)
+                end
+            end
+        end)
+    elseif _G.GameTooltip and _G.GameTooltip.HookScript then
+        _G.GameTooltip:HookScript("OnTooltipSetItem", function(tooltip)
+            local owner = tooltip:GetOwner()
+            if owner and (owner.isRoithiBagSlot or tooltip.roithiBagSlot == owner) then
+                local itemID = (owner.itemData and owner.itemData.itemID)
+                    or (_G.C_Container and _G.C_Container.GetContainerItemID and _G.C_Container.GetContainerItemID(owner.bag, owner.slot))
+                    or (_G.GetContainerItemID and _G.GetContainerItemID(owner.bag, owner.slot))
+                if itemID then
+                    AppendBagShortcuts(tooltip, itemID)
+                end
+            end
+        end)
+    end
+    self.tooltipShortcutsHooked = true
 end
 
 function BagsMod:ScanInventoryOnce()
@@ -375,6 +464,7 @@ function BagsMod:ScanInventoryOnce()
             else
                 self.knownSlots[slotKey] = nil
                 self.newSlots[slotKey] = nil
+                if self.hoveredNewSlots then self.hoveredNewSlots[slotKey] = nil end
             end
         end
     end
@@ -427,10 +517,23 @@ function BagsMod:GetItemInfoAt(bag, slot)
             end
 
             local isQuest = false
+            local showQuestBang = false
+            local showQuestBorder = false
             if _G.C_Container and _G.C_Container.GetContainerItemQuestInfo then
                 local qInfo = _G.C_Container.GetContainerItemQuestInfo(bag, slot)
-                if qInfo and (qInfo.isQuestItem or qInfo.questID) then
-                    isQuest = true
+                if qInfo then
+                    local qState = self:EvaluateQuestItemState(itemID, qInfo.questID, qInfo.isActive)
+                    isQuest = qState.isQuest or qInfo.isQuestItem
+                    showQuestBang = qState.showQuestBang
+                    showQuestBorder = qState.showQuestBorder
+                end
+            elseif _G.GetContainerItemQuestInfo then
+                local isQuestItem, qID, act = _G.GetContainerItemQuestInfo(bag, slot)
+                if isQuestItem or qID or act then
+                    local qState = self:EvaluateQuestItemState(itemID, qID, act)
+                    isQuest = qState.isQuest or isQuestItem
+                    showQuestBang = qState.showQuestBang
+                    showQuestBorder = qState.showQuestBorder
                 end
             end
 
@@ -452,6 +555,8 @@ function BagsMod:GetItemInfoAt(bag, slot)
                 bindType = bindType,
                 expID = expID,
                 isQuest = isQuest,
+                showQuestBang = showQuestBang,
+                showQuestBorder = showQuestBorder,
                 isCraftingReagent = isCraftingReagent,
                 isNew = self:IsSlotNew(bag, slot),
             }
@@ -491,14 +596,15 @@ function BagsMod:CreateMainBagFrame()
         frame:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
     end
 
-    local pt = cfg.point or "BOTTOMRIGHT"
+    local defBW = ns.Defaults.profile.Bags.bagWindow
+    local pt = cfg.point or defBW.point
     local cols = self.db.columns or 10
     local slotSize = self.db.slotSize or 36
     local spacing = self.db.spacing or 4
     local initialW = math.max(380, cols * slotSize + (cols - 1) * spacing + 16)
     frame:SetSize(initialW, 420)
     frame:ClearAllPoints()
-    frame:SetPoint(pt, UIParent, pt, cfg.x or -10, cfg.y or 80)
+    frame:SetPoint(pt, UIParent, pt, cfg.x or defBW.x, cfg.y or defBW.y)
 
     if frame.RegisterForDrag then frame:RegisterForDrag("LeftButton") end
     frame:SetScript("OnDragStart", function(s) s:StartMoving() end)
@@ -575,9 +681,11 @@ function BagsMod:CreateHeaderBar()
     end
     plusText:SetJustifyH("CENTER")
     plusText:SetJustifyV("MIDDLE")
-    plusText:SetPoint("CENTER", saveFilterBtn, "CENTER", 0, 1)
+    plusText:SetPoint("CENTER", saveFilterBtn, "CENTER", 1, 0)
     plusText:SetText("+")
     plusText:SetTextColor(0.2, 0.8, 1.0, 1)
+    saveFilterBtn.text = plusText
+    self.saveFilterBtn = saveFilterBtn
 
     saveFilterBtn:SetScript("OnEnter", function(s)
         if _G.GameTooltip then
@@ -597,7 +705,7 @@ function BagsMod:CreateHeaderBar()
     -- Search Info / Guide Button (?)
     local infoBtn = CreateFrame("Button", nil, header, "BackdropTemplate")
     infoBtn:SetSize(20, 20)
-    infoBtn:SetPoint("RIGHT", saveFilterBtn, "LEFT", -4, 0)
+    infoBtn:SetPoint("RIGHT", saveFilterBtn, "LEFT", -6, 0)
     if infoBtn.SetBackdrop then
         infoBtn:SetBackdrop({
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
@@ -615,9 +723,11 @@ function BagsMod:CreateHeaderBar()
     end
     infoText:SetJustifyH("CENTER")
     infoText:SetJustifyV("MIDDLE")
-    infoText:SetPoint("CENTER", infoBtn, "CENTER", 0, 1)
+    infoText:SetPoint("CENTER", infoBtn, "CENTER", 1, 0)
     infoText:SetText("?")
     infoText:SetTextColor(1, 0.82, 0.0, 1)
+    infoBtn.text = infoText
+    self.infoBtn = infoBtn
 
     local function ShowSearchGuide(owner)
         if not _G.GameTooltip then return end
@@ -1171,6 +1281,66 @@ function BagsMod:SellAllJunk()
     end
 end
 
+function BagsMod:OnSlotEnter(s)
+    if not s then return end
+    if s.bag and s.slot then
+        local slotKey = GetSlotKey(s.bag, s.slot)
+        local hasTradeTimer = self:HasActiveTradeTimer(s.bag, s.slot)
+        local isNew = self:IsSlotNew(s.bag, s.slot)
+
+        if isNew and not hasTradeTimer then
+            self.hoveredNewSlots = self.hoveredNewSlots or {}
+            if not self.hoveredNewSlots[slotKey] then
+                local retentionMinutes = (self.db and self.db.newItemRetentionTimer) or 20
+                if retentionMinutes < 1 then retentionMinutes = 1 elseif retentionMinutes > 240 then retentionMinutes = 240 end
+                local now = _G.GetTime and _G.GetTime() or 0
+                self.hoveredNewSlots[slotKey] = now + (retentionMinutes * 60)
+                self.newSlots = self.newSlots or {}
+                self.newSlots[slotKey] = true
+            end
+            if s.itemData then
+                s.itemData.isNew = true
+            end
+            if s.newOverlay then
+                s.newOverlay:Show()
+            end
+        elseif not isNew and not hasTradeTimer then
+            self:ClearNewSlot(s.bag, s.slot)
+            if s.itemData then
+                s.itemData.isNew = false
+            end
+            if s.newOverlay then
+                s.newOverlay:Hide()
+            end
+            s.needsTabRefreshOnLeave = true
+        end
+    end
+
+    s.isRoithiBagSlot = true
+    if s.bag and s.slot and _G.GameTooltip then
+        _G.GameTooltip.roithiBagSlot = s
+        _G.GameTooltip.roithiShortcutsAdded = nil
+        _G.GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
+        local hasItem = false
+        if _G.C_Container and _G.C_Container.GetContainerItemInfo then
+            _G.GameTooltip:SetBagItem(s.bag, s.slot)
+            hasItem = (s.itemData and s.itemData.itemID ~= nil)
+        elseif s.itemData and s.itemData.link and _G.GameTooltip.SetHyperlink then
+            _G.GameTooltip:SetHyperlink(s.itemData.link)
+            hasItem = true
+        end
+
+        local itemID = (s.itemData and s.itemData.itemID)
+            or (_G.C_Container and _G.C_Container.GetContainerItemID and _G.C_Container.GetContainerItemID(s.bag, s.slot))
+            or (_G.GetContainerItemID and _G.GetContainerItemID(s.bag, s.slot))
+
+        if hasItem and itemID then
+            AppendBagShortcuts(_G.GameTooltip, itemID)
+        end
+        _G.GameTooltip:Show()
+    end
+end
+
 function BagsMod:AcquireItemSlot(index)
     if self.itemSlots[index] then
         return self.itemSlots[index]
@@ -1253,6 +1423,19 @@ function BagsMod:AcquireItemSlot(index)
         end
     end
 
+    -- Cooldown swirl and text
+    local cooldown = slot.Cooldown or slot.cooldown
+    if not cooldown then
+        cooldown = CreateFrame("Cooldown", nil, slot, "CooldownFrameTemplate")
+        cooldown:SetAllPoints(slot)
+        cooldown:SetFrameLevel(slot:GetFrameLevel() + 2)
+        if cooldown.SetDrawEdge then cooldown:SetDrawEdge(true) end
+        if cooldown.SetDrawSwipe then cooldown:SetDrawSwipe(true) end
+        if cooldown.SetDrawBling then cooldown:SetDrawBling(false) end
+        slot.Cooldown = cooldown
+        slot.cooldown = cooldown
+    end
+
     -- 1px overlay border to guarantee border renders above the icon
     if not slot.roithiBorder then
         local border = CreateFrame("Frame", nil, slot, "BackdropTemplate")
@@ -1328,6 +1511,16 @@ function BagsMod:AcquireItemSlot(index)
         newOverlay:SetAlpha(0.65)
         newOverlay:Hide()
         slot.newOverlay = newOverlay
+    end
+
+    -- Quest indicator icon (exclamation mark or quest border)
+    local questIcon = slot.questIcon
+    if not questIcon then
+        questIcon = slot:CreateTexture(nil, "OVERLAY", nil, 6)
+        questIcon:SetSize(16, 16)
+        questIcon:SetPoint("BOTTOMLEFT", slot, "BOTTOMLEFT", 1, 1)
+        questIcon:Hide()
+        slot.questIcon = questIcon
     end
 
     if slot.NewItemTexture then slot.NewItemTexture:Hide() end
@@ -1418,51 +1611,14 @@ function BagsMod:AcquireItemSlot(index)
 
 
     slot:SetScript("OnEnter", function(s)
-        -- Slot new status management:
-        -- If the item has an active trade timer, keep it marked new until timer expires.
-        -- If it has NO trade timer, remove it from new on hover.
-        if s.bag and s.slot then
-            local hasTradeTimer = self:HasActiveTradeTimer(s.bag, s.slot)
-            if not hasTradeTimer then
-                self:ClearNewSlot(s.bag, s.slot)
-                if s.itemData then
-                    s.itemData.isNew = false
-                end
-                if s.newOverlay then
-                    s.newOverlay:Hide()
-                end
-                s.needsTabRefreshOnLeave = true
-            end
-        end
-
-        if s.bag and s.slot and _G.GameTooltip then
-            _G.GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
-            local hasItem = false
-            if _G.C_Container and _G.C_Container.GetContainerItemInfo then
-                _G.GameTooltip:SetBagItem(s.bag, s.slot)
-                hasItem = (s.itemData and s.itemData.itemID ~= nil)
-            elseif s.itemData and s.itemData.link then
-                _G.GameTooltip:SetHyperlink(s.itemData.link)
-                hasItem = true
-            end
-
-            if hasItem and s.itemData and s.itemData.itemID then
-                local favs = self.db.favorites or {}
-                local isFav = favs[s.itemData.itemID] == true
-                _G.GameTooltip:AddLine(" ")
-                if isFav then
-                    _G.GameTooltip:AddLine("|cffffd100★ Favorited|r |cffaaaaaa(Alt + Right Click to remove)|r", 1, 1, 1)
-                else
-                    _G.GameTooltip:AddLine("|cff888888<Alt + Right Click to Favorite>|r", 0.7, 0.7, 0.7)
-                end
-                _G.GameTooltip:AddLine("|cff00ccff<Shift + Right Click to Reassign Category>|r", 0.4, 0.8, 1.0)
-                _G.GameTooltip:AddLine("|cff00ff00<Drag item onto Category tab to Reassign>|r", 0.4, 0.9, 0.4)
-            end
-            _G.GameTooltip:Show()
-        end
+        self:OnSlotEnter(s)
     end)
     slot:SetScript("OnLeave", function(s)
-        if _G.GameTooltip then _G.GameTooltip:Hide() end
+        if _G.GameTooltip then
+            _G.GameTooltip.roithiBagSlot = nil
+            _G.GameTooltip.roithiShortcutsAdded = nil
+            _G.GameTooltip:Hide()
+        end
         if s and s.needsTabRefreshOnLeave then
             s.needsTabRefreshOnLeave = nil
             if self.db and self.db.activeCategory == "NEW" and self.mainFrame and self.mainFrame:IsShown() then
@@ -1569,8 +1725,17 @@ function BagsMod:UpdateInventory()
                     })
                 end
             elseif activeCat == "REAGENTS" then
-                if (itemInfo and itemInfo.itemID and self:ItemMatchesCategory(itemInfo, activeCat)) or (isReagentBag and not itemInfo) then
-                    table.insert(displaySlots, {
+                if isNormalBag then
+                    if itemInfo and itemInfo.itemID and self:ItemMatchesCategory(itemInfo, activeCat) then
+                        table.insert(normalDisplaySlots, {
+                            bag = bag,
+                            slot = slot,
+                            itemData = itemInfo,
+                        })
+                        totalSlots = totalSlots + 1
+                    end
+                elseif isReagentBag then
+                    table.insert(reagentDisplaySlots, {
                         bag = bag,
                         slot = slot,
                         itemData = itemInfo,
@@ -1598,7 +1763,7 @@ function BagsMod:UpdateInventory()
 
     local numNormal = 0
     local numReagent = 0
-    if activeCat == "ALL" then
+    if activeCat == "ALL" or activeCat == "REAGENTS" then
         for _, entry in ipairs(normalDisplaySlots) do
             table.insert(displaySlots, entry)
         end
@@ -1608,6 +1773,7 @@ function BagsMod:UpdateInventory()
         end
         numReagent = #reagentDisplaySlots
     end
+    self.lastNumNormalReagents = (activeCat == "REAGENTS") and numNormal or nil
 
     if self.freeText then
         self.freeText:SetText(string.format("%d / %d %s", freeSlots, totalSlots, L["Free"]))
@@ -1618,11 +1784,12 @@ function BagsMod:UpdateInventory()
     local spacing = self.db.spacing or 4
 
     local numDisplay = #displaySlots
-    local normalRows = (activeCat == "ALL") and math.max(1, math.ceil(numNormal / cols)) or math.max(1, math.ceil(numDisplay / cols))
-    local normalGridH = normalRows * slotSize + (normalRows - 1) * spacing
+    local isSplitCategory = (activeCat == "ALL" or activeCat == "REAGENTS")
+    local normalRows = isSplitCategory and (numNormal > 0 and math.max(1, math.ceil(numNormal / cols)) or 0) or math.max(1, math.ceil(numDisplay / cols))
+    local normalGridH = (normalRows > 0) and (normalRows * slotSize + (normalRows - 1) * spacing) or 0
 
-    local reagentGap = (activeCat == "ALL" and numReagent > 0) and 10 or 0
-    local reagentRows = (activeCat == "ALL" and numReagent > 0) and math.ceil(numReagent / cols) or 0
+    local reagentGap = (isSplitCategory and numReagent > 0 and numNormal > 0) and 10 or 0
+    local reagentRows = (isSplitCategory and numReagent > 0) and math.ceil(numReagent / cols) or 0
     local reagentGridH = (reagentRows > 0) and (reagentRows * slotSize + (reagentRows - 1) * spacing) or 0
 
     local gridW = cols * slotSize + (cols - 1) * spacing
@@ -1631,6 +1798,7 @@ function BagsMod:UpdateInventory()
     local headerH = 28 + catH + 12
     local footerH = 24 + 8
     local gridH = normalGridH + reagentGap + reagentGridH
+    if gridH < slotSize then gridH = slotSize end
     local frameH = headerH + gridH + footerH + 16
 
     if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
@@ -1649,7 +1817,7 @@ function BagsMod:UpdateInventory()
             parent:ClearAllPoints()
 
             local x, y
-            if activeCat == "ALL" and i > numNormal then
+            if isSplitCategory and i > numNormal then
                 local relIdx = i - numNormal
                 local col = (relIdx - 1) % cols
                 local row = math.floor((relIdx - 1) / cols)
@@ -1714,6 +1882,8 @@ function BagsMod:UpdateInventory()
                     if iconTex and iconTex.SetDesaturated then iconTex:SetDesaturated(false) end
                     if isSearching then
                         slotFrame:SetBackdropBorderColor(1.0, 0.82, 0.0, 1.0)
+                    elseif itemData.showQuestBang or itemData.showQuestBorder then
+                        slotFrame:SetBackdropBorderColor(1.0, 0.85, 0.0, 1.0)
                     else
                         local qc = QUALITY_COLORS[itemData.quality or 1] or QUALITY_COLORS[1]
                         if self.db.qualityBorders ~= false then
@@ -1764,9 +1934,21 @@ function BagsMod:UpdateInventory()
                     end
                 end
 
+                -- Quest indicator
+                if slotFrame.questIcon then
+                    if itemData.showQuestBang then
+                        slotFrame.questIcon:SetTexture("Interface\\QuestFrame\\UI-QuestLog-ItemQuestIcon")
+                        slotFrame.questIcon:Show()
+                    else
+                        slotFrame.questIcon:Hide()
+                    end
+                end
+
+                self:UpdateSlotCooldown(slotFrame)
                 slotFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
             else
                 -- Empty slot
+                if slotFrame.questIcon then slotFrame.questIcon:Hide() end
                 if slotFrame.IconBorder then
                     slotFrame.IconBorder:SetAlpha(0)
                     if slotFrame.IconBorder.Hide then slotFrame.IconBorder:Hide() end
@@ -1791,6 +1973,14 @@ function BagsMod:UpdateInventory()
                 if slotFrame.BattlepayItemTexture then slotFrame.BattlepayItemTexture:Hide() end
                 if slotFrame.newitemglowAnim and slotFrame.newitemglowAnim.Stop then slotFrame.newitemglowAnim:Stop() end
                 if slotFrame.flashAnim and slotFrame.flashAnim.Stop then slotFrame.flashAnim:Stop() end
+                if slotFrame.Cooldown then
+                    slotFrame.Cooldown:Hide()
+                    if slotFrame.Cooldown.Clear then
+                        slotFrame.Cooldown:Clear()
+                    elseif slotFrame.Cooldown.SetCooldown then
+                        slotFrame.Cooldown:SetCooldown(0, 0)
+                    end
+                end
                 if isSearching then
                     slotFrame:SetAlpha(0.2)
                 else
@@ -1807,6 +1997,38 @@ function BagsMod:UpdateInventory()
         if s then
             s:Hide()
             if s.slotParent then s.slotParent:Hide() end
+        end
+    end
+end
+
+function BagsMod:UpdateSlotCooldown(slotFrame)
+    if not slotFrame or not slotFrame.Cooldown then return end
+    local start, duration, enable = 0, 0, 0
+    if slotFrame.bag and slotFrame.slot then
+        if _G.C_Container and _G.C_Container.GetContainerItemCooldown then
+            start, duration, enable = _G.C_Container.GetContainerItemCooldown(slotFrame.bag, slotFrame.slot)
+        elseif _G.GetContainerItemCooldown then
+            start, duration, enable = _G.GetContainerItemCooldown(slotFrame.bag, slotFrame.slot)
+        end
+    end
+    if enable and enable ~= 0 and duration and duration > 0 then
+        slotFrame.Cooldown:SetCooldown(start, duration)
+        slotFrame.Cooldown:Show()
+    else
+        slotFrame.Cooldown:Hide()
+        if slotFrame.Cooldown.Clear then
+            slotFrame.Cooldown:Clear()
+        elseif slotFrame.Cooldown.SetCooldown then
+            slotFrame.Cooldown:SetCooldown(0, 0)
+        end
+    end
+end
+
+function BagsMod:OnBagCooldownUpdate()
+    if not self.mainFrame or not self.mainFrame:IsShown() then return end
+    for _, slotFrame in ipairs(self.itemSlots) do
+        if slotFrame:IsShown() and slotFrame.bag and slotFrame.slot then
+            self:UpdateSlotCooldown(slotFrame)
         end
     end
 end

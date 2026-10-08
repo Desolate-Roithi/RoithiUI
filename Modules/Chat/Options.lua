@@ -70,7 +70,7 @@ function ChatMod:GetOptions()
                         desc = L["Position for the Chattynator-style action icons (Channels, Quick Chat, Voice, Social)."] or "Position for the Chattynator-style action icons (Channels, Quick Chat, Voice, Social).",
                         order = 4,
                         values = {
-                            ["INSIDE_TOP_RIGHT"] = L["Inside Top-Right"] or "Inside Top-Right",
+                            ["INSIDE_TOP_RIGHT"] = L["Top-Right (Tab Line)"] or "Top-Right (Tab Line)",
                             ["INSIDE_TOP_LEFT"] = L["Inside Top-Left"] or "Inside Top-Left",
                             ["ABOVE_CHAT"] = L["Above Chat"] or "Above Chat",
                             ["OUTSIDE_LEFT"] = L["Outside Left"] or "Outside Left",
@@ -204,7 +204,7 @@ function ChatMod:GetOptions()
                         min = 0,
                         max = 30,
                         step = 1,
-                        get = function() return (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 2 end,
+                        get = function() return (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 4 end,
                         set = function(_, val)
                             self.db.backgroundPaddingX = val
                             self:UpdateBackgroundPosition()
@@ -219,7 +219,7 @@ function ChatMod:GetOptions()
                         min = 0,
                         max = 20,
                         step = 1,
-                        get = function() return (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 2 end,
+                        get = function() return (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 4 end,
                         set = function(_, val)
                             self.db.backgroundPaddingY = val
                             self:UpdateBackgroundPosition()

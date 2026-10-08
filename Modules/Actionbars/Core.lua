@@ -11,6 +11,7 @@ AB.dbKey = "Actionbars"
 
 AB.defaultSettings = {
     enabled = true,
+    disableBarPaging = true,
     showHotkeys = true,
     showMacroText = true,
     showCount = true,
@@ -65,6 +66,9 @@ function AB:ToggleQuickKeybind()
     elseif _G.Settings and _G.Settings.OpenToCategory then
         pcall(_G.Settings.OpenToCategory, "Keybindings")
     end
+    if self.UpdateAllEmptyButtons then
+        self:UpdateAllEmptyButtons()
+    end
 end
 
 local function SafeCopyTable(src)
@@ -91,6 +95,11 @@ end
 
 function AB:OnEnable()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Actionbars or self.defaultSettings
+    for k, v in pairs(self.defaultSettings) do
+        if type(v) == "table" and not self.db[k] then
+            self.db[k] = SafeCopyTable(v)
+        end
+    end
     if self.db.enabled == false then return end
 
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -111,6 +120,7 @@ function AB:OnEnable()
     self:SetupBars()
     self:StyleAllBars()
     self:LayoutAllBars()
+    self:DisableActionPageSwitching()
     self:SetupLEM()
 end
 
@@ -127,6 +137,12 @@ function AB:PLAYER_REGEN_ENABLED()
     if self.queuedLayout then
         self.queuedLayout = false
         self:LayoutAllBars()
+    end
+    if self.queuedMouseUpdate then
+        self.queuedMouseUpdate = false
+        if self.UpdateAllEmptyButtons then
+            self:UpdateAllEmptyButtons()
+        end
     end
 end
 

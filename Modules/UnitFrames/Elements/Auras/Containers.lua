@@ -537,7 +537,7 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
     if not hasSavedPos then
         local userAnchor = isDebuffs and db.debuffAnchor
                         or isBuffs and db.buffAnchor
-                        or db.auraAnchor or (unit == "target" and "TOPLEFT" or "BOTTOMLEFT")
+                        or db.auraAnchor or ((unit == "pet" or unit == "focus" or unit == "target") and "TOPLEFT" or "BOTTOMLEFT")
 
         local userX = isCombined and (tonumber(db.auraX) or tonumber(db.auraXOffset) or 0)
                    or (isDebuffs and (tonumber(db.debuffX) or tonumber(db.debuffXOffset) or tonumber(db.auraX) or 0)
@@ -558,6 +558,10 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
 
         local containerPoint = layoutAnchor or userAnchor
         local targetRelPoint = userAnchor
+
+        if (unit == "pet" or unit == "focus") and userAnchor == "TOPLEFT" then
+            containerPoint = "TOPLEFT"
+        end
 
         if isCenterHoriz then
             if userAnchor:find("TOP") then

@@ -50,6 +50,19 @@ function AB:GetOptions()
                             self:StyleAllBars()
                         end,
                     },
+                    disableBarPaging = {
+                        type = "toggle",
+                        name = L["Disable Action Bar Paging"],
+                        desc = L["Prevents accidental action page switching via mouse wheel or keybind paging."],
+                        order = 1.5,
+                        get = function() return self.db.disableBarPaging ~= false end,
+                        set = function(_, val)
+                            self.db.disableBarPaging = val
+                            if val then
+                                self:DisableActionPageSwitching()
+                            end
+                        end,
+                    },
                     showMacroText = {
                         type = "toggle",
                         name = L["Show Macro Text"],
@@ -318,6 +331,28 @@ function AB:GetOptions()
                     local bKey = self.selectedBar or "bar1"
                     self.db[bKey] = self.db[bKey] or {}
                     self.db[bKey].buttonsPerRow = val
+                    self.db[bKey].numRows = nil
+                    self:LayoutBar(bKey)
+                end,
+            },
+            numRows = {
+                type = "range",
+                name = L["Number of Rows"] or "Number of Rows",
+                order = 9.2,
+                min = 1,
+                max = 12,
+                step = 1,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return self.db[bKey] and self.db[bKey].numRows or 1
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].numRows = val
+                    local cfg = self.BAR_CONFIGS and self.BAR_CONFIGS[bKey]
+                    local maxBtn = (self.db[bKey] and self.db[bKey].maxButtons) or (cfg and cfg.count) or 12
+                    self.db[bKey].buttonsPerRow = math.ceil(maxBtn / val)
                     self:LayoutBar(bKey)
                 end,
             },
@@ -345,6 +380,197 @@ function AB:GetOptions()
                     self.db[bKey] = self.db[bKey] or {}
                     self.db[bKey].maxButtons = math.min(val, maxCount)
                     self:LayoutBar(bKey)
+                end,
+            },
+            textHeader = {
+                type = "header",
+                name = L["Button Text Customization"] or "Button Text Customization",
+                order = 10,
+            },
+            hotkeyPosition = {
+                type = "select",
+                name = L["Hotkey Position"] or "Hotkey Position",
+                order = 11,
+                values = {
+                    ["TOPLEFT"] = "TOPLEFT",
+                    ["TOP"] = "TOP",
+                    ["TOPRIGHT"] = "TOPRIGHT",
+                    ["LEFT"] = "LEFT",
+                    ["CENTER"] = "CENTER",
+                    ["RIGHT"] = "RIGHT",
+                    ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                    ["BOTTOM"] = "BOTTOM",
+                    ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                },
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return (self.db[bKey] and self.db[bKey].hotkeyPosition) or "TOPRIGHT"
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].hotkeyPosition = val
+                    self:StyleAllBars()
+                end,
+            },
+            hotkeyOffsetX = {
+                type = "range",
+                name = L["Hotkey X Offset"] or "Hotkey X Offset",
+                order = 11.1,
+                min = -20,
+                max = 20,
+                step = 1,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return (self.db[bKey] and self.db[bKey].hotkeyOffsetX) or 0
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].hotkeyOffsetX = val
+                    self:StyleAllBars()
+                end,
+            },
+            hotkeyOffsetY = {
+                type = "range",
+                name = L["Hotkey Y Offset"] or "Hotkey Y Offset",
+                order = 11.2,
+                min = -20,
+                max = 20,
+                step = 1,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return (self.db[bKey] and self.db[bKey].hotkeyOffsetY) or -2
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].hotkeyOffsetY = val
+                    self:StyleAllBars()
+                end,
+            },
+            macroPosition = {
+                type = "select",
+                name = L["Macro Text Position"] or "Macro Text Position",
+                order = 12,
+                values = {
+                    ["TOPLEFT"] = "TOPLEFT",
+                    ["TOP"] = "TOP",
+                    ["TOPRIGHT"] = "TOPRIGHT",
+                    ["LEFT"] = "LEFT",
+                    ["CENTER"] = "CENTER",
+                    ["RIGHT"] = "RIGHT",
+                    ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                    ["BOTTOM"] = "BOTTOM",
+                    ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                },
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return (self.db[bKey] and self.db[bKey].macroPosition) or "BOTTOM"
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].macroPosition = val
+                    self:StyleAllBars()
+                end,
+            },
+            macroOffsetX = {
+                type = "range",
+                name = L["Macro Text X Offset"] or "Macro Text X Offset",
+                order = 12.1,
+                min = -20,
+                max = 20,
+                step = 1,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return (self.db[bKey] and self.db[bKey].macroOffsetX) or 0
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].macroOffsetX = val
+                    self:StyleAllBars()
+                end,
+            },
+            macroOffsetY = {
+                type = "range",
+                name = L["Macro Text Y Offset"] or "Macro Text Y Offset",
+                order = 12.2,
+                min = -20,
+                max = 20,
+                step = 1,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return (self.db[bKey] and self.db[bKey].macroOffsetY) or 2
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].macroOffsetY = val
+                    self:StyleAllBars()
+                end,
+            },
+            countPosition = {
+                type = "select",
+                name = L["Count Position"] or "Count Position",
+                order = 13,
+                values = {
+                    ["TOPLEFT"] = "TOPLEFT",
+                    ["TOP"] = "TOP",
+                    ["TOPRIGHT"] = "TOPRIGHT",
+                    ["LEFT"] = "LEFT",
+                    ["CENTER"] = "CENTER",
+                    ["RIGHT"] = "RIGHT",
+                    ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                    ["BOTTOM"] = "BOTTOM",
+                    ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                },
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return (self.db[bKey] and self.db[bKey].countPosition) or "BOTTOMRIGHT"
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].countPosition = val
+                    self:StyleAllBars()
+                end,
+            },
+            countOffsetX = {
+                type = "range",
+                name = L["Count X Offset"] or "Count X Offset",
+                order = 13.1,
+                min = -20,
+                max = 20,
+                step = 1,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return (self.db[bKey] and self.db[bKey].countOffsetX) or -2
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].countOffsetX = val
+                    self:StyleAllBars()
+                end,
+            },
+            countOffsetY = {
+                type = "range",
+                name = L["Count Y Offset"] or "Count Y Offset",
+                order = 13.2,
+                min = -20,
+                max = 20,
+                step = 1,
+                get = function()
+                    local bKey = self.selectedBar or "bar1"
+                    return (self.db[bKey] and self.db[bKey].countOffsetY) or 2
+                end,
+                set = function(_, val)
+                    local bKey = self.selectedBar or "bar1"
+                    self.db[bKey] = self.db[bKey] or {}
+                    self.db[bKey].countOffsetY = val
+                    self:StyleAllBars()
                 end,
             },
         },

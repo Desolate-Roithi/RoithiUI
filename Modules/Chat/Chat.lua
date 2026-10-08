@@ -17,8 +17,8 @@ ChatMod.defaultSettings = {
     backgroundColor = { r = 0.03, g = 0.045, b = 0.05, a = 0.65 },
     showBorder = true,
     borderColor = { r = 0.15, g = 0.15, b = 0.15, a = 1.0 },
-    backgroundPaddingX = 2,
-    backgroundPaddingY = 2,
+    backgroundPaddingX = 4,
+    backgroundPaddingY = 4,
     includeEditBoxInBackground = false,
     clampToScreen = false,
     font = "Interface\\AddOns\\RoithiUI\\Media\\Fonts\\Expressway.ttf",
@@ -108,12 +108,6 @@ local CHAT_FILTER_EVENTS = {
     "CHAT_MSG_BN_WHISPER_INFORM",
 }
 
--- Channel notice events should pass through unfiltered so join/leave messages
--- show the full channel name (e.g. "You have joined General"), not numbers.
-local CHANNEL_NOTICE_EVENTS = {
-    "CHAT_MSG_CHANNEL_NOTICE",
-    "CHAT_MSG_CHANNEL_NOTICE_USER",
-}
 
 local RACE_ATLAS_OVERRIDES = {
     scourge = "undead",
@@ -252,12 +246,77 @@ function ChatMod:GetSpeakerIcons(guid)
     return (out ~= "") and (out .. " ") or nil
 end
 
+local function IsSecretString(str)
+    if not str then return false end
+    if _G.issecretvalue and _G.issecretvalue(str) then return true end
+    if _G.canaccessvalue and not _G.canaccessvalue(str) then return true end
+    if type(str) == "userdata" then return true end
+    return false
+end
+
+local function IsChannelNoticeMessage(text, eventArgs)
+    if not text or type(text) ~= "string" then return false end
+    if eventArgs then
+        if eventArgs.event == "CHAT_MSG_CHANNEL_NOTICE" or eventArgs.event == "CHAT_MSG_CHANNEL_NOTICE_USER" then
+            return true
+        end
+        if eventArgs[1] == "CHAT_MSG_CHANNEL_NOTICE" or eventArgs[1] == "CHAT_MSG_CHANNEL_NOTICE_USER" then
+            return true
+        end
+    end
+    local noticeGlobals = {
+        _G.CHAT_YOU_JOINED_NOTICE,
+        _G.CHAT_YOU_JOINED_NOTICE_BN,
+        _G.CHAT_YOU_LEFT_NOTICE,
+        _G.CHAT_YOU_LEFT_NOTICE_BN,
+        _G.CHAT_YOU_CHANGED_NOTICE,
+        _G.CHAT_YOU_CHANGED_NOTICE_BN,
+        _G.CHAT_SUSPENDED_NOTICE,
+    }
+    for _, gStr in ipairs(noticeGlobals) do
+        if gStr and gStr ~= "" then
+            local prefix = gStr:match("^([^|]+)")
+            if prefix and text:find(prefix, 1, true) then
+                return true
+            end
+        end
+    end
+    if text:find("Joined Channel", 1, true)
+        or text:find("Left Channel", 1, true)
+        or text:find("Changed Channel", 1, true)
+        or text:find("Channel beigetreten", 1, true)
+        or text:find("Channel verlassen", 1, true)
+        or text:find("Channel gewechselt", 1, true)
+        or text:find("Kanal beigetreten", 1, true)
+        or text:find("Kanal verlassen", 1, true)
+        or text:find("Kanal gewechselt", 1, true) then
+        return true
+    end
+    return false
+end
+
 function ChatMod:FormatChatMessageText(text, eventArgs)
-    if not text or type(text) ~= "string" or text == "" then return text end
+    if not text or IsSecretString(text) or type(text) ~= "string" or text == "" then return text end
     local out = text
 
-    -- 1. Channel Shortening
-    if self.db and self.db.shortenChannels ~= false then
+    -- 1. Channel Resolution & Shortening
+    local isNotice = IsChannelNoticeMessage(out, eventArgs)
+    if isNotice then
+        -- Exclude channel notices from number shortening; resolve full channel name
+        out = out:gsub("(|Hchannel:[^|]*(%d+)|h)%[(.-)%](|h)", function(linkOpen, chanNumStr, innerText, linkClose)
+            local chanNum = tonumber(chanNumStr)
+            local chanName = innerText
+            if chanNum and _G.GetChannelName then
+                local _, resolvedName = _G.GetChannelName(chanNum)
+                if resolvedName and resolvedName ~= "" then
+                    chanName = resolvedName
+                end
+            end
+            local cleanName = chanName:match("^%d+%.%s*(.+)$") or chanName
+            local formattedLabel = chanNumStr .. ". " .. cleanName
+            return linkOpen .. "[" .. formattedLabel .. "]" .. linkClose
+        end)
+    elseif self.db and self.db.shortenChannels ~= false then
         out = out:gsub("(|Hchannel:[^|]*(%d+)|h)%[(.-)%](|h)", "%1[%2]%4")
 
         for _, grp in ipairs(GROUP_CHANNELS) do
@@ -316,7 +375,7 @@ end
 
 function ChatMod:FormatChatMessage(frame, text, eventArgs)
     if not self.db or self.db.enabled == false then return end
-    if not text or type(text) ~= "string" or text == "" then return end
+    if not text or IsSecretString(text) or type(text) ~= "string" or text == "" then return end
 
     local newText = self:FormatChatMessageText(text, eventArgs)
     if newText and newText ~= text then
@@ -352,23 +411,13 @@ end
 
 function ChatMod:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Chat or self.defaultSettings
-
-    -- Migrate old excessive padding defaults to tight 2px borders
-    if self.db.backgroundPaddingX == 10 or self.db.backgroundPaddingX == 12 then
-        self.db.backgroundPaddingX = 2
+    if self.db then
+        for k, v in pairs(self.defaultSettings) do
+            if self.db[k] == nil then
+                self.db[k] = v
+            end
+        end
     end
-    if self.db.backgroundPaddingY == 4 or self.db.backgroundPaddingY == 6 then
-        self.db.backgroundPaddingY = 2
-    end
-
-    -- Migrate old or default "none" timestamp setting so timestamps are active
-    if not self.db.timestampFormat or self.db.timestampFormat == "none" then
-        self.db.timestampFormat = "%H:%M "
-    end
-
-    if self.db.showClassIcons == nil then self.db.showClassIcons = true end
-    if self.db.showRaceIcons == nil then self.db.showRaceIcons = true end
-    if self.db.chatIconSize == nil then self.db.chatIconSize = 14 end
 
     if _G.StaticPopupDialogs and not _G.StaticPopupDialogs["ROITHI_CHAT_COPY_URL"] then
         _G.StaticPopupDialogs["ROITHI_CHAT_COPY_URL"] = {
@@ -584,23 +633,28 @@ function ChatMod:UpdateBackgroundPosition()
 
     local ebHeight = self.db.editBoxHeight or 24
     local isTop = (self.db.editBoxPosition == "TOP")
-    local padX = (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 2
-    local padY = (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 2
+    local padX = (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 4
+    local padY = (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 4
     local includeEb = (self.db.includeEditBoxInBackground == true)
+    local tabH = (self.db.styleTabs ~= false) and (self.db.tabHeight or 22) or 0
+    local topExtra = tabH + (isTop and (includeEb and (ebHeight + 4) or 0) or 0)
 
     self.bgPanel:ClearAllPoints()
     if isTop then
-        local topOffset = padY + (includeEb and (ebHeight + 4) or 0)
-        self.bgPanel:SetPoint("TOPLEFT", cf1, "TOPLEFT", -padX, topOffset)
+        self.bgPanel:SetPoint("TOPLEFT", cf1, "TOPLEFT", -padX, topExtra + padY)
         self.bgPanel:SetPoint("BOTTOMRIGHT", cf1, "BOTTOMRIGHT", padX, -padY)
     else
         local botOffset = -padY - (includeEb and (ebHeight + 4) or 0)
-        self.bgPanel:SetPoint("TOPLEFT", cf1, "TOPLEFT", -padX, padY)
+        self.bgPanel:SetPoint("TOPLEFT", cf1, "TOPLEFT", -padX, topExtra + padY)
         self.bgPanel:SetPoint("BOTTOMRIGHT", cf1, "BOTTOMRIGHT", padX, botOffset)
     end
 
     if _G.ChatFrame1EditBox and self.RepositionEditBox then
         self:RepositionEditBox(_G.ChatFrame1EditBox, cf1)
+    end
+
+    if self.UpdateButtonsDock then
+        self:UpdateButtonsDock()
     end
 
     if self.UpdateEditModeSelection then
@@ -621,8 +675,8 @@ function ChatMod:UpdateEditModeSelection(cf)
     cf.Selection:SetPoint("LEFT", anchorFrame, "LEFT", -2, 0)
     cf.Selection:SetPoint("RIGHT", anchorFrame, "RIGHT", 2, 0)
 
-    -- Top boundary: encompass chat tabs and/or top-positioned editbox
-    if isTop and eb and (eb.IsShown == nil or eb:IsShown()) then
+    -- Top boundary: encompass chat tabs and/or top-positioned editbox unconditionally
+    if isTop and eb then
         cf.Selection:SetPoint("TOP", eb, "TOP", 0, 2)
     elseif tab and (tab.IsShown == nil or tab:IsShown()) then
         cf.Selection:SetPoint("TOP", tab, "TOP", 0, 2)
@@ -631,8 +685,8 @@ function ChatMod:UpdateEditModeSelection(cf)
         cf.Selection:SetPoint("TOP", anchorFrame, "TOP", 0, tabH + 2)
     end
 
-    -- Bottom boundary: encompass bottom-positioned editbox
-    if (not isTop) and eb and (eb.IsShown == nil or eb:IsShown()) then
+    -- Bottom boundary: encompass bottom-positioned editbox unconditionally to prevent screen clipping
+    if (not isTop) and eb then
         cf.Selection:SetPoint("BOTTOM", eb, "BOTTOM", 0, -2)
     else
         cf.Selection:SetPoint("BOTTOM", anchorFrame, "BOTTOM", 0, -2)
@@ -652,8 +706,109 @@ function ChatMod:SkinAllChatFrames()
         end
     end
 
+    if not self.fcfColorsHooked and hooksecurefunc then
+        hooksecurefunc("FCFTab_UpdateColors", function(selectedTab, selected)
+            if self:IsEnabled() and self.UpdateTabVisuals then
+                self:UpdateTabVisuals(selectedTab, selected)
+            end
+        end)
+        self.fcfColorsHooked = true
+    end
+
+    if not self.fcfSelectDockHooked and hooksecurefunc then
+        hooksecurefunc("FCF_SelectDockFrame", function(dock, selectedChatFrame)
+            if not self:IsEnabled() or not dock or not dock.DOCKED_CHAT_FRAMES then return end
+            for _, dockedFrame in ipairs(dock.DOCKED_CHAT_FRAMES) do
+                local t = _G[dockedFrame:GetName() .. "Tab"]
+                if t and self.UpdateTabVisuals then
+                    self:UpdateTabVisuals(t, dockedFrame == selectedChatFrame)
+                end
+            end
+        end)
+        self.fcfSelectDockHooked = true
+    end
+
     if self.db.hideBlizzardChrome then
         self:HideBlizzardChrome()
+    end
+end
+
+function ChatMod:SkinScrollToBottomButton(btn)
+    if not btn or btn.roithiRestyled then return end
+    btn.roithiRestyled = true
+
+    if btn.SetSize then btn:SetSize(20, 20) end
+
+    -- Strip default Blizzard textures (beveled borders, corner notches)
+    local nt = btn.GetNormalTexture and btn:GetNormalTexture()
+    if nt then
+        if nt.SetTexture then nt:SetTexture("") end
+        if nt.SetAlpha then nt:SetAlpha(0) end
+    end
+    local pt = btn.GetPushedTexture and btn:GetPushedTexture()
+    if pt then
+        if pt.SetTexture then pt:SetTexture("") end
+        if pt.SetAlpha then pt:SetAlpha(0) end
+    end
+    local dt = btn.GetDisabledTexture and btn:GetDisabledTexture()
+    if dt then
+        if dt.SetTexture then dt:SetTexture("") end
+        if dt.SetAlpha then dt:SetAlpha(0) end
+    end
+    if btn.Flash and btn.Flash.SetTexture then
+        btn.Flash:SetTexture("")
+        if btn.Flash.SetAlpha then btn.Flash:SetAlpha(0) end
+    end
+
+    -- Clean RoithiUI backdrop tile
+    if not btn.roithiBackdrop then
+        local bg = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+        bg:SetAllPoints(btn)
+        bg:SetFrameLevel(math.max(0, btn:GetFrameLevel() - 1))
+        bg:EnableMouse(false)
+        LibRoithi.mixins:CreateBackdrop(bg)
+        bg:SetBackdropColor(0.08, 0.11, 0.14, 0.85)
+        bg:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.8)
+        btn.roithiBackdrop = bg
+    end
+
+    -- Clean golden downward chevron icon
+    if not btn.roithiArrow then
+        local arrow = btn:CreateTexture(nil, "ARTWORK")
+        arrow:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        arrow:SetSize(12, 12)
+        local hasChevron = _G.C_Texture and _G.C_Texture.GetAtlasInfo and _G.C_Texture.GetAtlasInfo("uitools-icon-chevron-down")
+        if hasChevron and arrow.SetAtlas then
+            arrow:SetAtlas("uitools-icon-chevron-down")
+            if arrow.SetVertexColor then arrow:SetVertexColor(1, 0.82, 0, 1) end
+        else
+            arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollEnd-Up")
+            arrow:SetTexCoord(0.33, 0.67, 0.33, 0.67)
+        end
+        btn.roithiArrow = arrow
+    end
+
+    if btn.HookScript and not btn.roithiPushedHooked then
+        btn.roithiPushedHooked = true
+        btn:HookScript("OnMouseDown", function()
+            if btn.roithiArrow then
+                btn.roithiArrow:SetPoint("CENTER", btn, "CENTER", 0, -1)
+            end
+        end)
+        btn:HookScript("OnMouseUp", function()
+            if btn.roithiArrow then
+                btn.roithiArrow:SetPoint("CENTER", btn, "CENTER", 0, 0)
+            end
+        end)
+    end
+
+    if btn.SetHighlightTexture then
+        btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+        local ht = btn.GetHighlightTexture and btn:GetHighlightTexture()
+        if ht then
+            if ht.ClearAllPoints then ht:ClearAllPoints() end
+            if ht.SetAllPoints then ht:SetAllPoints(btn) end
+        end
     end
 end
 
@@ -743,12 +898,19 @@ function ChatMod:SkinChatFrame(cf, idx)
         end
     end
 
-    -- Completely hide Blizzard's default ScrollToBottomButton
-    local scrollBottom = cf.ScrollToBottomButton or _G[cfName .. "ScrollToBottomButton"]
+    -- Restyle Blizzard's default ScrollToBottomButton (Classic & Retail)
+    local scrollBottom = cf.ScrollToBottomButton
+        or cf.bottomButton
+        or cf.BottomButton
+        or (cf.buttonFrame and (cf.buttonFrame.bottomButton or cf.buttonFrame.BottomButton))
+        or _G[cfName .. "ScrollToBottomButton"]
+        or _G[cfName .. "BottomButton"]
     if scrollBottom then
-        scrollBottom:SetParent(GetHiddenParent())
-        scrollBottom:Hide()
-        scrollBottom:SetAlpha(0)
+        self:SkinScrollToBottomButton(scrollBottom)
+        if scrollBottom.ClearAllPoints and scrollBottom.SetPoint then
+            scrollBottom:ClearAllPoints()
+            scrollBottom:SetPoint("BOTTOMRIGHT", cf, "BOTTOMRIGHT", -2, 2)
+        end
     end
 
     -- Apply font and shadow
@@ -902,7 +1064,7 @@ function ChatMod:RepositionEditBox(eb, cf)
 
     local ebHeight = self.db.editBoxHeight or 24
     local isTop = (self.db.editBoxPosition == "TOP")
-    local padX = (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 2
+    local padX = (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 4
     local includeEb = (self.db.includeEditBoxInBackground == true)
 
     local anchorFrame = (cf == _G.ChatFrame1 and self.bgPanel and self.db.showBackground) and self.bgPanel or cf
@@ -1013,6 +1175,60 @@ end
 -------------------------------------------------------------------------------
 -- Tab Skinning
 -------------------------------------------------------------------------------
+function ChatMod:UpdateTabVisuals(tab, isSelected)
+    if not tab then return end
+    local texs = tabTextures[tab]
+    local tabName = tab.GetName and tab:GetName()
+    local tabText = (texs and texs.text) or tab.Text or (tabName and _G[tabName .. "Text"])
+    local cfTarget = (texs and texs.cf) or tab.chatFrame or (tabName and _G[tabName:gsub("Tab$", "")])
+
+    local isSel = isSelected
+    if isSel == nil then
+        if _G.SELECTED_CHAT_FRAME and cfTarget then
+            isSel = (_G.SELECTED_CHAT_FRAME == cfTarget)
+        else
+            isSel = (cfTarget and cfTarget:IsShown())
+        end
+    end
+
+    local alpha = isSel and (self.db.tabAlphaActive or 1.0) or (self.db.tabAlphaInactive or 0.5)
+    if tab.SetAlpha then tab:SetAlpha(alpha) end
+
+    if tabText and tabText.SetTextColor then
+        if isSel then
+            -- Selected tab: bright gold highlight text
+            tabText:SetTextColor(1.0, 0.85, 0.35, 1.0)
+        else
+            -- Inactive tab: muted gray text
+            tabText:SetTextColor(0.65, 0.65, 0.65, 0.8)
+        end
+    end
+
+    if texs then
+        local bgColor = self.db.backgroundColor or self.defaultSettings.backgroundColor
+        local borderColor = self.db.borderColor or self.defaultSettings.borderColor
+
+        if isSel then
+            -- Selected tab: distinct elevated dark fill with bright gold top accent line
+            texs.bg:SetColorTexture(0.08, 0.11, 0.14, 0.85)
+            texs.top:SetHeight(2)
+            texs.top:SetColorTexture(1.0, 0.82, 0.0, 1.0)
+            texs.bottom:SetColorTexture(0, 0, 0, 0)
+            texs.left:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, 0.8)
+            texs.right:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, 0.8)
+        else
+            -- Inactive tab: subtle, muted
+            texs.bg:SetColorTexture(bgColor.r or 0.03, bgColor.g or 0.045, bgColor.b or 0.05, 0.35)
+            texs.top:SetHeight(1)
+            texs.top:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, 0.4)
+            texs.bottom:SetHeight(1)
+            texs.bottom:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, 0.4)
+            texs.left:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, 0.3)
+            texs.right:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, 0.3)
+        end
+    end
+end
+
 function ChatMod:SkinTab(tab, cf, idx)
     if not tab or skinnedTabs[tab] then return end
     skinnedTabs[tab] = true
@@ -1067,40 +1283,21 @@ function ChatMod:SkinTab(tab, cf, idx)
         right:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
         right:SetWidth(1)
 
-        tabTextures[tab] = { bg = bg, top = top, bottom = bottom, left = left, right = right }
+        tabTextures[tab] = { bg = bg, top = top, bottom = bottom, left = left, right = right, text = tabText, cf = cf }
     end
 
-    local function UpdateTabVisuals(isSelected)
-        local isSel = isSelected
-        if isSel == nil then
-            isSel = (cf and cf:IsShown())
-        end
-        local alpha = isSel and (self.db.tabAlphaActive or 1.0) or (self.db.tabAlphaInactive or 0.5)
-        tab:SetAlpha(alpha)
-
-        local texs = tabTextures[tab]
-        if texs then
-            local bgColor = self.db.backgroundColor or self.defaultSettings.backgroundColor
-            local borderColor = self.db.borderColor or self.defaultSettings.borderColor
-            local bgAlpha = (bgColor.a or 0.65) * (isSel and 1.0 or 0.7)
-            local borderAlpha = (borderColor.a or 1.0) * (isSel and 1.0 or 0.5)
-            texs.bg:SetColorTexture(bgColor.r or 0.03, bgColor.g or 0.045, bgColor.b or 0.05, bgAlpha)
-            texs.top:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, borderAlpha)
-            texs.bottom:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, borderAlpha)
-            texs.left:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, borderAlpha)
-            texs.right:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, borderAlpha)
-        end
-    end
-
-    -- Tab selection hook for active/inactive alpha
+    -- Tab hover hooks
     tab:HookScript("OnEnter", function()
-        UpdateTabVisuals(true)
+        self:UpdateTabVisuals(tab, true)
     end)
     tab:HookScript("OnLeave", function()
-        UpdateTabVisuals(cf and cf:IsShown())
+        local cfTarget = cf or _G[tab:GetName():gsub("Tab$", "")]
+        local isSel = (_G.SELECTED_CHAT_FRAME == cfTarget) or (cfTarget and cfTarget:IsShown())
+        self:UpdateTabVisuals(tab, isSel)
     end)
 
-    UpdateTabVisuals(cf and cf:IsShown())
+    local isInitSel = (_G.SELECTED_CHAT_FRAME == cf) or (cf and cf:IsShown())
+    self:UpdateTabVisuals(tab, isInitSel)
 end
 
 -------------------------------------------------------------------------------
@@ -1140,33 +1337,9 @@ function ChatMod:UpdateButtonsDock()
         dock:SetFrameStrata("MEDIUM")
         dock:SetFrameLevel(cf1:GetFrameLevel() + 10)
         self.buttonDock = dock
-
-        local scrollBtn = CreateFrame("Button", "RoithiChatScrollBottomButton", dock)
-        if scrollBtn.SetSize then scrollBtn:SetSize(18, 18) end
-        if scrollBtn.SetNormalTexture then scrollBtn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollEnd-Up") end
-        if scrollBtn.SetPushedTexture then scrollBtn:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollEnd-Down") end
-        if scrollBtn.SetHighlightTexture then scrollBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight") end
-        if scrollBtn.SetScript then
-            scrollBtn:SetScript("OnClick", function()
-                if _G.ChatFrame1 and _G.ChatFrame1.ScrollToBottom then
-                    _G.ChatFrame1:ScrollToBottom()
-                end
-                if scrollBtn.Hide then scrollBtn:Hide() end
-            end)
-        end
-        if scrollBtn.Hide then scrollBtn:Hide() end
-        self.scrollBtn = scrollBtn
-
-        if cf1.HookScript then
-            cf1:HookScript("OnMouseWheel", function()
-                C_Timer.After(0.05, function()
-                    if self.scrollBtn and _G.ChatFrame1 then
-                        local atBottom = _G.ChatFrame1.AtBottom and _G.ChatFrame1:AtBottom()
-                        self.scrollBtn:SetShown(not atBottom)
-                    end
-                end)
-            end)
-        end
+    end
+    if self.scrollBtn and self.scrollBtn.Hide then
+        self.scrollBtn:Hide()
     end
 
     local dock = self.buttonDock
@@ -1182,6 +1355,9 @@ function ChatMod:UpdateButtonsDock()
     if isOutside then
         dock:SetPoint("TOPRIGHT", cf1, "TOPLEFT", -4, 0)
         dock:SetSize(22, 132)
+    elseif isTopLeft then
+        dock:SetPoint("TOPLEFT", cf1, "TOPLEFT", 4, -2)
+        dock:SetSize(132, 22)
     elseif isAbove then
         local fps = _G.ForeverPlusChatSearch
         if fps and fps:IsShown() then
@@ -1189,20 +1365,23 @@ function ChatMod:UpdateButtonsDock()
         else
             dock:SetPoint("BOTTOMRIGHT", cf1, "TOPRIGHT", -2, 4)
         end
-        dock:SetSize(132, 22)
-    elseif isTopLeft then
-        dock:SetPoint("TOPLEFT", cf1, "TOPLEFT", 4, -2)
-        dock:SetSize(132, 22)
-    else -- "INSIDE_TOP_RIGHT"
+        dock:SetSize(140, 22)
+    else -- "INSIDE_TOP_RIGHT" (Default)
         local fps = _G.ForeverPlusChatSearch
         if fps and fps:IsShown() then
             dock:SetPoint("BOTTOMRIGHT", fps, "TOPRIGHT", 0, 4)
-        elseif _G.ForeverPlus or fps then
-            dock:SetPoint("BOTTOMRIGHT", cf1, "TOPRIGHT", -2, 4)
         else
-            dock:SetPoint("TOPRIGHT", cf1, "TOPRIGHT", -2, -2)
+            local padX = (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 4
+            local padY = (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 4
+
+            if self.bgPanel and self.bgPanel:IsShown() then
+                dock:SetPoint("TOPRIGHT", self.bgPanel, "TOPRIGHT", -padX, -padY)
+            else
+                dock:SetPoint("BOTTOMRIGHT", cf1, "TOPRIGHT", -2, 2)
+            end
         end
-        dock:SetSize(132, 22)
+        local tabH = (self.db.styleTabs ~= false) and (self.db.tabHeight or 22) or 22
+        dock:SetSize(140, tabH)
     end
 
     -- Hook ForeverPlusChatSearch so dock repositions when searchbar appears/disappears
@@ -1244,6 +1423,20 @@ function ChatMod:UpdateButtonsDock()
         self.copyBtn = copyBtn
     end
 
+    -- Ensure copyBtn textures are active and visible
+    if self.copyBtn then
+        if self.copyBtn.SetNormalTexture then
+            self.copyBtn:SetNormalTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up")
+            local nt = self.copyBtn:GetNormalTexture()
+            if nt and nt.SetAlpha then nt:SetAlpha(1) end
+        end
+        if self.copyBtn.SetPushedTexture then
+            self.copyBtn:SetPushedTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Down")
+            local pt = self.copyBtn:GetPushedTexture()
+            if pt and pt.SetAlpha then pt:SetAlpha(1) end
+        end
+    end
+
     local voiceLoggedIn = false
     if _G.C_VoiceChat and _G.C_VoiceChat.IsLoggedIn then
         local ok, loggedIn = pcall(_G.C_VoiceChat.IsLoggedIn)
@@ -1273,25 +1466,230 @@ function ChatMod:UpdateButtonsDock()
         end
     end
 
-    -- Ensure fallback atlases if voice buttons exist
+    -- Ensure fallback atlases if channel or voice buttons exist
+    local channelBtn = _G.ChatFrameChannelButton
+    if channelBtn and channelBtn.Icon then
+        local atlas = (channelBtn.Icon.GetAtlas and channelBtn.Icon:GetAtlas()) or ""
+        if atlas == "" and channelBtn.Icon.SetAtlas then
+            channelBtn.Icon:SetAtlas("chatframe-button-icon-voicechat")
+        end
+        channelBtn.Icon:Show()
+        channelBtn.Icon:SetAlpha(1)
+    end
+
     local deafenBtn = _G.ChatFrameToggleVoiceDeafenButton
     if deafenBtn and deafenBtn.Icon then
         local atlas = (deafenBtn.Icon.GetAtlas and deafenBtn.Icon:GetAtlas()) or ""
         if atlas == "" and deafenBtn.Icon.SetAtlas then
             deafenBtn.Icon:SetAtlas("chatframe-button-icon-speaker-on")
         end
+        deafenBtn.Icon:Show()
+        deafenBtn.Icon:SetAlpha(1)
     end
+
     local muteBtn = _G.ChatFrameToggleVoiceMuteButton
     if muteBtn and muteBtn.Icon then
         local atlas = (muteBtn.Icon.GetAtlas and muteBtn.Icon:GetAtlas()) or ""
         if atlas == "" and muteBtn.Icon.SetAtlas then
             muteBtn.Icon:SetAtlas("chatframe-button-icon-mic-on")
         end
+        muteBtn.Icon:Show()
+        muteBtn.Icon:SetAlpha(1)
+    end
+
+    local function StripChatButtonBorder(btn)
+        if not btn then return end
+        if btn == self.copyBtn then return end
+
+        -- 1. ChatFrameMenuButton (Speech bubble / chat menu button)
+        if btn == _G.ChatFrameMenuButton then
+            if btn.Icon then
+                btn.Icon:Hide()
+                btn.Icon:SetTexture(nil)
+                btn.Icon:ClearAllPoints()
+                btn.Icon:SetSize(0.001, 0.001)
+            end
+
+            local function ApplyMenuButtonTextures(b)
+                local nt = b.GetNormalTexture and b:GetNormalTexture()
+                if nt then
+                    nt:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-Chat-Up")
+                    nt:SetTexCoord(0.28, 0.72, 0.28, 0.72)
+                    nt:ClearAllPoints()
+                    nt:SetAllPoints(b)
+                    nt:SetAlpha(1)
+                end
+                local pt = b.GetPushedTexture and b:GetPushedTexture()
+                if pt then
+                    pt:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-Chat-Down")
+                    pt:SetTexCoord(0.28, 0.72, 0.28, 0.72)
+                    pt:ClearAllPoints()
+                    pt:SetAllPoints(b)
+                    pt:SetAlpha(1)
+                end
+                local dt = b.GetDisabledTexture and b:GetDisabledTexture()
+                if dt then
+                    dt:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-Chat-Disabled")
+                    dt:SetTexCoord(0.28, 0.72, 0.28, 0.72)
+                    dt:ClearAllPoints()
+                    dt:SetAllPoints(b)
+                end
+            end
+
+            ApplyMenuButtonTextures(btn)
+
+            if not btn.roithiMenuHooked then
+                btn.roithiMenuHooked = true
+                local isApplying = false
+                if btn.SetNormalTexture and ChatMod.SecureHook then
+                    ChatMod:SecureHook(btn, "SetNormalTexture", function(b)
+                        if isApplying then return end
+                        isApplying = true
+                        ApplyMenuButtonTextures(b)
+                        isApplying = false
+                    end)
+                end
+                if btn.SetPushedTexture and ChatMod.SecureHook then
+                    ChatMod:SecureHook(btn, "SetPushedTexture", function(b)
+                        if isApplying then return end
+                        isApplying = true
+                        ApplyMenuButtonTextures(b)
+                        isApplying = false
+                    end)
+                end
+            end
+
+            if btn.SetHighlightTexture then
+                btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+            end
+            return
+        end
+
+        -- 2. QuickJoinToastButton (Friends list button)
+        if btn == _G.QuickJoinToastButton then
+            if btn.FriendsButton then
+                btn.FriendsButton:ClearAllPoints()
+                btn.FriendsButton:SetAllPoints(btn)
+                if not btn.roithiFriendsHooked then
+                    btn.roithiFriendsHooked = true
+                    local settingFriendsAtlas = false
+                    if _G.hooksecurefunc and btn.FriendsButton.SetAtlas then
+                        _G.hooksecurefunc(btn.FriendsButton, "SetAtlas", function(tex, atlas)
+                            if settingFriendsAtlas then return end
+                            if atlas == "quickjoin-button-friendslist-up" or atlas == "quickjoin-button-friendslist-down" then
+                                settingFriendsAtlas = true
+                                tex:SetAtlas("friends-icon-tab-friends")
+                                settingFriendsAtlas = false
+                            end
+                        end)
+                    end
+                end
+                if btn.FriendsButton.SetAtlas then
+                    btn.FriendsButton:SetAtlas("friends-icon-tab-friends")
+                end
+                btn.FriendsButton:Show()
+            end
+            if btn.QueueButton then
+                btn.QueueButton:ClearAllPoints()
+                btn.QueueButton:SetAllPoints(btn)
+            end
+            if btn.FriendCount then
+                btn.FriendCount:ClearAllPoints()
+                btn.FriendCount:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 2, -2)
+                btn.FriendCount:Show()
+            end
+            local nt = btn.GetNormalTexture and btn:GetNormalTexture()
+            if nt then if nt.SetTexture then nt:SetTexture("") end if nt.SetAlpha then nt:SetAlpha(0) end end
+            local pt = btn.GetPushedTexture and btn:GetPushedTexture()
+            if pt then if pt.SetTexture then pt:SetTexture("") end if pt.SetAlpha then pt:SetAlpha(0) end end
+            if btn.SetHighlightTexture then
+                btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+            end
+            return
+        end
+
+        -- 3. Voice Toggle Buttons with btn.Icon
+        if btn.Icon then
+            local nt = btn.GetNormalTexture and btn:GetNormalTexture()
+            if nt then
+                if nt.SetTexture then nt:SetTexture("") end
+                if nt.SetAlpha then nt:SetAlpha(0) end
+            end
+            local pt = btn.GetPushedTexture and btn:GetPushedTexture()
+            if pt then
+                if pt.SetTexture then pt:SetTexture("") end
+                if pt.SetAlpha then pt:SetAlpha(0) end
+            end
+            local dt = btn.GetDisabledTexture and btn:GetDisabledTexture()
+            if dt then
+                if dt.SetTexture then dt:SetTexture("") end
+                if dt.SetAlpha then dt:SetAlpha(0) end
+            end
+
+            if not btn.roithiBorderStripped then
+                btn.roithiBorderStripped = true
+                if btn.SetNormalTexture and ChatMod.SecureHook then
+                    ChatMod:SecureHook(btn, "SetNormalTexture", function(b)
+                        local bnt = b:GetNormalTexture()
+                        if bnt and bnt.GetAlpha and bnt:GetAlpha() > 0 then
+                            if bnt.SetTexture then bnt:SetTexture("") end
+                            if bnt.SetAlpha then bnt:SetAlpha(0) end
+                        end
+                    end)
+                end
+                if btn.SetPushedTexture and ChatMod.SecureHook then
+                    ChatMod:SecureHook(btn, "SetPushedTexture", function(b)
+                        local bpt = b:GetPushedTexture()
+                        if bpt and bpt.GetAlpha and bpt:GetAlpha() > 0 then
+                            if bpt.SetTexture then bpt:SetTexture("") end
+                            if bpt.SetAlpha then bpt:SetAlpha(0) end
+                        end
+                    end)
+                end
+            end
+
+            btn.Icon:ClearAllPoints()
+            btn.Icon:SetAllPoints(btn)
+            btn.Icon:Show()
+            btn.Icon:SetAlpha(1)
+
+            local currentAtlas = (btn.Icon.GetAtlas and btn.Icon:GetAtlas()) or ""
+            if currentAtlas == "" and btn.Icon.SetAtlas then
+                if btn == _G.ChatFrameChannelButton then
+                    btn.Icon:SetAtlas("chatframe-button-icon-voicechat")
+                elseif btn == _G.ChatFrameToggleVoiceDeafenButton then
+                    btn.Icon:SetAtlas("chatframe-button-icon-speaker-on")
+                elseif btn == _G.ChatFrameToggleVoiceMuteButton then
+                    btn.Icon:SetAtlas("chatframe-button-icon-mic-on")
+                end
+            end
+        else
+            -- 4. Classic buttons without btn.Icon: keep NormalTexture with cropped border
+            local nt = btn.GetNormalTexture and btn:GetNormalTexture()
+            if nt then
+                nt:SetAlpha(1)
+                nt:SetTexCoord(0.18, 0.82, 0.18, 0.82)
+                nt:ClearAllPoints()
+                nt:SetAllPoints(btn)
+            end
+            local pt = btn.GetPushedTexture and btn:GetPushedTexture()
+            if pt then
+                pt:SetAlpha(1)
+                pt:SetTexCoord(0.18, 0.82, 0.18, 0.82)
+                pt:ClearAllPoints()
+                pt:SetAllPoints(btn)
+            end
+        end
+
+        if btn.SetHighlightTexture then
+            btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+        end
     end
 
     local prevBtn = nil
     for _, btn in ipairs(buttons) do
         if btn then
+            StripChatButtonBorder(btn)
             btn:SetParent(dock)
             btn:SetFrameStrata("HIGH")
             btn:SetFrameLevel(310)
@@ -1317,17 +1715,8 @@ function ChatMod:UpdateButtonsDock()
         end
     end
 
-    if self.scrollBtn and prevBtn then
-        self.scrollBtn:SetFrameStrata("HIGH")
-        self.scrollBtn:SetFrameLevel(310)
-        self.scrollBtn:ClearAllPoints()
-        if isOutside then
-            self.scrollBtn:SetPoint("TOP", prevBtn, "BOTTOM", 0, -2)
-        elseif isTopLeft then
-            self.scrollBtn:SetPoint("LEFT", prevBtn, "RIGHT", 2, 0)
-        else
-            self.scrollBtn:SetPoint("RIGHT", prevBtn, "LEFT", -2, 0)
-        end
+    if self.scrollBtn and self.scrollBtn.Hide then
+        self.scrollBtn:Hide()
     end
 end
 
@@ -1402,9 +1791,36 @@ function ChatMod:GetOrCreateChatCopyWindow()
     eb:SetMultiLine(true)
     eb:SetMaxLetters(0)
     eb:SetAutoFocus(false)
-    eb:SetFontObject("GameFontHighlight")
+    eb:SetFontObject("ChatFontNormal")
+    if eb.SetSpacing then eb:SetSpacing(2) end
+    if eb.SetTextInsets then eb:SetTextInsets(4, 4, 2, 2) end
     eb:SetWidth(550)
     eb:SetScript("OnEscapePressed", function() win:Hide() end)
+
+    if eb.SetScript then
+        eb:SetScript("OnCursorChanged", function(editBoxObj, x, y, w, h)
+            if not y or not h or not scrollArea then return end
+            local offset = -y
+            local currentScroll = scrollArea.GetVerticalScroll and scrollArea:GetVerticalScroll() or 0
+            local height = scrollArea.GetHeight and scrollArea:GetHeight() or 0
+            if height > 0 then
+                if offset < currentScroll and scrollArea.SetVerticalScroll then
+                    scrollArea:SetVerticalScroll(offset)
+                elseif offset + h > currentScroll + height and scrollArea.SetVerticalScroll then
+                    scrollArea:SetVerticalScroll(offset + h - height)
+                end
+            end
+        end)
+    end
+
+    if scrollArea.SetScript then
+        scrollArea:SetScript("OnSizeChanged", function(s, w)
+            if w and w > 20 and eb and eb.SetWidth then
+                eb:SetWidth(w - 8)
+            end
+        end)
+    end
+
     scrollArea:SetScrollChild(eb)
 
     win.editBox = eb
@@ -1468,8 +1884,10 @@ function ChatMod:OpenChatCopyWindow(cf)
     win:Show()
 
     local w = win.scrollArea:GetWidth()
-    if w and w > 0 then
-        win.editBox:SetWidth(w)
+    if w and w > 20 then
+        win.editBox:SetWidth(w - 8)
+    else
+        win.editBox:SetWidth(550)
     end
 
     if win.scrollArea.SetVerticalScroll and win.scrollArea.GetVerticalScrollRange then

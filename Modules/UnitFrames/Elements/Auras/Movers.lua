@@ -79,16 +79,33 @@ local function GetOrCreateAuraMover(container, unit, containerSuffix)
         local customID = isCustom and containerSuffix:sub(8)
         local customDB = isCustom and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.CustomAuraFrames and RoithiUI.db.profile.CustomAuraFrames[customID]
 
+        local defUF = ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.UnitFrames
+        local defUnit = defUF and defUF[unit]
+        local defCustomFrames = ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.CustomAuraFrames
+        local defCustom = isCustom and defCustomFrames and defCustomFrames[customID]
+
         local defaults = {
-            point = isCustom and (customDB and (customDB.screenPoint or customDB.auraScreenPoint))
+            point = isCustom and (defCustom and (defCustom.screenPoint or defCustom.auraScreenPoint))
+                 or (containerSuffix == "Buffs"    and defUnit and defUnit.buffScreenPoint)
+                 or (containerSuffix == "Debuffs"  and defUnit and defUnit.debuffScreenPoint)
+                 or (defUnit and defUnit.auraScreenPoint)
+                 or (isCustom and (customDB and (customDB.screenPoint or customDB.auraScreenPoint)))
                  or (containerSuffix == "Buffs"    and db.buffScreenPoint)
                  or (containerSuffix == "Debuffs"  and db.debuffScreenPoint)
                  or db.auraScreenPoint or "CENTER",
-            x = isCustom and (customDB and (customDB.screenX or customDB.auraScreenX))
+            x = isCustom and (defCustom and (defCustom.screenX or defCustom.auraScreenX))
+             or (containerSuffix == "Buffs"   and defUnit and defUnit.buffScreenX)
+             or (containerSuffix == "Debuffs" and defUnit and defUnit.debuffScreenX)
+             or (defUnit and defUnit.auraScreenX)
+             or (isCustom and (customDB and (customDB.screenX or customDB.auraScreenX)))
              or (containerSuffix == "Buffs"   and db.buffScreenX)
              or (containerSuffix == "Debuffs" and db.debuffScreenX)
              or db.auraScreenX or 0,
-            y = isCustom and (customDB and (customDB.screenY or customDB.auraScreenY))
+            y = isCustom and (defCustom and (defCustom.screenY or defCustom.auraScreenY))
+             or (containerSuffix == "Buffs"   and defUnit and defUnit.buffScreenY)
+             or (containerSuffix == "Debuffs" and defUnit and defUnit.debuffScreenY)
+             or (defUnit and defUnit.auraScreenY)
+             or (isCustom and (customDB and (customDB.screenY or customDB.auraScreenY)))
              or (containerSuffix == "Buffs"   and db.buffScreenY)
              or (containerSuffix == "Debuffs" and db.debuffScreenY)
              or db.auraScreenY or 0,

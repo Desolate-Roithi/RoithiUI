@@ -66,8 +66,12 @@ function UF:CreatePowerBar(frame)
         -- Actually, usually better to Add once.
         frame.Power.editModeName = (frame.editModeName or frame:GetName()) .. " Power"
 
-        -- Default position (detached)
-        local defaults = { point = "CENTER", x = 0, y = -100 }
+        local defUnit = ns.Defaults.profile.UnitFrames[frame.unit] or ns.Defaults.profile.UnitFrames.player
+        local defaults = {
+            point = defUnit.powerPoint,
+            x = defUnit.powerX,
+            y = defUnit.powerY,
+        }
 
         local function OnPowerPosChanged(f, layoutName, point, x, y)
             local unit = frame.unit
@@ -244,8 +248,12 @@ function UF:CreateAdditionalPower(frame)
     if LEM then
         frame.AdditionalPower.editModeName = (frame.editModeName or frame:GetName()) .. " Additional Power"
 
-        -- Default position (detached)
-        local defaults = { point = "CENTER", x = 0, y = 0 }
+        local defUnit = ns.Defaults.profile.UnitFrames[frame.unit] or ns.Defaults.profile.UnitFrames.player
+        local defaults = {
+            point = defUnit.additionalPowerPoint,
+            x = defUnit.additionalPowerX,
+            y = defUnit.additionalPowerY,
+        }
 
         local function OnPosChanged(f, layoutName, point, x, y)
             local unit = frame.unit

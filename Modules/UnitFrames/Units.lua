@@ -28,7 +28,9 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
                 db.y = y
             end
         end
-        LEM:AddFrame(frame, OnPosChanged, { point = "CENTER", x = 0, y = 0 })
+        local defUF = ns.Defaults.profile.UnitFrames[unit]
+        local defaultPos = { point = defUF.point, x = defUF.x, y = defUF.y }
+        LEM:AddFrame(frame, OnPosChanged, defaultPos)
 
         if ns.OptionsEngine and ns.OptionsEngine.RegisterLEMOptions then
             local ufUnit = (unit:match("^boss%d$")) and "boss" or unit

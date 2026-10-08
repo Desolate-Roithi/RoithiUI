@@ -503,10 +503,8 @@ function UpdateBar(unit)
             db.y = y
         end
 
-        if not bar.isInEditMode then
-            bar:ClearAllPoints()
-            bar:SetPoint(point, UIParent, point, x, y)
-        end
+        bar:ClearAllPoints()
+        bar:SetPoint(point, UIParent, point, x, y)
     else
         if ns.SetCastbarAttachment then
             ns.SetCastbarAttachment(unit, true)
@@ -523,7 +521,7 @@ function UpdateBar(unit)
             end
         end
         local AL = ns.AttachmentLogic
-        if AL then AL:GlobalLayoutRefresh(unit) end
+        if AL and AL.GlobalLayoutRefresh then AL:GlobalLayoutRefresh(unit) end
     end
 
     bar:SetSize(finalWidth, finalHeight)
@@ -816,15 +814,21 @@ function ns.InitializeCastbarConfig()
     if not ns.bars or not LEM then return end
 
     for unit, bar in pairs(ns.bars) do
-        local db = GetCastbarDB(unit)
         bar.editModeName = "Roithi " .. unit:gsub("^%l", string.upper) .. " Castbar"
 
-        local defaults = { point = db.point or "CENTER", x = db.x or 0, y = db.y or 0 }
+        local defCB = ns.Defaults.profile.Castbar[unit]
+        local defaults = { point = defCB.point, x = defCB.x, y = defCB.y }
 
         local function OnPositionChanged(movedBar, _, point, x, y)
             local posDB = GetCastbarDB(unit)
             if not posDB.detached then
-                posDB.detached = true
+                if ns.SetCastbarAttachment then
+                    ns.SetCastbarAttachment(unit, true)
+                end
+                if LEM and LEM.RefreshFrameSettings then
+                    LEM:RefreshFrameSettings(movedBar)
+                end
+                return
             end
 
             x = math.floor(x * 100 + 0.5) / 100
@@ -840,7 +844,9 @@ function ns.InitializeCastbarConfig()
 
             movedBar:ClearAllPoints()
             movedBar:SetPoint(point, UIParent, point, x, y)
-            LEM:RefreshFrameSettings(movedBar)
+            if LEM and LEM.RefreshFrameSettings then
+                LEM:RefreshFrameSettings(movedBar)
+            end
         end
 
         LEM:AddFrame(bar, OnPositionChanged, defaults)

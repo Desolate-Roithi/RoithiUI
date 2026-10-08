@@ -67,12 +67,26 @@ Totems.spellsDatabase = {
     },
     weapon = {
         { id = 8232, name = "Windfury Weapon" },
+        { id = 33757, name = "Windfury Weapon" },
         { id = 8024, name = "Flametongue Weapon" },
+        { id = 318038, name = "Flametongue Weapon" },
         { id = 8017, name = "Rockbiter Weapon" },
         { id = 8033, name = "Frostbrand Weapon" },
         { id = 51730, name = "Earthliving Weapon" },
+        { id = 382021, name = "Earthliving Weapon" },
     },
 }
+
+Totems.spellToCategory = {}
+for catKey, spellList in pairs(Totems.spellsDatabase) do
+    for _, entry in ipairs(spellList) do
+        Totems.spellToCategory[entry.id] = catKey
+        if entry.name then
+            Totems.spellToCategory[string.lower(entry.name)] = catKey
+        end
+    end
+end
+
 
 Totems.defaultSettings = {
     enabled = true,
@@ -89,9 +103,9 @@ Totems.defaultSettings = {
     showAir = true,
     showShield = true,
     showWeapon = true,
-    point = "CENTER",
+    point = "BOTTOM",
     x = 0,
-    y = -180,
+    y = 150,
     fontSize = 11,
     font = "Friz Quadrata TT",
     borderColor = { r = 0.2, g = 0.2, b = 0.2, a = 1.0 },
@@ -223,6 +237,8 @@ function Totems:OnEnable()
     self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "UpdateAllSpellCooldowns")
     self:RegisterEvent("UNIT_AURA", "OnUnitAura")
     self:RegisterEvent("UNIT_INVENTORY_CHANGED", "OnInventoryChanged")
+    self:RegisterEvent("WEAPON_ENCHANT_CHANGED", "OnWeaponEnchantChanged")
+    self:RegisterEvent("WEAPON_SLOT_CHANGED", "OnWeaponEnchantChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatEnter")
     self:RegisterEvent("UPDATE_BINDINGS", "OnUpdateBindings")
@@ -385,7 +401,11 @@ end
 
 local function FormatTimeSeconds(seconds)
     if not seconds or seconds <= 0 then return "" end
-    if seconds >= 60 then
+    if seconds >= 3600 then
+        local h = math.floor(seconds / 3600)
+        local m = math.floor((seconds % 3600) / 60)
+        return string.format("%dh", (m > 0 and h + 1) or h)
+    elseif seconds >= 60 then
         local m = math.floor(seconds / 60)
         local s = math.floor(seconds % 60)
         return string.format("%d:%02d", m, s)
@@ -400,9 +420,10 @@ end
 function Totems:CreateTotemBar()
     if self.bar then return end
 
+    local def = ns.Defaults.profile.Totems
     local bar = CreateFrame("Frame", "RoithiTotemBar", UIParent)
     bar:SetSize(250, 40)
-    bar:SetPoint(self.db.point or "CENTER", UIParent, self.db.point or "CENTER", self.db.x or 0, self.db.y or -180)
+    bar:SetPoint(self.db.point or def.point, UIParent, self.db.point or def.point, self.db.x or def.x, self.db.y or def.y)
     bar:SetClampedToScreen(true)
     bar:SetMovable(true)
     self.bar = bar
@@ -653,6 +674,20 @@ function Totems:CreateTotemBar()
                 local inQuickKeybind = _G.KeybindFrames_InQuickKeybindMode and _G.KeybindFrames_InQuickKeybindMode()
                 if inQuickKeybind and _G.QuickKeybindFrame and mouseBtn ~= "LeftButton" and mouseBtn ~= "RightButton" then
                     _G.QuickKeybindFrame:OnKeyDown(mouseBtn)
+                    return
+                end
+                if mouseBtn == "RightButton" then
+                    local info = self.categoryInfo[catKey]
+                    if info and info.blizzSlot then
+                        local state = self.slotStates and self.slotStates[catKey]
+                        local slotToDestroy = (state and state.activeSlot) or info.blizzSlot
+                        if slotToDestroy and slotToDestroy > 0 then
+                            local cannotDismiss = _G.GetTotemCannotDismiss and _G.GetTotemCannotDismiss(slotToDestroy)
+                            if not cannotDismiss and DestroyTotem then
+                                pcall(DestroyTotem, slotToDestroy)
+                            end
+                        end
+                    end
                 end
             end)
 
@@ -660,13 +695,24 @@ function Totems:CreateTotemBar()
             btn:HookScript("OnMouseDown", function(buttonSelf, mouseBtn)
                 local inQuickKeybind = _G.KeybindFrames_InQuickKeybindMode and _G.KeybindFrames_InQuickKeybindMode()
                 if inQuickKeybind then return end
-                if not InCombatLockdown() then
-                    if mouseBtn == "RightButton" then
-                        local info = self.categoryInfo[catKey]
-                        if not (info and info.blizzSlot) then
+                if mouseBtn == "RightButton" then
+                    local info = self.categoryInfo[catKey]
+                    if not (info and info.blizzSlot) then
+                        if not InCombatLockdown() then
                             self:ToggleFlyout(buttonSelf)
                         end
-                    elseif mouseBtn == "LeftButton" then
+                    else
+                        local state = self.slotStates and self.slotStates[catKey]
+                        local slotToDestroy = (state and state.activeSlot) or info.blizzSlot
+                        if slotToDestroy and slotToDestroy > 0 then
+                            local cannotDismiss = _G.GetTotemCannotDismiss and _G.GetTotemCannotDismiss(slotToDestroy)
+                            if not cannotDismiss and DestroyTotem then
+                                pcall(DestroyTotem, slotToDestroy)
+                            end
+                        end
+                    end
+                elseif mouseBtn == "LeftButton" then
+                    if not InCombatLockdown() then
                         self.isKeyboardHighlight = false
                         self.db.selectedCategory = catKey
                         self:UpdateAllSlotBorders()
@@ -1034,8 +1080,13 @@ function Totems:UpdateButtonAttributes(catKey)
 
         -- Configure unsummon / destroy on right click
         if info and info.blizzSlot then
+            local activeSlot = (self.slotStates and self.slotStates[catKey] and self.slotStates[catKey].activeSlot) or info.blizzSlot
             btn:SetAttribute("type2", "destroytotem")
-            btn:SetAttribute("totem-slot", info.blizzSlot)
+            btn:SetAttribute("*type2", "destroytotem")
+            btn:SetAttribute("totem-slot", activeSlot)
+            btn:SetAttribute("totem-slot2", activeSlot)
+            btn:SetAttribute("*totem-slot*", activeSlot)
+            btn:SetAttribute("*totem-slot2", activeSlot)
         end
     end
 end
@@ -1216,31 +1267,76 @@ end
 
 function Totems:UpdateTotemSlots()
     local now = GetTime()
+    local detectedSlots = {}
+
+    for slot = 1, 4 do
+        if GetTotemInfo then
+            local haveTotem, name, startTime, duration = GetTotemInfo(slot)
+            if haveTotem and duration and duration > 0 then
+                local expTime = startTime + duration
+                local catKey = nil
+                if name and self.spellToCategory then
+                    catKey = self.spellToCategory[string.lower(name)]
+                end
+                if not catKey then
+                    for k, info in pairs(self.categoryInfo) do
+                        if info.blizzSlot == slot then
+                            catKey = k
+                            break
+                        end
+                    end
+                end
+                if catKey then
+                    detectedSlots[catKey] = {
+                        slot = slot,
+                        startTime = startTime,
+                        duration = duration,
+                        expTime = expTime,
+                        isActive = (expTime > now),
+                    }
+                end
+            end
+        end
+    end
+
     for _, catKey in ipairs(self.categories) do
         local info = self.categoryInfo[catKey]
         if info and info.blizzSlot then
             local state = self.slotStates[catKey]
-            local haveTotem, _, startTime, duration, _ = false, nil, 0, 0, nil
-            if GetTotemInfo then
-                haveTotem, _, startTime, duration, _ = GetTotemInfo(info.blizzSlot)
+            local detected = detectedSlots[catKey]
+
+            if detected then
+                state.isActive = detected.isActive
+                state.expirationTime = detected.expTime
+                state.activeSlot = detected.slot
+            else
+                local haveTotem, _, startTime, duration = false, nil, 0, 0
+                if GetTotemInfo then
+                    haveTotem, _, startTime, duration = GetTotemInfo(info.blizzSlot)
+                end
+
+                local isActive = false
+                local expTime = 0
+                local ok, active = pcall(function()
+                    return haveTotem and duration and duration > 0 and (startTime + duration) > now
+                end)
+                if ok and active then
+                    isActive = true
+                    expTime = startTime + duration
+                elseif not ok and haveTotem then
+                    isActive = true
+                    expTime = 0
+                end
+
+                state.isActive = isActive
+                state.expirationTime = expTime
+                state.activeSlot = (isActive and info.blizzSlot) or nil
             end
 
-            local isActive = false
-            local expTime = 0
-            local ok, active = pcall(function()
-                return haveTotem and duration and duration > 0 and (startTime + duration) > now
-            end)
-            if ok and active then
-                isActive = true
-                expTime = startTime + duration
-            elseif not ok and haveTotem then
-                isActive = true
-                expTime = 0
-            end
-
-            state.isActive = isActive
-            state.expirationTime = expTime
             self:UpdateSlotBorder(catKey)
+            if not InCombatLockdown() then
+                self:UpdateButtonAttributes(catKey)
+            end
         end
     end
     self:UpdateAllSpellCooldowns()
@@ -1307,6 +1403,21 @@ function Totems:UpdateShieldSlot()
     self:UpdateSlotBorder("shield")
 end
 
+local SHAMAN_WEAPON_BUFFS = {
+    -- Modern WoW (Retail / Midnight 12.0/12.1)
+    [33757] = true,   -- Windfury Weapon
+    [318038] = true,  -- Flametongue Weapon
+    [382021] = true,  -- Earthliving Weapon
+    [382022] = true,  -- Earthliving Weapon (alternate)
+    [382024] = true,  -- Tidecaller's Guard
+    -- Classic / TBC / WotLK / Cataclysm IDs
+    [8232] = true, [8235] = true, [10486] = true, [16362] = true, [25505] = true, [58804] = true,
+    [8024] = true, [8027] = true, [8030] = true, [16339] = true, [16341] = true, [16342] = true, [25489] = true, [58789] = true, [58790] = true,
+    [8017] = true, [8018] = true, [8019] = true, [10399] = true, [16314] = true, [16315] = true, [16316] = true,
+    [8033] = true, [8038] = true, [10459] = true, [16355] = true, [16356] = true, [25500] = true, [58796] = true,
+    [51730] = true, [51988] = true, [51991] = true, [51992] = true, [51993] = true, [51994] = true,
+}
+
 function Totems:UpdateWeaponSlot()
     local state = self.slotStates.weapon
     local btn = self.buttons.weapon
@@ -1314,20 +1425,74 @@ function Totems:UpdateWeaponSlot()
     local expiration = 0
     local count = 0
 
-    if GetWeaponEnchantInfo then
-        local hasMH, mhExp, mhCount, _, hasOH, ohExp, ohCount = GetWeaponEnchantInfo()
-        if hasMH then
-            isActive = true
-            if mhExp and mhExp > 0 then
-                expiration = GetTime() + (mhExp / 1000)
+    -- 1. Modern WoW / Midnight 12.0/12.1 player aura check (AllowedWhenTainted)
+    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        for spellId in pairs(SHAMAN_WEAPON_BUFFS) do
+            local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellId)
+            if ok and aura then
+                isActive = true
+                count = aura.applications or aura.charges or 0
+                expiration = aura.expirationTime or 0
+                break
             end
-            count = mhCount or 0
-        elseif hasOH then
+        end
+    end
+
+    -- 2. Modern WoW C_PaperDollInfo temporary enchant check (INVSLOT_MAINHAND=16, INVSLOT_OFFHAND=17)
+    if not isActive and _G.C_PaperDollInfo and _G.C_PaperDollInfo.GetTemporaryEnchantmentInfo then
+        local mhSlot = (_G.INVSLOT_MAINHAND or 16)
+        local ohSlot = (_G.INVSLOT_OFFHAND or 17)
+        local okMh, mhInfo = pcall(_G.C_PaperDollInfo.GetTemporaryEnchantmentInfo, mhSlot)
+        local okOh, ohInfo = pcall(_G.C_PaperDollInfo.GetTemporaryEnchantmentInfo, ohSlot)
+
+        if okMh and mhInfo then
             isActive = true
-            if ohExp and ohExp > 0 then
-                expiration = GetTime() + (ohExp / 1000)
+            count = mhInfo.chargesRemaining or 0
+            if mhInfo.hasExpirationTime and mhInfo.remainingTimeMs and mhInfo.remainingTimeMs > 0 then
+                expiration = GetTime() + (mhInfo.remainingTimeMs / 1000)
             end
-            count = ohCount or 0
+        elseif okOh and ohInfo then
+            isActive = true
+            count = ohInfo.chargesRemaining or 0
+            if ohInfo.hasExpirationTime and ohInfo.remainingTimeMs and ohInfo.remainingTimeMs > 0 then
+                expiration = GetTime() + (ohInfo.remainingTimeMs / 1000)
+            end
+        end
+    end
+
+    -- 3. Legacy / Classic Era GetWeaponEnchantInfo fallback
+    if not isActive and GetWeaponEnchantInfo then
+        local ok, hasMH, mhExp, mhCount, _, hasOH, ohExp, ohCount = pcall(GetWeaponEnchantInfo)
+        if ok then
+            if hasMH then
+                isActive = true
+                if mhExp and mhExp > 0 then
+                    expiration = GetTime() + (mhExp / 1000)
+                end
+                count = mhCount or 0
+            elseif hasOH then
+                isActive = true
+                if ohExp and ohExp > 0 then
+                    expiration = GetTime() + (ohExp / 1000)
+                end
+                count = ohCount or 0
+            end
+        end
+    end
+
+    -- 4. Legacy Classic Era UnitAura fallback (OOC-only: UnitAura is secret-restricted when tainted in combat)
+    if not isActive and UnitAura and not InCombatLockdown() then
+        for i = 1, 40 do
+            local ok, name, _, buffCount, _, _, expirationTime, _, _, _, spellId = pcall(UnitAura, "player", i, "HELPFUL")
+            if not ok or not name then break end
+            if (spellId and SHAMAN_WEAPON_BUFFS[spellId]) or
+               (name and (name:find("Windfury") or name:find("Flametongue") or name:find("Rockbiter") or name:find("Frostbrand") or name:find("Earthliving")
+                          or name:find("Windzorn") or name:find("Flammenzunge") or name:find("Felsbeißer") or name:find("Frostbrand") or name:find("Erdenleben"))) then
+                isActive = true
+                count = buffCount or 0
+                expiration = expirationTime or 0
+                break
+            end
         end
     end
 
@@ -1475,8 +1640,14 @@ end
 function Totems:OnUnitAura(_, unit)
     if unit == "player" then
         self:UpdateShieldSlot()
+        self:UpdateWeaponSlot()
         self:OnTick()
     end
+end
+
+function Totems:OnWeaponEnchantChanged()
+    self:UpdateWeaponSlot()
+    self:OnTick()
 end
 
 function Totems:OnInventoryChanged()
@@ -1506,16 +1677,98 @@ function Totems:SetupLEM()
     local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
     if not LEM or not self.bar then return end
 
+    local def = ns.Defaults.profile.Totems
     local defaultPos = {
-        point = "CENTER",
-        x = 0,
-        y = -180,
+        point = def.point,
+        x = def.x,
+        y = def.y,
     }
     LEM:AddFrame(self.bar, function(f, _, newPoint, newX, newY)
         self.db.point = newPoint
         self.db.x = newX
         self.db.y = newY
+        if f and f.ClearAllPoints and f.SetPoint then
+            f:ClearAllPoints()
+            f:SetPoint(newPoint, UIParent, newPoint, newX, newY)
+        end
     end, defaultPos, L["Totem Bar"])
+
+    if LEM.AddFrameSettings then
+        local sliderType = (LEM.SettingType and LEM.SettingType.Slider) or 2
+        local dropdownType = (LEM.SettingType and LEM.SettingType.Dropdown) or 4
+        local settings = {
+            {
+                name = L["X Position"] or "X Position",
+                kind = sliderType,
+                minValue = -2500,
+                maxValue = 2500,
+                valueStep = 1,
+                formatter = function(v) return string.format("%.0f", v) end,
+                get = function() return self.db.x or 0 end,
+                set = function(_, val)
+                    self.db.x = val
+                    local p = self.db.point or "BOTTOM"
+                    self.bar:ClearAllPoints()
+                    self.bar:SetPoint(p, UIParent, p, val, self.db.y or 150)
+                end,
+            },
+            {
+                name = L["Y Position"] or "Y Position",
+                kind = sliderType,
+                minValue = -1500,
+                maxValue = 1500,
+                valueStep = 1,
+                formatter = function(v) return string.format("%.0f", v) end,
+                get = function() return self.db.y or 150 end,
+                set = function(_, val)
+                    self.db.y = val
+                    local p = self.db.point or "BOTTOM"
+                    self.bar:ClearAllPoints()
+                    self.bar:SetPoint(p, UIParent, p, self.db.x or 0, val)
+                end,
+            },
+            {
+                name = L["Button Size"] or "Button Size",
+                kind = sliderType,
+                minValue = 20,
+                maxValue = 60,
+                valueStep = 1,
+                formatter = function(v) return string.format("%.0f", v) end,
+                get = function() return self.db.buttonSize or 36 end,
+                set = function(_, val)
+                    self.db.buttonSize = val
+                    self:UpdateBarLayout()
+                end,
+            },
+            {
+                name = L["Button Spacing"] or "Button Spacing",
+                kind = sliderType,
+                minValue = 0,
+                maxValue = 20,
+                valueStep = 1,
+                formatter = function(v) return string.format("%.0f", v) end,
+                get = function() return self.db.spacing or 4 end,
+                set = function(_, val)
+                    self.db.spacing = val
+                    self:UpdateBarLayout()
+                end,
+            },
+            {
+                name = L["Orientation"] or "Orientation",
+                kind = dropdownType,
+                values = {
+                    { text = L["Horizontal"] or "Horizontal", value = "HORIZONTAL" },
+                    { text = L["Vertical"] or "Vertical", value = "VERTICAL" },
+                },
+                get = function() return self.db.orientation or "HORIZONTAL" end,
+                set = function(_, val)
+                    self.db.orientation = val
+                    self:UpdateBarLayout()
+                end,
+            },
+        }
+        LEM:AddFrameSettings(self.bar, settings)
+    end
 
     if LEM.AddFrameSettingsButtons then
         LEM:AddFrameSettingsButtons(self.bar, {

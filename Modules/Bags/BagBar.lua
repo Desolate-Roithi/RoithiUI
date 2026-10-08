@@ -141,13 +141,14 @@ function BagsMod:SetupBagBar()
 
     local pt = cfg.point or "BOTTOMLEFT"
     if bar.ClearAllPoints then bar:ClearAllPoints() end
-    if bar.SetPoint then bar:SetPoint(pt, UIParent, pt, cfg.x or 10, cfg.y or 285) end
+    if bar.SetPoint then bar:SetPoint(pt, UIParent, pt, cfg.x or 286, cfg.y or 235) end
 
     self.bagBarFrame = bar
 
     if LEM and LEM.AddFrame then
         bar.editModeName = L["Bag Bar"]
-        local defaults = { point = pt, x = cfg.x or 10, y = cfg.y or 285 }
+        local def = ns.Defaults.profile.Bags.bagBar
+        local defaults = { point = def.point, x = def.x, y = def.y }
         LEM:AddFrame(bar, function(f, _, newPoint, newX, newY)
             self.db.bagBar = self.db.bagBar or {}
             self.db.bagBar.point = newPoint
@@ -176,13 +177,13 @@ function BagsMod:SetupBagBar()
                     maxValue = 2500,
                     valueStep = 1,
                     formatter = function(v) return string.format("%.0f", v) end,
-                    get = function() return self.db.bagBar and self.db.bagBar.x or 10 end,
+                    get = function() return self.db.bagBar and self.db.bagBar.x or 286 end,
                     set = function(_, val)
                         self.db.bagBar = self.db.bagBar or {}
                         self.db.bagBar.x = val
                         local p = self.db.bagBar.point or "BOTTOMLEFT"
                         bar:ClearAllPoints()
-                        bar:SetPoint(p, UIParent, p, val, self.db.bagBar.y or 285)
+                        bar:SetPoint(p, UIParent, p, val, self.db.bagBar.y or 235)
                         self:UpdateBagBarLayout()
                     end,
                 },
@@ -193,13 +194,13 @@ function BagsMod:SetupBagBar()
                     maxValue = 1500,
                     valueStep = 1,
                     formatter = function(v) return string.format("%.0f", v) end,
-                    get = function() return self.db.bagBar and self.db.bagBar.y or 285 end,
+                    get = function() return self.db.bagBar and self.db.bagBar.y or 235 end,
                     set = function(_, val)
                         self.db.bagBar = self.db.bagBar or {}
                         self.db.bagBar.y = val
                         local p = self.db.bagBar.point or "BOTTOMLEFT"
                         bar:ClearAllPoints()
-                        bar:SetPoint(p, UIParent, p, self.db.bagBar.x or 10, val)
+                        bar:SetPoint(p, UIParent, p, self.db.bagBar.x or 286, val)
                         self:UpdateBagBarLayout()
                     end,
                 },

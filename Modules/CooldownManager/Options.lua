@@ -178,56 +178,254 @@ function CDM:GetOptions()
                 order = 3,
                 inline = true,
                 args = {
-                    essentialSize = {
-                        type = "range",
-                        name = L["Essential Cooldowns Size"] or "Essential Cooldowns Size",
+                    essentialGroup = {
+                        type = "group",
+                        name = L["Essential Cooldowns"] or "Essential Cooldowns",
                         order = 1,
-                        min = 24,
-                        max = 80,
-                        step = 2,
-                        get = function()
-                            return self.db.viewers and self.db.viewers.Essential and self.db.viewers.Essential.iconSize or 50
-                        end,
-                        set = function(_, val)
-                            if not self.db.viewers then self.db.viewers = {} end
-                            if not self.db.viewers.Essential then self.db.viewers.Essential = {} end
-                            self.db.viewers.Essential.iconSize = val
-                            self:StyleAllActiveItems()
-                        end,
+                        inline = true,
+                        args = {
+                            size = {
+                                type = "range",
+                                name = L["Icon Size"] or "Icon Size",
+                                order = 1,
+                                min = 24,
+                                max = 80,
+                                step = 2,
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.Essential and self.db.viewers.Essential.iconSize or 50
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.Essential then self.db.viewers.Essential = {} end
+                                    self.db.viewers.Essential.iconSize = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                            font = {
+                                type = "select",
+                                dialogControl = "LSM30_Font",
+                                name = L["Font Override"] or "Font Override",
+                                order = 2,
+                                values = AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font or {},
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.Essential and self.db.viewers.Essential.font or self.db.font or "Friz Quadrata TT"
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.Essential then self.db.viewers.Essential = {} end
+                                    self.db.viewers.Essential.font = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                            stackSize = {
+                                type = "range",
+                                name = L["Stack Font Size"] or "Stack Font Size",
+                                order = 3,
+                                min = 8,
+                                max = 24,
+                                step = 1,
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.Essential and self.db.viewers.Essential.stackFontSize or self.db.stackFontSize or 11
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.Essential then self.db.viewers.Essential = {} end
+                                    self.db.viewers.Essential.stackFontSize = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                            stackAnchor = {
+                                type = "select",
+                                name = L["Stack Anchor"] or "Stack Anchor",
+                                order = 4,
+                                values = {
+                                    ["TOPLEFT"] = "TOPLEFT",
+                                    ["TOP"] = "TOP",
+                                    ["TOPRIGHT"] = "TOPRIGHT",
+                                    ["LEFT"] = "LEFT",
+                                    ["CENTER"] = "CENTER",
+                                    ["RIGHT"] = "RIGHT",
+                                    ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                                    ["BOTTOM"] = "BOTTOM",
+                                    ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                                },
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.Essential and self.db.viewers.Essential.stackAnchor or self.db.stackAnchor or "BOTTOMRIGHT"
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.Essential then self.db.viewers.Essential = {} end
+                                    self.db.viewers.Essential.stackAnchor = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                        },
                     },
-                    utilitySize = {
-                        type = "range",
-                        name = L["Utility Cooldowns Size"] or "Utility Cooldowns Size",
+                    utilityGroup = {
+                        type = "group",
+                        name = L["Utility Cooldowns"] or "Utility Cooldowns",
                         order = 2,
-                        min = 20,
-                        max = 60,
-                        step = 2,
-                        get = function()
-                            return self.db.viewers and self.db.viewers.Utility and self.db.viewers.Utility.iconSize or 32
-                        end,
-                        set = function(_, val)
-                            if not self.db.viewers then self.db.viewers = {} end
-                            if not self.db.viewers.Utility then self.db.viewers.Utility = {} end
-                            self.db.viewers.Utility.iconSize = val
-                            self:StyleAllActiveItems()
-                        end,
+                        inline = true,
+                        args = {
+                            size = {
+                                type = "range",
+                                name = L["Icon Size"] or "Icon Size",
+                                order = 1,
+                                min = 20,
+                                max = 60,
+                                step = 2,
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.Utility and self.db.viewers.Utility.iconSize or 32
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.Utility then self.db.viewers.Utility = {} end
+                                    self.db.viewers.Utility.iconSize = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                            font = {
+                                type = "select",
+                                dialogControl = "LSM30_Font",
+                                name = L["Font Override"] or "Font Override",
+                                order = 2,
+                                values = AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font or {},
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.Utility and self.db.viewers.Utility.font or self.db.font or "Friz Quadrata TT"
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.Utility then self.db.viewers.Utility = {} end
+                                    self.db.viewers.Utility.font = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                            stackSize = {
+                                type = "range",
+                                name = L["Stack Font Size"] or "Stack Font Size",
+                                order = 3,
+                                min = 8,
+                                max = 24,
+                                step = 1,
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.Utility and self.db.viewers.Utility.stackFontSize or self.db.stackFontSize or 11
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.Utility then self.db.viewers.Utility = {} end
+                                    self.db.viewers.Utility.stackFontSize = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                            stackAnchor = {
+                                type = "select",
+                                name = L["Stack Anchor"] or "Stack Anchor",
+                                order = 4,
+                                values = {
+                                    ["TOPLEFT"] = "TOPLEFT",
+                                    ["TOP"] = "TOP",
+                                    ["TOPRIGHT"] = "TOPRIGHT",
+                                    ["LEFT"] = "LEFT",
+                                    ["CENTER"] = "CENTER",
+                                    ["RIGHT"] = "RIGHT",
+                                    ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                                    ["BOTTOM"] = "BOTTOM",
+                                    ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                                },
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.Utility and self.db.viewers.Utility.stackAnchor or self.db.stackAnchor or "BOTTOMRIGHT"
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.Utility then self.db.viewers.Utility = {} end
+                                    self.db.viewers.Utility.stackAnchor = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                        },
                     },
-                    buffIconSize = {
-                        type = "range",
-                        name = L["Buff Icons Size"] or "Buff Icons Size",
+                    buffIconGroup = {
+                        type = "group",
+                        name = L["Buff Icons"] or "Buff Icons",
                         order = 3,
-                        min = 20,
-                        max = 60,
-                        step = 2,
-                        get = function()
-                            return self.db.viewers and self.db.viewers.BuffIcon and self.db.viewers.BuffIcon.iconSize or 40
-                        end,
-                        set = function(_, val)
-                            if not self.db.viewers then self.db.viewers = {} end
-                            if not self.db.viewers.BuffIcon then self.db.viewers.BuffIcon = {} end
-                            self.db.viewers.BuffIcon.iconSize = val
-                            self:StyleAllActiveItems()
-                        end,
+                        inline = true,
+                        args = {
+                            size = {
+                                type = "range",
+                                name = L["Icon Size"] or "Icon Size",
+                                order = 1,
+                                min = 20,
+                                max = 60,
+                                step = 2,
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.BuffIcon and self.db.viewers.BuffIcon.iconSize or 40
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.BuffIcon then self.db.viewers.BuffIcon = {} end
+                                    self.db.viewers.BuffIcon.iconSize = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                            font = {
+                                type = "select",
+                                dialogControl = "LSM30_Font",
+                                name = L["Font Override"] or "Font Override",
+                                order = 2,
+                                values = AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font or {},
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.BuffIcon and self.db.viewers.BuffIcon.font or self.db.font or "Friz Quadrata TT"
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.BuffIcon then self.db.viewers.BuffIcon = {} end
+                                    self.db.viewers.BuffIcon.font = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                            stackSize = {
+                                type = "range",
+                                name = L["Stack Font Size"] or "Stack Font Size",
+                                order = 3,
+                                min = 8,
+                                max = 24,
+                                step = 1,
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.BuffIcon and self.db.viewers.BuffIcon.stackFontSize or self.db.stackFontSize or 11
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.BuffIcon then self.db.viewers.BuffIcon = {} end
+                                    self.db.viewers.BuffIcon.stackFontSize = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                            stackAnchor = {
+                                type = "select",
+                                name = L["Stack Anchor"] or "Stack Anchor",
+                                order = 4,
+                                values = {
+                                    ["TOPLEFT"] = "TOPLEFT",
+                                    ["TOP"] = "TOP",
+                                    ["TOPRIGHT"] = "TOPRIGHT",
+                                    ["LEFT"] = "LEFT",
+                                    ["CENTER"] = "CENTER",
+                                    ["RIGHT"] = "RIGHT",
+                                    ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                                    ["BOTTOM"] = "BOTTOM",
+                                    ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                                },
+                                get = function()
+                                    return self.db.viewers and self.db.viewers.BuffIcon and self.db.viewers.BuffIcon.stackAnchor or self.db.stackAnchor or "BOTTOMRIGHT"
+                                end,
+                                set = function(_, val)
+                                    if not self.db.viewers then self.db.viewers = {} end
+                                    if not self.db.viewers.BuffIcon then self.db.viewers.BuffIcon = {} end
+                                    self.db.viewers.BuffIcon.stackAnchor = val
+                                    self:StyleAllActiveItems()
+                                end,
+                            },
+                        },
                     },
                 },
             },

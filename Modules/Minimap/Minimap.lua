@@ -38,14 +38,20 @@ MinimapMod.defaultSettings = {
     dataTextTimeType = "LOCAL",
     dataTextBgColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.6 },
     dataTextLeftType = "FPS",
-    dataTextLeftFontSize = 11,
+    dataTextLeftFontSize = 12,
+    dataTextLeftX = 0,
+    dataTextLeftY = 0,
     dataTextMiddleType = "Time",
-    dataTextMiddleFontSize = 11,
+    dataTextMiddleFontSize = 12,
+    dataTextMiddleX = 0,
+    dataTextMiddleY = 0,
     dataTextRightType = "Social",
-    dataTextRightFontSize = 11,
+    dataTextRightFontSize = 12,
+    dataTextRightX = 0,
+    dataTextRightY = 0,
     showAddonBar = true,
     addonBarAttached = true,
-    addonBarSnap = true,
+    addonBarSnap = false,
     addonBarSnapEdge = "AUTO",
     addonBarExpanded = true,
     addonBarExpansionMode = "STANDARD",
@@ -53,9 +59,9 @@ MinimapMod.defaultSettings = {
     addonBarButtonSize = 30,
     addonBarExpanderSize = 16,
     addonBarSpacing = 4,
-    addonBarColumns = 1,
+    addonBarColumns = 6,
     addonBarGrowDirection = "UP_LEFT",
-    addonBarBreakpoint = 5,
+    addonBarBreakpoint = 6,
     addonBarButtons = {},
     addonBarButtonOrder = {},
     displaceBuffs = true,
@@ -68,6 +74,8 @@ function MinimapMod:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Minimap or self.defaultSettings
     if self.db then
         self.db.addonBarButtons = self.db.addonBarButtons or {}
+        self.db.addonBarButtonOrder = self.db.addonBarButtonOrder or {}
+        self.db.offsets = self.db.offsets or {}
     end
     self.scannedButtons = {}
     self.activeButtons = {}
@@ -83,6 +91,16 @@ end
 
 function MinimapMod:PLAYER_ENTERING_WORLD()
     self:LayoutDefaultButtons()
+    if self.db and self.db.showDataTextBar then
+        self:UpdateDataTextBarVisibility()
+    end
+    if self.db and self.db.showAddonBar then
+        self:ScanAddonButtons()
+    end
+    local objMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Objectives", true)
+    if objMod and objMod.ApplyPosition then
+        objMod:ApplyPosition()
+    end
 end
 
 function MinimapMod:UpdateAnchorsMouseState(enable)
@@ -174,21 +192,25 @@ function MinimapMod:ReparentFramesAfterEditMode()
         { key = "zoomOutAnchor", frame = self.zoomOutAnchor, default = { point = "TOPRIGHT", x = 0, y = -68 } },
         { key = "calendarAnchor", frame = self.calendarAnchor, default = { point = "TOPLEFT", x = 0, y = 0 } },
         { key = "dielAnchor", frame = self.dielAnchor, default = { point = "BOTTOMRIGHT", x = 0, y = 0 } },
+        { key = "coordsAnchor", frame = self.coordsAnchor, default = { point = "BOTTOM", x = 0, y = 0 } },
         { key = "addonBar", frame = self.addonBar, default = { point = "BOTTOMLEFT", x = 10, y = 100 } },
     }
 
     for _, entry in ipairs(frames) do
         local f = entry.frame
         if f then
+            local isInteractive = (entry.key ~= "zoneTextAnchor" and entry.key ~= "coordsAnchor")
+            local targetStrata = isInteractive and "MEDIUM" or "LOW"
+            local targetLevel = isInteractive and 30 or 5
             local isDetached = (entry.key == "addonBar" and self.db.addonBarAttached == false) or (self.db.detached and self.db.detached[entry.key])
             if isDetached then
                 f:SetParent(UIParent)
                 f:SetScale(1.0)
                 if f.SetFrameStrata then
-                    f:SetFrameStrata("HIGH")
+                    f:SetFrameStrata(targetStrata)
                 end
                 if f.SetFrameLevel then
-                    f:SetFrameLevel(20)
+                    f:SetFrameLevel(targetLevel)
                 end
                 local point, _, _, x, y = f:GetPoint(1)
                 if point then
@@ -202,10 +224,10 @@ function MinimapMod:ReparentFramesAfterEditMode()
                     f:SetParent(container)
                     f:SetScale(1.0)
                     if f.SetFrameStrata then
-                        f:SetFrameStrata("HIGH")
+                        f:SetFrameStrata(targetStrata)
                     end
                     if f.SetFrameLevel then
-                        f:SetFrameLevel(20)
+                        f:SetFrameLevel(targetLevel)
                     end
                     local offset = self.db.offsets and self.db.offsets[entry.key] or entry.default
                     f:ClearAllPoints()
@@ -243,11 +265,19 @@ function MinimapMod:OnEnable()
         self:HookBuffFrameStyling()
     end
 
-    -- Initial scan, then repeat after delay to let late addons load
+    -- Initial scan, then repeat after delays to let late addons load
     self:ScanAddonButtons()
+    C_Timer.After(0.5, function()
+        self:ScanAddonButtons()
+    end)
     C_Timer.After(2, function()
         self:ScanAddonButtons()
     end)
+
+    local objMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Objectives", true)
+    if objMod and objMod.ApplyPosition then
+        objMod:ApplyPosition()
+    end
 
     -- Setup LFG hook ticker to handle late-created LFG buttons safely
     if not self.lfgHookTicker and C_Timer.NewTicker then
@@ -411,9 +441,9 @@ function MinimapMod:StyleMinimap()
         end
 
         self.container:ClearAllPoints()
-        local defaults = { point = "TOPRIGHT", x = -10, y = -10 }
+        local defaults = ns.Defaults.profile.Minimap.container
         local offset = self.db.offsets and self.db.offsets["container"] or defaults
-        self.container:SetPoint(offset.point or defaults.point, UIParent, offset.point or defaults.point, offset.x, offset.y)
+        self.container:SetPoint(offset.point, UIParent, offset.point, offset.x, offset.y)
         self.container:Show()
 
         -- Register with LibEditMode-Roithi
@@ -784,18 +814,7 @@ function MinimapMod:UpdateMinimapSize()
     end
 end
 
-MinimapMod.defaultAnchorPositions = {
-    zoneTextAnchor = { point = "TOP", x = 0, y = 0 },
-    mailAnchor = { point = "TOPRIGHT", x = 0, y = 0 },
-    trackingAnchor = { point = "TOPLEFT", x = 0, y = -38 },
-    lfgAnchor = { point = "BOTTOMLEFT", x = 0, y = 0 },
-    landingAnchor = { point = "BOTTOMLEFT", x = 0, y = 32 },
-    zoomInAnchor = { point = "TOPRIGHT", x = 0, y = -34 },
-    zoomOutAnchor = { point = "TOPRIGHT", x = 0, y = -68 },
-    calendarAnchor = { point = "TOPLEFT", x = 0, y = 0 },
-    dielAnchor = { point = "BOTTOMRIGHT", x = 0, y = 0 },
-    addonBar = { point = "BOTTOMLEFT", x = 10, y = 100 },
-}
+MinimapMod.defaultAnchorPositions = ns.Defaults.profile.Minimap.defaultAnchorPositions
 
 function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
     local container = _G.RoithiMinimapContainer
@@ -808,11 +827,12 @@ function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
         -- Detach: parent to UIParent and preserve current layout/screen coordinates
         f:SetParent(UIParent)
         f:SetScale(1.0)
+        local isInteractive = (key ~= "zoneTextAnchor" and key ~= "coordsAnchor")
         if f.SetFrameStrata then
-            f:SetFrameStrata("HIGH")
+            f:SetFrameStrata(isInteractive and "MEDIUM" or "LOW")
         end
         if f.SetFrameLevel then
-            f:SetFrameLevel(20)
+            f:SetFrameLevel(isInteractive and 30 or 5)
         end
         f:ClearAllPoints()
 
@@ -836,11 +856,12 @@ function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
 
         f:SetParent(container)
         f:SetScale(1.0)
+        local isInteractive = (key ~= "zoneTextAnchor" and key ~= "coordsAnchor")
         if f.SetFrameStrata then
-            f:SetFrameStrata("HIGH")
+            f:SetFrameStrata(isInteractive and "MEDIUM" or "LOW")
         end
         if f.SetFrameLevel then
-            f:SetFrameLevel(20)
+            f:SetFrameLevel(isInteractive and 30 or 5)
         end
         f:ClearAllPoints()
 
@@ -1005,11 +1026,12 @@ local function CreateAnchorFrame(mod, key, name, editModeName, w, h, defaultPos)
         local f = CreateFrame("Frame", name, UIParent, "BackdropTemplate")
         f.defaultPos = defaultPos
         f:SetSize(w, h)
+        local isInteractive = (key ~= "zoneTextAnchor" and key ~= "coordsAnchor")
         if f.SetFrameStrata then
-            f:SetFrameStrata("HIGH")
+            f:SetFrameStrata(isInteractive and "MEDIUM" or "LOW")
         end
         if f.SetFrameLevel then
-            f:SetFrameLevel(20)
+            f:SetFrameLevel(isInteractive and 30 or 5)
         end
         f:SetClampedToScreen(true)
         f:SetMovable(true)
@@ -1034,7 +1056,7 @@ local function CreateAnchorFrame(mod, key, name, editModeName, w, h, defaultPos)
             f:ClearAllPoints()
             local offset = mod.db.offsets and mod.db.offsets[key]
             if not offset or not offset.point or not offset.x or not offset.y then
-                offset = defaultPos
+                offset = defaultPos or { point = "CENTER", x = 0, y = 0 }
             end
             f:SetPoint(offset.point, UIParent, offset.point, offset.x, offset.y)
         else
@@ -1042,7 +1064,7 @@ local function CreateAnchorFrame(mod, key, name, editModeName, w, h, defaultPos)
             f:ClearAllPoints()
             local offset = mod.db.offsets and mod.db.offsets[key]
             if not offset or not offset.point or not offset.x or not offset.y then
-                offset = defaultPos
+                offset = defaultPos or { point = "CENTER", x = 0, y = 0 }
             end
             f:SetPoint(offset.point, container, offset.point, offset.x, offset.y)
         end
@@ -1119,14 +1141,22 @@ function MinimapMod:LayoutDefaultButtons()
         end
 
         originalSetParent(btn, anchor)
+        if btn.SetFrameStrata and anchor.GetFrameStrata then
+            btn:SetFrameStrata(anchor:GetFrameStrata())
+        end
+        if btn.SetFrameLevel and anchor.GetFrameLevel then
+            btn:SetFrameLevel(anchor:GetFrameLevel() + 5)
+        end
         originalClearAllPoints(btn)
         originalSetPoint(btn, "CENTER", anchor, "CENTER", 0, 0)
     end
 
+    local defPos = ns.Defaults.profile.Minimap.defaultAnchorPositions
+
     -- Setup Zone Text Anchor
     local zoneWidth = (self.db and self.db.size) or 200
-    local zoneTextAnchor = CreateAnchorFrame(self, "zoneTextAnchor", "RoithiZoneTextAnchor", L["Minimap Zone Text"], zoneWidth, 20, { point = "TOP", x = 0, y = 0 })
-    local zoneText = MinimapCluster.ZoneTextButton or MinimapCluster.ZoneTextFrame or _G.MinimapZoneTextButton
+    local zoneTextAnchor = CreateAnchorFrame(self, "zoneTextAnchor", "RoithiZoneTextAnchor", L["Minimap Zone Text"], zoneWidth, 20, defPos.zoneTextAnchor)
+    local zoneText = (MinimapCluster and (MinimapCluster.ZoneTextButton or MinimapCluster.ZoneTextFrame)) or _G.MinimapZoneTextButton
     if zoneText then
         HookBlizzardButton(zoneText, zoneTextAnchor)
         if zoneText.SetSize then zoneText:SetSize(zoneWidth, 20) end
@@ -1157,26 +1187,26 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Coordinates Anchor
-    local coordsAnchor = CreateAnchorFrame(self, "coordsAnchor", "RoithiCoordsAnchor", L["Minimap Coordinates"], 90, 18, { point = "BOTTOM", x = 0, y = 0 })
+    local coordsAnchor = CreateAnchorFrame(self, "coordsAnchor", "RoithiCoordsAnchor", L["Minimap Coordinates"], 90, 18, defPos.coordsAnchor)
     self.coordsAnchor = coordsAnchor
     self:SetupCoordsWidget(coordsAnchor)
 
     -- Setup Mail Anchor
-    local mailAnchor = CreateAnchorFrame(self, "mailAnchor", "RoithiMailAnchor", L["Minimap Mail Frame"], 32, 32, { point = "TOPRIGHT", x = 0, y = 0 })
-    local mail = MiniMapMailFrame or (MinimapCluster.IndicatorFrame and MinimapCluster.IndicatorFrame.MailFrame)
+    local mailAnchor = CreateAnchorFrame(self, "mailAnchor", "RoithiMailAnchor", L["Minimap Mail Frame"], 32, 32, defPos.mailAnchor)
+    local mail = MiniMapMailFrame or (MinimapCluster and MinimapCluster.IndicatorFrame and MinimapCluster.IndicatorFrame.MailFrame)
     if mail then
         HookBlizzardButton(mail, mailAnchor)
     end
 
     -- Setup Tracking Anchor
-    local trackingAnchor = CreateAnchorFrame(self, "trackingAnchor", "RoithiTrackingAnchor", L["Minimap Tracking Frame"], 32, 32, { point = "TOPLEFT", x = 0, y = -38 })
-    local tracking = MinimapCluster.Tracking or MinimapCluster.TrackingFrame or MiniMapTracking
+    local trackingAnchor = CreateAnchorFrame(self, "trackingAnchor", "RoithiTrackingAnchor", L["Minimap Tracking Frame"], 32, 32, defPos.trackingAnchor)
+    local tracking = (MinimapCluster and (MinimapCluster.Tracking or MinimapCluster.TrackingFrame)) or MiniMapTracking
     if tracking then
         HookBlizzardButton(tracking, trackingAnchor)
     end
 
     -- Setup LFG Anchor
-    local lfgAnchor = CreateAnchorFrame(self, "lfgAnchor", "RoithiLFGAnchor", L["Minimap LFG Frame"], 32, 32, { point = "BOTTOMLEFT", x = 0, y = 0 })
+    local lfgAnchor = CreateAnchorFrame(self, "lfgAnchor", "RoithiLFGAnchor", L["Minimap LFG Frame"], 32, 32, defPos.lfgAnchor)
     local lfgs = {}
     if _G.QueueStatusMinimapButton then table.insert(lfgs, _G.QueueStatusMinimapButton) end
     if _G.QueueStatusButton then table.insert(lfgs, _G.QueueStatusButton) end
@@ -1190,7 +1220,7 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Landing Anchor
-    local landingAnchor = CreateAnchorFrame(self, "landingAnchor", "RoithiLandingAnchor", L["Minimap Landing Button"], 36, 36, { point = "BOTTOMLEFT", x = 0, y = 32 })
+    local landingAnchor = CreateAnchorFrame(self, "landingAnchor", "RoithiLandingAnchor", L["Minimap Landing Button"], 36, 36, defPos.landingAnchor)
     local landings = {}
     if _G.GarrisonLandingPageMinimapButton then table.insert(landings, _G.GarrisonLandingPageMinimapButton) end
     if _G.ExpansionLandingPageMinimapButton then table.insert(landings, _G.ExpansionLandingPageMinimapButton) end
@@ -1211,27 +1241,33 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Zoom In Anchor
-    local zoomInAnchor = CreateAnchorFrame(self, "zoomInAnchor", "RoithiZoomInAnchor", L["Minimap Zoom In"], 32, 32, { point = "TOPRIGHT", x = 0, y = -34 })
-    local zoomIn = Minimap.ZoomIn or _G.MinimapZoomIn
+    local zoomInAnchor = CreateAnchorFrame(self, "zoomInAnchor", "RoithiZoomInAnchor", L["Minimap Zoom In"], 32, 32, defPos.zoomInAnchor)
+    local zoomIn = (Minimap and Minimap.ZoomIn) or _G.MinimapZoomIn
     if zoomIn then
         zoomIn:SetParent(zoomInAnchor)
+        if zoomIn.SetFrameStrata and zoomInAnchor.GetFrameStrata then zoomIn:SetFrameStrata(zoomInAnchor:GetFrameStrata()) end
+        if zoomIn.SetFrameLevel and zoomInAnchor.GetFrameLevel then zoomIn:SetFrameLevel(zoomInAnchor:GetFrameLevel() + 5) end
         zoomIn:ClearAllPoints()
         zoomIn:SetPoint("CENTER", zoomInAnchor, "CENTER", 0, 0)
     end
 
     -- Setup Zoom Out Anchor
-    local zoomOutAnchor = CreateAnchorFrame(self, "zoomOutAnchor", "RoithiZoomOutAnchor", L["Minimap Zoom Out"], 32, 32, { point = "TOPRIGHT", x = 0, y = -68 })
-    local zoomOut = Minimap.ZoomOut or _G.MinimapZoomOut
+    local zoomOutAnchor = CreateAnchorFrame(self, "zoomOutAnchor", "RoithiZoomOutAnchor", L["Minimap Zoom Out"], 32, 32, defPos.zoomOutAnchor)
+    local zoomOut = (Minimap and Minimap.ZoomOut) or _G.MinimapZoomOut
     if zoomOut then
         zoomOut:SetParent(zoomOutAnchor)
+        if zoomOut.SetFrameStrata and zoomOutAnchor.GetFrameStrata then zoomOut:SetFrameStrata(zoomOutAnchor:GetFrameStrata()) end
+        if zoomOut.SetFrameLevel and zoomOutAnchor.GetFrameLevel then zoomOut:SetFrameLevel(zoomOutAnchor:GetFrameLevel() + 5) end
         zoomOut:ClearAllPoints()
         zoomOut:SetPoint("CENTER", zoomOutAnchor, "CENTER", 0, 0)
     end
 
     -- Setup Calendar Anchor
-    local calendarAnchor = CreateAnchorFrame(self, "calendarAnchor", "RoithiCalendarAnchor", L["Minimap Calendar Button"], 36, 36, { point = "TOPLEFT", x = 0, y = 0 })
+    local calendarAnchor = CreateAnchorFrame(self, "calendarAnchor", "RoithiCalendarAnchor", L["Minimap Calendar Button"], 36, 36, defPos.calendarAnchor)
     if GameTimeFrame then
         GameTimeFrame:SetParent(calendarAnchor)
+        if GameTimeFrame.SetFrameStrata and calendarAnchor.GetFrameStrata then GameTimeFrame:SetFrameStrata(calendarAnchor:GetFrameStrata()) end
+        if GameTimeFrame.SetFrameLevel and calendarAnchor.GetFrameLevel then GameTimeFrame:SetFrameLevel(calendarAnchor:GetFrameLevel() + 5) end
         GameTimeFrame:ClearAllPoints()
         GameTimeFrame:SetPoint("CENTER", calendarAnchor, "CENTER", 0, 0)
 
@@ -1246,7 +1282,7 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Diel/Dial Anchor
-    local dielAnchor = CreateAnchorFrame(self, "dielAnchor", "RoithiDielAnchor", L["Minimap Daytime Dial"] or "Minimap Daytime Dial", 32, 32, { point = "BOTTOMRIGHT", x = 0, y = 0 })
+    local dielAnchor = CreateAnchorFrame(self, "dielAnchor", "RoithiDielAnchor", L["Minimap Daytime Dial"] or "Minimap Daytime Dial", 32, 32, defPos.dielAnchor)
     local diel = (MinimapCluster and (MinimapCluster.DielFrame or MinimapCluster.DialFrame)) or _G.DielFrame or _G.DialFrame
     if diel then
         HookBlizzardButton(diel, dielAnchor)
@@ -1369,6 +1405,48 @@ function MinimapMod:UpdateCalendarVisibility()
     end
 end
 
+function MinimapMod:SharePlayerCoordinates()
+    local ok, mapID = pcall(function()
+        return _G.C_Map and _G.C_Map.GetBestMapForUnit and _G.C_Map.GetBestMapForUnit("player")
+    end)
+    if not ok or not mapID then return end
+    local okPos, pos = pcall(function()
+        return _G.C_Map.GetPlayerMapPosition(mapID, "player")
+    end)
+    if not okPos or not pos or not pos.GetXY then return end
+    local okXY, x, y = pcall(function() return pos:GetXY() end)
+    if not okXY or not x or not y or x <= 0 or y <= 0 then return end
+
+    local coordStr
+    local isRetail = true
+    if ns and ns.IsRetail ~= nil then
+        isRetail = ns.IsRetail
+    elseif _G.WOW_PROJECT_ID and _G.WOW_PROJECT_MAINLINE then
+        isRetail = (_G.WOW_PROJECT_ID == _G.WOW_PROJECT_MAINLINE)
+    end
+    if isRetail then
+        coordStr = string.format("/mappin %d %.1f %.1f", mapID, x * 100, y * 100)
+    else
+        coordStr = string.format("/way %.1f %.1f", x * 100, y * 100)
+    end
+
+    local editBox = _G.ChatEdit_GetActiveWindow and _G.ChatEdit_GetActiveWindow()
+    if not editBox then
+        if _G.ChatFrame1EditBox and _G.ChatFrame1EditBox.IsShown and _G.ChatFrame1EditBox:IsShown() then
+            editBox = _G.ChatFrame1EditBox
+        elseif _G.ChatEdit_OpenChat then
+            _G.ChatEdit_OpenChat("", _G.SELECTED_DOCK_FRAME)
+            editBox = _G.ChatEdit_GetActiveWindow and _G.ChatEdit_GetActiveWindow()
+        end
+    end
+
+    if editBox then
+        editBox:SetText(coordStr)
+        if editBox.HighlightText then editBox:HighlightText() end
+        if editBox.SetFocus then editBox:SetFocus() end
+    end
+end
+
 function MinimapMod:SetupCoordsWidget(anchor)
     if not anchor or self.coordsText then return end
 
@@ -1382,6 +1460,24 @@ function MinimapMod:SetupCoordsWidget(anchor)
     if text.SetPoint then text:SetPoint("CENTER", anchor, "CENTER", 0, 0) end
     if text.SetTextColor then text:SetTextColor(1, 1, 1, 1) end
     self.coordsText = text
+
+    anchor:EnableMouse(true)
+    anchor:SetScript("OnEnter", function(f)
+        if _G.GameTooltip then
+            _G.GameTooltip:SetOwner(f, "ANCHOR_BOTTOM")
+            _G.GameTooltip:AddLine(L["Minimap Coordinates"] or "Minimap Coordinates", 1, 1, 1)
+            _G.GameTooltip:AddLine(L["Click to insert map pin / way coordinates into chat."] or "Click to insert map pin / way coordinates into chat.", 0.2, 0.8, 1, true)
+            _G.GameTooltip:Show()
+        end
+    end)
+    anchor:SetScript("OnLeave", function()
+        if _G.GameTooltip then _G.GameTooltip:Hide() end
+    end)
+    anchor:SetScript("OnMouseDown", function(_, btn)
+        if btn == "LeftButton" then
+            self:SharePlayerCoordinates()
+        end
+    end)
 
     if not self.coordsTicker and _G.C_Timer and _G.C_Timer.NewTicker then
         self.coordsTicker = _G.C_Timer.NewTicker(0.2, function()
@@ -1684,15 +1780,28 @@ function MinimapMod:UpdateDataTextBarLayout()
         if self.UpdateAddonBarAttachment then
             self:UpdateAddonBarAttachment()
         end
+        local objMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Objectives", true)
+        if objMod and objMod.ApplyPosition then
+            objMod:ApplyPosition()
+        end
         return
     end
     bar:Show()
+    if bar.textLeft and bar.textLeft.Show then bar.textLeft:Show() end
+    if bar.textMiddle and bar.textMiddle.Show then bar.textMiddle:Show() end
+    if bar.textRight and bar.textRight.Show then bar.textRight:Show() end
 
     local width = self.db.width or self.db.size or 200
     bar:SetSize(width, 20)
 
     bar:ClearAllPoints()
     bar:SetParent(container)
+    if bar.SetFrameStrata then
+        bar:SetFrameStrata("HIGH")
+    end
+    if bar.SetFrameLevel then
+        bar:SetFrameLevel(25)
+    end
 
     -- Background / Border Styling
     local bg = self.db.dataTextBgColor or { r = 0.05, g = 0.05, b = 0.05, a = 0.6 }
@@ -1733,17 +1842,17 @@ function MinimapMod:UpdateDataTextBarLayout()
     -- Left Section
     bar.textLeft:ClearAllPoints()
     bar.textLeft:SetPoint("LEFT", bar, "LEFT", self.db.dataTextLeftX or 4, self.db.dataTextLeftY or 0)
-    LibRoithi.mixins:SetFont(bar.textLeft, font, self.db.dataTextLeftFontSize or 11, "OUTLINE")
+    LibRoithi.mixins:SetFont(bar.textLeft, font, self.db.dataTextLeftFontSize or 12, "OUTLINE")
 
     -- Middle Section
     bar.textMiddle:ClearAllPoints()
     bar.textMiddle:SetPoint("CENTER", bar, "CENTER", self.db.dataTextMiddleX or 0, self.db.dataTextMiddleY or 0)
-    LibRoithi.mixins:SetFont(bar.textMiddle, font, self.db.dataTextMiddleFontSize or 11, "OUTLINE")
+    LibRoithi.mixins:SetFont(bar.textMiddle, font, self.db.dataTextMiddleFontSize or 12, "OUTLINE")
 
     -- Right Section
     bar.textRight:ClearAllPoints()
     bar.textRight:SetPoint("RIGHT", bar, "RIGHT", self.db.dataTextRightX or -4, self.db.dataTextRightY or 0)
-    LibRoithi.mixins:SetFont(bar.textRight, font, self.db.dataTextRightFontSize or 11, "OUTLINE")
+    LibRoithi.mixins:SetFont(bar.textRight, font, self.db.dataTextRightFontSize or 12, "OUTLINE")
 
     -- Section Buttons for precise hover & click
     local secW = width / 3
@@ -1767,6 +1876,10 @@ function MinimapMod:UpdateDataTextBarLayout()
     if self.UpdateAddonBarAttachment then
         self:UpdateAddonBarAttachment()
     end
+    local objMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Objectives", true)
+    if objMod and objMod.ApplyPosition then
+        objMod:ApplyPosition()
+    end
 end
 
 function MinimapMod:CreateDataTextBar()
@@ -1776,6 +1889,12 @@ function MinimapMod:CreateDataTextBar()
     bar:SetSize(200, 20)
     bar:SetClampedToScreen(true)
     bar:EnableMouse(true)
+    if bar.SetFrameStrata then
+        bar:SetFrameStrata("HIGH")
+    end
+    if bar.SetFrameLevel then
+        bar:SetFrameLevel(25)
+    end
 
     LibRoithi.mixins:CreateBackdrop(bar)
 

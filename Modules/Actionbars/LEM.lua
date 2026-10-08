@@ -27,19 +27,8 @@ function AB:SetupLEM()
         local displayName = L[BAR_DISPLAY_NAMES[barKey] or barKey] or barKey
         container.editModeName = displayName
 
-        local defaults = { point = "BOTTOM", x = 0, y = 30 }
-        if barKey == "bar2" then defaults.y = 70
-        elseif barKey == "bar3" then defaults.y = 110
-        elseif barKey == "bar4" then defaults.y = 150
-        elseif barKey == "bar5" then defaults.y = 190
-        elseif barKey == "bar6" then defaults.y = 230
-        elseif barKey == "bar7" then defaults.y = 270
-        elseif barKey == "bar8" then defaults.y = 310
-        elseif barKey == "pet" then defaults.y = 230
-        elseif barKey == "stance" then defaults.y = 265
-        elseif barKey == "extraAction" then defaults.point = "CENTER"; defaults.x = 0; defaults.y = -100
-        elseif barKey == "zoneAction" then defaults.point = "CENTER"; defaults.x = 0; defaults.y = -160
-        end
+        local defBar = ns.Defaults.profile.Actionbars[barKey]
+        local defaults = { point = defBar.point, x = defBar.x, y = defBar.y }
 
         LEM:AddFrame(container, function(f, _, point, x, y)
             f:ClearAllPoints()
@@ -53,6 +42,44 @@ function AB:SetupLEM()
         if LEM.AddFrameSettings then
             local maxBarCount = self.BAR_CONFIGS and self.BAR_CONFIGS[barKey] and self.BAR_CONFIGS[barKey].count or 12
             local settings = {
+                {
+                    name = L["X Position"] or "X Position",
+                    kind = LEM.SettingType.Slider,
+                    minValue = -2500,
+                    maxValue = 2500,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db[barKey] and self.db[barKey].x or defaults.x end,
+                    set = function(_, val)
+                        self.db[barKey] = self.db[barKey] or {}
+                        self.db[barKey].x = val
+                        if not InCombatLockdown() then
+                            local pt = self.db[barKey].point or defaults.point
+                            local py = self.db[barKey].y or defaults.y
+                            container:ClearAllPoints()
+                            container:SetPoint(pt, UIParent, pt, val, py)
+                        end
+                    end,
+                },
+                {
+                    name = L["Y Position"] or "Y Position",
+                    kind = LEM.SettingType.Slider,
+                    minValue = -1500,
+                    maxValue = 1500,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db[barKey] and self.db[barKey].y or defaults.y end,
+                    set = function(_, val)
+                        self.db[barKey] = self.db[barKey] or {}
+                        self.db[barKey].y = val
+                        if not InCombatLockdown() then
+                            local pt = self.db[barKey].point or defaults.point
+                            local px = self.db[barKey].x or defaults.x
+                            container:ClearAllPoints()
+                            container:SetPoint(pt, UIParent, pt, px, val)
+                        end
+                    end,
+                },
                 {
                     name = L["Button Size"],
                     kind = LEM.SettingType.Slider,
@@ -92,6 +119,23 @@ function AB:SetupLEM()
                     set = function(_, val)
                         self.db[barKey] = self.db[barKey] or {}
                         self.db[barKey].buttonsPerRow = val
+                        self.db[barKey].numRows = nil
+                        self:LayoutBar(barKey)
+                    end,
+                },
+                {
+                    name = L["Number of Rows"] or "Number of Rows",
+                    kind = LEM.SettingType.Slider,
+                    minValue = 1,
+                    maxValue = 12,
+                    valueStep = 1,
+                    formatter = function(v) return string.format("%.0f", v) end,
+                    get = function() return self.db[barKey] and self.db[barKey].numRows or 1 end,
+                    set = function(_, val)
+                        self.db[barKey] = self.db[barKey] or {}
+                        self.db[barKey].numRows = val
+                        local maxBtn = self.db[barKey].maxButtons or maxBarCount
+                        self.db[barKey].buttonsPerRow = math.ceil(maxBtn / val)
                         self:LayoutBar(barKey)
                     end,
                 },

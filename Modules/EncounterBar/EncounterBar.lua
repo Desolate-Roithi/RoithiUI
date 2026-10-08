@@ -9,6 +9,20 @@ local IsEncounterInProgress = _G.IsEncounterInProgress
 local issecretvalue = _G.issecretvalue
 
 local EB = RoithiUI:NewModule("EncounterBar", "AceEvent-3.0", "AceConsole-3.0")
+EB.dbKey = "EncounterResource"
+EB.defaultSettings = {
+    enabled       = true,
+    width         = 250,
+    height        = 20,
+    fontSize      = 12,
+    texture       = "Solid",
+    point         = "TOP",
+    x             = 0,
+    y             = -100,
+    widgetDebug   = false,
+    widgetLogMode = false,
+    whitelist     = {},
+}
 
 -- Blizzard source constant: ALTERNATE_POWER_INDEX = 10
 -- Do NOT use Enum.PowerType.Alternate — it does not exist in 12.0.1.
@@ -509,41 +523,14 @@ end
 -- ─────────────────────────────────────────────────────────────────────────────
 function EB:OnInitialize()
     -- Check if module is disabled
-    local profile = RoithiUI.db.profile
-    if profile.EnabledModules and profile.EnabledModules.EncounterBar == false then
+    local profile = RoithiUI.db and RoithiUI.db.profile
+    if profile and profile.EnabledModules and profile.EnabledModules.EncounterBar == false then
         self:Disable()
         return
     end
 
-    -- Ensure DB has full defaults
-    if not RoithiUI.db.profile.EncounterResource then
-        RoithiUI.db.profile.EncounterResource = {
-            enabled       = true,
-            width         = 250,
-            height        = 20,
-            fontSize      = 12,
-            texture       = "Solid",
-            point         = "TOP",
-            x             = 0,
-            y             = -100,
-            widgetDebug   = false,
-            widgetLogMode = false,
-            whitelist     = {},
-        }
-    end
-    local db = RoithiUI.db.profile.EncounterResource
-
-    -- Fill any missing keys (for older save data)
-    if not db.point then db.point = "TOP" end
-    if not db.x then db.x = 0 end
-    if not db.y then db.y = -100 end
-    if not db.width then db.width = 250 end
-    if not db.height then db.height = 20 end
-    if not db.fontSize then db.fontSize = 12 end
-    if not db.texture then db.texture = "Solid" end
-    if db.widgetDebug == nil then db.widgetDebug = false end
-    if db.widgetLogMode == nil then db.widgetLogMode = false end
-    if not db.whitelist then db.whitelist = {} end
+    self.db = profile and profile.EncounterResource or self.defaultSettings
+    local db = self.db
 
     -- Slash Command
     self:RegisterChatCommand("reb", "ChatCommand")

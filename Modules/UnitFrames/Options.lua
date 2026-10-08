@@ -2378,11 +2378,8 @@ function ns.InitializeUnitFrameConfig()
                 frame:SetMovable(true)
                 frame:SetClampedToScreen(true)
 
-                local defaults = {
-                    point = db.point or "CENTER",
-                    x = db.x or 0,
-                    y = db.y or 0
-                }
+                local defUF = ns.Defaults.profile.UnitFrames[unit]
+                local defaults = { point = defUF.point, x = defUF.x, y = defUF.y }
 
                 if not db.point then db.point = defaults.point end
                 if not db.x then db.x = defaults.x end

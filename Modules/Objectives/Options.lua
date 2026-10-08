@@ -22,7 +22,7 @@ function ObjectivesMod:GetOptions()
                         desc = L["Enables modern restyling for the Blizzard Objective Tracker."] or "Enables modern restyling for the Blizzard Objective Tracker.",
                         order = 1,
                         get = function() return self.db.enabled ~= false end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.enabled = val
                             if val then
                                 self:OnEnable()
@@ -37,7 +37,7 @@ function ObjectivesMod:GetOptions()
                         desc = L["Hides the top master header to save vertical space."] or "Hides the top master header to save vertical space.",
                         order = 2,
                         get = function() return self.db.hideMasterHeader == true end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.hideMasterHeader = val
                             self:ApplyMasterHeaderVisibility()
                         end,
@@ -48,7 +48,7 @@ function ObjectivesMod:GetOptions()
                         desc = L["Displays a 1px colored accent line underneath section headers."] or "Displays a 1px colored accent line underneath section headers.",
                         order = 3,
                         get = function() return self.db.showAccentDivider ~= false end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.showAccentDivider = val
                             self:SkinAllExisting()
                         end,
@@ -59,7 +59,7 @@ function ObjectivesMod:GetOptions()
                         desc = L["Apply modern flat styling and 1px borders to quest progress bars."] or "Apply modern flat styling and 1px borders to quest progress bars.",
                         order = 4,
                         get = function() return self.db.skinProgressBars ~= false end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.skinProgressBars = val
                             self:SkinAllExisting()
                         end,
@@ -73,7 +73,7 @@ function ObjectivesMod:GetOptions()
                         max = 4,
                         step = 1,
                         get = function() return self.db.dividerThickness or 1 end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.dividerThickness = val
                             self:SkinAllExisting()
                         end,
@@ -89,7 +89,7 @@ function ObjectivesMod:GetOptions()
                         step = 0.05,
                         isPercent = true,
                         get = function() return self.db.scale or 1.0 end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.scale = val
                             self:ApplyScaleAndHeight()
                         end,
@@ -103,7 +103,7 @@ function ObjectivesMod:GetOptions()
                         max = 1400,
                         step = 25,
                         get = function() return self.db.maxHeight or 800 end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.maxHeight = val
                             self:ApplyScaleAndHeight()
                         end,
@@ -114,7 +114,7 @@ function ObjectivesMod:GetOptions()
                         desc = L["Automatically minimize the objective tracker upon entering combat."] or "Automatically minimize the objective tracker upon entering combat.",
                         order = 8,
                         get = function() return self.db.autoCollapseCombat == true end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.autoCollapseCombat = val
                             self:CheckAutoCollapse()
                         end,
@@ -125,7 +125,7 @@ function ObjectivesMod:GetOptions()
                         desc = L["Automatically minimize the objective tracker inside instances."] or "Automatically minimize the objective tracker inside instances.",
                         order = 9,
                         get = function() return self.db.autoCollapseInstance == true end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.autoCollapseInstance = val
                             self:CheckAutoCollapse()
                         end,
@@ -136,7 +136,7 @@ function ObjectivesMod:GetOptions()
                         desc = L["Anchor the objective tracker directly below the minimap, matching its combined width."] or "Anchor the objective tracker directly below the minimap, matching its combined width.",
                         order = 9.5,
                         get = function() return self.db.attachedToMinimap ~= false end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.attachedToMinimap = val
                             self:ApplyPosition()
                         end,
@@ -151,7 +151,7 @@ function ObjectivesMod:GetOptions()
                         step = 5,
                         disabled = function() return self.db.attachedToMinimap ~= false end,
                         get = function() return self.db.detachedWidth or self.db.width or 235 end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.detachedWidth = val
                             self.db.width = val
                             self:ApplyPosition()
@@ -181,6 +181,9 @@ function ObjectivesMod:GetOptions()
                             if _G.C_QuestLog and _G.C_QuestLog.SortQuestWatches then
                                 _G.C_QuestLog.SortQuestWatches()
                             end
+                            if self.RefreshTrackers then
+                                self:RefreshTrackers()
+                            end
                             self:SkinAllExisting()
                         end,
                     },
@@ -190,8 +193,31 @@ function ObjectivesMod:GetOptions()
                         desc = L["Display the quest level prefix [lvl] before the quest title."] or "Display the quest level prefix [lvl] before the quest title.",
                         order = 12,
                         get = function() return self.db.showQuestLevel ~= false end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.showQuestLevel = val
+                            self:SkinAllExisting()
+                        end,
+                    },
+                    showForeverQuestInfinity = {
+                        type = "toggle",
+                        name = L["Forever Quest Indicator"] or "Forever Quest Indicator",
+                        desc = L["Display an infinity symbol next to the level for new quests not part of original Classic."] or "Display an infinity symbol next to the level for new quests not part of original Classic.",
+                        order = 12.5,
+                        hidden = function() return ns.IsRetail or (_G.WOW_PROJECT_ID and _G.WOW_PROJECT_MAINLINE and _G.WOW_PROJECT_ID == _G.WOW_PROJECT_MAINLINE) end,
+                        get = function() return self.db.showForeverQuestInfinity ~= false end,
+                        set = function(info, val)
+                            self.db.showForeverQuestInfinity = val
+                            self:SkinAllExisting()
+                        end,
+                    },
+                    showCompletedQuestIndicator = {
+                        type = "toggle",
+                        name = L["Completed Quest Indicator"] or "Completed Quest Indicator",
+                        desc = L["Display a green checkmark and highlight the quest title in green when ready for turn-in."] or "Display a green checkmark and highlight the quest title in green when ready for turn-in.",
+                        order = 12.6,
+                        get = function() return self.db.showCompletedQuestIndicator ~= false end,
+                        set = function(info, val)
+                            self.db.showCompletedQuestIndicator = val
                             self:SkinAllExisting()
                         end,
                     },
@@ -201,9 +227,33 @@ function ObjectivesMod:GetOptions()
                         desc = L["Only show quest objective text and progress when hovering over the quest."] or "Only show quest objective text and progress when hovering over the quest.",
                         order = 13,
                         get = function() return self.db.hoverObjectiveText ~= false end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.hoverObjectiveText = val
-                            self:SkinAllExisting()
+                            self:RefreshSettings()
+                        end,
+                    },
+                    hideCompletedObjectives = {
+                        type = "toggle",
+                        name = L["Hide Completed Objectives"] or "Hide Completed Objectives",
+                        desc = L["Hide completed objective lines while keeping uncompleted objectives visible, dynamically adjusting quest height."] or "Hide completed objective lines while keeping uncompleted objectives visible, dynamically adjusting quest height.",
+                        order = 13.2,
+                        get = function() return self.db.hideCompletedObjectives == true end,
+                        set = function(info, val)
+                            self.db.hideCompletedObjectives = val
+                            self:RefreshSettings()
+                        end,
+                    },
+                    collapseDelay = {
+                        type = "range",
+                        name = L["Hover Collapse Delay"] or "Hover Collapse Delay",
+                        desc = L["Delay in seconds before collapsing quest objectives when moving the mouse away, preventing abrupt accordion jumping."] or "Delay in seconds before collapsing quest objectives when moving the mouse away, preventing abrupt accordion jumping.",
+                        order = 13.5,
+                        min = 0.05,
+                        max = 1.0,
+                        step = 0.05,
+                        get = function() return self.db.collapseDelay or 0.25 end,
+                        set = function(info, val)
+                            self.db.collapseDelay = val
                         end,
                     },
                     hideQuestIcon = {
@@ -212,8 +262,19 @@ function ObjectivesMod:GetOptions()
                         desc = L["Hide the round quest POI button / icon next to quest titles."] or "Hide the round quest POI button / icon next to quest titles.",
                         order = 14,
                         get = function() return self.db.hideQuestIcon ~= false end,
-                        set = function(_, val)
+                        set = function(info, val)
                             self.db.hideQuestIcon = val
+                            self:SkinAllExisting()
+                        end,
+                    },
+                    showFocusIndicator = {
+                        type = "toggle",
+                        name = L["Show Focus Indicator"] or "Show Focus Indicator",
+                        desc = L["Display a focused marker next to the currently super-tracked / focused quest."] or "Display a focused marker next to the currently super-tracked / focused quest.",
+                        order = 15,
+                        get = function() return self.db.showFocusIndicator ~= false end,
+                        set = function(info, val)
+                            self.db.showFocusIndicator = val
                             self:SkinAllExisting()
                         end,
                     },
@@ -336,8 +397,23 @@ function ObjectivesMod:GetOptions()
                             local c = self.db.objectiveColor or self.defaultSettings.objectiveColor
                             return c.r or 0.8, c.g or 0.8, c.b or 0.8, c.a or 1.0
                         end,
-                        set = function(_, r, g, b, a)
+                        set = function(info, r, g, b, a)
                             self.db.objectiveColor = { r = r, g = g, b = b, a = a }
+                            self:SkinAllExisting()
+                        end,
+                    },
+                    foreverColor = {
+                        type = "color",
+                        name = L["Forever Indicator Color"] or "Forever Indicator Color",
+                        desc = L["Color of the infinity symbol for Forever quests."] or "Color of the infinity symbol for Forever quests.",
+                        hasAlpha = false,
+                        order = 4,
+                        get = function()
+                            local c = self.db.foreverColor or { r = 0.22, g = 0.74, b = 0.97, a = 1.0 }
+                            return c.r or 0.22, c.g or 0.74, c.b or 0.97
+                        end,
+                        set = function(info, r, g, b)
+                            self.db.foreverColor = { r = r, g = g, b = b, a = 1.0 }
                             self:SkinAllExisting()
                         end,
                     },
@@ -348,10 +424,10 @@ function ObjectivesMod:GetOptions()
 end
 
 function ObjectivesMod:GetLEMFrameSettings()
-    local LEM = LibStub("LibEditMode-1.0", true)
+    local LEM = LibStub("LibEditMode-Roithi", true) or LibStub("LibEditMode-1.0", true)
     if not LEM or not LEM.SettingType then return {} end
 
-    return {
+    local settings = {
         {
             name = L["Attach to Minimap"] or "Attach to Minimap",
             kind = LEM.SettingType.Checkbox,
@@ -359,6 +435,49 @@ function ObjectivesMod:GetLEMFrameSettings()
             get = function() return self.db.attachedToMinimap ~= false end,
             set = function(_, val)
                 self.db.attachedToMinimap = val
+                self:ApplyPosition()
+                if LEM.RefreshFrameSettings and _G.ObjectiveTrackerFrame then
+                    LEM:RefreshFrameSettings(_G.ObjectiveTrackerFrame)
+                end
+            end,
+        },
+        {
+            name = L["Objectives on Hover Only"] or "Objectives on Hover Only",
+            kind = LEM.SettingType.Checkbox,
+            default = true,
+            get = function() return self.db.hoverObjectiveText ~= false end,
+            set = function(_, val)
+                self.db.hoverObjectiveText = val
+                self:RefreshSettings()
+            end,
+        },
+        {
+            name = L["X Position"] or "X Position",
+            kind = LEM.SettingType.Slider,
+            default = -50,
+            minValue = -2500,
+            maxValue = 2500,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.0f", v) end,
+            get = function() return self.db.x or -50 end,
+            set = function(_, val)
+                self.db.x = val
+                self.db.attachedToMinimap = false
+                self:ApplyPosition()
+            end,
+        },
+        {
+            name = L["Y Position"] or "Y Position",
+            kind = LEM.SettingType.Slider,
+            default = -200,
+            minValue = -1500,
+            maxValue = 1500,
+            valueStep = 1,
+            formatter = function(v) return string.format("%.0f", v) end,
+            get = function() return self.db.y or -200 end,
+            set = function(_, val)
+                self.db.y = val
+                self.db.attachedToMinimap = false
                 self:ApplyPosition()
             end,
         },
@@ -430,6 +549,7 @@ function ObjectivesMod:GetLEMFrameSettings()
             end,
         },
     }
+    return settings
 end
 
 function ObjectivesMod:GetLEMFrameButtons()

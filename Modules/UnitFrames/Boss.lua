@@ -24,13 +24,14 @@ function UF:InitializeBossFrames()
     if not driver then return end
 
     -- Load Driver Position (Prioritize DB)
+    local defBoss = ns.Defaults.profile.UnitFrames[unit1]
     local db = RoithiUI.db.profile.UnitFrames[unit1]
     if db and db.point then
         driver:ClearAllPoints()
-        driver:SetPoint(db.point, UIParent, db.point, db.x or 0, db.y or 0)
+        driver:SetPoint(db.point, UIParent, db.point, db.x or defBoss.x, db.y or defBoss.y)
     else
         driver:ClearAllPoints()
-        driver:SetPoint("RIGHT", UIParent, "RIGHT", -250, 0)
+        driver:SetPoint(defBoss.point, UIParent, defBoss.point, defBoss.x, defBoss.y)
     end
 
     driver:SetMovable(true)
@@ -79,7 +80,7 @@ function UF:InitializeBossFrames()
         driver.EditModeOverlay = overlays[1]
 
         -- Logic for Position Saving
-        local defaults = { point = "RIGHT", x = -250, y = 0 }
+        local defaults = { point = defBoss.point, x = defBoss.x, y = defBoss.y }
         local function OnPosChanged(f, layoutName, point, x, y)
             if not RoithiUI.db.profile.UnitFrames[unit1] then
                 RoithiUI.db.profile.UnitFrames[unit1] = {}

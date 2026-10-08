@@ -225,7 +225,8 @@ local function ApplyBarToDB()
         LibRoithi.mixins:SetFont(bar.Text, "Friz Quadrata TT", db.fontSize or 12, "OUTLINE")
     end
     bar:ClearAllPoints()
-    bar:SetPoint(db.point or "TOP", UIParent, db.point or "TOP", db.x or 0, db.y or 0)
+    local defEB = ns.Defaults.profile.EncounterResource
+    bar:SetPoint(db.point or defEB.point, UIParent, db.point or defEB.point, db.x or defEB.x, db.y or defEB.y)
 end
 
 function ns.InitEncounterBarLEM()
@@ -236,8 +237,8 @@ function ns.InitEncounterBarLEM()
     bar.editModeName = "Encounter Resource Bar"
     bar:SetMovable(true)
     bar:SetClampedToScreen(true)
-    local db = GetEncounterDB()
-    local defaults = { point = db.point or "TOP", x = db.x or 0, y = db.y or 0 }
+    local defEB = ns.Defaults.profile.EncounterResource
+    local defaults = { point = defEB.point, x = defEB.x, y = defEB.y }
 
     local function OnPositionChanged(f, _, point, x, y)
         local posDB = GetEncounterDB()

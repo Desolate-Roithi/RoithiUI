@@ -72,10 +72,13 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
     end
     if bg.Show then bg:Show() end
 
+    local vConf = self.db.viewers and self.db.viewers[viewerKey]
+
     -- Cooldown frame countdown font
     local cd = itemFrame.Cooldown or (itemFrame.GetCooldownFrame and itemFrame:GetCooldownFrame())
     if cd and cd.SetCountdownFont then
-        local fontPath = GetActiveFont(self.db.font)
+        local fontName = (vConf and vConf.font) or self.db.font
+        local fontPath = GetActiveFont(fontName)
         pcall(cd.SetCountdownFont, cd, fontPath)
     end
 
@@ -98,9 +101,10 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
     end
 
     if stackFS then
-        local fontPath = GetActiveFont(self.db.font)
-        local fontSize = self.db.stackFontSize or 11
-        local fontOutline = self.db.stackFontOutline or "OUTLINE"
+        local fontName = (vConf and vConf.font) or self.db.font
+        local fontPath = GetActiveFont(fontName)
+        local fontSize = (vConf and vConf.stackFontSize) or self.db.stackFontSize or 11
+        local fontOutline = (vConf and vConf.stackFontOutline) or self.db.stackFontOutline or "OUTLINE"
         if stackFS.SetFont then
             stackFS:SetFont(fontPath, fontSize, fontOutline)
         end
@@ -108,9 +112,9 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
             stackFS:SetSize(0, 0)
         end
         if stackFS.ClearAllPoints and stackFS.SetPoint then
-            local anchor = self.db.stackAnchor or "BOTTOMRIGHT"
-            local ox = self.db.stackOffsetX or -2
-            local oy = self.db.stackOffsetY or 2
+            local anchor = (vConf and vConf.stackAnchor) or self.db.stackAnchor or "BOTTOMRIGHT"
+            local ox = (vConf and vConf.stackOffsetX) or self.db.stackOffsetX or -2
+            local oy = (vConf and vConf.stackOffsetY) or self.db.stackOffsetY or 2
             if stackFS.SetJustifyH then
                 if anchor:find("LEFT") then
                     stackFS:SetJustifyH("LEFT")
@@ -126,7 +130,6 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
     end
 
     -- Viewer-specific sizing (essential/utility/buff icon)
-    local vConf = self.db.viewers and self.db.viewers[viewerKey]
     if vConf and vConf.iconSize and itemFrame.SetSize then
         local sz = vConf.iconSize
         if sz > 0 and (viewerKey ~= "BuffBar") then
