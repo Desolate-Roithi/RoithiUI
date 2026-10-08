@@ -11,18 +11,26 @@ local UF = RoithiUI:GetModule("UnitFrames")
 local issecretvalue = _G.issecretvalue
 local GetComboPoints = _G.GetComboPoints
 
+local PowerType = (Enum and Enum.PowerType) or {}
+local ComboPointsType = PowerType.ComboPoints or 4
+local ChiType = PowerType.Chi or 12
+local HolyPowerType = PowerType.HolyPower or 9
+local SoulShardsType = PowerType.SoulShards or 7
+local ArcaneChargesType = PowerType.ArcaneCharges or 16
+local EssenceType = PowerType.Essence or 19
+
 -- Configuration for Class Power
 local ClassPowerConfig = {
-    ["ROGUE"] = { mode = "POWER", type = Enum.PowerType.ComboPoints },
-    ["DRUID"] = { mode = "POWER", type = Enum.PowerType.ComboPoints, requireForm = true },
+    ["ROGUE"] = { mode = "POWER", type = ComboPointsType },
+    ["DRUID"] = { mode = "POWER", type = ComboPointsType, requireForm = true },
     ["MONK"] = {
         [1] = { mode = "STAGGER", style = "BAR" },          -- Brewmaster Stagger
-        [3] = { mode = "POWER", type = Enum.PowerType.Chi } -- Windwalker Only
+        [3] = { mode = "POWER", type = ChiType } -- Windwalker Only
     },
-    ["PALADIN"] = { mode = "POWER", type = Enum.PowerType.HolyPower },
-    ["WARLOCK"] = { mode = "POWER", type = Enum.PowerType.SoulShards },
-    ["MAGE"] = { mode = "POWER", type = Enum.PowerType.ArcaneCharges, spec = 1 },
-    ["EVOKER"] = { mode = "POWER", type = Enum.PowerType.Essence },
+    ["PALADIN"] = { mode = "POWER", type = HolyPowerType },
+    ["WARLOCK"] = { mode = "POWER", type = SoulShardsType },
+    ["MAGE"] = { mode = "POWER", type = ArcaneChargesType, spec = 1 },
+    ["EVOKER"] = { mode = "POWER", type = EssenceType },
     ["DEATHKNIGHT"] = {
         mode = "RUNES",
         color = { r = 0.2, g = 0.6, b = 1.0 } -- Blueish Rune Color
@@ -163,11 +171,33 @@ function UF:CreateClassPower(frame)
         end
     end)
 
-    -- Runes OnUpdate Loop (Continuous Value Refill + Timer)
+    -- Runes OnUpdate Loop (Continuous Value Refill + Throttled Sort/Timer)
     local RuneData = {}
     for i = 1, 6 do RuneData[i] = {} end
 
+    local function RuneSortComparator(a, b)
+        if a.ready and not b.ready then return true end
+        if not a.ready and b.ready then return false end
+        if not a.ready and not b.ready then
+            if math.abs(a.remain - b.remain) > 0.01 then
+                return a.remain < b.remain
+            end
+            return a.index < b.index
+        end
+        return a.index < b.index
+    end
+
+    local runeThrottle = 0
     local function OnUpdateRunes(sf, elapsed)
+        local now = GetTime()
+        runeThrottle = runeThrottle + (elapsed or 0.016)
+        local shouldSort = (runeThrottle >= 0.05)
+        if shouldSort then
+            runeThrottle = 0
+        end
+
+        local anyCooldown = false
+
         -- Gather rune data
         for i = 1, 6 do
             local start, duration, runeReady = GetRuneCooldown(i)
@@ -177,52 +207,80 @@ function UF:CreateClassPower(frame)
             RuneData[i].ready = runeReady
             local isSecretRune = (issecretvalue and (issecretvalue(start) or issecretvalue(duration))) or (canaccessvalue and (not canaccessvalue(start) or not canaccessvalue(duration)))
             if not isSecretRune and not runeReady and start and duration then
-                RuneData[i].remain = (start + duration) - GetTime()
+                RuneData[i].remain = (start + duration) - now
+                anyCooldown = true
             else
                 RuneData[i].remain = 0
             end
         end
 
-        -- Sort: Ready ones left, cooling down sorted by remaining time
-        table.sort(RuneData, function(a, b)
-            if a.ready and not b.ready then return true end
-            if not a.ready and b.ready then return false end
-            if not a.ready and not b.ready then
-                if math.abs(a.remain - b.remain) > 0.01 then
-                    return a.remain < b.remain
+        -- Quick pre-check: If all runes are ready, order is already 1..6 (zero sort needed).
+        -- If cooldowns exist, check if already in sorted order to avoid invoking table.sort.
+        if shouldSort and anyCooldown then
+            local needsSort = false
+            for i = 1, 5 do
+                local a = RuneData[i]
+                local b = RuneData[i + 1]
+                if not a.ready and b.ready then
+                    needsSort = true
+                    break
+                elseif a.ready and b.ready and a.index > b.index then
+                    needsSort = true
+                    break
+                elseif not a.ready and not b.ready and (a.remain > b.remain + 0.01) then
+                    needsSort = true
+                    break
                 end
-                return a.index < b.index
             end
-            return a.index < b.index
-        end)
+            if needsSort then
+                table.sort(RuneData, RuneSortComparator)
+            end
+        end
 
         -- Apply to UI Points
         for i = 1, 6 do
             local point = element.points[i]
             local data = RuneData[i]
+            local runeChanged = (point.lastRuneIndex ~= data.index)
+            if shouldSort then
+                point.lastRuneIndex = data.index
+            end
+
             if data.ready then
                 point:SetMinMaxValues(0, 1)
                 point:SetValue(1)
                 point:SetAlpha(1)
-                point.Timer:SetText("")
+                if shouldSort and (runeChanged or point.lastTenths ~= 0) then
+                    point.lastTenths = 0
+                    point.Timer:SetText("")
+                end
             elseif data.start and data.duration then
                 point:SetAlpha(1)
 
-                local current = GetTime() - data.start
+                local current = now - data.start
                 point:SetMinMaxValues(0, data.duration)
                 point:SetValue(current)
 
-                -- Timer Logic
-                local remain = data.duration - current
-                if remain > 0 then
-                    point.Timer:SetText(string.format("%.1f", remain))
-                else
-                    point.Timer:SetText("")
+                -- Timer Logic (Throttled to 20Hz, SetFormattedText in C, zero Lua string garbage)
+                if shouldSort then
+                    local remain = data.duration - current
+                    local tenths = (remain > 0) and math.floor(remain * 10) or 0
+                    if runeChanged or point.lastTenths ~= tenths then
+                        point.lastTenths = tenths
+                        if tenths > 0 then
+                            point.Timer:SetFormattedText("%.1f", remain)
+                        else
+                            point.Timer:SetText("")
+                        end
+                    end
                 end
             else
                 point:SetMinMaxValues(0, 1)
                 point:SetValue(0)
-                point.Timer:SetText("")
+                if shouldSort and (runeChanged or point.lastTenths ~= 0) then
+                    point.lastTenths = 0
+                    point.Timer:SetText("")
+                end
             end
         end
     end
@@ -331,11 +389,11 @@ function UF:CreateClassPower(frame)
             end
 
             -- Explicit Warlock Fix: Soul Shards are always 10 fragments per shard
-            if class == "WARLOCK" and config.type == Enum.PowerType.SoulShards then
+            if class == "WARLOCK" and config.type == SoulShardsType then
                 modifier = 10
             end
 
-            if config.type == Enum.PowerType.ComboPoints and (ns.IsForever or GetComboPoints) then
+            if (config.type == ComboPointsType or (Enum and Enum.PowerType and config.type == Enum.PowerType.ComboPoints)) and (ns.IsForever or GetComboPoints) then
                 local cp = GetComboPoints and GetComboPoints("player", "target")
                 if cp and cp > 0 then
                     curValue = cp
