@@ -102,8 +102,7 @@ function UF:CreateClassPower(frame)
 
         -- Timer Text (For Runes)
         point.Timer = point:CreateFontString(nil, "OVERLAY")
-        -- 8pt Font, Outline, 1 digit precision requested
-        LibRoithi.mixins:SetFont(point.Timer, fontName, 12, "OUTLINE")
+        LibRoithi.mixins:SetFont(point.Timer, fontName, 14, "OUTLINE")
         point.Timer:SetPoint("CENTER", point, "CENTER", 0, 0)
         point.Timer:SetText("")
 
@@ -143,23 +142,39 @@ function UF:CreateClassPower(frame)
         element.forceLayout = false
 
         local width = element:GetWidth()
-        if width <= 0 then
-            local db = RoithiUI.db.profile.UnitFrames[frame.unit]
-            width = db and (db.classPowerWidth or db.width) or 200
+        local unitDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
+
+        if not width or width <= 0 then
+            width = unitDB and (unitDB.classPowerWidth or unitDB.width) or 200
+            if element.SetWidth then element:SetWidth(width) end
+        end
+
+        local height = element:GetHeight()
+        if not height or height <= 0 then
+            height = unitDB and unitDB.classPowerHeight or 12
+            if element.SetHeight then element:SetHeight(height) end
         end
 
         local spacing = 2
         local pWidth = (width - (numPoints - 1) * spacing) / numPoints
 
+        local currentFont = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT"
+        local timerFontSize = unitDB and unitDB.classPowerTimerFontSize or 14
+
         for i = 1, numPoints do
             local point = element.points[i]
             point:SetWidth(pWidth)
-            point:SetHeight(element:GetHeight()) -- Ensure height updates dynamically
+            point:SetHeight(height)
             point:ClearAllPoints()
             if i == 1 then
                 point:SetPoint("LEFT", element, "LEFT", 0, 0)
             else
                 point:SetPoint("LEFT", element.points[i - 1], "RIGHT", spacing, 0)
+            end
+
+            if point.Timer and LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+                LibRoithi.mixins:SetFont(point.Timer, currentFont, timerFontSize, "OUTLINE")
+                point.Timer:SetPoint("CENTER", point, "CENTER", 0, 0)
             end
         end
     end
@@ -171,9 +186,13 @@ function UF:CreateClassPower(frame)
         end
     end)
 
-    -- Runes OnUpdate Loop (Continuous Value Refill + Throttled Sort/Timer)
+    -- Runes OnUpdate Loop (Continuous Value Refill + Throttled Timer)
+    local RawRunes = {}
     local RuneData = {}
-    for i = 1, 6 do RuneData[i] = {} end
+    for i = 1, 6 do
+        RawRunes[i] = { index = i, start = 0, duration = 0, ready = true, remain = 0 }
+        RuneData[i] = RawRunes[i]
+    end
 
     local function RuneSortComparator(a, b)
         if a.ready and not b.ready then return true end
@@ -191,50 +210,34 @@ function UF:CreateClassPower(frame)
     local function OnUpdateRunes(sf, elapsed)
         local now = GetTime()
         runeThrottle = runeThrottle + (elapsed or 0.016)
-        local shouldSort = (runeThrottle >= 0.05)
-        if shouldSort then
+        local shouldUpdateTimer = (runeThrottle >= 0.05)
+        if shouldUpdateTimer then
             runeThrottle = 0
         end
 
         local anyCooldown = false
 
-        -- Gather rune data
+        -- Gather raw rune data
         for i = 1, 6 do
             local start, duration, runeReady = GetRuneCooldown(i)
-            RuneData[i].index = i
-            RuneData[i].start = start
-            RuneData[i].duration = duration
-            RuneData[i].ready = runeReady
+            local r = RawRunes[i]
+            r.index = i
+            r.start = start
+            r.duration = duration
+            r.ready = runeReady
             local isSecretRune = (issecretvalue and (issecretvalue(start) or issecretvalue(duration))) or (canaccessvalue and (not canaccessvalue(start) or not canaccessvalue(duration)))
-            if not isSecretRune and not runeReady and start and duration then
-                RuneData[i].remain = (start + duration) - now
+            if not isSecretRune and not runeReady and start and duration and duration > 0 then
+                r.remain = (start + duration) - now
                 anyCooldown = true
             else
-                RuneData[i].remain = 0
+                r.remain = 0
             end
+            RuneData[i] = r
         end
 
-        -- Quick pre-check: If all runes are ready, order is already 1..6 (zero sort needed).
-        -- If cooldowns exist, check if already in sorted order to avoid invoking table.sort.
-        if shouldSort and anyCooldown then
-            local needsSort = false
-            for i = 1, 5 do
-                local a = RuneData[i]
-                local b = RuneData[i + 1]
-                if not a.ready and b.ready then
-                    needsSort = true
-                    break
-                elseif a.ready and b.ready and a.index > b.index then
-                    needsSort = true
-                    break
-                elseif not a.ready and not b.ready and (a.remain > b.remain + 0.01) then
-                    needsSort = true
-                    break
-                end
-            end
-            if needsSort then
-                table.sort(RuneData, RuneSortComparator)
-            end
+        -- Always sort RuneData so UI slots are consistent every single frame
+        if anyCooldown then
+            table.sort(RuneData, RuneSortComparator)
         end
 
         -- Apply to UI Points
@@ -242,27 +245,28 @@ function UF:CreateClassPower(frame)
             local point = element.points[i]
             local data = RuneData[i]
             local runeChanged = (point.lastRuneIndex ~= data.index)
-            if shouldSort then
-                point.lastRuneIndex = data.index
-            end
+            point.lastRuneIndex = data.index
 
             if data.ready then
                 point:SetMinMaxValues(0, 1)
                 point:SetValue(1)
                 point:SetAlpha(1)
-                if shouldSort and (runeChanged or point.lastTenths ~= 0) then
+                if runeChanged or point.lastTenths ~= 0 then
                     point.lastTenths = 0
                     point.Timer:SetText("")
                 end
-            elseif data.start and data.duration then
+            elseif data.start and data.duration and data.duration > 0 then
                 point:SetAlpha(1)
 
                 local current = now - data.start
+                if current < 0 then current = 0 end
+                if current > data.duration then current = data.duration end
+
                 point:SetMinMaxValues(0, data.duration)
                 point:SetValue(current)
 
                 -- Timer Logic (Throttled to 20Hz, SetFormattedText in C, zero Lua string garbage)
-                if shouldSort then
+                if shouldUpdateTimer then
                     local remain = data.duration - current
                     local tenths = (remain > 0) and math.floor(remain * 10) or 0
                     if runeChanged or point.lastTenths ~= tenths then
@@ -277,7 +281,7 @@ function UF:CreateClassPower(frame)
             else
                 point:SetMinMaxValues(0, 1)
                 point:SetValue(0)
-                if shouldSort and (runeChanged or point.lastTenths ~= 0) then
+                if runeChanged or point.lastTenths ~= 0 then
                     point.lastTenths = 0
                     point.Timer:SetText("")
                 end
@@ -507,6 +511,8 @@ function UF:CreateClassPower(frame)
                 elseif config.mode == "RUNES" then
                     -- Initial Setup for Runes (Updates handled by OnUpdate)
                     point.cooldown:Hide()
+                    point.OvercapBar:SetValue(0)
+                    point.OvercapBar:Hide()
                 else
                     -- Standard Points Mode
                     -- Here is where the smooth fragment logic shines
@@ -583,6 +589,7 @@ function UF:CreateClassPower(frame)
         end
 
         element:SetHeight(height)
+        element.forceLayout = true
         Update()
     end
 

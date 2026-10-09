@@ -1252,6 +1252,7 @@ ns.Defaults = {
                 classPowerDetached = false,
                 classPowerEnabled = true,
                 classPowerHeight = 10,
+                classPowerTimerFontSize = 14,
                 classPowerSectionExpanded = false,
                 classPowerWidth = 230,
                 enabled = true,
