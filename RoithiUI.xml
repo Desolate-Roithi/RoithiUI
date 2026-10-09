@@ -13,10 +13,10 @@
     <Script file="Core/Commands.lua"/>
     <Script file="Core/Media.lua"/>
     <Script file="Core/AttachmentLogic.lua"/>
+    <Script file="Core/Dashboard.lua"/>
 
     <!-- Config -->
     <Script file="Config/Defaults.lua"/>
-    <Script file="Config/Dashboard.lua"/>
     <Script file="Config/CustomTags.lua"/>
     <Script file="Config/GeneralOptions.lua"/>
     <Script file="Config/Options.lua"/>
@@ -26,48 +26,13 @@
     <Include file="Modules/Castbar/Castbar.xml"/>
     <Include file="Modules/EncounterBar/EncounterBar.xml"/>
     <Include file="Modules/ProfileSharing/ProfileSharing.xml"/>
-
-    <!-- Minimap -->
-    <Script file="Modules/Minimap/Minimap.lua"/>
-    <Script file="Modules/Minimap/AddonBar.lua"/>
-    <Script file="Modules/Minimap/ButtonConfigurator.lua"/>
-    <Script file="Modules/Minimap/BuffFrame.lua"/>
-
-    <!-- Actionbars -->
-    <Script file="Modules/Actionbars/Core.lua"/>
-    <Script file="Modules/Actionbars/Bars.lua"/>
-    <Script file="Modules/Actionbars/LEM.lua"/>
-    <Script file="Modules/Actionbars/Options.lua"/>
-
-    <!-- Menu -->
-    <Script file="Modules/Menu/Menu.lua"/>
-    <Script file="Modules/Menu/Options.lua"/>
-
-    <!-- Bags -->
-    <Script file="Modules/Bags/Filters.lua"/>
-    <Script file="Modules/Bags/BagBar.lua"/>
-    <Script file="Modules/Bags/Bags.lua"/>
-    <Script file="Modules/Bags/Options.lua"/>
-
-    <!-- Totems -->
-    <Script file="Modules/Totems/Totems.lua"/>
-    <Script file="Modules/Totems/Keybinds.lua"/>
-    <Script file="Modules/Totems/Options.lua"/>
-
-    <!-- Cooldown Manager -->
-    <Script file="Modules/CooldownManager/Core.lua"/>
-    <Script file="Modules/CooldownManager/Style.lua"/>
-    <Script file="Modules/CooldownManager/Options.lua"/>
-
-    <!-- Swing Timer (Forever Only) -->
-    <Script file="Modules/SwingTimer/SwingTimer.lua"/>
-    <Script file="Modules/SwingTimer/Options.lua"/>
-
-    <!-- Chat -->
-    <Script file="Modules/Chat/Chat.lua"/>
-    <Script file="Modules/Chat/Options.lua"/>
-
-    <!-- Objectives -->
-    <Script file="Modules/Objectives/Objectives.lua"/>
-    <Script file="Modules/Objectives/Options.lua"/>
+    <Include file="Modules/Minimap/Minimap.xml"/>
+    <Include file="Modules/Actionbars/Actionbars.xml"/>
+    <Include file="Modules/Menu/Menu.xml"/>
+    <Include file="Modules/Bags/Bags.xml"/>
+    <Include file="Modules/Totems/Totems.xml"/>
+    <Include file="Modules/CooldownManager/CooldownManager.xml"/>
+    <Include file="Modules/SwingTimer/SwingTimer.xml"/>
+    <Include file="Modules/Chat/Chat.xml"/>
+    <Include file="Modules/Objectives/Objectives.xml"/>
 </Ui>

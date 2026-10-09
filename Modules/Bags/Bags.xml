@@ -1,0 +1,7 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Script file="Defaults.lua"/>
+    <Script file="Filters.lua"/>
+    <Script file="BagBar.lua"/>
+    <Script file="Bags.lua"/>
+    <Script file="Options.lua"/>
+</Ui>

@@ -19,14 +19,6 @@ local SoulShardsType = PowerType.SoulShards or 7
 local ArcaneChargesType = PowerType.ArcaneCharges or 16
 local EssenceType = PowerType.Essence or 19
 
-local PowerType = (Enum and Enum.PowerType) or {}
-local ComboPointsType = PowerType.ComboPoints or 4
-local ChiType = PowerType.Chi or 12
-local HolyPowerType = PowerType.HolyPower or 9
-local SoulShardsType = PowerType.SoulShards or 7
-local ArcaneChargesType = PowerType.ArcaneCharges or 16
-local EssenceType = PowerType.Essence or 19
-
 -- Configuration for Class Power
 local ClassPowerConfig = {
     ["ROGUE"] = { mode = "POWER", type = ComboPointsType },

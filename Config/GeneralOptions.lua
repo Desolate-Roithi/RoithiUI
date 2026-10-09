@@ -2,15 +2,9 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
-local LSM = LibStub("LibSharedMedia-3.0")
 
 local function GetLSMKeys(mediaType)
-    local list = LSM:List(mediaType)
-    local out = {}
-    for _, name in ipairs(list) do
-        out[name] = name
-    end
-    return out
+    return ns.Utils.GetLSMKeys(mediaType)
 end
 
 function ns.GetGeneralOptions()

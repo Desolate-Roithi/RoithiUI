@@ -4,7 +4,7 @@ local RoithiUI = _G.RoithiUI
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
 local AL = ns.AttachmentLogic
 local SafeNum = ns.SafeNum
-local LEM = LibStub("LibEditModeOverride-1.0", true) or LibStub("LibEditMode-1.0", true)
+local LEM = LibStub("LibEditMode-Roithi", true)
 
 function ns.BuildUnitAndCastbarOptions(options)
     -- Populate Unit Frame Options
@@ -1863,8 +1863,6 @@ ns.BuildUnitAndCastbarOptions(dummyContainer)
 -- Single Source of Truth - Moved from Config/LEMConfig/
 -- ============================================================================
 
-LEM = LibStub("LibEditMode-Roithi", true) or LEM
-
 local function GetUnitDB(unit)
     if not RoithiUI.db.profile.UnitFrames[unit] then RoithiUI.db.profile.UnitFrames[unit] = {} end
     return RoithiUI.db.profile.UnitFrames[unit]
@@ -2472,7 +2470,7 @@ end
 
 function ns.ApplyLEMBossConfiguration(frame, unit)
     if not LEM then return end
-    local function GetBossDB()
+    local function GetBossGroupDB()
         if not RoithiUI.db.profile.UnitFrames["boss1"] then RoithiUI.db.profile.UnitFrames["boss1"] = {} end
         return RoithiUI.db.profile.UnitFrames["boss1"]
     end
@@ -2485,15 +2483,15 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
             collapsedLabel = "Expand size & spacing",
             kind = LEM.SettingType.Expander,
             default = false,
-            get = function() return GetBossDB().sizeSectionExpanded end,
+            get = function() return GetBossGroupDB().sizeSectionExpanded end,
             set = function(_, v)
-                GetBossDB().sizeSectionExpanded = v
+                GetBossGroupDB().sizeSectionExpanded = v
                 LEM:AddFrameSettings(frame, GetBossSettings())
                 LEM:RefreshFrameSettings(frame)
             end,
         })
 
-        if GetBossDB().sizeSectionExpanded then
+        if GetBossGroupDB().sizeSectionExpanded then
             local sizeSettings = {
                 {
                     name = "Width",
@@ -2502,9 +2500,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = 50,
                     maxValue = 400,
                     valueStep = 1,
-                    get = function() return GetBossDB().width or 200 end,
+                    get = function() return GetBossGroupDB().width or 200 end,
                     set = function(_, value)
-                        GetBossDB().width = value
+                        GetBossGroupDB().width = value
                         for i = 1, 5 do UpdateFrameFromSettings("boss" .. i) end
                     end,
                     formatter = function(v) return string.format("%.1f", v) end,
@@ -2516,9 +2514,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = 20,
                     maxValue = 150,
                     valueStep = 1,
-                    get = function() return GetBossDB().height or 50 end,
+                    get = function() return GetBossGroupDB().height or 50 end,
                     set = function(_, value)
-                        GetBossDB().height = value
+                        GetBossGroupDB().height = value
                         for i = 1, 5 do UpdateFrameFromSettings("boss" .. i) end
                         local UF = RoithiUI:GetModule("UnitFrames")
                         if UF and UF.UpdateBossAnchors then UF:UpdateBossAnchors() end
@@ -2532,9 +2530,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = -2500,
                     maxValue = 2500,
                     valueStep = 1,
-                    get = function() return GetBossDB().x or -250 end,
+                    get = function() return GetBossGroupDB().x or -250 end,
                     set = function(_, value)
-                        GetBossDB().x = value
+                        GetBossGroupDB().x = value
                         local UF = RoithiUI:GetModule("UnitFrames")
                         if UF then
                             UF:UpdateFrameFromSettings("boss1")
@@ -2550,9 +2548,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = -1500,
                     maxValue = 1500,
                     valueStep = 1,
-                    get = function() return GetBossDB().y or 0 end,
+                    get = function() return GetBossGroupDB().y or 0 end,
                     set = function(_, value)
-                        GetBossDB().y = value
+                        GetBossGroupDB().y = value
                         local UF = RoithiUI:GetModule("UnitFrames")
                         if UF then
                             UF:UpdateFrameFromSettings("boss1")
@@ -2564,9 +2562,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                 {
                     kind = LEM.SettingType.Slider,
                     name = "Spacing",
-                    get = function() return GetBossDB().spacing or 30 end,
+                    get = function() return GetBossGroupDB().spacing or 30 end,
                     set = function(_, v)
-                        GetBossDB().spacing = v
+                        GetBossGroupDB().spacing = v
                         local UF = RoithiUI:GetModule("UnitFrames")
                         if UF and UF.UpdateBossAnchors then
                             UF:UpdateBossAnchors()
@@ -2588,23 +2586,23 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
             collapsedLabel = "Expand power",
             kind = LEM.SettingType.Expander,
             default = false,
-            get = function() return GetBossDB().powerSectionExpanded end,
+            get = function() return GetBossGroupDB().powerSectionExpanded end,
             set = function(_, v)
-                GetBossDB().powerSectionExpanded = v
+                GetBossGroupDB().powerSectionExpanded = v
                 LEM:AddFrameSettings(frame, GetBossSettings())
                 LEM:RefreshFrameSettings(frame)
             end,
         })
 
-        if GetBossDB().powerSectionExpanded then
+        if GetBossGroupDB().powerSectionExpanded then
             local powerSettings = {
                 {
                     name = "Enable Power",
                     kind = LEM.SettingType.Checkbox,
                     default = true,
-                    get = function() return GetBossDB().powerEnabled ~= false end,
+                    get = function() return GetBossGroupDB().powerEnabled ~= false end,
                     set = function(_, value)
-                        GetBossDB().powerEnabled = value
+                        GetBossGroupDB().powerEnabled = value
                         for i = 1, 5 do UpdateFrameFromSettings("boss" .. i) end
                     end,
                 },
@@ -2615,9 +2613,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = 2,
                     maxValue = 50,
                     valueStep = 1,
-                    get = function() return GetBossDB().powerHeight or 10 end,
+                    get = function() return GetBossGroupDB().powerHeight or 10 end,
                     set = function(_, value)
-                        GetBossDB().powerHeight = value
+                        GetBossGroupDB().powerHeight = value
                         for i = 1, 5 do UpdateFrameFromSettings("boss" .. i) end
                     end,
                     formatter = function(v) return string.format("%.1f", v) end,
@@ -2626,16 +2624,16 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     name = "Detached",
                     kind = LEM.SettingType.Checkbox,
                     default = false,
-                    get = function() return GetBossDB().powerDetached end,
+                    get = function() return GetBossGroupDB().powerDetached end,
                     set = function(_, value)
-                        GetBossDB().powerDetached = value
+                        GetBossGroupDB().powerDetached = value
                         for i = 1, 5 do UpdateFrameFromSettings("boss" .. i) end
                         LEM:AddFrameSettings(frame, GetBossSettings())
                         LEM:RefreshFrameSettings(frame)
                     end,
                 },
             }
-            if GetBossDB().powerDetached then
+            if GetBossGroupDB().powerDetached then
                 table.insert(powerSettings, {
                     name = "X Position",
                     kind = LEM.SettingType.Slider,
@@ -2643,9 +2641,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = -1000,
                     maxValue = 1000,
                     valueStep = 1,
-                    get = function() return GetBossDB().powerX or 0 end,
+                    get = function() return GetBossGroupDB().powerX or 0 end,
                     set = function(_, value)
-                        GetBossDB().powerX = value
+                        GetBossGroupDB().powerX = value
                         for i = 1, 5 do UpdateFrameFromSettings("boss" .. i) end
                     end,
                     formatter = function(v) return string.format("%.1f", v) end,
@@ -2657,9 +2655,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = -1000,
                     maxValue = 1000,
                     valueStep = 1,
-                    get = function() return GetBossDB().powerY or -50 end,
+                    get = function() return GetBossGroupDB().powerY or -50 end,
                     set = function(_, value)
-                        GetBossDB().powerY = value
+                        GetBossGroupDB().powerY = value
                         for i = 1, 5 do UpdateFrameFromSettings("boss" .. i) end
                     end,
                     formatter = function(v) return string.format("%.1f", v) end,
@@ -2671,9 +2669,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     minValue = 50,
                     maxValue = 400,
                     valueStep = 1,
-                    get = function() return GetBossDB().powerWidth or 200 end,
+                    get = function() return GetBossGroupDB().powerWidth or 200 end,
                     set = function(_, value)
-                        GetBossDB().powerWidth = value
+                        GetBossGroupDB().powerWidth = value
                         for i = 1, 5 do UpdateFrameFromSettings("boss" .. i) end
                     end,
                     formatter = function(v) return string.format("%.1f", v) end,
@@ -2690,15 +2688,15 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
             collapsedLabel = "Expand castbar",
             kind = LEM.SettingType.Expander,
             default = false,
-            get = function() return GetBossDB().castbarSectionExpanded end,
+            get = function() return GetBossGroupDB().castbarSectionExpanded end,
             set = function(_, v)
-                GetBossDB().castbarSectionExpanded = v
+                GetBossGroupDB().castbarSectionExpanded = v
                 LEM:AddFrameSettings(frame, GetBossSettings())
                 LEM:RefreshFrameSettings(frame)
             end,
         })
 
-        if GetBossDB().castbarSectionExpanded then
+        if GetBossGroupDB().castbarSectionExpanded then
             local castbarSettings = {
                 {
                     name = "Enable Castbar",

@@ -8,6 +8,7 @@ BagsMod.displayName = L["Bags"]
 BagsMod.description = L["Modern unified bag display with category filter buttons and expandable bag bar."]
 BagsMod.order = 80
 BagsMod.dbKey = "Bags"
+BagsMod.defaultSettings = ns.BagsDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Bags)
 
 -- Category IDs
 local CATEGORY_ALL = "ALL"

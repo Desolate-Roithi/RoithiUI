@@ -61,20 +61,8 @@ local CLASSIC_MICRO_BUTTONS = {
     "HelpMicroButton",
 }
 
-MenuMod.defaultSettings = {
-    enabled = true,
-    styleMicroMenu = true,
-    buttonWidth = 24,
-    buttonHeight = 32,
-    spacing = 2,
-    orientation = "HORIZONTAL", -- HORIZONTAL or VERTICAL
-    alpha = 1.0,
-    mouseover = false,
-    mouseoverAlpha = 0.0,
-    point = "BOTTOMLEFT",
-    x = 4,
-    y = 235,
-}
+MenuMod.dbKey = "Menu"
+MenuMod.defaultSettings = ns.MenuDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Menu)
 
 function MenuMod:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Menu or self.defaultSettings

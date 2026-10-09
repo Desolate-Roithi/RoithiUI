@@ -209,26 +209,10 @@ function Totems:UnsummonAll()
 end
 
 local function FormatHotkey(text)
-    if not text or text == "" then return "" end
-    if text == _G.RANGE_INDICATOR or text == "·" or text == "•" or text:find("[\194\183\226\128\162]") then
-        return ""
+    if ns.Utils and ns.Utils.FormatHotkey then
+        return ns.Utils.FormatHotkey(text)
     end
-    local formatted = text
-    formatted = formatted:gsub("SHIFT%-", "S")
-    formatted = formatted:gsub("Shift%-", "S")
-    formatted = formatted:gsub("s%-", "S")
-    formatted = formatted:gsub("CTRL%-", "C")
-    formatted = formatted:gsub("Ctrl%-", "C")
-    formatted = formatted:gsub("c%-", "C")
-    formatted = formatted:gsub("ALT%-", "A")
-    formatted = formatted:gsub("Alt%-", "A")
-    formatted = formatted:gsub("a%-", "A")
-    formatted = formatted:gsub("STRG%-", "C")
-    formatted = formatted:gsub("Strg%-", "C")
-    formatted = formatted:gsub("SPACE", "Sp")
-    formatted = formatted:gsub("Mouse Wheel Up", "WU")
-    formatted = formatted:gsub("Mouse Wheel Down", "WD")
-    return formatted
+    return text or ""
 end
 
 function Totems:UpdateHotkeys()

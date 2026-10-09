@@ -46,26 +46,10 @@ end
 AB.IsRangeIndicator = IsRangeIndicator
 
 local function FormatHotkey(text)
-    if not text or text == "" then return "" end
-    if IsRangeIndicator(text) then
-        return ""
+    if ns.Utils and ns.Utils.FormatHotkey then
+        return ns.Utils.FormatHotkey(text)
     end
-    local formatted = text
-    formatted = formatted:gsub("SHIFT%-", "S")
-    formatted = formatted:gsub("Shift%-", "S")
-    formatted = formatted:gsub("s%-", "S")
-    formatted = formatted:gsub("CTRL%-", "C")
-    formatted = formatted:gsub("Ctrl%-", "C")
-    formatted = formatted:gsub("c%-", "C")
-    formatted = formatted:gsub("ALT%-", "A")
-    formatted = formatted:gsub("Alt%-", "A")
-    formatted = formatted:gsub("a%-", "A")
-    formatted = formatted:gsub("STRG%-", "C")
-    formatted = formatted:gsub("Strg%-", "C")
-    formatted = formatted:gsub("SPACE", "Sp")
-    formatted = formatted:gsub("Mouse Wheel Up", "WU")
-    formatted = formatted:gsub("Mouse Wheel Down", "WD")
-    return formatted
+    return text or ""
 end
 AB.FormatHotkey = FormatHotkey
 

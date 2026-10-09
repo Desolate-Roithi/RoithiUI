@@ -33,7 +33,7 @@ local UF = RoithiUI:NewModule("UnitFrames")
 UF.displayName = "Unit Frames"
 UF.description = "Enables RoithiUI custom player, target, focus, pet, and boss frames."
 UF.order = 10
-UF.defaultSettings = ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.UnitFrames
+UF.defaultSettings = ns.UnitFramesDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.UnitFrames)
 UF.dbKey = "UnitFrames"
 
 function UF:GetOptions()
@@ -214,3 +214,27 @@ function UF:OnEnable()
         self:UpdateAllCustomAuras()
     end
 end
+
+function UF:RefreshProfile()
+    if self.units then
+        for unit in pairs(self.units) do
+            if self.ToggleFrame then
+                self:ToggleFrame(unit, self:IsUnitEnabled(unit))
+            end
+            if self:IsUnitEnabled(unit) and self.UpdateFrameFromSettings then
+                self:UpdateFrameFromSettings(unit)
+            end
+            if ns.AttachmentLogic then
+                ns.AttachmentLogic:GlobalLayoutRefresh(unit)
+            end
+        end
+    end
+    if self.UpdateAllCustomAuras then
+        self:UpdateAllCustomAuras()
+    end
+    if self.RefreshBossEditMode then
+        self:RefreshBossEditMode()
+    end
+end
+UF.RefreshSettings = UF.RefreshProfile
+

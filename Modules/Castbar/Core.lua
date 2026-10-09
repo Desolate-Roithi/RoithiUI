@@ -228,57 +228,59 @@ end
 ---@class Castbar : AceAddon, AceModule
 local Castbar = RoithiUI:NewModule("Castbar")
 Castbar.bars = ns.bars   -- Expose for AttachmentLogic
-local MidnightCastbarsDB -- Local reference to RoithiUIDB.Castbar
+Castbar.defaultSettings = ns.CastbarDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Castbar)
+Castbar.dbKey = "Castbar"
+local castbarsDB
 
 function Castbar:OnInitialize()
     -- Initialize DB reference
     -- RoithiUI.db should handle defaults via AceDB.
     -- But we might need to verify if "Castbar" key exists if usage was unstructured before.
     if not RoithiUI.db.profile.Castbar then RoithiUI.db.profile.Castbar = {} end
-    MidnightCastbarsDB = RoithiUI.db.profile.Castbar
+    castbarsDB = RoithiUI.db.profile.Castbar
 
     -- Apply Defaults
     for unit, defaultCfg in pairs(ns.DEFAULTS) do
-        if not MidnightCastbarsDB[unit] then
-            MidnightCastbarsDB[unit] = defaultCfg
+        if not castbarsDB[unit] then
+            castbarsDB[unit] = defaultCfg
         else
             -- Merge new defaults if missing
             for k, v in pairs(defaultCfg) do
-                if MidnightCastbarsDB[unit][k] == nil then
-                    MidnightCastbarsDB[unit][k] = v
+                if castbarsDB[unit][k] == nil then
+                    castbarsDB[unit][k] = v
                 end
             end
-            if not MidnightCastbarsDB[unit].colors then
-                MidnightCastbarsDB[unit].colors = defaultCfg.colors
+            if not castbarsDB[unit].colors then
+                castbarsDB[unit].colors = defaultCfg.colors
             else
                 for cKey, cVal in pairs(defaultCfg.colors) do
-                    if not MidnightCastbarsDB[unit].colors[cKey] then
-                        MidnightCastbarsDB[unit].colors[cKey] = cVal
+                    if not castbarsDB[unit].colors[cKey] then
+                        castbarsDB[unit].colors[cKey] = cVal
                     end
                 end
             end
-            if MidnightCastbarsDB[unit].enabled == nil then MidnightCastbarsDB[unit].enabled = true end
-            if not MidnightCastbarsDB[unit].fontSize then MidnightCastbarsDB[unit].fontSize = 12 end
-            MidnightCastbarsDB[unit].scale = nil -- Remove legacy scale
+            if castbarsDB[unit].enabled == nil then castbarsDB[unit].enabled = true end
+            if not castbarsDB[unit].fontSize then castbarsDB[unit].fontSize = 12 end
+            castbarsDB[unit].scale = nil -- Remove legacy scale
         end
     end
 
     -- Force Color Reset for v4
-    if not MidnightCastbarsDB.colors_v4 then
+    if not castbarsDB.colors_v4 then
         for unit, _ in pairs(ns.DEFAULTS) do
-            if MidnightCastbarsDB[unit] then
-                if not MidnightCastbarsDB[unit].colors then MidnightCastbarsDB[unit].colors = {} end
+            if castbarsDB[unit] then
+                if not castbarsDB[unit].colors then castbarsDB[unit].colors = {} end
                 for k, v in pairs(DEFAULT_COLORS) do
-                    MidnightCastbarsDB[unit].colors[k] = { v[1], v[2], v[3], v[4] }
+                    castbarsDB[unit].colors[k] = { v[1], v[2], v[3], v[4] }
                 end
             end
         end
-        MidnightCastbarsDB.colors_v4 = true
+        castbarsDB.colors_v4 = true
     end
 end
 
 function Castbar:OnEnable()
-    MidnightCastbarsDB = RoithiUI.db.profile.Castbar -- Ensure defined
+    castbarsDB = RoithiUI.db.profile.Castbar -- Ensure defined
 
     ns.UpdateBlizzardVisibility()
     ns.InitializeBars()          -- Defined in Castbar.lua

@@ -3,15 +3,10 @@ if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
 local LSM = LibStub("LibSharedMedia-3.0")
-local LEM = LibStub("LibEditModeOverride-1.0", true) or LibStub("LibEditMode-1.0", true)
+local LEM = LibStub("LibEditMode-Roithi", true)
 
 local function GetLSMKeys(mediaType)
-    local list = LSM:List(mediaType)
-    local out = {}
-    for _, name in ipairs(list) do
-        out[name] = name
-    end
-    return out
+    return ns.Utils.GetLSMKeys(mediaType)
 end
 
 function ns.GetEncounterBarOptions()
@@ -202,7 +197,6 @@ end
 -- Single Source of Truth - Moved from Config/LEMConfig/
 -- ============================================================================
 
-LEM = LibStub("LibEditMode-Roithi", true) or LEM
 local LibRoithi = LibStub("LibRoithi-1.0", true)
 
 local function GetEncounterDB()

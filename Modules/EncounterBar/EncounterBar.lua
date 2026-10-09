@@ -10,19 +10,7 @@ local issecretvalue = _G.issecretvalue
 
 local EB = RoithiUI:NewModule("EncounterBar", "AceEvent-3.0", "AceConsole-3.0")
 EB.dbKey = "EncounterResource"
-EB.defaultSettings = {
-    enabled       = true,
-    width         = 250,
-    height        = 20,
-    fontSize      = 12,
-    texture       = "Solid",
-    point         = "TOP",
-    x             = 0,
-    y             = -100,
-    widgetDebug   = false,
-    widgetLogMode = false,
-    whitelist     = {},
-}
+EB.defaultSettings = ns.EncounterBarDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.EncounterResource)
 
 -- Blizzard source constant: ALTERNATE_POWER_INDEX = 10
 -- Do NOT use Enum.PowerType.Alternate — it does not exist in 12.0.1.
@@ -99,16 +87,7 @@ end
 -- ─────────────────────────────────────────────────────────────────────────────
 function EB:Toggle(enabled)
     if not RoithiUI.db.profile.EncounterResource then
-        RoithiUI.db.profile.EncounterResource = {
-            enabled  = true,
-            width    = 250,
-            height   = 20,
-            fontSize = 12,
-            texture  = "Solid",
-            point    = "TOP",
-            x        = 0,
-            y        = -100,
-        }
+        RoithiUI.db.profile.EncounterResource = CopyTable(self.defaultSettings)
     end
 
     local db = RoithiUI.db.profile.EncounterResource
@@ -139,14 +118,6 @@ function EB:Toggle(enabled)
             encounterBar:Hide()
         end
     end
-end
-
-function EB:OnEnable()
-    self:Toggle(true)
-end
-
-function EB:OnDisable()
-    self:Toggle(false)
 end
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -606,17 +577,6 @@ EB.dbKey = "EncounterResource"
 EB.displayName = L["Encounter Bar (Alt Power)"]
 EB.description = L["Enables RoithiUI custom alternative power bar and encounter power widgets."]
 EB.order = 30
-
-EB.defaultSettings = {
-    enabled  = true,
-    width    = 250,
-    height   = 20,
-    fontSize = 12,
-    texture  = "Solid",
-    point    = "TOP",
-    x        = 0,
-    y        = -100,
-}
 
 function EB:RefreshProfile()
     local profile = RoithiUI.db and RoithiUI.db.profile

@@ -262,6 +262,20 @@ function RoithiUI:OnInitialize()
     end
 end
 
+local MODULE_REFRESH_ORDER = {
+    "UnitFrames",
+    "Minimap",
+    "Objectives",
+    "Menu",
+    "Actionbars",
+    "Bags",
+    "Chat",
+    "SwingTimer",
+    "Totems",
+    "CooldownManager",
+    "EncounterBar",
+}
+
 function RoithiUI:RefreshProfile()
     -- 1. Sync module enable/disable states according to the new profile
     if self.ModuleManager and self.ModuleManager.EnableModules then
@@ -273,106 +287,40 @@ function RoithiUI:RefreshProfile()
         ns.RefreshAllCastbars()
     end
 
-    -- 3. UnitFrames
-    local UF = self:GetModule("UnitFrames", true)
-    if UF then
-        if UF.units then
-            for unit in pairs(UF.units) do
-                if UF.ToggleFrame then
-                    UF:ToggleFrame(unit, UF:IsUnitEnabled(unit))
-                end
-                if UF:IsUnitEnabled(unit) and UF.UpdateFrameFromSettings then
-                    UF:UpdateFrameFromSettings(unit)
-                end
-                if ns.AttachmentLogic then
-                    ns.AttachmentLogic:GlobalLayoutRefresh(unit)
-                end
+    -- 3. Sequenced Module Refresh
+    local refreshed = {}
+    for _, modName in ipairs(MODULE_REFRESH_ORDER) do
+        local mod = self:GetModule(modName, true)
+        if mod and mod:IsEnabled() then
+            refreshed[mod] = true
+            local dbKey = mod.dbKey or modName
+            if self.db.profile and self.db.profile[dbKey] then
+                mod.db = self.db.profile[dbKey]
+            end
+            if mod.RefreshProfile then
+                mod:RefreshProfile()
+            elseif mod.RefreshSettings then
+                mod:RefreshSettings()
+            elseif mod.OnEnable then
+                mod:OnEnable()
             end
         end
-        if UF.UpdateAllCustomAuras then
-            UF:UpdateAllCustomAuras()
-        end
-        if UF.RefreshBossEditMode then
-            UF:RefreshBossEditMode()
-        end
     end
 
-    -- 4. Minimap & AddonBar (must refresh before Objectives so Objectives can anchor)
-    local MM = self:GetModule("Minimap", true)
-    if MM and MM.RefreshProfile then
-        MM:RefreshProfile()
-    end
-
-    -- 5. Objectives
-    local OBJ = self:GetModule("Objectives", true)
-    if OBJ and OBJ.RefreshSettings then
-        OBJ:RefreshSettings()
-    end
-
-    -- 6. Micro Menu
-    local Menu = self:GetModule("Menu", true)
-    if Menu and Menu.RefreshSettings then
-        Menu:RefreshSettings()
-    end
-
-    -- 7. Actionbars
-    local AB = self:GetModule("Actionbars", true)
-    if AB and AB.RefreshProfile then
-        AB:RefreshProfile()
-    end
-
-    -- 8. Bags
-    local Bags = self:GetModule("Bags", true)
-    if Bags and Bags.RefreshProfile then
-        Bags:RefreshProfile()
-    end
-
-    -- 9. Chat
-    local Chat = self:GetModule("Chat", true)
-    if Chat and Chat.RefreshSettings then
-        Chat:RefreshSettings()
-    end
-
-    -- 10. SwingTimer
-    local ST = self:GetModule("SwingTimer", true)
-    if ST and ST.RefreshProfile then
-        ST:RefreshProfile()
-    end
-
-    -- 11. Totems
-    local Totems = self:GetModule("Totems", true)
-    if Totems and Totems.RefreshProfile then
-        Totems:RefreshProfile()
-    end
-
-    -- 12. CooldownManager
-    local CDM = self:GetModule("CooldownManager", true)
-    if CDM and CDM.RefreshProfile then
-        CDM:RefreshProfile()
-    end
-
-    -- 13. EncounterBar
-    local EB = self:GetModule("EncounterBar", true)
-    if EB and EB.RefreshProfile then
-        EB:RefreshProfile()
-    elseif EB and EB.OnEnable then
-        EB:OnEnable()
-    end
-
-    -- 14. Fallback for any other modules
+    -- 4. Fallback for any other dynamically registered modules
     if self.IterateModules then
-        for name, module in self:IterateModules() do
-            if module:IsEnabled() and module ~= UF and module ~= MM and module ~= OBJ and module ~= Menu and module ~= AB and module ~= Bags and module ~= Chat and module ~= ST and module ~= Totems and module ~= CDM and module ~= EB then
-                local dbKey = module.dbKey or name
+        for name, mod in self:IterateModules() do
+            if mod:IsEnabled() and not refreshed[mod] then
+                local dbKey = mod.dbKey or name
                 if self.db.profile and self.db.profile[dbKey] then
-                    module.db = self.db.profile[dbKey]
+                    mod.db = self.db.profile[dbKey]
                 end
-                if module.RefreshProfile then
-                    module:RefreshProfile()
-                elseif module.RefreshSettings then
-                    module:RefreshSettings()
-                elseif module.UpdateLayout then
-                    module:UpdateLayout()
+                if mod.RefreshProfile then
+                    mod:RefreshProfile()
+                elseif mod.RefreshSettings then
+                    mod:RefreshSettings()
+                elseif mod.UpdateLayout then
+                    mod:UpdateLayout()
                 end
             end
         end

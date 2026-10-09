@@ -88,33 +88,8 @@ for catKey, spellList in pairs(Totems.spellsDatabase) do
 end
 
 
-Totems.defaultSettings = (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Totems) or {
-    enabled = true,
-    showOnAllClasses = false,
-    buttonSize = 36,
-    spacing = 4,
-    orientation = "HORIZONTAL",
-    showDuration = true,
-    showCooldown = true,
-    showKeybind = true,
-    showEarth = true,
-    showFire = true,
-    showWater = true,
-    showAir = true,
-    showShield = true,
-    showWeapon = true,
-    point = "BOTTOM",
-    x = -320,
-    y = 190,
-    fontSize = 11,
-    font = "Friz Quadrata TT",
-    borderColor = { r = 0.2, g = 0.2, b = 0.2, a = 1.0 },
-    activeBorderColor = { r = 0.2, g = 0.8, b = 0.2, a = 1.0 },
-    selectionBorderColor = { r = 1.0, g = 0.85, b = 0.0, a = 1.0 },
-    selectedCategory = "earth",
-    selectedSpells = {},
-    disabledSpells = {},
-}
+Totems.dbKey = "Totems"
+Totems.defaultSettings = ns.TotemsDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Totems)
 
 function Totems:IsShaman()
     local _, playerClass = UnitClass("player")
@@ -1706,7 +1681,7 @@ end
 function Totems:RefreshProfile()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Totems or self.defaultSettings
     if self.bar and self.bar.ClearAllPoints and self.bar.SetPoint then
-        local def = ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Totems or { point = "BOTTOM", x = 0, y = 265 }
+        local def = self.defaultSettings or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Totems) or { point = "BOTTOM", x = 0, y = 265 }
         local pt = self.db.point or def.point
         self.bar:ClearAllPoints()
         self.bar:SetPoint(pt, UIParent, pt, self.db.x or def.x, self.db.y or def.y)

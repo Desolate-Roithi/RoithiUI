@@ -1,0 +1,31 @@
+local addonName, ns = ...
+if ns.skipLoad then return end
+local RoithiUI = _G.RoithiUI
+
+local defaultSettings = {
+    activeCategory = "ALL",
+    autoSellJunk = false,
+    bagBar = { buttonSize = 30, enabled = true, expanded = false, point = "BOTTOMLEFT", spacing = 4, x = 286, y = 285 },
+    bagWindow = { point = "BOTTOMRIGHT", x = -10, y = 10 },
+    columns = 10,
+    customCategoryAssignments = {},
+    customFilters = {},
+    enabled = true,
+    favorites = {},
+    newItemRetentionTimer = 20,
+    qualityBorders = true,
+    showEmptySlots = true,
+    showItemLevel = true,
+    slotSize = 36,
+    spacing = 4,
+}
+
+local mod = RoithiUI and RoithiUI:GetModule("Bags", true)
+if mod then
+    mod.defaultSettings = defaultSettings
+    mod.dbKey = "Bags"
+end
+if ns.Defaults and ns.Defaults.profile then
+    ns.Defaults.profile.Bags = defaultSettings
+end
+ns.BagsDefaults = defaultSettings

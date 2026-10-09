@@ -12,42 +12,8 @@ ObjectivesMod.description = L["Modern restyling for the Blizzard Objective Track
 ObjectivesMod.order = 87
 ObjectivesMod.dbKey = "Objectives"
 
-ObjectivesMod.defaultSettings = {
-    enabled = true,
-    font = "Interface\\AddOns\\RoithiUI\\Media\\Fonts\\Expressway.ttf",
-    fontOutline = "OUTLINE",
-    headerFontSize = 13,
-    titleFontSize = 12,
-    objectiveFontSize = 11,
-    headerColor = { r = 0.05, g = 0.82, b = 0.61, a = 1.0 }, -- Accent teal/green
-    titleColor = { r = 1.0, g = 0.85, b = 0.35, a = 1.0 }, -- Gold
-    objectiveColor = { r = 0.8, g = 0.8, b = 0.8, a = 1.0 }, -- Gray
-    completedColor = { r = 0.25, g = 1.0, b = 0.35, a = 1.0 }, -- Green
-    foreverColor = { r = 0.22, g = 0.74, b = 0.97, a = 1.0 }, -- Light blue (WoW Forever background)
-    showAccentDivider = true,
-    dividerThickness = 1,
-    skinProgressBars = true,
-    hideMasterHeader = false,
-    scale = 1.0,
-    maxHeight = 800,
-    autoCollapseCombat = false,
-    autoCollapseInstance = false,
-    sortQuestsByZone = true,
-    showQuestLevel = true,
-    showForeverQuestInfinity = true,
-    hoverObjectiveText = true,
-    hideCompletedObjectives = false,
-    collapseDelay = 0.25,
-    pinnedQuests = {},
-    showFocusIndicator = true,
-    showCompletedQuestIndicator = true,
-    hideQuestIcon = true,
-    attachedToMinimap = true,
-    detachedWidth = 235,
-    point = "TOPRIGHT",
-    x = -50,
-    y = -200,
-}
+ObjectivesMod.dbKey = "Objectives"
+ObjectivesMod.defaultSettings = ns.ObjectivesDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Objectives)
 
 -- Weak-keyed state tables to strictly prevent mutating Blizzard-owned tables (taint prevention)
 local skinnedBlocks = setmetatable({}, { __mode = "k" })

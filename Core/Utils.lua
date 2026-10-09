@@ -9,7 +9,7 @@ local cGameRules = _G.C_GameRules
 local WOW_PROJECT_ID = _G.WOW_PROJECT_ID
 local WOW_PROJECT_MAINLINE = _G.WOW_PROJECT_MAINLINE
 
-local _, _, _, interfaceVersion = GetBuildInfo()
+local interfaceVersion = GetBuildInfo and select(4, GetBuildInfo())
 ns.InterfaceVersion = tonumber(interfaceVersion) or 0
 ns.IsForever = (ns.InterfaceVersion == 16001) or (cGameRules and cGameRules.IsForever and cGameRules.IsForever() or false)
 ns.IsRetail = not ns.IsForever and (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
@@ -211,4 +211,50 @@ function ns.Utils.ClampFrameToScreen(frame, padding)
         frame:SetPoint(p, relTo or UIParent, relP or p, curX, curY)
     end
 end
+
+-- -------------------------------------------------------------------------
+-- String & Media Helpers
+-- -------------------------------------------------------------------------
+function ns.Utils.FormatHotkey(text)
+    if not text or text == "" then return "" end
+    if (_G.RANGE_INDICATOR and text == _G.RANGE_INDICATOR)
+        or text == "·"
+        or text == "•"
+        or text == "●"
+        or text:find("\194\183", 1, true)
+        or text:find("\226\128\162", 1, true)
+        or text:find("\149", 1, true)
+        or text:find("[\194\183\226\128\162]")
+    then
+        return ""
+    end
+    local formatted = text
+    formatted = formatted:gsub("SHIFT%-", "S")
+    formatted = formatted:gsub("Shift%-", "S")
+    formatted = formatted:gsub("s%-", "S")
+    formatted = formatted:gsub("CTRL%-", "C")
+    formatted = formatted:gsub("Ctrl%-", "C")
+    formatted = formatted:gsub("c%-", "C")
+    formatted = formatted:gsub("ALT%-", "A")
+    formatted = formatted:gsub("Alt%-", "A")
+    formatted = formatted:gsub("a%-", "A")
+    formatted = formatted:gsub("STRG%-", "C")
+    formatted = formatted:gsub("Strg%-", "C")
+    formatted = formatted:gsub("SPACE", "Sp")
+    formatted = formatted:gsub("Mouse Wheel Up", "WU")
+    formatted = formatted:gsub("Mouse Wheel Down", "WD")
+    return formatted
+end
+
+function ns.Utils.GetLSMKeys(mediaType)
+    local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+    if not LSM then return {} end
+    local list = LSM:List(mediaType)
+    local out = {}
+    for _, name in ipairs(list) do
+        out[name] = name
+    end
+    return out
+end
+
 

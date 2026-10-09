@@ -123,6 +123,7 @@ local function FindButtonIcon(button)
 
     return ScanRegions(button)
 end
+MinimapMod.FindButtonIcon = FindButtonIcon
 
 local isSnapping = false
 local function SnapFrameToEdge(f)

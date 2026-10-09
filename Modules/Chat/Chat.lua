@@ -11,44 +11,7 @@ ChatMod.displayName = L["Chat"] or "Chat"
 ChatMod.description = L["Modern minimalist chat reskin with restylable background, edit box, and tabs."] or "Modern minimalist chat reskin with restylable background, edit box, and tabs."
 ChatMod.order = 86
 ChatMod.dbKey = "Chat"
-
-ChatMod.defaultSettings = {
-    enabled = true,
-    point = "BOTTOMLEFT",
-    x = 0,
-    y = 30,
-    width = 460,
-    height = 200,
-    showBackground = true,
-    backgroundColor = { r = 0.03, g = 0.045, b = 0.05, a = 0.65 },
-    showBorder = true,
-    borderColor = { r = 0.15, g = 0.15, b = 0.15, a = 1.0 },
-    backgroundPaddingX = 4,
-    backgroundPaddingY = 4,
-    includeEditBoxInBackground = false,
-    clampToScreen = false,
-    font = "Interface\\AddOns\\RoithiUI\\Media\\Fonts\\Expressway.ttf",
-    fontSize = 12,
-    fontOutline = "OUTLINE",
-    showFontShadow = false,
-    timestampFormat = "%H:%M ",
-    buttonDockPosition = "INSIDE_TOP_RIGHT",
-    shortenChannels = true,
-    showClassIcons = true,
-    showRaceIcons = true,
-    chatIconSize = 14,
-    linkURLs = true,
-    editBoxHeight = 24,
-    editBoxPosition = "BOTTOM", -- "BOTTOM" or "TOP"
-    editBoxBgColor = { r = 0.05, g = 0.065, b = 0.08, a = 0.9 },
-    editBoxBorderColor = { r = 0.2, g = 0.2, b = 0.2, a = 1.0 },
-    hideBlizzardChrome = true,
-    styleTabs = true,
-    tabHeight = 22,
-    tabFontSize = 11,
-    tabAlphaInactive = 0.5,
-    tabAlphaActive = 1.0,
-}
+ChatMod.defaultSettings = ns.ChatDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Chat)
 
 local hiddenParent = nil
 local skinnedFrames = setmetatable({}, { __mode = "k" })

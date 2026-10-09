@@ -11,50 +11,7 @@ SwingTimer.displayName = L["Swing Timer"]
 SwingTimer.description = L["Weapon swing timer for player and target in Forever."]
 SwingTimer.order = 96
 SwingTimer.dbKey = "SwingTimer"
-
-SwingTimer.defaultSettings = {
-    enabled = true,
-    player = {
-        enabled = true,
-        width = 200,
-        height = 12,
-        showOffhand = true,
-        barOrder = "MAIN_TOP",
-        showLabel = true,
-        showTimer = true,
-        labelAnchor = "LEFT",
-        timerAnchor = "RIGHT",
-        labelX = 4,
-        labelY = 0,
-        timerX = -4,
-        timerY = 0,
-        showText = true,
-        point = "CENTER",
-        x = 0,
-        y = -140,
-        colorMain = { r = 1.0, g = 0.82, b = 0.0, a = 1.0 },
-        colorOff = { r = 0.35, g = 0.75, b = 1.0, a = 1.0 },
-        colorRanged = { r = 0.2, g = 0.85, b = 0.35, a = 1.0 },
-    },
-    target = {
-        enabled = true,
-        width = 200,
-        height = 12,
-        showLabel = true,
-        showTimer = true,
-        labelAnchor = "LEFT",
-        timerAnchor = "RIGHT",
-        labelX = 4,
-        labelY = 0,
-        timerX = -4,
-        timerY = 0,
-        showText = true,
-        point = "CENTER",
-        x = 0,
-        y = -160,
-        color = { r = 0.85, g = 0.25, b = 0.25, a = 1.0 },
-    },
-}
+SwingTimer.defaultSettings = ns.SwingTimerDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.SwingTimer)
 
 -- Abilities that reset the swing timer in Classic / Forever
 local SWING_RESET_SPELLS = {
@@ -236,6 +193,19 @@ function SwingTimer:SyncNativeClear(hand, _)
     end
 end
 
+local function SuppressNativeSelection(targetFrame)
+    if not targetFrame then return end
+    if targetFrame.Selection then
+        targetFrame.Selection:Hide()
+        if not targetFrame.roithiSelectionHooked and hooksecurefunc then
+            hooksecurefunc(targetFrame.Selection, "Show", function(sel)
+                sel:Hide()
+            end)
+            targetFrame.roithiSelectionHooked = true
+        end
+    end
+end
+
 function SwingTimer:BindNativeSwingFrames()
     self.nativeFramesBound = self.nativeFramesBound or {}
     local anyBound = false
@@ -251,19 +221,6 @@ function SwingTimer:BindNativeSwingFrames()
         off = _G.SwingTimerOffHandFrame,
         ranged = _G.SwingTimerRangedFrame,
     }
-
-    local function SuppressNativeSelection(targetFrame)
-        if not targetFrame then return end
-        if targetFrame.Selection then
-            targetFrame.Selection:Hide()
-            if not targetFrame.roithiSelectionHooked and hooksecurefunc then
-                hooksecurefunc(targetFrame.Selection, "Show", function(sel)
-                    sel:Hide()
-                end)
-                targetFrame.roithiSelectionHooked = true
-            end
-        end
-    end
 
     for hand, frame in pairs(targets) do
         if frame and not self.nativeFramesBound[frame] then
@@ -586,19 +543,6 @@ end
 
 function SwingTimer:SetupEditMode()
     if not LEM or not LEM.AddFrame then return end
-
-    local function SuppressNativeSelection(targetFrame)
-        if not targetFrame then return end
-        if targetFrame.Selection then
-            targetFrame.Selection:Hide()
-            if not targetFrame.roithiSelectionHooked and hooksecurefunc then
-                hooksecurefunc(targetFrame.Selection, "Show", function(sel)
-                    sel:Hide()
-                end)
-                targetFrame.roithiSelectionHooked = true
-            end
-        end
-    end
 
     if self.playerFrame and not self.playerFrame.editModeRegistered then
         self.playerFrame.editModeName = L["Player Swing Timer"] or "Player Swing Timer"

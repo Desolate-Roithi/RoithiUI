@@ -1,0 +1,89 @@
+local addonName, ns = ...
+if ns.skipLoad then return end
+local RoithiUI = _G.RoithiUI
+
+local defaultSettings = {
+    addonBarAttached = true,
+    addonBarAutohide = false,
+    addonBarBgColor = { r = 0, g = 0, b = 0, a = 0.6 },
+    addonBarBreakpoint = 6,
+    addonBarButtonOrder = {},
+    addonBarButtonSize = 30,
+    addonBarButtons = {},
+    addonBarColumns = 6,
+    addonBarExpanded = true,
+    addonBarExpanderSize = 16,
+    addonBarExpansionMode = "STANDARD",
+    addonBarGrowDirection = "UP_LEFT",
+    addonBarHide = false,
+    addonBarHoverColor = { r = 1, g = 1, b = 1, a = 1 },
+    addonBarScale = 1,
+    addonBarSnap = false,
+    addonBarSnapEdge = "AUTO",
+    addonBarSpacing = 4,
+    addonBarVisibleCount = 3,
+    borderColor = { r = 0.2, g = 0.2, b = 0.2, a = 1 },
+    borderSize = 1,
+    container = { point = "TOPRIGHT", x = -10, y = -10 },
+    dataTextBgColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.6 },
+    dataTextLeftFontSize = 12,
+    dataTextLeftType = "FPS",
+    dataTextLeftX = 0,
+    dataTextLeftY = 0,
+    dataTextMiddleFontSize = 12,
+    dataTextMiddleType = "Time",
+    dataTextMiddleX = 0,
+    dataTextMiddleY = 0,
+    dataTextPosition = "OUTSIDE",
+    dataTextRightFontSize = 12,
+    dataTextRightType = "Social",
+    dataTextRightX = 0,
+    dataTextRightY = 0,
+    dataTextTimeFormat = "24H",
+    dataTextTimeType = "LOCAL",
+    defaultAnchorPositions = {
+        addonBar = { point = "BOTTOMLEFT", x = 10, y = 100 },
+        calendarAnchor = { point = "TOPLEFT", x = 0, y = 0 },
+        coordsAnchor = { point = "BOTTOM", x = 0, y = 0 },
+        dielAnchor = { point = "BOTTOMRIGHT", x = 0, y = 0 },
+        landingAnchor = { point = "BOTTOMLEFT", x = 0, y = 32 },
+        lfgAnchor = { point = "BOTTOMLEFT", x = 0, y = 0 },
+        mailAnchor = { point = "TOPRIGHT", x = 0, y = 0 },
+        trackingAnchor = { point = "TOPLEFT", x = 0, y = -38 },
+        zoneTextAnchor = { point = "TOP", x = 0, y = 0 },
+        zoomInAnchor = { point = "TOPRIGHT", x = 0, y = -34 },
+        zoomOutAnchor = { point = "TOPRIGHT", x = 0, y = -68 },
+    },
+    detached = {},
+    enabled = true,
+    height = 200,
+    offsets = {},
+    scale = 1,
+    shape = "SQUARE",
+    showAddonBar = true,
+    showCalendar = false,
+    showDataTextBar = true,
+    showDiel = true,
+    showLFG = true,
+    showLanding = true,
+    showMail = true,
+    showTracking = true,
+    showZoneText = true,
+    showZoom = false,
+    showZoomIn = true,
+    showZoomOut = true,
+    size = 200,
+    width = 200,
+    zoneTextX = 0,
+    zoneTextY = 0,
+}
+
+local mod = RoithiUI and RoithiUI:GetModule("Minimap", true)
+if mod then
+    mod.defaultSettings = defaultSettings
+    mod.dbKey = "Minimap"
+end
+if ns.Defaults and ns.Defaults.profile then
+    ns.Defaults.profile.Minimap = defaultSettings
+end
+ns.MinimapDefaults = defaultSettings

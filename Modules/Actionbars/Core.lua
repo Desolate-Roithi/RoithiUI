@@ -8,30 +8,7 @@ AB.displayName = L["Action Bars"]
 AB.description = L["Enables RoithiUI custom action bar styling and layout."]
 AB.order = 90
 AB.dbKey = "Actionbars"
-
-AB.defaultSettings = {
-    enabled = true,
-    disableBarPaging = true,
-    showHotkeys = true,
-    showMacroText = true,
-    showCount = true,
-    iconZoom = 0.07,
-    font = "Friz Quadrata TT",
-    fontSize = 11,
-    borderColor = { r = 0.2, g = 0.2, b = 0.2, a = 1.0 },
-    bar1 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, maxButtons = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 30, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar2 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, maxButtons = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 70, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar3 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, maxButtons = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 110, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar4 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, maxButtons = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 150, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar5 = { enabled = true, buttonSize = 36, spacing = 4, buttonsPerRow = 12, maxButtons = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 190, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar6 = { enabled = false, buttonSize = 36, spacing = 4, buttonsPerRow = 12, maxButtons = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 230, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar7 = { enabled = false, buttonSize = 36, spacing = 4, buttonsPerRow = 12, maxButtons = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 270, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    bar8 = { enabled = false, buttonSize = 36, spacing = 4, buttonsPerRow = 12, maxButtons = 12, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 310, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    pet = { enabled = true, buttonSize = 30, spacing = 4, buttonsPerRow = 10, maxButtons = 10, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 230, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    stance = { enabled = true, buttonSize = 30, spacing = 4, buttonsPerRow = 10, maxButtons = 10, orientation = "HORIZONTAL", point = "BOTTOM", x = 0, y = 265, alpha = 1.0, mouseover = false, mouseoverAlpha = 0, hideEmpty = false },
-    extraAction = { enabled = true, buttonSize = 52, maxButtons = 1, point = "CENTER", x = 0, y = -100, alpha = 1.0 },
-    zoneAction = { enabled = true, buttonSize = 52, maxButtons = 1, point = "CENTER", x = 0, y = -160, alpha = 1.0 },
-}
+AB.defaultSettings = ns.ActionbarsDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Actionbars)
 
 function AB:GetValidDivisors(count)
     local divisors = {}

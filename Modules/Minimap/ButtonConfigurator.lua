@@ -18,27 +18,8 @@ dragProxy.icon = dpIcon
 dragProxy:Hide()
 
 local function FindButtonIcon(button)
-    if not button then return "Interface\\Icons\\INV_Misc_QuestionMark" end
-    if button.icon and button.icon.GetTexture and button.icon:GetTexture() then
-        return button.icon:GetTexture()
-    end
-    if button.Icon and button.Icon.GetTexture and button.Icon:GetTexture() then
-        return button.Icon:GetTexture()
-    end
-    if button.GetRegions then
-        for _, obj in ipairs({ button:GetRegions() }) do
-            if obj:IsObjectType("Texture") then
-                local tex = obj:GetTexture()
-                if tex then
-                    local texStr = type(tex) == "string" and tex:lower() or ""
-                    if not texStr:find("border") and not texStr:find("background") and not texStr:find("glow") and not texStr:find("shadow") then
-                        return tex
-                    end
-                end
-            end
-        end
-    end
-    return "Interface\\Icons\\INV_Misc_QuestionMark"
+    local icon = MinimapMod.FindButtonIcon and MinimapMod.FindButtonIcon(button)
+    return icon or "Interface\\Icons\\INV_Misc_QuestionMark"
 end
 
 local function GetOrderedButtonList()
