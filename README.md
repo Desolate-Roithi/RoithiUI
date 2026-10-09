@@ -2,15 +2,15 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v1.7.4  
-**Last Updated:** 2026-10-08  
+**Latest Version:** v1.7.5  
+**Last Updated:** 2026-10-09  
 **Compatibility:** WoW 12.1.0 (Midnight) & WoW Forever (16001)
 
-## 🆕 Recent Updates (v1.7.4)
+## 🆕 Recent Updates (v1.7.5)
 
-* **Death Knight Rune Optimization**: Added an elapsed throttle (20Hz) and pre-sort ordering check to rune cooldown updates, eliminating unthrottled table sorting and frame-rate dependent overhead.
-* **Zero-Allocation Rune Timers**: Replaced Lua string allocations with native C fontstring formatting (`SetFormattedText`) and integer tenths caching, eliminating garbage collection spikes and micro-stutters during heavy combat.
-* **Classic / Forever PowerType Resilience**: Hardened power type lookups with safe fallbacks to ensure seamless compatibility across all client versions.
+* **Death Knight Rune Synchronization**: Resolved frame-rate jitter and slot displacement by maintaining consistent rune sort ordering across every render frame.
+* **Rune Timer Sizing & Customization**: Increased default rune countdown timer font size to 14pt with new customizable font size controls in UnitFrames settings and Edit Mode.
+* **Client Keybinding Probe Fix**: Added root `Bindings.xml` manifest to cleanly resolve engine-level `Couldn't open RoithiUI-Dev/Bindings.xml` Lua warnings.
 
 ## 🚀 Key Features
 

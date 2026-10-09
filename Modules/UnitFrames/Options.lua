@@ -300,6 +300,18 @@ function ns.BuildUnitAndCastbarOptions(options)
                                                 ns.RefreshUnitFrame(unit)
                                             end,
                                         },
+                                        classPowerTimerFontSize = {
+                                            type = "range",
+                                            name = L["Timer Font Size"] or "Timer Font Size",
+                                            order = 2.5,
+                                            min = 8, max = 24, step = 1,
+                                            scope = "both",
+                                            get = function() return GetDB().classPowerTimerFontSize or 14 end,
+                                            set = function(_, v)
+                                                GetDB().classPowerTimerFontSize = v
+                                                ns.RefreshUnitFrame(unit)
+                                            end,
+                                        },
                                         classPowerDetached = {
                                             type = "toggle",
                                             name = L["Detached"],
@@ -2037,6 +2049,19 @@ local function GetSettingsForClassPower(unit)
             get = function() return GetUnitDB(unit).classPowerHeight or 10 end,
             set = function(_, value)
                 GetUnitDB(unit).classPowerHeight = value
+                UpdateFrameFromSettings(unit)
+            end,
+        },
+        {
+            name = "Timer Font Size",
+            kind = LEM.SettingType.Slider,
+            default = 14,
+            minValue = 8,
+            maxValue = 24,
+            valueStep = 1,
+            get = function() return GetUnitDB(unit).classPowerTimerFontSize or 14 end,
+            set = function(_, value)
+                GetUnitDB(unit).classPowerTimerFontSize = value
                 UpdateFrameFromSettings(unit)
             end,
         },

@@ -223,6 +223,7 @@ local unitFramesDefaults = {
         classPowerDetached = false,
         classPowerEnabled = true,
         classPowerHeight = 10,
+        classPowerTimerFontSize = 14,
         classPowerPoint = "CENTER",
         classPowerSectionExpanded = false,
         classPowerWidth = 230,
