@@ -864,18 +864,8 @@ local function GetGlobalAuraOptions()
                                 type = "select",
                                 name = L["Timer Anchor"],
                                 order = 2,
-                                values = {
-                                    ["TOPLEFT"] = "Top Left",
-                                    ["LEFT"] = "Left",
-                                    ["BOTTOMLEFT"] = "Bottom Left",
-                                    ["TOP"] = "Top",
-                                    ["CENTER"] = "Center",
-                                    ["BOTTOM"] = "Bottom",
-                                    ["TOPRIGHT"] = "Top Right",
-                                    ["RIGHT"] = "Right",
-                                    ["BOTTOMRIGHT"] = "Bottom Right"
-                                },
-                                sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
+                                values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
+                                sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
                                 get = function() return GetDB().timerAnchor or "CENTER" end,
                                 set = function(_, v)
                                     GetDB().timerAnchor = v; ns.RefreshAllUnitFrames()
@@ -929,18 +919,8 @@ local function GetGlobalAuraOptions()
                                 type = "select",
                                 name = L["Stack Anchor"],
                                 order = 2,
-                                values = {
-                                    ["TOPLEFT"] = "Top Left",
-                                    ["LEFT"] = "Left",
-                                    ["BOTTOMLEFT"] = "Bottom Left",
-                                    ["TOP"] = "Top",
-                                    ["CENTER"] = "Center",
-                                    ["BOTTOM"] = "Bottom",
-                                    ["TOPRIGHT"] = "Top Right",
-                                    ["RIGHT"] = "Right",
-                                    ["BOTTOMRIGHT"] = "Bottom Right"
-                                },
-                                sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
+                                values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
+                                sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
                                 get = function() return GetDB().stackAnchor or "BOTTOMRIGHT" end,
                                 set = function(_, v)
                                     GetDB().stackAnchor = v; ns.RefreshAllUnitFrames()

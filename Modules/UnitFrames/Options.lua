@@ -547,17 +547,8 @@ function ns.BuildUnitAndCastbarOptions(options)
                                 name = L["Anchor Point"],
                                 order = 7,
                                 scope = "both",
-                                values = {
-                                    ["TOPLEFT"] = "Top Left",
-                                    ["LEFT"] = "Left",
-                                    ["BOTTOMLEFT"] = "Bottom Left",
-                                    ["TOP"] = "Top",
-                                    ["CENTER"] = "Center",
-                                    ["BOTTOM"] = "Bottom",
-                                    ["TOPRIGHT"] = "Top Right",
-                                    ["RIGHT"] = "Right",
-                                    ["BOTTOMRIGHT"] = "Bottom Right"
-                                },
+                                values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
+                                sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
                                 get = function() return GetDB().auraAnchor or "BOTTOM" end,
                                 set = function(_, v)
                                     GetDB().auraAnchor = v
@@ -714,17 +705,8 @@ function ns.BuildUnitAndCastbarOptions(options)
                                         type = "select",
                                         name = L["Anchor Point"],
                                         order = 3,
-                                        values = {
-                                            ["CENTER"] = "Center",
-                                            ["TOP"] = "Top",
-                                            ["BOTTOM"] = "Bottom",
-                                            ["LEFT"] = "Left",
-                                            ["RIGHT"] = "Right",
-                                            ["TOPLEFT"] = "Top Left",
-                                            ["TOPRIGHT"] = "Top Right",
-                                            ["BOTTOMLEFT"] = "Bottom Left",
-                                            ["BOTTOMRIGHT"] = "Bottom Right"
-                                        },
+                                        values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
+                                        sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
                                         get = function()
                                             local k = RoithiUI.db.profile.tempIndicatorSelect
                                             local db = GetDB().indicators and GetDB().indicators[k]
@@ -903,18 +885,8 @@ function ns.BuildUnitAndCastbarOptions(options)
                     type = "select",
                     name = L["Anchor Point"],
                     order = 5,
-                    values = {
-                        ["TOPLEFT"] = "Top Left",
-                        ["LEFT"] = "Left",
-                        ["BOTTOMLEFT"] = "Bottom Left",
-                        ["TOP"] = "Top",
-                        ["CENTER"] = "Center",
-                        ["BOTTOM"] = "Bottom",
-                        ["TOPRIGHT"] = "Top Right",
-                        ["RIGHT"] = "Right",
-                        ["BOTTOMRIGHT"] = "Bottom Right"
-                    },
-                    sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
+                    values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
+                    sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
                     get = function() return GetDB().auraAnchor or "BOTTOM" end,
                     set = function(_, v)
                         GetDB().auraAnchor = v; ns.RefreshUnitFrame(unit)
@@ -1073,18 +1045,8 @@ function ns.BuildUnitAndCastbarOptions(options)
                             type = "select",
                             name = L["Anchor Point"],
                             order = 4,
-                            values = {
-                                ["TOPLEFT"] = "Top Left",
-                                ["LEFT"] = "Left",
-                                ["BOTTOMLEFT"] = "Bottom Left",
-                                ["TOP"] = "Top",
-                                ["CENTER"] = "Center",
-                                ["BOTTOM"] = "Bottom",
-                                ["TOPRIGHT"] = "Top Right",
-                                ["RIGHT"] = "Right",
-                                ["BOTTOMRIGHT"] = "Bottom Right"
-                            },
-                            sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
+                            values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
+                            sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
                             get = function() return GetDB().buffAnchor or GetDB().auraAnchor or "BOTTOM" end,
                             set = function(_, v)
                                 GetDB().buffAnchor = v; ns.RefreshUnitFrame(unit)
@@ -1240,18 +1202,8 @@ function ns.BuildUnitAndCastbarOptions(options)
                             type = "select",
                             name = L["Anchor Point"],
                             order = 4,
-                            values = {
-                                ["TOPLEFT"] = "Top Left",
-                                ["LEFT"] = "Left",
-                                ["BOTTOMLEFT"] = "Bottom Left",
-                                ["TOP"] = "Top",
-                                ["CENTER"] = "Center",
-                                ["BOTTOM"] = "Bottom",
-                                ["TOPRIGHT"] = "Top Right",
-                                ["RIGHT"] = "Right",
-                                ["BOTTOMRIGHT"] = "Bottom Right"
-                            },
-                            sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
+                            values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
+                            sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
                             get = function() return GetDB().debuffAnchor or GetDB().auraAnchor or "BOTTOM" end,
                             set = function(_, v)
                                 GetDB().debuffAnchor = v; ns.RefreshUnitFrame(unit)
@@ -1384,18 +1336,8 @@ function ns.BuildUnitAndCastbarOptions(options)
                             type = "select",
                             name = L["Timer Anchor"],
                             order = 11,
-                            values = {
-                                ["TOPLEFT"] = "Top Left",
-                                ["LEFT"] = "Left",
-                                ["BOTTOMLEFT"] = "Bottom Left",
-                                ["TOP"] = "Top",
-                                ["CENTER"] = "Center",
-                                ["BOTTOM"] = "Bottom",
-                                ["TOPRIGHT"] = "Top Right",
-                                ["RIGHT"] = "Right",
-                                ["BOTTOMRIGHT"] = "Bottom Right"
-                            },
-                            sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
+                            values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
+                            sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
                             get = function() return GetDB().timerAnchor or "CENTER" end,
                             set = function(_, v)
                                 GetDB().timerAnchor = v; ns.RefreshUnitFrame(unit)
@@ -1442,18 +1384,8 @@ function ns.BuildUnitAndCastbarOptions(options)
                             type = "select",
                             name = L["Stack Anchor"],
                             order = 21,
-                            values = {
-                                ["TOPLEFT"] = "Top Left",
-                                ["LEFT"] = "Left",
-                                ["BOTTOMLEFT"] = "Bottom Left",
-                                ["TOP"] = "Top",
-                                ["CENTER"] = "Center",
-                                ["BOTTOM"] = "Bottom",
-                                ["TOPRIGHT"] = "Top Right",
-                                ["RIGHT"] = "Right",
-                                ["BOTTOMRIGHT"] = "Bottom Right"
-                            },
-                            sorting = { "TOPLEFT", "LEFT", "BOTTOMLEFT", "TOP", "CENTER", "BOTTOM", "TOPRIGHT", "RIGHT", "BOTTOMRIGHT" },
+                            values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
+                            sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
                             get = function() return GetDB().stackAnchor or "BOTTOMRIGHT" end,
                             set = function(_, v)
                                 GetDB().stackAnchor = v; ns.RefreshUnitFrame(unit)

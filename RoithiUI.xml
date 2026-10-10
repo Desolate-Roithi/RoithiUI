@@ -12,6 +12,7 @@
     <Script file="Core/Utils.lua"/>
     <Script file="Core/Commands.lua"/>
     <Script file="Core/Media.lua"/>
+    <Script file="Core/FontEngine.lua"/>
     <Script file="Core/AttachmentLogic.lua"/>
     <Script file="Core/Dashboard.lua"/>
 

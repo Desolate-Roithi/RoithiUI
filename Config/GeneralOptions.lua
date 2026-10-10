@@ -24,6 +24,44 @@ function ns.GetGeneralOptions()
                 order = 5,
                 inline = true,
                 args = {
+                    globalHeader = {
+                        type = "header",
+                        name = L["Global Typography"] or "Global Typography",
+                        order = 0.1,
+                    },
+                    globalFont = {
+                        type = "select",
+                        dialogControl = "LSM30_Font",
+                        name = L["Global Font"] or "Global Font",
+                        desc = L["Default font used across all UI modules unless specifically overridden."] or "Default font used across all UI modules.",
+                        order = 0.2,
+                        values = function() return GetLSMKeys("font") end,
+                        get = function() return (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Friz Quadrata TT" end,
+                        set = function(_, v)
+                            if RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General then
+                                RoithiUI.db.profile.General.font = v
+                            end
+                            if RoithiUI.TriggerFontUpdate then RoithiUI:TriggerFontUpdate() end
+                        end,
+                    },
+                    globalFontOutline = {
+                        type = "select",
+                        name = L["Global Font Outline"] or "Global Font Outline",
+                        order = 0.3,
+                        values = {
+                            ["NONE"] = "NONE",
+                            ["OUTLINE"] = "OUTLINE",
+                            ["THICKOUTLINE"] = "THICKOUTLINE",
+                            ["MONOCHROME"] = "MONOCHROME",
+                        },
+                        get = function() return (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE" end,
+                        set = function(_, v)
+                            if RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General then
+                                RoithiUI.db.profile.General.fontOutline = v
+                            end
+                            if RoithiUI.TriggerFontUpdate then RoithiUI:TriggerFontUpdate() end
+                        end,
+                    },
                     ufHeader = {
                         type = "header",
                         name = L["Unit Frames"],

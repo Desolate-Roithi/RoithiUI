@@ -655,6 +655,9 @@ function BagsMod:RestoreBlizzardBagBar()
     if self.expanderButton and self.expanderButton.Hide then
         self.expanderButton:Hide()
     end
+    if self.reagentSeparator and self.reagentSeparator.Hide then
+        self.reagentSeparator:Hide()
+    end
     if _G.BagsBar and _G.BagsBar.Layout then
         pcall(_G.BagsBar.Layout, _G.BagsBar)
     end
@@ -749,6 +752,23 @@ function BagsMod:UpdateBagBarLayout()
     -- 4. Reagent Bag (Retail/Forever)
     local reagentBag = _G.CharacterReagentBag0Slot
     if reagentBag then
+        if not self.reagentSeparator and self.bagBarFrame then
+            local sep = self.bagBarFrame:CreateTexture(nil, "OVERLAY")
+            if sep.SetColorTexture then
+                sep:SetColorTexture(0.4, 0.4, 0.4, 0.8)
+            end
+            self.reagentSeparator = sep
+        end
+        if self.reagentSeparator then
+            local sepH = math.max(14, math.floor(btnSize * 0.7))
+            self.reagentSeparator:ClearAllPoints()
+            self.reagentSeparator:SetSize(1, sepH)
+            local sepX = xOffset + math.floor((spacing - 1) / 2)
+            self.reagentSeparator:SetPoint("LEFT", self.bagBarFrame, "LEFT", sepX, 0)
+            self.reagentSeparator:Show()
+            xOffset = xOffset + spacing
+        end
+
         self:StyleBagButton(reagentBag)
         self:UpdateBagButtonVisual(reagentBag)
         if not reagentBag.originalParent and reagentBag.GetParent then
@@ -764,6 +784,10 @@ function BagsMod:UpdateBagBarLayout()
         if reagentBag.SetPoint then reagentBag:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0) end
         if reagentBag.Show then reagentBag:Show() end
         xOffset = xOffset + btnSize + spacing
+    else
+        if self.reagentSeparator and self.reagentSeparator.Hide then
+            self.reagentSeparator:Hide()
+        end
     end
 
     -- 5. Keyring (Classic/Forever)

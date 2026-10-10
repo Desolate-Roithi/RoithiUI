@@ -351,10 +351,10 @@ function MinimapMod:OnDisable()
     end
 
     -- Restore Blizzard frames
-    if Minimap_ZoomIn then Minimap_ZoomIn:Show() end
-    if Minimap_ZoomOut then Minimap_ZoomOut:Show() end
-    if GameTimeFrame then GameTimeFrame:Show() end
-    if MiniMapTracking then MiniMapTracking:Show() end
+    if type(Minimap_ZoomIn) == "table" and Minimap_ZoomIn.Show then Minimap_ZoomIn:Show() end
+    if type(Minimap_ZoomOut) == "table" and Minimap_ZoomOut.Show then Minimap_ZoomOut:Show() end
+    if type(GameTimeFrame) == "table" and GameTimeFrame.Show then GameTimeFrame:Show() end
+    if type(MiniMapTracking) == "table" and MiniMapTracking.Show then MiniMapTracking:Show() end
     if MinimapCluster then
         MinimapCluster:Show()
         MinimapCluster:SetAlpha(1)
@@ -899,17 +899,7 @@ function MinimapMod:RegisterAnchorSettings(f, key)
         {
             name = L["Anchor Point"] or "Anchor Point",
             kind = LEM.SettingType.Dropdown,
-            values = {
-                { text = L["Top Left"] or "Top Left", value = "TOPLEFT" },
-                { text = L["Top"] or "Top", value = "TOP" },
-                { text = L["Top Right"] or "Top Right", value = "TOPRIGHT" },
-                { text = L["Left"] or "Left", value = "LEFT" },
-                { text = L["Center"] or "Center", value = "CENTER" },
-                { text = L["Right"] or "Right", value = "RIGHT" },
-                { text = L["Bottom Left"] or "Bottom Left", value = "BOTTOMLEFT" },
-                { text = L["Bottom"] or "Bottom", value = "BOTTOM" },
-                { text = L["Bottom Right"] or "Bottom Right", value = "BOTTOMRIGHT" },
-            },
+            values = (ns.Utils and ns.Utils.GetAnchorLEMValues) and ns.Utils.GetAnchorLEMValues() or {},
             get = function()
                 local offset = self.db.offsets and self.db.offsets[key]
                 return offset and offset.point or default.point

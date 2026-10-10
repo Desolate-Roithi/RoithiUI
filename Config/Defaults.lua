@@ -30,7 +30,7 @@ ns.Defaults = {
             TargetTargetFrame = true,
             UnitFrames = true,
         },
-        General = { Theme = "Class", castbarBar = "Solid", castbarFont = "Friz Quadrata TT", debugMode = false, unitFrameBar = "Solid", unitFrameFont = "Friz Quadrata TT" },
+        General = { Theme = "Class", castbarBar = "Solid", castbarFont = "Friz Quadrata TT", debugMode = false, unitFrameBar = "Solid", unitFrameFont = "Friz Quadrata TT", font = "Friz Quadrata TT", fontOutline = "OUTLINE" },
         IndicatorTestMode = false,
         LEMDialogPosition = false,
         Range = { insideAlpha = 1, outsideAlpha = 0.4 },

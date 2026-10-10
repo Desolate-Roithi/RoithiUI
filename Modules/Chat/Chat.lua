@@ -478,6 +478,21 @@ function ChatMod:OnEnable()
         end)
     end
 
+    if _G.FloatingChatFrame_Update and not self:IsHooked("FloatingChatFrame_Update") then
+        self:SecureHook("FloatingChatFrame_Update", function()
+            if self.UpdateButtonsDock then
+                self:UpdateButtonsDock()
+            end
+        end)
+    end
+    if _G.FCFDock_UpdateTabs and not self:IsHooked("FCFDock_UpdateTabs") then
+        self:SecureHook("FCFDock_UpdateTabs", function()
+            if self.UpdateButtonsDock then
+                self:UpdateButtonsDock()
+            end
+        end)
+    end
+
     if _G.ChatFrame_AddMessageEventFilter and not self.filterRegistered then
         for _, ev in ipairs(CHAT_FILTER_EVENTS) do
             _G.ChatFrame_AddMessageEventFilter(ev, ShortenChannelFilter)
@@ -680,8 +695,9 @@ function ChatMod:RegisterWithEditMode()
 
     if _G.Enum and _G.Enum.EditModeSystem and _G.Enum.EditModeSystem.ChatFrame and LEM.AddSystemSettings and self.GetLEMFrameSettings then
         LEM:AddSystemSettings(_G.Enum.EditModeSystem.ChatFrame, self:GetLEMFrameSettings())
-        if LEM.AddSystemButtons then
-            LEM:AddSystemButtons(_G.Enum.EditModeSystem.ChatFrame, {
+        local addSysBtn = LEM.AddSystemSettingsButtons or LEM.AddSystemButtons
+        if addSysBtn then
+            addSysBtn(LEM, _G.Enum.EditModeSystem.ChatFrame, {
                 {
                     text = L["Open Full Settings"] or "Open Full Settings",
                     click = function()
@@ -1417,15 +1433,17 @@ function ChatMod:UpdateButtonsDock()
         dock:SetPoint("TOPLEFT", cf1, "TOPLEFT", 4, -2)
         dock:SetSize(132, 22)
     elseif isAbove then
-        local fps = _G.ForeverPlusChatSearch
+        local fps = _G.ForeverPlus and _G.ForeverPlusChatSearch
         if fps and fps:IsShown() then
             dock:SetPoint("BOTTOMRIGHT", fps, "TOPRIGHT", 0, 4)
+        elseif self.bgPanel and self.bgPanel:IsShown() then
+            dock:SetPoint("BOTTOMRIGHT", self.bgPanel, "TOPRIGHT", 0, 4)
         else
             dock:SetPoint("BOTTOMRIGHT", cf1, "TOPRIGHT", -2, 4)
         end
         dock:SetSize(140, 22)
     else -- "INSIDE_TOP_RIGHT" (Default)
-        local fps = _G.ForeverPlusChatSearch
+        local fps = _G.ForeverPlus and _G.ForeverPlusChatSearch
         if fps and fps:IsShown() then
             dock:SetPoint("BOTTOMRIGHT", fps, "TOPRIGHT", 0, 4)
         else
@@ -1435,22 +1453,11 @@ function ChatMod:UpdateButtonsDock()
             if self.bgPanel and self.bgPanel:IsShown() then
                 dock:SetPoint("TOPRIGHT", self.bgPanel, "TOPRIGHT", -padX, -padY)
             else
-                dock:SetPoint("BOTTOMRIGHT", cf1, "TOPRIGHT", -2, 2)
+                dock:SetPoint("TOPRIGHT", cf1, "TOPRIGHT", -2, -2)
             end
         end
         local tabH = (self.db.styleTabs ~= false) and (self.db.tabHeight or 22) or 22
         dock:SetSize(140, tabH)
-    end
-
-    -- Hook ForeverPlusChatSearch so dock repositions when searchbar appears/disappears
-    if not self.searchHooked and _G.ForeverPlusChatSearch and hooksecurefunc then
-        hooksecurefunc(_G.ForeverPlusChatSearch, "Show", function()
-            if self.UpdateButtonsDock then self:UpdateButtonsDock() end
-        end)
-        hooksecurefunc(_G.ForeverPlusChatSearch, "Hide", function()
-            if self.UpdateButtonsDock then self:UpdateButtonsDock() end
-        end)
-        self.searchHooked = true
     end
 
     if not self.copyBtn then
@@ -1741,6 +1748,19 @@ function ChatMod:UpdateButtonsDock()
 
         if btn.SetHighlightTexture then
             btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+        end
+
+        if not btn.roithiDockHooked and hooksecurefunc then
+            btn.roithiDockHooked = true
+            local isRepositioning = false
+            hooksecurefunc(btn, "SetPoint", function(b)
+                if isRepositioning then return end
+                if ChatMod.db and ChatMod.db.buttonDockPosition ~= "HIDDEN" and ChatMod.buttonDock and b:GetParent() ~= ChatMod.buttonDock then
+                    isRepositioning = true
+                    ChatMod:UpdateButtonsDock()
+                    isRepositioning = false
+                end
+            end)
         end
     end
 

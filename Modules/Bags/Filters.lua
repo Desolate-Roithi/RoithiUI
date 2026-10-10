@@ -293,11 +293,105 @@ local EXPANSION_NAME_MAP = {
     midnight = 11,
 }
 
+local SLOT_ID_TO_EQUIP_LOCS = {
+    [1]  = { "invtype_head" },
+    [2]  = { "invtype_neck" },
+    [3]  = { "invtype_shoulder" },
+    [4]  = { "invtype_body" },
+    [5]  = { "invtype_chest", "invtype_robe" },
+    [6]  = { "invtype_waist" },
+    [7]  = { "invtype_legs" },
+    [8]  = { "invtype_feet" },
+    [9]  = { "invtype_wrist" },
+    [10] = { "invtype_hand" },
+    [11] = { "invtype_finger" },
+    [12] = { "invtype_finger" },
+    [13] = { "invtype_trinket" },
+    [14] = { "invtype_trinket" },
+    [15] = { "invtype_cloak" },
+    [16] = { "invtype_weapon", "invtype_2hweapon", "invtype_weaponmainhand" },
+    [17] = { "invtype_weapon", "invtype_weaponoffhand", "invtype_shield", "invtype_holdable" },
+    [18] = { "invtype_ranged", "invtype_rangedright", "invtype_thrown", "invtype_relic" },
+    [19] = { "invtype_tabard" },
+}
+
+local SLOT_NAME_TO_EQUIP_LOCS = {
+    head = { "invtype_head" },
+    helm = { "invtype_head" },
+    helmet = { "invtype_head" },
+    neck = { "invtype_neck" },
+    necklace = { "invtype_neck" },
+    shoulder = { "invtype_shoulder" },
+    shoulders = { "invtype_shoulder" },
+    shirt = { "invtype_body" },
+    chest = { "invtype_chest", "invtype_robe" },
+    robe = { "invtype_chest", "invtype_robe" },
+    waist = { "invtype_waist" },
+    belt = { "invtype_waist" },
+    legs = { "invtype_legs" },
+    pants = { "invtype_legs" },
+    feet = { "invtype_feet" },
+    foot = { "invtype_feet" },
+    boots = { "invtype_feet" },
+    boot = { "invtype_feet" },
+    wrist = { "invtype_wrist" },
+    wrists = { "invtype_wrist" },
+    bracer = { "invtype_wrist" },
+    bracers = { "invtype_wrist" },
+    hands = { "invtype_hand" },
+    hand = { "invtype_hand" },
+    gloves = { "invtype_hand" },
+    glove = { "invtype_hand" },
+    finger = { "invtype_finger" },
+    ring = { "invtype_finger" },
+    rings = { "invtype_finger" },
+    trinket = { "invtype_trinket" },
+    trinkets = { "invtype_trinket" },
+    back = { "invtype_cloak" },
+    cloak = { "invtype_cloak" },
+    cape = { "invtype_cloak" },
+    mainhand = { "invtype_weapon", "invtype_2hweapon", "invtype_weaponmainhand" },
+    offhand = { "invtype_weapon", "invtype_weaponoffhand", "invtype_shield", "invtype_holdable" },
+    shield = { "invtype_shield" },
+    weapon = { "invtype_weapon", "invtype_2hweapon", "invtype_weaponmainhand", "invtype_weaponoffhand" },
+    weapons = { "invtype_weapon", "invtype_2hweapon", "invtype_weaponmainhand", "invtype_weaponoffhand" },
+    ["2h"] = { "invtype_2hweapon" },
+    twohand = { "invtype_2hweapon" },
+    twohanded = { "invtype_2hweapon" },
+    ranged = { "invtype_ranged", "invtype_rangedright", "invtype_thrown", "invtype_relic" },
+    tabard = { "invtype_tabard" },
+    bag = { "invtype_bag" },
+    bags = { "invtype_bag" },
+}
+
+local function MatchesItemSlot(equipLoc, slotQuery)
+    if not equipLoc or equipLoc == "" then return false end
+    local eqLower = equipLoc:lower()
+    local num = tonumber(slotQuery)
+    if num then
+        local locs = SLOT_ID_TO_EQUIP_LOCS[num]
+        if locs then
+            for _, loc in ipairs(locs) do
+                if eqLower == loc then return true end
+            end
+        end
+        return false
+    end
+    local locs = SLOT_NAME_TO_EQUIP_LOCS[slotQuery]
+    if locs then
+        for _, loc in ipairs(locs) do
+            if eqLower == loc then return true end
+        end
+    end
+    return false
+end
+
 --- Checks whether an item matches an advanced search query.
 --- Supports partial matching and tokenized key:value tags:
 ---   name:<str>, type:<str>, bind:<bop|boe|bou|account>, reagent:<yes|no>,
 ---   exp:<name|id>, quality:<name|num>, ilvl:<[><=]num|range>, junk, gear, weapon, armor, new, fav,
----   boss:<str>, dropped-by:<str>, zone:<str>, dropped-in:<str>
+---   boss:<str>, dropped-by:<str>, zone:<str>, dropped-in:<str>,
+---   slot:<name|num>, s:<name|num>
 --- Multiple tokens are combined with AND logic.
 function BagsMod:MatchesSearchQuery(itemData, query)
     if not itemData or not itemData.itemID then return false end
@@ -414,7 +508,12 @@ function BagsMod:MatchesSearchQuery(itemData, query)
             local tt = GetTooltip()
             matched = (tt:find(val, 1, true) ~= nil)
 
-        -- 10. Shorthand standalone flags
+        -- 10. slot:<val> or s:<val>
+        elseif token:find("^slot:") or token:find("^s:") then
+            local val = token:gsub("^slot:", ""):gsub("^s:", "")
+            matched = MatchesItemSlot(itemData.equipLoc, val)
+
+        -- 11. Shorthand standalone flags
         elseif token == "junk" or token == "j" then
             matched = (itemData.quality == 0)
         elseif token == "new" then
@@ -431,12 +530,13 @@ function BagsMod:MatchesSearchQuery(itemData, query)
         elseif token == "reagents" or token == "reagent" then
             matched = (itemData.classID == 7 or itemData.isCraftingReagent == true or itemData.bag == 5)
 
-        -- 11. Generic partial string match
+        -- 12. Generic partial string match
         else
             matched = (nameLower:find(token, 1, true) ~= nil)
                 or (typeLower:find(token, 1, true) ~= nil)
                 or (subTypeLower:find(token, 1, true) ~= nil)
                 or (equipLower:find(token, 1, true) ~= nil)
+                or MatchesItemSlot(itemData.equipLoc, token)
         end
 
         if not matched then

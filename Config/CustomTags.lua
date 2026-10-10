@@ -259,17 +259,8 @@ function RoithiUI.Config.GetCustomTagsOptions()
                         type = "select",
                         name = "Point",
                         order = 4,
-                        values = {
-                            ["CENTER"] = "Center",
-                            ["TOP"] = "Top",
-                            ["BOTTOM"] = "Bottom",
-                            ["LEFT"] = "Left",
-                            ["RIGHT"] = "Right",
-                            ["TOPLEFT"] = "Top Left",
-                            ["TOPRIGHT"] = "Top Right",
-                            ["BOTTOMLEFT"] = "Bottom Left",
-                            ["BOTTOMRIGHT"] = "Bottom Right"
-                        },
+                        values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
+                        sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
                         get = function() return tagConfig.point or "CENTER" end,
                         set = function(_, v)
                             tagConfig.point = v

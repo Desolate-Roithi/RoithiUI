@@ -168,17 +168,8 @@ function MenuMod:GetOptions()
                         type = "select",
                         name = L["Anchor Point"],
                         order = 10,
-                        values = {
-                            ["TOPLEFT"] = "TOPLEFT",
-                            ["TOP"] = "TOP",
-                            ["TOPRIGHT"] = "TOPRIGHT",
-                            ["LEFT"] = "LEFT",
-                            ["CENTER"] = "CENTER",
-                            ["RIGHT"] = "RIGHT",
-                            ["BOTTOMLEFT"] = "BOTTOMLEFT",
-                            ["BOTTOM"] = "BOTTOM",
-                            ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
-                        },
+                        values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
+                        sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
                         get = function() return self.db.point or "BOTTOMRIGHT" end,
                         set = function(_, val)
                             self.db.point = val

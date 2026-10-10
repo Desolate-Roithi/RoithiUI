@@ -67,6 +67,26 @@ if sliderPool then
                     end
                 end
             end
+
+            local oldSetup = frame.Setup
+            frame.Setup = function(s, data)
+                if data then
+                    local minVal = data.minValue or 0
+                    local maxVal = data.maxValue or 1
+                    if minVal >= maxVal then
+                        maxVal = minVal + 1
+                        data.maxValue = maxVal
+                    end
+                    local stepSize = data.valueStep or 1
+                    if stepSize <= 0 then
+                        stepSize = 1
+                        data.valueStep = 1
+                    end
+                end
+                if oldSetup then
+                    oldSetup(s, data)
+                end
+            end
         end
 
         return frame, isNew

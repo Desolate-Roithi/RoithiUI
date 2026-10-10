@@ -257,4 +257,101 @@ function ns.Utils.GetLSMKeys(mediaType)
     return out
 end
 
+-- -------------------------------------------------------------------------
+-- Centralized Anchor Point System
+-- -------------------------------------------------------------------------
+local ANCHOR_POINTS = {
+    "TOPLEFT",
+    "TOP",
+    "TOPRIGHT",
+    "LEFT",
+    "CENTER",
+    "RIGHT",
+    "BOTTOMLEFT",
+    "BOTTOM",
+    "BOTTOMRIGHT",
+}
+ns.Utils.ANCHOR_POINTS = ANCHOR_POINTS
+
+local ANCHOR_NAMES = {
+    TOPLEFT = "Top Left",
+    TOP = "Top",
+    TOPRIGHT = "Top Right",
+    LEFT = "Left",
+    CENTER = "Center",
+    RIGHT = "Right",
+    BOTTOMLEFT = "Bottom Left",
+    BOTTOM = "Bottom",
+    BOTTOMRIGHT = "Bottom Right",
+}
+ns.Utils.ANCHOR_NAMES = ANCHOR_NAMES
+
+function ns.Utils.GetAnchorList()
+    local list = {}
+    for i, a in ipairs(ANCHOR_POINTS) do
+        list[i] = a
+    end
+    return list
+end
+
+function ns.Utils.GetNextAnchor(current)
+    local cur = current or "CENTER"
+    local idx = 1
+    for i, a in ipairs(ANCHOR_POINTS) do
+        if a == cur then
+            idx = i
+            break
+        end
+    end
+    return ANCHOR_POINTS[(idx % #ANCHOR_POINTS) + 1]
+end
+
+function ns.Utils.GetAnchorJustifyH(anchor)
+    if not anchor then return "CENTER" end
+    if anchor:find("LEFT") then
+        return "LEFT"
+    elseif anchor:find("RIGHT") then
+        return "RIGHT"
+    end
+    return "CENTER"
+end
+
+function ns.Utils.GetDefaultAnchorOffsets(anchor, padding)
+    local pad = padding or 2
+    if not anchor then return 0, 0, "CENTER" end
+    local ox = anchor:find("RIGHT") and -pad or (anchor:find("LEFT") and pad or 0)
+    local oy = anchor:find("TOP") and -pad or (anchor:find("BOTTOM") and pad or 0)
+    local justifyH = ns.Utils.GetAnchorJustifyH(anchor)
+    return ox, oy, justifyH
+end
+
+function ns.Utils.GetAnchorDropdownValues()
+    local L = LibStub and LibStub("AceLocale-3.0", true) and LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
+    local values = {}
+    for _, pt in ipairs(ANCHOR_POINTS) do
+        local rawText = ANCHOR_NAMES[pt] or pt
+        values[pt] = (L and L[rawText]) or rawText
+    end
+    return values
+end
+
+function ns.Utils.GetAnchorLEMValues()
+    local L = LibStub and LibStub("AceLocale-3.0", true) and LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
+    local values = {}
+    for _, pt in ipairs(ANCHOR_POINTS) do
+        local rawText = ANCHOR_NAMES[pt] or pt
+        table.insert(values, {
+            text = (L and L[rawText]) or rawText,
+            value = pt,
+        })
+    end
+    return values
+end
+
+local RoithiUI = _G.RoithiUI
+if RoithiUI then
+    RoithiUI.Utils = ns.Utils
+end
+
+
 

@@ -324,6 +324,7 @@ function BagsMod:GetOptions()
                             "• |cffffcc00ilvl:<expr>|r - " .. (L["Item level comparison (ilvl:>600, ilvl:<550, ilvl:600-630)"] or "Item level comparison (ilvl:>600, ilvl:<550, ilvl:600-630)") .. "\n" ..
                             "• |cffffcc00boss:<name>|r - " .. (L["Drop source boss from item tooltip (e.g. boss:ansurek)"] or "Drop source boss from item tooltip (e.g. boss:ansurek)") .. "\n" ..
                             "• |cffffcc00zone:<name>|r - " .. (L["Drop source zone from item tooltip (e.g. zone:nerub-ar)"] or "Drop source zone from item tooltip (e.g. zone:nerub-ar)") .. "\n" ..
+                            "• |cffffcc00slot:<name|num>|r or |cffffcc00s:<name|num>|r - " .. (L["Equipment slot by name or slot ID (e.g. slot:head, slot:1, s:ring, s:13)"] or "Equipment slot by name or slot ID (e.g. slot:head, slot:1, s:ring, s:13)") .. "\n" ..
                             "• |cffffcc00junk|r, |cffffcc00new|r, |cffffcc00fav|r - " .. (L["Shorthand flags"] or "Shorthand flags") .. "\n\n" ..
                             "|cff00ff00" .. (L["Combined Example:"] or "Combined Example:") .. "|r |cfffffffftype:gear quality:epic ilvl:>600|r\n" ..
                             "|cff00ff00" .. (L["Custom Filter Tabs:"] or "Custom Filter Tabs:") .. "|r " .. (L["Click the [+] button next to the search box to save the current query as a custom category tab. Right-click the tab to delete it."] or "Click the [+] button next to the search box to save the current query as a custom category tab. Right-click the tab to delete it."),

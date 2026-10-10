@@ -73,28 +73,57 @@ function RoithiUI:OpenSettings(group, ...)
             ACD:Close("RoithiUI")
         else
             ACD:Open("RoithiUI")
+            local f = ACD.OpenFrames and ACD.OpenFrames["RoithiUI"]
+            if f and f.frame then
+                f.frame:SetFrameStrata("FULLSCREEN_DIALOG")
+                f.frame:SetFrameLevel(2500)
+                if f.frame.Raise then f.frame:Raise() end
+            end
         end
         return
     end
 
     local lowGroup = tostring(group):lower()
-    local basePath = GROUP_PATH_MAP[lowGroup]
+    local sub1 = select(1, ...)
+    local basePath
     local fullPath = {}
-    if basePath then
+
+    -- Special sub-routing for auras on specific units
+    if lowGroup == "auras" and sub1 == "units" then
+        basePath = { "combat", "unitframes" }
         for _, p in ipairs(basePath) do
             table.insert(fullPath, p)
         end
+        local unitTarget = select(2, ...)
+        if unitTarget then
+            table.insert(fullPath, unitTarget)
+        end
     else
-        table.insert(fullPath, group)
-    end
-    for i = 1, select("#", ...) do
-        local sub = select(i, ...)
-        if sub then
-            table.insert(fullPath, sub)
+        basePath = GROUP_PATH_MAP[lowGroup]
+        if basePath then
+            for _, p in ipairs(basePath) do
+                table.insert(fullPath, p)
+            end
+        else
+            table.insert(fullPath, group)
+        end
+        for i = 1, select("#", ...) do
+            local sub = select(i, ...)
+            if sub then
+                table.insert(fullPath, sub)
+            end
         end
     end
-    ACD:SelectGroup("RoithiUI", unpack(fullPath))
-    ACD:Open("RoithiUI")
+
+    pcall(function() ACD:SelectGroup("RoithiUI", unpack(fullPath)) end)
+    pcall(function() ACD:Open("RoithiUI", nil, unpack(fullPath)) end)
+
+    local f = ACD.OpenFrames and ACD.OpenFrames["RoithiUI"]
+    if f and f.frame then
+        f.frame:SetFrameStrata("FULLSCREEN_DIALOG")
+        f.frame:SetFrameLevel(2500)
+        if f.frame.Raise then f.frame:Raise() end
+    end
 end
 RoithiUI.OpenConfigWindow = RoithiUI.OpenSettings
 

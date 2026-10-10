@@ -63,6 +63,22 @@ function AB:GetOptions()
                             end
                         end,
                     },
+                    hideEmpty = {
+                        type = "toggle",
+                        name = L["Hide Empty Buttons"] or "Hide Empty Buttons",
+                        desc = L["Hide empty button slots across all action bars when not dragging an action."] or "Hide empty button slots across all action bars when not dragging an action.",
+                        order = 1.6,
+                        get = function() return self.db.hideEmpty ~= false end,
+                        set = function(_, val)
+                            self.db.hideEmpty = val
+                            for barKey in pairs(self.BAR_CONFIGS or {}) do
+                                if self.db[barKey] then
+                                    self.db[barKey].hideEmpty = val
+                                end
+                            end
+                            self:UpdateAllEmptyButtons()
+                        end,
+                    },
                     showMacroText = {
                         type = "toggle",
                         name = L["Show Macro Text"],
@@ -193,7 +209,7 @@ function AB:GetOptions()
                 order = 3,
                 get = function()
                     local bKey = self.selectedBar or "bar1"
-                    return self.db[bKey] and self.db[bKey].hideEmpty == true
+                    return self:IsHideEmpty(bKey)
                 end,
                 set = function(_, val)
                     local bKey = self.selectedBar or "bar1"

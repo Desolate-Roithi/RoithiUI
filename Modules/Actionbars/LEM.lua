@@ -108,7 +108,9 @@ function AB:SetupLEM()
                         self:LayoutBar(barKey)
                     end,
                 },
-                {
+            }
+            if maxBarCount > 1 then
+                table.insert(settings, {
                     name = L["Number of Rows"] or "Number of Rows",
                     kind = LEM.SettingType.Slider,
                     minValue = 1,
@@ -132,8 +134,8 @@ function AB:SetupLEM()
                         self.db[barKey].buttonsPerRow = math.floor(maxBtn / val)
                         self:LayoutBar(barKey)
                     end,
-                },
-            }
+                })
+            end
             if maxBarCount > 1 then
                 table.insert(settings, {
                     name = L["Max Buttons"],
@@ -185,10 +187,18 @@ function AB:SetupLEM()
 
     if LEM.RegisterCallback and not self.lemCallbackRegistered then
         LEM:RegisterCallback("enter", function()
-            self:SetButtonsMouseInteractivity(false)
+            if self.OnEditModeEnter then
+                self:OnEditModeEnter()
+            else
+                self:SetButtonsMouseInteractivity(false)
+            end
         end)
         LEM:RegisterCallback("exit", function()
-            self:SetButtonsMouseInteractivity(true)
+            if self.OnEditModeExit then
+                self:OnEditModeExit()
+            else
+                self:SetButtonsMouseInteractivity(true)
+            end
         end)
         self.lemCallbackRegistered = true
     end

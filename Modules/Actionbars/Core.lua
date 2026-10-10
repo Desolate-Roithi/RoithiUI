@@ -202,6 +202,9 @@ function AB:OnPageChanged()
             self:LayoutBar("bar1")
         end
     end
+    if self.UpdateEmptyButtons then
+        self:UpdateEmptyButtons("bar1")
+    end
 end
 
 function AB:OnExtraActionBarUpdate()
@@ -232,6 +235,29 @@ function AB:OnEnteringWorld()
         self:LayoutBar("extraAction")
         self:LayoutBar("zoneAction")
     end
+    if _G.C_Timer and _G.C_Timer.After then
+        _G.C_Timer.After(0.1, function()
+            if self.UpdateAllEmptyButtons then self:UpdateAllEmptyButtons() end
+            if self.LayoutBar then
+                self:LayoutBar("extraAction")
+                self:LayoutBar("zoneAction")
+            end
+        end)
+        _G.C_Timer.After(0.5, function()
+            if self.UpdateAllEmptyButtons then self:UpdateAllEmptyButtons() end
+            if self.LayoutBar then
+                self:LayoutBar("extraAction")
+                self:LayoutBar("zoneAction")
+            end
+        end)
+        _G.C_Timer.After(1.0, function()
+            if self.UpdateAllEmptyButtons then self:UpdateAllEmptyButtons() end
+            if self.LayoutBar then
+                self:LayoutBar("extraAction")
+                self:LayoutBar("zoneAction")
+            end
+        end)
+    end
 end
 
 function AB:SafeLayout(callback)
@@ -243,6 +269,9 @@ function AB:SafeLayout(callback)
 end
 
 function AB:OnUpdateState()
+    if self.UpdateAllEmptyButtons then
+        self:UpdateAllEmptyButtons()
+    end
     if not self.GetBarButtons or not self.UpdateOverlayContainment then return end
     local configs = self.BAR_CONFIGS or {}
     for barKey in pairs(configs) do

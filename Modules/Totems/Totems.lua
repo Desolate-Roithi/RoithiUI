@@ -1381,20 +1381,61 @@ end
 
 function Totems:UpdateWeaponSlot()
     local state = self.slotStates and self.slotStates.weapon
-    if state then
+    local btn = self.buttons and self.buttons.weapon
+    if not state or not btn then return end
+
+    local now = GetTime()
+    local hasEnchant = false
+    local remainingMs = 0
+    local charges = 0
+
+    if _G.C_PaperDollInfo and _G.C_PaperDollInfo.GetTemporaryEnchantmentInfo then
+        local mainInfo = _G.C_PaperDollInfo.GetTemporaryEnchantmentInfo(_G.INVSLOT_MAINHAND or 16)
+        local offInfo = _G.C_PaperDollInfo.GetTemporaryEnchantmentInfo(_G.INVSLOT_OFFHAND or 17)
+        if mainInfo and mainInfo.remainingTimeMs and mainInfo.remainingTimeMs > 0 then
+            hasEnchant = true
+            remainingMs = mainInfo.remainingTimeMs
+            charges = mainInfo.chargesRemaining or 0
+        elseif offInfo and offInfo.remainingTimeMs and offInfo.remainingTimeMs > 0 then
+            hasEnchant = true
+            remainingMs = offInfo.remainingTimeMs
+            charges = offInfo.chargesRemaining or 0
+        end
+    elseif _G.GetWeaponEnchantInfo then
+        local hasMh, mhExp, mhCharges, _, hasOh, ohExp, ohCharges = _G.GetWeaponEnchantInfo()
+        if hasMh and mhExp and mhExp > 0 then
+            hasEnchant = true
+            remainingMs = mhExp
+            charges = mhCharges or 0
+        elseif hasOh and ohExp and ohExp > 0 then
+            hasEnchant = true
+            remainingMs = ohExp
+            charges = ohCharges or 0
+        end
+    end
+
+    if hasEnchant and remainingMs > 0 then
+        state.isActive = true
+        state.expirationTime = now + (remainingMs / 1000)
+        state.count = charges or 0
+        if btn.countText then
+            if charges and charges > 0 then
+                btn.countText:SetText(tostring(charges))
+            else
+                btn.countText:SetText("")
+            end
+        end
+    else
         state.isActive = false
         state.expirationTime = 0
         state.count = 0
-    end
-
-    local btn = self.buttons and self.buttons.weapon
-    if btn then
         if btn.countText then btn.countText:SetText("") end
         if btn.timerText then
             btn.timerText:SetText("")
             btn.timerText:Hide()
         end
     end
+
     self:UpdateSlotBorder("weapon")
 end
 
@@ -1413,7 +1454,7 @@ function Totems:UpdateSlotBorder(catKey)
             btn.selectionBorder:Show()
         end
         btn:SetBackdropBorderColor(1.0, 0.85, 0.0, 1.0)
-    elseif catKey ~= "weapon" and state and state.isActive then
+    elseif state and state.isActive then
         if btn.selectionHighlight then btn.selectionHighlight:Hide() end
         if btn.selectionBorder then
             local c = self.db.activeBorderColor or { r = 0.2, g = 0.8, b = 0.2, a = 1.0 }
@@ -1473,12 +1514,7 @@ function Totems:OnTick()
                     btn.cooldownText:Hide()
                 end
             end
-            if catKey == "weapon" then
-                if btn.timerText then
-                    btn.timerText:SetText("")
-                    btn.timerText:Hide()
-                end
-            elseif state then
+            if state then
                 local isExpActive = false
                 local isTimedOut = false
                 if state.isActive and state.expirationTime then
@@ -1509,6 +1545,8 @@ function Totems:OnTick()
                             self:UpdateTotemSlots()
                         elseif catKey == "shield" then
                             self:UpdateShieldSlot()
+                        elseif catKey == "weapon" then
+                            self:UpdateWeaponSlot()
                         end
                     end
                 end

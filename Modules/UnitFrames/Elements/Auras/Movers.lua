@@ -271,9 +271,9 @@ local function GetOrCreateAuraMover(container, unit, containerSuffix)
                         text = "Open Full Settings",
                         click = function()
                             if RoithiUI and RoithiUI.OpenSettings then
-                                RoithiUI:OpenSettings("auras", "units", unit)
+                                RoithiUI:OpenSettings("unitframes", unit)
                             elseif LibStub("AceConfigDialog-3.0", true) then
-                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "auras", "units", unit)
+                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "unitframes", unit)
                                 LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
                             end
                         end
@@ -674,17 +674,7 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
         {
             kind = LEM.SettingType.Dropdown,
             name = "Anchor Point",
-            values = {
-                { text = "Top Left",     value = "TOPLEFT" },
-                { text = "Left",         value = "LEFT" },
-                { text = "Bottom Left",  value = "BOTTOMLEFT" },
-                { text = "Top",          value = "TOP" },
-                { text = "Center",       value = "CENTER" },
-                { text = "Bottom",       value = "BOTTOM" },
-                { text = "Top Right",    value = "TOPRIGHT" },
-                { text = "Right",        value = "RIGHT" },
-                { text = "Bottom Right", value = "BOTTOMRIGHT" },
-            },
+            values = (ns.Utils and ns.Utils.GetAnchorLEMValues) and ns.Utils.GetAnchorLEMValues() or {},
             get = function()
                 local db = GetUnitDB(unit)
                 if not db then return "BOTTOM" end
