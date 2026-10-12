@@ -588,19 +588,20 @@ function CDM:InitializeCustomBar(index)
                 {
                     text = L["RoithiUI Cooldown Settings"] or "RoithiUI Cooldown Settings",
                     click = function()
+                        if CDM then CDM.selectedOptionsBar = frame.barKey end
                         if RoithiUI and RoithiUI.OpenSettings then
                             RoithiUI:OpenSettings("cooldownmanager")
                         elseif LibStub and LibStub("AceConfigDialog-3.0", true) then
                             local ACD = LibStub("AceConfigDialog-3.0", true)
-                            ACD:SelectGroup("RoithiUI", "combat", "cooldownmanager")
-                            ACD:Open("RoithiUI")
+                            pcall(function() ACD:Open("RoithiUI") end)
+                            pcall(function() ACD:SelectGroup("RoithiUI", "combat", "cooldownmanager") end)
                         end
                     end,
                 },
                 {
-                    text = L["Blizzard Cooldown Manager"] or "Blizzard Cooldown Manager",
+                    text = L["Create / Edit Bars"] or "Create / Edit Bars",
                     click = function()
-                        CDM:OpenBlizzardSettings(false)
+                        CDM:OpenBlizzardSettings(true)
                     end,
                 },
             })

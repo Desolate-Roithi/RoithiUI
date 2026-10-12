@@ -152,8 +152,8 @@ function MinimapMod:ReparentFramesAfterEditMode()
     for _, entry in ipairs(frames) do
         local f = entry.frame
         if f then
-            local isInteractive = (entry.key ~= "zoneTextAnchor" and entry.key ~= "coordsAnchor")
-            local targetStrata = "HIGH"
+            local isInteractive = (entry.key ~= "zoneTextAnchor")
+            local targetStrata = (entry.key == "zoneTextAnchor") and "MEDIUM" or "HIGH"
             local targetLevel = isInteractive and 60 or 40
             local isDetached = (entry.key == "addonBar" and self.db.addonBarAttached == false) or (self.db.detached and self.db.detached[entry.key])
             if isDetached then
@@ -780,9 +780,10 @@ function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
         -- Detach: parent to UIParent and preserve current layout/screen coordinates
         f:SetParent(UIParent)
         f:SetScale(1.0)
-        local isInteractive = (key ~= "zoneTextAnchor" and key ~= "coordsAnchor")
+        local isInteractive = (key ~= "zoneTextAnchor")
+        local targetStrata = (key == "zoneTextAnchor") and "MEDIUM" or "HIGH"
         if f.SetFrameStrata then
-            f:SetFrameStrata("HIGH")
+            f:SetFrameStrata(targetStrata)
         end
         if f.SetFrameLevel then
             f:SetFrameLevel(isInteractive and 60 or 40)
@@ -809,9 +810,10 @@ function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
 
         f:SetParent(container)
         f:SetScale(1.0)
-        local isInteractive = (key ~= "zoneTextAnchor" and key ~= "coordsAnchor")
+        local isInteractive = (key ~= "zoneTextAnchor")
+        local targetStrata = (key == "zoneTextAnchor") and "MEDIUM" or "HIGH"
         if f.SetFrameStrata then
-            f:SetFrameStrata("HIGH")
+            f:SetFrameStrata(targetStrata)
         end
         if f.SetFrameLevel then
             f:SetFrameLevel(isInteractive and 60 or 40)
@@ -969,9 +971,10 @@ local function CreateAnchorFrame(mod, key, name, editModeName, w, h, defaultPos)
         local f = CreateFrame("Frame", name, UIParent, "BackdropTemplate")
         f.defaultPos = defaultPos
         f:SetSize(w, h)
-        local isInteractive = (key ~= "zoneTextAnchor" and key ~= "coordsAnchor")
+        local isInteractive = (key ~= "zoneTextAnchor")
+        local targetStrata = (key == "zoneTextAnchor") and "MEDIUM" or "HIGH"
         if f.SetFrameStrata then
-            f:SetFrameStrata("HIGH")
+            f:SetFrameStrata(targetStrata)
         end
         if f.SetFrameLevel then
             f:SetFrameLevel(isInteractive and 60 or 40)
@@ -1011,6 +1014,12 @@ local function CreateAnchorFrame(mod, key, name, editModeName, w, h, defaultPos)
             end
             f:SetPoint(offset.point, container, offset.point, offset.x, offset.y)
         end
+        if f.SetFrameStrata then
+            f:SetFrameStrata(targetStrata)
+        end
+        if f.SetFrameLevel then
+            f:SetFrameLevel(isInteractive and 60 or 40)
+        end
         f:Show()
 
         local function OnPositionChanged(self, _, point, x, y)
@@ -1032,6 +1041,8 @@ local function CreateAnchorFrame(mod, key, name, editModeName, w, h, defaultPos)
                     end
                     local pt = off.point or "BOTTOMLEFT"
                     self:SetPoint(pt, c, pt, off.x, off.y)
+                    if self.SetFrameStrata then self:SetFrameStrata(targetStrata) end
+                    if self.SetFrameLevel then self:SetFrameLevel(isInteractive and 60 or 40) end
                 end
             end
         end
@@ -1349,16 +1360,46 @@ function MinimapMod:UpdateCalendarVisibility()
 end
 
 function MinimapMod:SharePlayerCoordinates()
-    local ok, mapID = pcall(function()
+    local mapID
+    local okMap, bestMap = pcall(function()
         return _G.C_Map and _G.C_Map.GetBestMapForUnit and _G.C_Map.GetBestMapForUnit("player")
     end)
-    if not ok or not mapID then return end
-    local okPos, pos = pcall(function()
-        return _G.C_Map.GetPlayerMapPosition(mapID, "player")
-    end)
-    if not okPos or not pos or not pos.GetXY then return end
-    local okXY, x, y = pcall(function() return pos:GetXY() end)
-    if not okXY or not x or not y or x <= 0 or y <= 0 then return end
+    if okMap and bestMap then mapID = bestMap end
+
+    local x, y
+    if mapID then
+        local okPos, pos = pcall(function()
+            return _G.C_Map.GetPlayerMapPosition(mapID, "player")
+        end)
+        if okPos and pos and pos.GetXY then
+            local okXY, px, py = pcall(function() return pos:GetXY() end)
+            if okXY and px and py and px > 0 and py > 0 then
+                x, y = px * 100, py * 100
+            end
+        end
+    end
+
+    if (not x or not y) and self.coordsText and self.coordsText.GetText then
+        local txt = self.coordsText:GetText()
+        if txt and txt ~= "" then
+            local parsedX, parsedY = txt:match("([%d%.]+),%s*([%d%.]+)")
+            if parsedX and parsedY then
+                x = tonumber(parsedX)
+                y = tonumber(parsedY)
+            end
+        end
+    end
+
+    if not x or not y then
+        local noMsg = L["Coordinates unavailable in this location."] or "Coordinates unavailable in this location."
+        if _G.UIErrorsFrame and _G.UIErrorsFrame.AddMessage then
+            _G.UIErrorsFrame:AddMessage(noMsg, 1.0, 0.3, 0.3)
+        end
+        if _G.DEFAULT_CHAT_FRAME and _G.DEFAULT_CHAT_FRAME.AddMessage then
+            _G.DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[RoithiUI]|r " .. noMsg)
+        end
+        return
+    end
 
     local coordStr
     local isRetail = true
@@ -1367,77 +1408,87 @@ function MinimapMod:SharePlayerCoordinates()
     elseif _G.WOW_PROJECT_ID and _G.WOW_PROJECT_MAINLINE then
         isRetail = (_G.WOW_PROJECT_ID == _G.WOW_PROJECT_MAINLINE)
     end
-    if isRetail then
-        coordStr = string.format("/mappin %d %.1f %.1f", mapID, x * 100, y * 100)
+    if isRetail and mapID then
+        coordStr = string.format("/mappin %d %.1f %.1f", mapID, x, y)
     else
-        coordStr = string.format("/way %.1f %.1f", x * 100, y * 100)
+        coordStr = string.format("/way %.1f %.1f", x, y)
     end
 
-    local copied = false
-    if _G.CopyToClipboard then
-        _G.CopyToClipboard(coordStr)
-        copied = true
-    elseif _G.C_System and _G.C_System.CopyToClipboard then
-        _G.C_System.CopyToClipboard(coordStr)
-        copied = true
+    if _G.PlaySound then
+        pcall(_G.PlaySound, (_G.SOUNDKIT and _G.SOUNDKIT.U_CHAT_SCROLL_BUTTON) or 856)
     end
 
-    if copied then
-        local msg = string.format(L["Coordinates copied to clipboard: %s"] or "Coordinates copied to clipboard: %s", coordStr)
-        if _G.UIErrorsFrame and _G.UIErrorsFrame.AddMessage then
-            _G.UIErrorsFrame:AddMessage(msg, 0.2, 1.0, 0.2)
-        elseif _G.DEFAULT_CHAT_FRAME and _G.DEFAULT_CHAT_FRAME.AddMessage then
-            _G.DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00" .. msg .. "|r")
-        end
-    else
-        local editBox = _G.ChatEdit_GetActiveWindow and _G.ChatEdit_GetActiveWindow()
-        if not editBox then
-            if _G.ChatFrame1EditBox and _G.ChatFrame1EditBox.IsShown and _G.ChatFrame1EditBox:IsShown() then
-                editBox = _G.ChatFrame1EditBox
-            elseif _G.ChatEdit_OpenChat then
-                _G.ChatEdit_OpenChat("", _G.SELECTED_DOCK_FRAME)
-                editBox = _G.ChatEdit_GetActiveWindow and _G.ChatEdit_GetActiveWindow()
-            end
-        end
+    if _G.ChatEdit_OpenChat then
+        _G.ChatEdit_OpenChat(coordStr, _G.SELECTED_DOCK_FRAME)
+    end
 
-        if editBox then
-            editBox:SetText(coordStr)
-            if editBox.HighlightText then editBox:HighlightText() end
-            if editBox.SetFocus then editBox:SetFocus() end
-        end
+    local editBox = (_G.ChatEdit_GetActiveWindow and _G.ChatEdit_GetActiveWindow()) or _G.ChatFrame1EditBox
+    if editBox then
+        if editBox.Show and not editBox:IsShown() then editBox:Show() end
+        editBox:SetText(coordStr)
+        if editBox.HighlightText then editBox:HighlightText() end
+        if editBox.SetFocus then editBox:SetFocus() end
+    end
+
+    local msg = string.format(L["Coordinates ready in chat: %s"] or "Coordinates ready in chat: %s", coordStr)
+    if _G.UIErrorsFrame and _G.UIErrorsFrame.AddMessage then
+        _G.UIErrorsFrame:AddMessage(msg, 0.2, 1.0, 0.2)
+    end
+    if _G.DEFAULT_CHAT_FRAME and _G.DEFAULT_CHAT_FRAME.AddMessage then
+        _G.DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[RoithiUI]|r " .. msg)
     end
 end
 
 function MinimapMod:SetupCoordsWidget(anchor)
     if not anchor or self.coordsText then return end
 
-    local text = anchor:CreateFontString(nil, "OVERLAY")
+    if anchor.SetFrameStrata then anchor:SetFrameStrata("HIGH") end
+    if anchor.SetFrameLevel then anchor:SetFrameLevel(60) end
+
+    local clickBtn = self.coordsClickButton
+    if not clickBtn then
+        clickBtn = CreateFrame("Button", "RoithiMinimapCoordsButton", anchor)
+        if clickBtn.SetAllPoints then
+            clickBtn:SetAllPoints(anchor)
+        elseif clickBtn.SetPoint then
+            clickBtn:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
+            clickBtn:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 0, 0)
+        end
+        if clickBtn.SetFrameStrata then clickBtn:SetFrameStrata("HIGH") end
+        if clickBtn.SetFrameLevel and anchor.GetFrameLevel then clickBtn:SetFrameLevel(anchor:GetFrameLevel() + 5) end
+        if clickBtn.RegisterForClicks then clickBtn:RegisterForClicks("AnyUp") end
+        if clickBtn.EnableMouse then clickBtn:EnableMouse(true) end
+        self.coordsClickButton = clickBtn
+    end
+
+    local text = clickBtn:CreateFontString(nil, "OVERLAY")
     if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
     else
         text:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
     end
     if text.SetJustifyH then text:SetJustifyH("CENTER") end
-    if text.SetPoint then text:SetPoint("CENTER", anchor, "CENTER", 0, 0) end
+    if text.SetPoint then text:SetPoint("CENTER", clickBtn, "CENTER", 0, 0) end
     if text.SetTextColor then text:SetTextColor(1, 1, 1, 1) end
     self.coordsText = text
 
-    anchor:EnableMouse(true)
-    anchor:SetScript("OnEnter", function(f)
+    clickBtn:SetScript("OnEnter", function(f)
         if _G.GameTooltip then
             _G.GameTooltip:SetOwner(f, "ANCHOR_BOTTOM")
             _G.GameTooltip:AddLine(L["Minimap Coordinates"] or "Minimap Coordinates", 1, 1, 1)
-            _G.GameTooltip:AddLine(L["Click to copy coordinates to clipboard."] or "Click to copy coordinates to clipboard.", 0.2, 0.8, 1, true)
+            _G.GameTooltip:AddLine(L["Click to insert coordinates into chat."] or "Click to insert coordinates into chat.", 0.2, 0.8, 1, true)
+            _G.GameTooltip:AddLine(L["Highlighted in chat for quick send or Ctrl+C."] or "Highlighted in chat for quick send or Ctrl+C.", 0.7, 0.7, 0.7, true)
             _G.GameTooltip:Show()
         end
     end)
-    anchor:SetScript("OnLeave", function()
+    clickBtn:SetScript("OnLeave", function()
         if _G.GameTooltip then _G.GameTooltip:Hide() end
     end)
-    anchor:SetScript("OnMouseDown", function(_, btn)
-        if btn == "LeftButton" then
-            self:SharePlayerCoordinates()
+    clickBtn:SetScript("OnClick", function(_, btn)
+        if _G.EditModeManagerFrame and _G.EditModeManagerFrame.IsShown and _G.EditModeManagerFrame:IsShown() then
+            return
         end
+        self:SharePlayerCoordinates()
     end)
 
     if not self.coordsTicker and _G.C_Timer and _G.C_Timer.NewTicker then

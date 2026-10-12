@@ -115,8 +115,8 @@ function RoithiUI:OpenSettings(group, ...)
         end
     end
 
+    pcall(function() ACD:Open("RoithiUI") end)
     pcall(function() ACD:SelectGroup("RoithiUI", unpack(fullPath)) end)
-    pcall(function() ACD:Open("RoithiUI", nil, unpack(fullPath)) end)
 
     local f = ACD.OpenFrames and ACD.OpenFrames["RoithiUI"]
     if f and f.frame then

@@ -27,6 +27,9 @@ function BagsMod:OnInitialize()
     if not self.db.customCategoryAssignments then
         self.db.customCategoryAssignments = {}
     end
+    if self.db.activeCategory == "WEAPONS" then
+        self.db.activeCategory = "GEAR"
+    end
     self.itemSlots = {}
     self.categoryButtons = {}
     self.newItems = {}
@@ -46,6 +49,9 @@ function BagsMod:OnEnable()
     end
     if not self.db.bagWindow then
         self.db.bagWindow = CopyTable(self.defaultSettings.bagWindow)
+    end
+    if self.db.activeCategory == "WEAPONS" then
+        self.db.activeCategory = "GEAR"
     end
     if self.db.enabled == false then return end
 
@@ -673,6 +679,94 @@ function BagsMod:CreateMainBagFrame()
     self:CreateHeaderBar()
     self:CreateCategoryButtons()
     self:CreateFooterBar()
+    self:UpdateTypography()
+end
+
+function BagsMod:ApplyFont(fontString, defaultSize, customSizeKey, defaultOutline)
+    if not fontString then return end
+    local fontFace = (self.db and self.db.font) or "Friz Quadrata TT"
+    local outline = (self.db and self.db.fontOutline) or defaultOutline or "OUTLINE"
+    local size = (self.db and customSizeKey and self.db[customSizeKey]) or defaultSize or 12
+    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        LibRoithi.mixins:SetFont(fontString, fontFace, size, outline)
+    else
+        fontString:SetFont("Fonts\\FRIZQT__.TTF", size, outline)
+    end
+end
+
+function BagsMod:UpdateFooterLayout()
+    if not self.footerBar or not self.freeText or not self.sortButton then return end
+    local freeAnchor = (self.db and self.db.freeSlotsAnchor) or "RIGHT"
+    self.freeText:ClearAllPoints()
+    self.sortButton:ClearAllPoints()
+
+    if freeAnchor == "LEFT" then
+        if self.moneyText then
+            self.freeText:SetPoint("LEFT", self.moneyText, "RIGHT", 12, 0)
+        else
+            self.freeText:SetPoint("LEFT", self.footerBar, "LEFT", 120, 0)
+        end
+        if self.freeText.SetJustifyH then self.freeText:SetJustifyH("LEFT") end
+        self.sortButton:SetPoint("RIGHT", self.footerBar, "RIGHT", -2, 0)
+    elseif freeAnchor == "CENTER" then
+        self.freeText:SetPoint("CENTER", self.footerBar, "CENTER", 0, 0)
+        if self.freeText.SetJustifyH then self.freeText:SetJustifyH("CENTER") end
+        self.sortButton:SetPoint("RIGHT", self.footerBar, "RIGHT", -2, 0)
+    else
+        self.freeText:SetPoint("RIGHT", self.footerBar, "RIGHT", -2, 0)
+        if self.freeText.SetJustifyH then self.freeText:SetJustifyH("RIGHT") end
+        self.sortButton:SetPoint("RIGHT", self.freeText, "LEFT", -8, 0)
+    end
+end
+
+function BagsMod:UpdateTypography()
+    if self.searchBox then
+        self:ApplyFont(self.searchBox, 12, "searchFontSize", "")
+    end
+    if self.searchPlaceholder then
+        self:ApplyFont(self.searchPlaceholder, 12, "searchFontSize", "")
+    end
+    if self.categoryButtons then
+        for _, btn in ipairs(self.categoryButtons) do
+            if btn.label then
+                self:ApplyFont(btn.label, 12, "categoryFontSize", "OUTLINE")
+            end
+        end
+    end
+    if self.moneyText then
+        self:ApplyFont(self.moneyText, 12, "goldFontSize", "OUTLINE")
+    end
+    if self.freeText then
+        self:ApplyFont(self.freeText, 12, "freeSlotsFontSize", "OUTLINE")
+    end
+    self:UpdateFooterLayout()
+
+    local slots = self.itemSlots or self.slotPool
+    if slots then
+        local countAnchor = (self.db and self.db.itemCountAnchor) or "BOTTOMRIGHT"
+        local countX = (self.db and self.db.itemCountX) or -2
+        local countY = (self.db and self.db.itemCountY) or 2
+        local ilvlAnchor = (self.db and self.db.itemLevelAnchor) or "TOPLEFT"
+        local ilvlX = (self.db and self.db.itemLevelX) or 2
+        local ilvlY = (self.db and self.db.itemLevelY) or -2
+
+        for _, slotFrame in pairs(slots) do
+            local count = slotFrame.Count or slotFrame.count
+            if count then
+                self:ApplyFont(count, 12, "itemCountFontSize", "OUTLINE")
+                if count.ClearAllPoints then count:ClearAllPoints() end
+                count:SetPoint(countAnchor, slotFrame, countAnchor, countX, countY)
+            end
+            if slotFrame.ilvl then
+                self:ApplyFont(slotFrame.ilvl, 12, "itemLevelFontSize", "OUTLINE")
+                if slotFrame.ilvl.ClearAllPoints then slotFrame.ilvl:ClearAllPoints() end
+                slotFrame.ilvl:SetPoint(ilvlAnchor, slotFrame, ilvlAnchor, ilvlX, ilvlY)
+            end
+        end
+    end
+    if self.reagentGridSeparator and self.reagentGridSeparator.label then
+        self:ApplyFont(self.reagentGridSeparator.label, 12, "categoryFontSize", "OUTLINE")
+    end
 end
 
 function BagsMod:CreateHeaderBar()
@@ -701,10 +795,49 @@ function BagsMod:CreateHeaderBar()
     end)
     closeBtn:SetScript("OnClick", function() self:CloseBags() end)
 
+    -- Bag Settings Button (gear icon between + and x)
+    local settingsBtn = CreateFrame("Button", nil, header)
+    settingsBtn:SetSize(18, 18)
+    settingsBtn:SetPoint("RIGHT", closeBtn, "LEFT", -6, 0)
+    local gearTex = settingsBtn:CreateTexture(nil, "ARTWORK")
+    gearTex:SetAllPoints(settingsBtn)
+    local gearAtlasOk = false
+    if gearTex.SetAtlas and _G.C_Texture and _G.C_Texture.GetAtlasInfo and _G.C_Texture.GetAtlasInfo("GM-icon-settings") then
+        gearAtlasOk = pcall(function() gearTex:SetAtlas("GM-icon-settings") end)
+    end
+    if not gearAtlasOk then
+        gearTex:SetTexture("Interface\\WorldMap\\Gear_64Grey")
+    end
+    gearTex:SetVertexColor(0.7, 0.7, 0.7, 1)
+    settingsBtn.icon = gearTex
+    settingsBtn:SetScript("OnEnter", function()
+        gearTex:SetVertexColor(0, 0.85, 1, 1)
+        if _G.GameTooltip then
+            _G.GameTooltip:SetOwner(settingsBtn, "ANCHOR_TOP")
+            _G.GameTooltip:SetText(L["Bag Settings"] or "Bag Settings", 1, 1, 1)
+            _G.GameTooltip:AddLine(L["Click to open RoithiUI Bag Settings."] or "Click to open RoithiUI Bag Settings.", 0.8, 0.8, 0.8, true)
+            _G.GameTooltip:Show()
+        end
+    end)
+    settingsBtn:SetScript("OnLeave", function()
+        gearTex:SetVertexColor(0.7, 0.7, 0.7, 1)
+        if _G.GameTooltip then _G.GameTooltip:Hide() end
+    end)
+    settingsBtn:SetScript("OnClick", function()
+        if RoithiUI and RoithiUI.OpenSettings then
+            RoithiUI:OpenSettings("bags")
+        elseif LibStub and LibStub("AceConfigDialog-3.0", true) then
+            local ACD = LibStub("AceConfigDialog-3.0", true)
+            pcall(function() ACD:Open("RoithiUI") end)
+            pcall(function() ACD:SelectGroup("RoithiUI", "general", "bags") end)
+        end
+    end)
+    self.settingsBtn = settingsBtn
+
     -- Save Filter Button (+)
     local saveFilterBtn = CreateFrame("Button", nil, header, "BackdropTemplate")
     saveFilterBtn:SetSize(20, 20)
-    saveFilterBtn:SetPoint("RIGHT", closeBtn, "LEFT", -6, 0)
+    saveFilterBtn:SetPoint("RIGHT", settingsBtn, "LEFT", -6, 0)
     if saveFilterBtn.SetBackdrop then
         saveFilterBtn:SetBackdrop({
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
@@ -774,7 +907,7 @@ function BagsMod:CreateHeaderBar()
         if not _G.GameTooltip then return end
         _G.GameTooltip:SetOwner(owner, "ANCHOR_TOPLEFT")
         _G.GameTooltip:SetText(L["Bag Search Syntax Guide"] or "Bag Search Syntax Guide", 1, 0.82, 0)
-        _G.GameTooltip:AddLine(L["Combine any tokens with spaces (AND logic):"] or "Combine any tokens with spaces (AND logic):", 1, 1, 1)
+        _G.GameTooltip:AddLine(L["Combine tokens with spaces/and/&& (AND) or ,/or/|| (OR):"] or "Combine tokens with spaces/and/&& (AND) or ,/or/|| (OR):", 1, 1, 1)
         _G.GameTooltip:AddLine(" ")
         _G.GameTooltip:AddLine("• |cffffd100name:text|r or |cffffd100text|r - " .. (L["Item name match"] or "Item name match"), 0.9, 0.9, 0.9)
         _G.GameTooltip:AddLine("• |cffffd100type:gear||weapon||armor||consumable||reagent|r", 0.9, 0.9, 0.9)
@@ -784,9 +917,11 @@ function BagsMod:CreateHeaderBar()
         _G.GameTooltip:AddLine("• |cffffd100quality:epic||rare||uncommon||poor|r or |cffffd100q:4|r", 0.9, 0.9, 0.9)
         _G.GameTooltip:AddLine("• |cffffd100ilvl:>600|r, |cffffd100ilvl:<550|r, |cffffd100ilvl:600-630|r", 0.9, 0.9, 0.9)
         _G.GameTooltip:AddLine("• |cffffd100boss:name|r, |cffffd100zone:name|r - " .. (L["Drop source"] or "Drop source"), 0.9, 0.9, 0.9)
+        _G.GameTooltip:AddLine("• |cffffd100slot:finger|r, |cffffd100s:ring|r, |cffffd100s:13|r - " .. (L["Slot match"] or "Slot match"), 0.9, 0.9, 0.9)
         _G.GameTooltip:AddLine("• |cffffd100junk|r, |cffffd100new|r, |cffffd100fav|r - " .. (L["Shorthand flags"] or "Shorthand flags"), 0.9, 0.9, 0.9)
         _G.GameTooltip:AddLine(" ")
-        _G.GameTooltip:AddLine("|cff00ff00" .. (L["Example:"] or "Example:") .. "|r |cfffffffftype:gear quality:epic ilvl:>600|r", 0.8, 0.8, 0.8)
+        _G.GameTooltip:AddLine("|cff00ff00" .. (L["Boolean OR:"] or "Boolean OR:") .. "|r |cffffffffring or trinket|r, |cffffffffcloth || leather|r, |cffffffffs:finger, s:trinket|r", 0.8, 0.8, 0.8)
+        _G.GameTooltip:AddLine("|cff00ff00" .. (L["Boolean AND:"] or "Boolean AND:") .. "|r |cffffffffepic and gem|r, |cfffffffftype:gear quality:epic ilvl:>600|r", 0.8, 0.8, 0.8)
         _G.GameTooltip:AddLine("|cff00ff00" .. (L["Save:"] or "Save:") .. "|r |cffaaaaaa" .. (L["Click [+] to save as a custom category tab"] or "Click [+] to save as a custom category tab") .. "|r", 0.8, 0.8, 0.8)
         _G.GameTooltip:Show()
     end
@@ -802,7 +937,7 @@ function BagsMod:CreateHeaderBar()
 
     -- Search Box
     local search = CreateFrame("EditBox", "RoithiBagSearchBox", header, "BackdropTemplate")
-    search:SetHeight(20)
+    search:SetHeight(22)
     search:SetPoint("LEFT", header, "LEFT", 0, 0)
     search:SetPoint("RIGHT", infoBtn, "LEFT", -6, 0)
     if search.SetAutoFocus then search:SetAutoFocus(false) end
@@ -815,23 +950,19 @@ function BagsMod:CreateHeaderBar()
         search:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
         search:SetBackdropBorderColor(0.25, 0.25, 0.25, 1.0)
     end
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(search, "Friz Quadrata TT", 11, "")
-    else
-        search:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
-    end
+    self:ApplyFont(search, 12, "searchFontSize", "")
     if search.SetTextInsets then search:SetTextInsets(6, 6, 0, 0) end
     if search.SetTextColor then search:SetTextColor(0.9, 0.9, 0.9, 1) end
 
     local placeholder = search:CreateFontString(nil, "OVERLAY")
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(placeholder, "Friz Quadrata TT", 10, "")
-    else
-        placeholder:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
-    end
+    self:ApplyFont(placeholder, 12, "searchFontSize", "")
     placeholder:SetPoint("LEFT", search, "LEFT", 6, 0)
-    placeholder:SetText(L["Search items (e.g. type:gear, bind:boe, new)..."] or "Search items...")
+    placeholder:SetPoint("RIGHT", search, "RIGHT", -6, 0)
+    placeholder:SetJustifyH("LEFT")
+    if placeholder.SetWordWrap then placeholder:SetWordWrap(false) end
+    placeholder:SetText(L["Search items (e.g. ring or trinket, type:gear)..."] or "Search items (e.g. ring or trinket, type:gear)...")
     placeholder:SetTextColor(0.5, 0.5, 0.5, 0.8)
+    self.searchPlaceholder = placeholder
 
     search:SetScript("OnTextChanged", function(s)
         local txt = s:GetText() or ""
@@ -959,9 +1090,9 @@ end
 function BagsMod:OpenItemCategoryMenu(owner, itemID)
     if not itemID then return end
     local currentCat = (self.db.customCategoryAssignments and self.db.customCategoryAssignments[itemID])
+    if currentCat == "WEAPONS" then currentCat = "GEAR" end
     local categories = {
         { id = "GEAR", name = L["Gear"] or "Gear" },
-        { id = "WEAPONS", name = L["Weapons"] or "Weapons" },
         { id = "CONSUMABLES", name = L["Consumables"] or "Consumables" },
         { id = "REAGENTS", name = L["Reagents"] or "Reagents" },
         { id = "QUEST", name = L["Quest"] or "Quest" },
@@ -1062,12 +1193,11 @@ function BagsMod:CreateCategoryButtons()
         end
 
         local text = btn:CreateFontString(nil, "OVERLAY")
-        if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
-        else
-            text:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-        end
-        text:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        self:ApplyFont(text, 12, "categoryFontSize", "OUTLINE")
+        text:SetPoint("LEFT", btn, "LEFT", 2, 0)
+        text:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
+        text:SetJustifyH("CENTER")
+        if text.SetWordWrap then text:SetWordWrap(false) end
         text:SetText(cat.name)
         text:SetTextColor(0.8, 0.8, 0.8, 1)
 
@@ -1144,10 +1274,10 @@ function BagsMod:CreateCategoryButtons()
     self:UpdateCategoryButtonsLayout()
 end
 
-function BagsMod:UpdateCategoryButtonsLayout()
+function BagsMod:UpdateCategoryButtonsLayout(overrideW)
     if not self.catContainer or not self.categoryButtons or #self.categoryButtons == 0 then return end
 
-    local totalW = self.catContainer:GetWidth()
+    local totalW = overrideW or self.catContainer:GetWidth()
     if not totalW or totalW < 100 then
         local cols = self.db.columns or 10
         local slotSize = self.db.slotSize or 36
@@ -1156,9 +1286,10 @@ function BagsMod:UpdateCategoryButtonsLayout()
     end
 
     local numButtons = #self.categoryButtons
-    local buttonsPerRow = 5
     local btnSpacing = 3
-    local btnH = 20
+    local minBtnW = 86
+    local buttonsPerRow = math.max(2, math.floor((totalW + btnSpacing) / (minBtnW + btnSpacing)))
+    local btnH = 22
     local btnW = math.floor((totalW - (buttonsPerRow - 1) * btnSpacing) / buttonsPerRow)
 
     for i, btn in ipairs(self.categoryButtons) do
@@ -1170,6 +1301,13 @@ function BagsMod:UpdateCategoryButtonsLayout()
         btn:ClearAllPoints()
         btn:SetSize(btnW, btnH)
         btn:SetPoint("TOPLEFT", self.catContainer, "TOPLEFT", x, y)
+        if btn.label then
+            btn.label:ClearAllPoints()
+            btn.label:SetPoint("LEFT", btn, "LEFT", 2, 0)
+            btn.label:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
+            btn.label:SetJustifyH("CENTER")
+            if btn.label.SetWordWrap then btn.label:SetWordWrap(false) end
+        end
         btn:Show()
     end
 
@@ -1204,28 +1342,20 @@ function BagsMod:CreateFooterBar()
 
     -- Money Display
     local moneyText = footer:CreateFontString(nil, "OVERLAY")
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(moneyText, "Friz Quadrata TT", 10, "OUTLINE")
-    else
-        moneyText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-    end
+    self:ApplyFont(moneyText, 12, "goldFontSize", "OUTLINE")
     moneyText:SetPoint("LEFT", footer, "LEFT", 2, 0)
     self.moneyText = moneyText
     self:UpdateMoneyDisplay()
 
     -- Free Space Count
     local freeText = footer:CreateFontString(nil, "OVERLAY")
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(freeText, "Friz Quadrata TT", 10, "OUTLINE")
-    else
-        freeText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-    end
+    self:ApplyFont(freeText, 12, "freeSlotsFontSize", "OUTLINE")
     freeText:SetPoint("RIGHT", footer, "RIGHT", -2, 0)
     self.freeText = freeText
 
     -- Clean / Sort Bags button
     local sortBtn = CreateFrame("Button", nil, footer, "BackdropTemplate")
-    sortBtn:SetSize(40, 18)
+    sortBtn:SetSize(48, 20)
     sortBtn:SetPoint("RIGHT", freeText, "LEFT", -8, 0)
     if sortBtn.SetBackdrop then
         sortBtn:SetBackdrop({
@@ -1242,12 +1372,10 @@ function BagsMod:CreateFooterBar()
     sortBtn:SetHighlightTexture(sortHl)
 
     local sortText = sortBtn:CreateFontString(nil, "OVERLAY")
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(sortText, "Friz Quadrata TT", 9, "OUTLINE")
-    else
-        sortText:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
-    end
-    sortText:SetPoint("CENTER", sortBtn, "CENTER", 0, 0)
+    self:ApplyFont(sortText, 11, nil, "OUTLINE")
+    sortText:SetPoint("LEFT", sortBtn, "LEFT", 2, 0)
+    sortText:SetPoint("RIGHT", sortBtn, "RIGHT", -2, 0)
+    sortText:SetJustifyH("CENTER")
     sortText:SetText(L["Sort"])
     sortBtn:SetScript("OnClick", function()
         if _G.C_Container and _G.C_Container.SortBags then
@@ -1286,7 +1414,7 @@ function BagsMod:CreateFooterBar()
 
     -- Sell Junk Button (Visible at Vendor)
     local junkBtn = CreateFrame("Button", nil, footer, "BackdropTemplate")
-    junkBtn:SetSize(65, 18)
+    junkBtn:SetSize(74, 20)
     junkBtn:SetPoint("RIGHT", sortBtn, "LEFT", -6, 0)
     if junkBtn.SetBackdrop then
         junkBtn:SetBackdrop({
@@ -1303,12 +1431,10 @@ function BagsMod:CreateFooterBar()
     junkBtn:SetHighlightTexture(junkHl)
 
     local junkText = junkBtn:CreateFontString(nil, "OVERLAY")
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(junkText, "Friz Quadrata TT", 9, "OUTLINE")
-    else
-        junkText:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
-    end
-    junkText:SetPoint("CENTER", junkBtn, "CENTER", 0, 0)
+    self:ApplyFont(junkText, 11, nil, "OUTLINE")
+    junkText:SetPoint("LEFT", junkBtn, "LEFT", 2, 0)
+    junkText:SetPoint("RIGHT", junkBtn, "RIGHT", -2, 0)
+    junkText:SetJustifyH("CENTER")
     junkText:SetText(L["Sell Junk"])
     junkBtn:SetScript("OnClick", function()
         self:SellAllJunk()
@@ -1568,31 +1694,35 @@ function BagsMod:AcquireItemSlot(index)
 
     -- Count text
     local count = slot.Count or slot.count
+    local countAnchor = (self.db and self.db.itemCountAnchor) or "BOTTOMRIGHT"
+    local countX = (self.db and self.db.itemCountX) or -2
+    local countY = (self.db and self.db.itemCountY) or 2
     if not count then
         count = slot:CreateFontString(nil, "OVERLAY")
-        count:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -2, 2)
+        count:SetPoint(countAnchor, slot, countAnchor, countX, countY)
+    else
+        if count.ClearAllPoints then count:ClearAllPoints() end
+        count:SetPoint(countAnchor, slot, countAnchor, countX, countY)
     end
     slot.count = count
     slot.Count = count
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(count, "Friz Quadrata TT", 10, "OUTLINE")
-    else
-        count:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-    end
+    self:ApplyFont(count, 12, "itemCountFontSize", "OUTLINE")
 
     -- Item level text
     local ilvl = slot.ilvl
+    local ilvlAnchor = (self.db and self.db.itemLevelAnchor) or "TOPLEFT"
+    local ilvlX = (self.db and self.db.itemLevelX) or 2
+    local ilvlY = (self.db and self.db.itemLevelY) or -2
     if not ilvl then
         ilvl = slot:CreateFontString(nil, "OVERLAY")
-        ilvl:SetPoint("TOPLEFT", slot, "TOPLEFT", 2, -2)
+        ilvl:SetPoint(ilvlAnchor, slot, ilvlAnchor, ilvlX, ilvlY)
         ilvl:SetTextColor(1, 0.82, 0, 1)
         slot.ilvl = ilvl
-    end
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(ilvl, "Friz Quadrata TT", 9, "OUTLINE")
     else
-        ilvl:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
+        if ilvl.ClearAllPoints then ilvl:ClearAllPoints() end
+        ilvl:SetPoint(ilvlAnchor, slot, ilvlAnchor, ilvlX, ilvlY)
     end
+    self:ApplyFont(ilvl, 12, "itemLevelFontSize", "OUTLINE")
 
     -- Favorite star indicator (Texture atlas, zero tofu box)
     local fav = slot.fav
@@ -1909,12 +2039,15 @@ function BagsMod:UpdateInventory()
     local normalRows = isSplitCategory and (numNormal > 0 and math.max(1, math.ceil(numNormal / cols)) or 0) or math.max(1, math.ceil(numDisplay / cols))
     local normalGridH = (normalRows > 0) and (normalRows * slotSize + (normalRows - 1) * spacing) or 0
 
-    local reagentGap = (isSplitCategory and numReagent > 0 and numNormal > 0) and 10 or 0
+    local reagentGap = (isSplitCategory and numReagent > 0 and numNormal > 0) and 20 or 0
     local reagentRows = (isSplitCategory and numReagent > 0) and math.ceil(numReagent / cols) or 0
     local reagentGridH = (reagentRows > 0) and (reagentRows * slotSize + (reagentRows - 1) * spacing) or 0
 
     local gridW = cols * slotSize + (cols - 1) * spacing
     local frameW = math.max(380, gridW + 16)
+    if self.UpdateCategoryButtonsLayout then
+        self:UpdateCategoryButtonsLayout(frameW - 12)
+    end
     local catH = (self.catContainer and self.catContainer:GetHeight()) or 46
     local headerH = 28 + catH + 12
     local footerH = 24 + 8
@@ -1922,9 +2055,39 @@ function BagsMod:UpdateInventory()
     if gridH < slotSize then gridH = slotSize end
     local frameH = headerH + gridH + footerH + 16
 
+    if isSplitCategory and numReagent > 0 and numNormal > 0 then
+        if not self.reagentGridSeparator then
+            local sep = CreateFrame("Frame", nil, self.mainFrame)
+            sep:SetHeight(16)
+            local line = sep:CreateTexture(nil, "ARTWORK")
+            line:SetHeight(1)
+            line:SetPoint("LEFT", sep, "LEFT", 0, 0)
+            line:SetPoint("RIGHT", sep, "RIGHT", 0, 0)
+            line:SetColorTexture(0.3, 0.3, 0.35, 0.8)
+            sep.line = line
+
+            local label = sep:CreateFontString(nil, "OVERLAY")
+            self:ApplyFont(label, 12, "categoryFontSize", "OUTLINE")
+            label:SetPoint("LEFT", sep, "LEFT", 4, 0)
+            label:SetText(L["Reagents"] or "Reagents")
+            label:SetTextColor(0.2, 0.8, 1, 0.9)
+            sep.label = label
+            self.reagentGridSeparator = sep
+        end
+        local sepY = -(headerH + normalGridH + 2)
+        self.reagentGridSeparator:ClearAllPoints()
+        self.reagentGridSeparator:SetPoint("TOPLEFT", self.mainFrame, "TOPLEFT", 8, sepY)
+        self.reagentGridSeparator:SetWidth(gridW)
+        self.reagentGridSeparator:Show()
+    else
+        if self.reagentGridSeparator then
+            self.reagentGridSeparator:Hide()
+        end
+    end
+
     if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
         self.mainFrame:SetSize(frameW, frameH)
-        self:UpdateCategoryButtonsLayout()
+        self:UpdateCategoryButtonsLayout(frameW - 12)
     end
 
     local isSearching = (self.searchText and self.searchText ~= "")

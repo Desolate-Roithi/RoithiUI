@@ -10,11 +10,8 @@ local LSM = LibStub("LibSharedMedia-3.0")
 -- Media Registration
 -- ----------------------------------------------------------------------------
 -- Fonts
-LSM:Register("font", "Roithi Thin", [[Interface\Addons\RoithiUI\Media\Fonts\AvantGarde LT Book Regular.ttf]])
-LSM:Register("font", "Roithi Thick", [[Interface\Addons\RoithiUI\Media\Fonts\Gotham Narrow Ultra.ttf]])
-
--- StatusBars
-LSM:Register("statusbar", "Roithi Flat", [[Interface\Addons\RoithiUI\Media\StatusBars\Flat.tga]])
+LSM:Register("font", "Roithi Thin", [[Interface\AddOns\]] .. addonName .. [[\Media\Fonts\AvantGarde LT Book Regular.ttf]])
+LSM:Register("font", "Roithi Thick", [[Interface\AddOns\]] .. addonName .. [[\Media\Fonts\Gotham Narrow Ultra.ttf]])
 
 -- ----------------------------------------------------------------------------
 -- Themes

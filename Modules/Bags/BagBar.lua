@@ -304,12 +304,16 @@ function BagsMod:CreateBagBarExpander()
     text:SetText(isExpanded and "<" or ">")
     expander.arrow = text
 
+    if expander.RegisterForClicks then expander:RegisterForClicks("AnyUp") end
     expander:SetScript("OnClick", function()
         self.db.bagBar = self.db.bagBar or {}
         self.db.bagBar.expanded = not self.db.bagBar.expanded
         local expanded = self.db.bagBar.expanded
         if expander.arrow then
             expander.arrow:SetText(expanded and "<" or ">")
+        end
+        if _G.MainMenuBarBagManager and _G.MainMenuBarBagManager.ToggleExpandBar then
+            pcall(_G.MainMenuBarBagManager.ToggleExpandBar, _G.MainMenuBarBagManager)
         end
         self:UpdateBagBarLayout()
     end)
@@ -393,7 +397,7 @@ function BagsMod:UpdateBagButtonVisual(btn)
         if icon.SetAlpha then icon:SetAlpha(1) end
         if icon.Show then icon:Show() end
     elseif btn == _G.CharacterReagentBag0Slot or btnName == "CharacterReagentBag0Slot" then
-        local invID = btn.GetID and btn:GetID()
+        local invID = (_G.ContainerIDToInventoryID and _G.ContainerIDToInventoryID(5)) or (btn.GetID and btn:GetID())
         local hasItem = invID and _G.GetInventoryItemTexture and _G.GetInventoryItemTexture("player", invID)
         if hasItem then
             if icon.SetTexture then icon:SetTexture(hasItem) end
@@ -752,38 +756,45 @@ function BagsMod:UpdateBagBarLayout()
     -- 4. Reagent Bag (Retail/Forever)
     local reagentBag = _G.CharacterReagentBag0Slot
     if reagentBag then
-        if not self.reagentSeparator and self.bagBarFrame then
-            local sep = self.bagBarFrame:CreateTexture(nil, "OVERLAY")
-            if sep.SetColorTexture then
-                sep:SetColorTexture(0.4, 0.4, 0.4, 0.8)
+        if isExpanded then
+            if not self.reagentSeparator and self.bagBarFrame then
+                local sep = self.bagBarFrame:CreateTexture(nil, "OVERLAY")
+                if sep.SetColorTexture then
+                    sep:SetColorTexture(0.4, 0.4, 0.4, 0.8)
+                end
+                self.reagentSeparator = sep
             end
-            self.reagentSeparator = sep
-        end
-        if self.reagentSeparator then
-            local sepH = math.max(14, math.floor(btnSize * 0.7))
-            self.reagentSeparator:ClearAllPoints()
-            self.reagentSeparator:SetSize(1, sepH)
-            local sepX = xOffset + math.floor((spacing - 1) / 2)
-            self.reagentSeparator:SetPoint("LEFT", self.bagBarFrame, "LEFT", sepX, 0)
-            self.reagentSeparator:Show()
-            xOffset = xOffset + spacing
-        end
+            if self.reagentSeparator then
+                local sepH = math.max(14, math.floor(btnSize * 0.7))
+                self.reagentSeparator:ClearAllPoints()
+                self.reagentSeparator:SetSize(1, sepH)
+                local sepX = xOffset + math.floor((spacing - 1) / 2)
+                self.reagentSeparator:SetPoint("LEFT", self.bagBarFrame, "LEFT", sepX, 0)
+                self.reagentSeparator:Show()
+                xOffset = xOffset + spacing
+            end
 
-        self:StyleBagButton(reagentBag)
-        self:UpdateBagButtonVisual(reagentBag)
-        if not reagentBag.originalParent and reagentBag.GetParent then
-            reagentBag.originalParent = reagentBag:GetParent()
+            self:StyleBagButton(reagentBag)
+            self:UpdateBagButtonVisual(reagentBag)
+            if not reagentBag.originalParent and reagentBag.GetParent then
+                reagentBag.originalParent = reagentBag:GetParent()
+            end
+            if reagentBag.SetParent then reagentBag:SetParent(self.bagBarFrame) end
+            if reagentBag.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
+                reagentBag:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 10)
+            end
+            if reagentBag.EnableMouse then reagentBag:EnableMouse(btnMouse) end
+            if reagentBag.ClearAllPoints then reagentBag:ClearAllPoints() end
+            if reagentBag.SetSize then reagentBag:SetSize(btnSize, btnSize) end
+            if reagentBag.SetPoint then reagentBag:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0) end
+            if reagentBag.Show then reagentBag:Show() end
+            xOffset = xOffset + btnSize + spacing
+        else
+            if self.reagentSeparator and self.reagentSeparator.Hide then
+                self.reagentSeparator:Hide()
+            end
+            if reagentBag.Hide then reagentBag:Hide() end
         end
-        if reagentBag.SetParent then reagentBag:SetParent(self.bagBarFrame) end
-        if reagentBag.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
-            reagentBag:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 10)
-        end
-        if reagentBag.EnableMouse then reagentBag:EnableMouse(btnMouse) end
-        if reagentBag.ClearAllPoints then reagentBag:ClearAllPoints() end
-        if reagentBag.SetSize then reagentBag:SetSize(btnSize, btnSize) end
-        if reagentBag.SetPoint then reagentBag:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0) end
-        if reagentBag.Show then reagentBag:Show() end
-        xOffset = xOffset + btnSize + spacing
     else
         if self.reagentSeparator and self.reagentSeparator.Hide then
             self.reagentSeparator:Hide()

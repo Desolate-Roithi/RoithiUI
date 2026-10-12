@@ -339,6 +339,8 @@ function CDM:GetOptions()
                 order = 0.5,
                 width = "double",
                 func = function()
+                    local ACD = LibStub and LibStub("AceConfigDialog-3.0", true)
+                    if ACD then ACD:Close("RoithiUI") end
                     self:OpenBlizzardSettings()
                 end,
             },

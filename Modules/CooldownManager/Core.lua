@@ -150,13 +150,15 @@ function CDM:OnResetItemFrame(viewerKey, itemFrame)
 end
 
 function CDM:PopulateSettingsPanel(panel)
-    if not panel then return end
-    if panel.populated then
+    if self.selectedOptionsBar then
+        panel.selectedBar = self.selectedOptionsBar
+        self.selectedOptionsBar = nil
+        if panel.RebuildTabs then panel:RebuildTabs() end
         if panel.RefreshView then panel:RefreshView() end
+    end
+    if panel.populated then
         return
     end
-
-
 
     panel.selectedBar = panel.selectedBar or "Essential"
 
@@ -323,10 +325,56 @@ function CDM:PopulateSettingsPanel(panel)
         slider:SetValue(val)
         local label = slider:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         label:SetPoint("BOTTOMLEFT", slider, "TOPLEFT", 0, 3)
-        label:SetText(string.format("%s: %s", name, tostring(val)))
+        label:SetPoint("RIGHT", slider, "TOPRIGHT", -46, 3)
+        label:SetJustifyH("LEFT")
+        if label.SetWordWrap then label:SetWordWrap(false) end
+        label:SetText(name)
+
+        local editBox = CreateFrame("EditBox", nil, slider, "BackdropTemplate")
+        editBox:SetSize(42, 18)
+        editBox:SetPoint("BOTTOMRIGHT", slider, "TOPRIGHT", 0, 1)
+        editBox:SetBackdrop({
+            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        editBox:SetBackdropColor(0.08, 0.08, 0.1, 0.9)
+        editBox:SetBackdropBorderColor(0.25, 0.25, 0.28, 0.9)
+        if editBox.SetFontObject then editBox:SetFontObject("GameFontHighlightSmall") end
+        if editBox.SetJustifyH then editBox:SetJustifyH("RIGHT") end
+        if editBox.SetTextInsets then editBox:SetTextInsets(2, 4, 0, 0) end
+        if editBox.SetAutoFocus then editBox:SetAutoFocus(false) end
+        if editBox.SetText then editBox:SetText(tostring(val)) end
+
+        editBox:SetScript("OnEditFocusGained", function(eb)
+            eb:SetBackdropBorderColor(0, 0.85, 1, 1)
+            eb:HighlightText()
+        end)
+        editBox:SetScript("OnEditFocusLost", function(eb)
+            eb:SetBackdropBorderColor(0.25, 0.25, 0.28, 0.9)
+            eb:SetText(tostring(slider:GetValue()))
+        end)
+        editBox:SetScript("OnEnterPressed", function(eb)
+            local num = tonumber(eb:GetText())
+            if num then
+                num = math.min(maxVal, math.max(minVal, num))
+                num = math.floor((num - minVal) / step + 0.5) * step + minVal
+                slider:SetValue(num)
+                setVal(num)
+            end
+            eb:ClearFocus()
+        end)
+        editBox:SetScript("OnEscapePressed", function(eb)
+            eb:SetText(tostring(slider:GetValue()))
+            eb:ClearFocus()
+        end)
+
         slider:SetScript("OnValueChanged", function(_, v)
-            v = math.floor(v / step + 0.5) * step
-            label:SetText(string.format("%s: %s", name, tostring(v)))
+            v = math.floor((v - minVal) / step + 0.5) * step + minVal
+            v = math.min(maxVal, math.max(minVal, v))
+            if not editBox:HasFocus() then
+                editBox:SetText(tostring(v))
+            end
             setVal(v)
         end)
         return slider
@@ -368,6 +416,7 @@ function CDM:PopulateSettingsPanel(panel)
         local ddBtn = CreateFrame("Button", nil, cParent, "UIPanelButtonTemplate")
         ddBtn:SetSize(165, 22)
         ddBtn:SetPoint("TOPLEFT", cParent, "TOPLEFT", xOffset, yOffset)
+        StyleModernButton(ddBtn, false)
 
         local arrowTex = ddBtn:CreateTexture(nil, "OVERLAY")
         arrowTex:SetSize(12, 12)
@@ -389,7 +438,7 @@ function CDM:PopulateSettingsPanel(panel)
             if fs then
                 fs:ClearAllPoints()
                 fs:SetPoint("LEFT", ddBtn, "LEFT", 8, 0)
-                fs:SetPoint("RIGHT", dropArrow, "LEFT", -2, 0)
+                fs:SetPoint("RIGHT", arrowTex, "LEFT", -2, 0)
                 fs:SetJustifyH("LEFT")
                 fs:SetWordWrap(false)
             end
@@ -558,6 +607,7 @@ function CDM:PopulateSettingsPanel(panel)
             local btnGrowth = CreateFrame("Button", nil, contentFrame, "UIPanelButtonTemplate")
             btnGrowth:SetSize(165, 22)
             btnGrowth:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 188, -35)
+            StyleModernButton(btnGrowth, false)
             local growthNames = {
                 ["LEFT_TO_RIGHT"] = L["Grow: Left -> Right"] or "Grow: Left -> Right",
                 ["RIGHT_TO_LEFT"] = L["Grow: Right -> Left"] or "Grow: Right -> Left",
@@ -603,6 +653,7 @@ function CDM:PopulateSettingsPanel(panel)
             local btnOrient = CreateFrame("Button", nil, contentFrame, "UIPanelButtonTemplate")
             btnOrient:SetSize(165, 22)
             btnOrient:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 188, -62)
+            StyleModernButton(btnOrient, false)
             local function UpdateOrientText()
                 local orient = cData.orientation or "HORIZONTAL"
                 btnOrient:SetText(string.format("Orientation: %s", orient))
@@ -678,6 +729,7 @@ function CDM:PopulateSettingsPanel(panel)
             btnEditMode:SetSize(165, 22)
             btnEditMode:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 188, -300)
             btnEditMode:SetText(L["Open Edit Mode"] or "Open Edit Mode")
+            StyleModernButton(btnEditMode, false)
             btnEditMode:SetScript("OnClick", function()
                 if _G.EditModeManagerFrame and _G.EditModeManagerFrame.Show then
                     _G.EditModeManagerFrame:Show()
@@ -726,6 +778,7 @@ function CDM:PopulateSettingsPanel(panel)
             btnAddSpell:SetSize(100, 22)
             btnAddSpell:SetPoint("LEFT", spellInput, "RIGHT", 6, 0)
             btnAddSpell:SetText(L["+ Add Spell"] or "+ Add Spell")
+            StyleModernButton(btnAddSpell, true)
             table.insert(contentFrame.widgets, btnAddSpell)
 
             local function AddSpellAction()
@@ -1004,6 +1057,7 @@ function CDM:PopulateSettingsPanel(panel)
             local btnNamePos = CreateFrame("Button", nil, contentFrame, "UIPanelButtonTemplate")
             btnNamePos:SetSize(165, 22)
             btnNamePos:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 188, -165)
+            StyleModernButton(btnNamePos, false)
             local function UpdateNamePosText()
                 local pos = vConf.namePosition or "LEFT"
                 btnNamePos:SetText(string.format("Name Pos: %s", pos))
@@ -1448,6 +1502,9 @@ function CDM:OpenBlizzardSettings(fromEditMode)
     if InCombatLockdown() then
         RoithiUI:Print(L["Cannot open cooldown settings while in combat."] or "Cannot open cooldown settings while in combat.")
         return
+    end
+    if fromEditMode and _G.EditModeManagerFrame and _G.EditModeManagerFrame.CheckHideAndLockEditMode then
+        _G.EditModeManagerFrame:CheckHideAndLockEditMode()
     end
     if C_AddOns and C_AddOns.LoadAddOn and not (C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Blizzard_CooldownViewer")) then
         pcall(C_AddOns.LoadAddOn, "Blizzard_CooldownViewer")

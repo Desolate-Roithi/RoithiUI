@@ -225,20 +225,10 @@ function BagsMod:GetOptions()
                             self:UpdateInventory()
                         end,
                     },
-                    showEmptySlots = {
-                        type = "toggle",
-                        name = L["Show Empty Slots in All View"],
-                        order = 5,
-                        get = function() return self.db.showEmptySlots ~= false end,
-                        set = function(_, val)
-                            self.db.showEmptySlots = val
-                            self:UpdateInventory()
-                        end,
-                    },
                     point = {
                         type = "select",
                         name = L["Anchor Point"],
-                        order = 6,
+                        order = 5,
                         values = {
                             ["TOPLEFT"] = "TOPLEFT",
                             ["TOP"] = "TOP",
@@ -263,7 +253,7 @@ function BagsMod:GetOptions()
                     x = {
                         type = "range",
                         name = L["X Position"],
-                        order = 7,
+                        order = 6,
                         min = -2500,
                         max = 2500,
                         step = 1,
@@ -281,7 +271,7 @@ function BagsMod:GetOptions()
                     y = {
                         type = "range",
                         name = L["Y Position"],
-                        order = 8,
+                        order = 7,
                         min = -1500,
                         max = 1500,
                         step = 1,
@@ -294,6 +284,242 @@ function BagsMod:GetOptions()
                                 self.mainFrame:ClearAllPoints()
                                 self.mainFrame:SetPoint(pt, UIParent, pt, self.db.bagWindow.x or -10, val)
                             end
+                        end,
+                    },
+                },
+            },
+            typography = {
+                type = "group",
+                name = L["Typography & Text Sizing"] or "Typography & Text Sizing",
+                order = 3.5,
+                inline = true,
+                args = {
+                    font = {
+                        type = "select",
+                        name = L["Font Face"] or "Font Face",
+                        order = 1,
+                        dialogControl = "LSM30_Font",
+                        values = function()
+                            local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+                            return LSM and LSM:HashTable("font") or { ["Friz Quadrata TT"] = "Friz Quadrata TT" }
+                        end,
+                        get = function() return self.db.font or "Friz Quadrata TT" end,
+                        set = function(_, val)
+                            self.db.font = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    fontOutline = {
+                        type = "select",
+                        name = L["Font Outline"] or "Font Outline",
+                        order = 2,
+                        values = {
+                            ["NONE"] = L["None"] or "None",
+                            ["OUTLINE"] = L["Outline"] or "Outline",
+                            ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
+                        },
+                        get = function() return self.db.fontOutline or "OUTLINE" end,
+                        set = function(_, val)
+                            self.db.fontOutline = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    categoryFontSize = {
+                        type = "range",
+                        name = L["Category Button Font Size"] or "Category Button Font Size",
+                        order = 3,
+                        min = 8,
+                        max = 18,
+                        step = 1,
+                        get = function() return self.db.categoryFontSize or 12 end,
+                        set = function(_, val)
+                            self.db.categoryFontSize = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    freeSlotsFontSize = {
+                        type = "range",
+                        name = L["Free Slots Font Size"] or "Free Slots Font Size",
+                        order = 4,
+                        min = 8,
+                        max = 18,
+                        step = 1,
+                        get = function() return self.db.freeSlotsFontSize or 12 end,
+                        set = function(_, val)
+                            self.db.freeSlotsFontSize = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                        end,
+                    },
+                    freeSlotsAnchor = {
+                        type = "select",
+                        name = L["Free Slots Anchor"] or "Free Slots Anchor",
+                        order = 5,
+                        values = {
+                            ["RIGHT"] = L["Right"] or "Right",
+                            ["CENTER"] = L["Center"] or "Center",
+                            ["LEFT"] = L["Left"] or "Left",
+                        },
+                        get = function() return self.db.freeSlotsAnchor or "RIGHT" end,
+                        set = function(_, val)
+                            self.db.freeSlotsAnchor = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                        end,
+                    },
+                    goldFontSize = {
+                        type = "range",
+                        name = L["Gold / Currency Font Size"] or "Gold / Currency Font Size",
+                        order = 6,
+                        min = 8,
+                        max = 18,
+                        step = 1,
+                        get = function() return self.db.goldFontSize or 12 end,
+                        set = function(_, val)
+                            self.db.goldFontSize = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                        end,
+                    },
+                    searchFontSize = {
+                        type = "range",
+                        name = L["Search Bar Font Size"] or "Search Bar Font Size",
+                        order = 7,
+                        min = 8,
+                        max = 18,
+                        step = 1,
+                        get = function() return self.db.searchFontSize or 12 end,
+                        set = function(_, val)
+                            self.db.searchFontSize = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                        end,
+                    },
+                    itemCountFontSize = {
+                        type = "range",
+                        name = L["Item Count Font Size"] or "Item Count Font Size",
+                        order = 8,
+                        min = 8,
+                        max = 20,
+                        step = 1,
+                        get = function() return self.db.itemCountFontSize or 12 end,
+                        set = function(_, val)
+                            self.db.itemCountFontSize = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    itemCountAnchor = {
+                        type = "select",
+                        name = L["Item Count Anchor"] or "Item Count Anchor",
+                        order = 9,
+                        values = {
+                            ["TOPLEFT"] = "TOPLEFT",
+                            ["TOP"] = "TOP",
+                            ["TOPRIGHT"] = "TOPRIGHT",
+                            ["LEFT"] = "LEFT",
+                            ["CENTER"] = "CENTER",
+                            ["RIGHT"] = "RIGHT",
+                            ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                            ["BOTTOM"] = "BOTTOM",
+                            ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                        },
+                        get = function() return self.db.itemCountAnchor or "BOTTOMRIGHT" end,
+                        set = function(_, val)
+                            self.db.itemCountAnchor = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    itemCountX = {
+                        type = "range",
+                        name = L["Item Count X Offset"] or "Item Count X Offset",
+                        order = 10,
+                        min = -30,
+                        max = 30,
+                        step = 1,
+                        get = function() return self.db.itemCountX or -2 end,
+                        set = function(_, val)
+                            self.db.itemCountX = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    itemCountY = {
+                        type = "range",
+                        name = L["Item Count Y Offset"] or "Item Count Y Offset",
+                        order = 11,
+                        min = -30,
+                        max = 30,
+                        step = 1,
+                        get = function() return self.db.itemCountY or 2 end,
+                        set = function(_, val)
+                            self.db.itemCountY = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    itemLevelFontSize = {
+                        type = "range",
+                        name = L["Item Level Font Size"] or "Item Level Font Size",
+                        order = 12,
+                        min = 7,
+                        max = 18,
+                        step = 1,
+                        get = function() return self.db.itemLevelFontSize or 12 end,
+                        set = function(_, val)
+                            self.db.itemLevelFontSize = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    itemLevelAnchor = {
+                        type = "select",
+                        name = L["Item Level Anchor"] or "Item Level Anchor",
+                        order = 13,
+                        values = {
+                            ["TOPLEFT"] = "TOPLEFT",
+                            ["TOP"] = "TOP",
+                            ["TOPRIGHT"] = "TOPRIGHT",
+                            ["LEFT"] = "LEFT",
+                            ["CENTER"] = "CENTER",
+                            ["RIGHT"] = "RIGHT",
+                            ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                            ["BOTTOM"] = "BOTTOM",
+                            ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                        },
+                        get = function() return self.db.itemLevelAnchor or "TOPLEFT" end,
+                        set = function(_, val)
+                            self.db.itemLevelAnchor = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    itemLevelX = {
+                        type = "range",
+                        name = L["Item Level X Offset"] or "Item Level X Offset",
+                        order = 14,
+                        min = -30,
+                        max = 30,
+                        step = 1,
+                        get = function() return self.db.itemLevelX or 2 end,
+                        set = function(_, val)
+                            self.db.itemLevelX = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    itemLevelY = {
+                        type = "range",
+                        name = L["Item Level Y Offset"] or "Item Level Y Offset",
+                        order = 15,
+                        min = -30,
+                        max = 30,
+                        step = 1,
+                        get = function() return self.db.itemLevelY or -2 end,
+                        set = function(_, val)
+                            self.db.itemLevelY = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
                         end,
                     },
                 },

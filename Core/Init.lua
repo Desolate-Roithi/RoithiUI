@@ -276,6 +276,24 @@ local MODULE_REFRESH_ORDER = {
     "EncounterBar",
 }
 
+local function RefreshModuleInstance(addon, mod, modName, refreshed, isFallback)
+    if not mod or not mod:IsEnabled() or (refreshed and refreshed[mod]) then return end
+    if refreshed then refreshed[mod] = true end
+    local dbKey = mod.dbKey or modName
+    if addon.db and addon.db.profile and addon.db.profile[dbKey] then
+        mod.db = addon.db.profile[dbKey]
+    end
+    if mod.RefreshProfile then
+        mod:RefreshProfile()
+    elseif mod.RefreshSettings then
+        mod:RefreshSettings()
+    elseif isFallback and mod.UpdateLayout then
+        mod:UpdateLayout()
+    elseif mod.OnEnable then
+        mod:OnEnable()
+    end
+end
+
 function RoithiUI:RefreshProfile()
     -- 1. Sync module enable/disable states according to the new profile
     if self.ModuleManager and self.ModuleManager.EnableModules then
@@ -291,38 +309,13 @@ function RoithiUI:RefreshProfile()
     local refreshed = {}
     for _, modName in ipairs(MODULE_REFRESH_ORDER) do
         local mod = self:GetModule(modName, true)
-        if mod and mod:IsEnabled() then
-            refreshed[mod] = true
-            local dbKey = mod.dbKey or modName
-            if self.db.profile and self.db.profile[dbKey] then
-                mod.db = self.db.profile[dbKey]
-            end
-            if mod.RefreshProfile then
-                mod:RefreshProfile()
-            elseif mod.RefreshSettings then
-                mod:RefreshSettings()
-            elseif mod.OnEnable then
-                mod:OnEnable()
-            end
-        end
+        RefreshModuleInstance(self, mod, modName, refreshed, false)
     end
 
     -- 4. Fallback for any other dynamically registered modules
     if self.IterateModules then
         for name, mod in self:IterateModules() do
-            if mod:IsEnabled() and not refreshed[mod] then
-                local dbKey = mod.dbKey or name
-                if self.db.profile and self.db.profile[dbKey] then
-                    mod.db = self.db.profile[dbKey]
-                end
-                if mod.RefreshProfile then
-                    mod:RefreshProfile()
-                elseif mod.RefreshSettings then
-                    mod:RefreshSettings()
-                elseif mod.UpdateLayout then
-                    mod:UpdateLayout()
-                end
-            end
+            RefreshModuleInstance(self, mod, name, refreshed, true)
         end
     end
 
