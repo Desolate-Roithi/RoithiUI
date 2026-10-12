@@ -260,12 +260,12 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
         end
         if cd.SetCooldown then
             local cdInfo = _G.C_Spell and _G.C_Spell.GetSpellCooldown and _G.C_Spell.GetSpellCooldown(spellID)
-            if cdInfo and cdInfo.startTime and cdInfo.duration and cdInfo.duration > 0 and cdInfo.isEnabled then
-                cd:SetCooldown(cdInfo.startTime, cdInfo.duration, cdInfo.modRate or 1)
+            if cdInfo and cdInfo.startTime and cdInfo.duration and cdInfo.isEnabled then
+                pcall(cd.SetCooldown, cd, cdInfo.startTime, cdInfo.duration, cdInfo.modRate or 1)
             elseif _G.GetSpellCooldown then
                 local start, dur, enable, modRate = _G.GetSpellCooldown(spellID)
-                if start and dur and dur > 0 and enable == 1 then
-                    cd:SetCooldown(start, dur, modRate or 1)
+                if start and dur and enable == 1 then
+                    pcall(cd.SetCooldown, cd, start, dur, modRate or 1)
                 elseif cd.Clear then
                     cd:Clear()
                 end
@@ -285,8 +285,16 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
             chargeFS:Hide()
         else
             chargeFS:Show()
-            if chargeInfo and chargeInfo.maxCharges and chargeInfo.maxCharges > 1 then
-                chargeFS:SetText(tostring(chargeInfo.currentCharges or 0))
+            local isMultiCharge = false
+            local ok, multi = pcall(function()
+                return chargeInfo and chargeInfo.maxCharges and chargeInfo.maxCharges > 1
+            end)
+            if ok and multi then
+                isMultiCharge = true
+            end
+
+            if isMultiCharge and chargeInfo and chargeInfo.currentCharges then
+                chargeFS:SetText(chargeInfo.currentCharges)
                 if chargeFS.SetTextColor then
                     chargeFS:SetTextColor(1, 1, 1, 1)
                 end

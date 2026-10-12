@@ -12,9 +12,13 @@ RoithiUI.FontEngine = FontEngine
 local DEFAULT_FALLBACK_FONT = "Fonts\\FRIZQT__.TTF"
 
 local function ResolveLSMFont(fontName)
-    if LSM and fontName then
-        local fetched = LSM:Fetch("font", fontName)
-        if fetched then return fetched end
+    if LSM then
+        if fontName then
+            local fetched = LSM:Fetch("font", fontName)
+            if fetched then return fetched end
+        end
+        local thick = LSM:Fetch("font", "Roithi Thick")
+        if thick then return thick end
     end
     if fontName and (fontName:find("\\") or fontName:find("/")) then
         return fontName
@@ -48,7 +52,7 @@ function RoithiUI:GetFontInfo(moduleKey, textKey, defaultSize, defaultOutline)
     local modOutline = modDB and modDB.fontOutline
 
     -- 3. Global fallback
-    local globalFont = (globalGeneral and globalGeneral.font) or (self.db and self.db.profile and self.db.profile.font) or "Friz Quadrata TT"
+    local globalFont = (globalGeneral and globalGeneral.font) or (self.db and self.db.profile and self.db.profile.font) or "Roithi Thick"
     local globalOutline = (globalGeneral and globalGeneral.fontOutline) or "OUTLINE"
 
     local finalFontName = textFont or modFont or globalFont
@@ -63,6 +67,13 @@ function RoithiUI:ApplyFont(fontString, moduleKey, textKey, defaultSize, default
     if not fontString or not fontString.SetFont then return end
     local fontPath, size, outline = self:GetFontInfo(moduleKey, textKey, defaultSize, defaultOutline)
     fontString:SetFont(fontPath, size, outline)
+    if fontString.SetShadowOffset then
+        if outline ~= "NONE" and outline ~= "" then
+            fontString:SetShadowOffset(0, 0)
+        else
+            fontString:SetShadowOffset(1, -1)
+        end
+    end
 end
 
 function RoithiUI:TriggerFontUpdate()

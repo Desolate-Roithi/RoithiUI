@@ -90,8 +90,8 @@ end
 function AB:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Actionbars or self.defaultSettings
     for k, v in pairs(self.defaultSettings) do
-        if type(v) == "table" and not self.db[k] then
-            self.db[k] = SafeCopyTable(v)
+        if self.db[k] == nil then
+            self.db[k] = type(v) == "table" and SafeCopyTable(v) or v
         end
     end
     self.bars = {}
@@ -102,13 +102,30 @@ end
 function AB:OnEnable()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Actionbars or self.defaultSettings
     for k, v in pairs(self.defaultSettings) do
-        if type(v) == "table" and not self.db[k] then
-            self.db[k] = SafeCopyTable(v)
+        if self.db[k] == nil then
+            self.db[k] = type(v) == "table" and SafeCopyTable(v) or v
         end
     end
     if self.db.enabled == false then return end
 
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnFaderEvent")
+    self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
+    if self.RegisterUnitEvent then
+        self:RegisterUnitEvent("UNIT_SPELLCAST_START", "OnSpellcastEvent", "player")
+        self:RegisterUnitEvent("UNIT_SPELLCAST_STOP", "OnSpellcastEvent", "player")
+        self:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "OnSpellcastEvent", "player")
+        self:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnSpellcastEvent", "player")
+        self:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_START", "OnSpellcastEvent", "player")
+        self:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_STOP", "OnSpellcastEvent", "player")
+    else
+        self:RegisterEvent("UNIT_SPELLCAST_START", "OnSpellcastEvent")
+        self:RegisterEvent("UNIT_SPELLCAST_STOP", "OnSpellcastEvent")
+        self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "OnSpellcastEvent")
+        self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnSpellcastEvent")
+        self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START", "OnSpellcastEvent")
+        self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP", "OnSpellcastEvent")
+    end
     self:RegisterEvent("UPDATE_BINDINGS", "UpdateAllBindings")
     self:RegisterEvent("ACTIONBAR_SLOT_CHANGED", "OnSlotChanged")
     self:RegisterEvent("ACTIONBAR_SHOWGRID", "OnShowGrid")
@@ -116,6 +133,9 @@ function AB:OnEnable()
     self:RegisterEvent("PET_BAR_UPDATE", "OnPetBarUpdate")
     self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS", "OnStanceUpdate")
     self:RegisterEvent("ACTIONBAR_PAGE_CHANGED", "OnPageChanged")
+    self:RegisterEvent("UPDATE_BONUS_ACTIONBAR", "OnActionBarStateUpdate")
+    self:RegisterEvent("UPDATE_VEHICLE_ACTIONBAR", "OnActionBarStateUpdate")
+    self:RegisterEvent("UPDATE_OVERRIDE_ACTIONBAR", "OnActionBarStateUpdate")
     self:RegisterEvent("UPDATE_EXTRA_ACTIONBAR", "OnExtraActionBarUpdate")
     self:RegisterEvent("SPELLS_CHANGED", "OnZoneAbilityUpdate")
     self:RegisterEvent("ZONE_CHANGED", "OnZoneAbilityUpdate")
@@ -150,6 +170,28 @@ function AB:PLAYER_REGEN_ENABLED()
             self:UpdateAllEmptyButtons()
         end
     end
+    self:OnFaderEvent()
+end
+
+function AB:OnTargetChanged()
+    if self.UpdateAllBarFaders then
+        self:UpdateAllBarFaders()
+    end
+    if self.UpdateAllButtonsRange then
+        self:UpdateAllButtonsRange()
+    end
+end
+
+function AB:OnFaderEvent()
+    if self.UpdateAllBarFaders then
+        self:UpdateAllBarFaders()
+    end
+end
+
+function AB:OnSpellcastEvent(event, unit)
+    if unit == "player" and self.UpdateAllBarFaders then
+        self:UpdateAllBarFaders()
+    end
 end
 
 function AB:UpdateAllBindings()
@@ -174,6 +216,9 @@ function AB:OnSlotChanged()
     if self.UpdateAllEmptyButtons then
         self:UpdateAllEmptyButtons()
     end
+    if self.UpdateAllButtonsRange then
+        self:UpdateAllButtonsRange()
+    end
 end
 
 function AB:OnPetBarUpdate()
@@ -195,6 +240,9 @@ function AB:OnStanceUpdate()
 end
 
 function AB:OnPageChanged()
+    if self.SyncBar1Page then
+        self:SyncBar1Page()
+    end
     if self.LayoutBar then
         if _G.InCombatLockdown and _G.InCombatLockdown() then
             self.queuedLayout = true
@@ -204,6 +252,21 @@ function AB:OnPageChanged()
     end
     if self.UpdateEmptyButtons then
         self:UpdateEmptyButtons("bar1")
+    end
+    if self.UpdateAllButtonsRange then
+        self:UpdateAllButtonsRange()
+    end
+end
+
+function AB:OnActionBarStateUpdate()
+    if self.SyncBar1Page then
+        self:SyncBar1Page()
+    end
+    if self.UpdateEmptyButtons then
+        self:UpdateEmptyButtons("bar1")
+    end
+    if self.UpdateAllButtonsRange then
+        self:UpdateAllButtonsRange()
     end
 end
 
@@ -228,6 +291,9 @@ function AB:OnZoneAbilityUpdate()
 end
 
 function AB:OnEnteringWorld()
+    if self.SyncBar1Page then
+        self:SyncBar1Page()
+    end
     if self.UpdateAllEmptyButtons then
         self:UpdateAllEmptyButtons()
     end
@@ -285,8 +351,8 @@ end
 function AB:RefreshProfile()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Actionbars or self.defaultSettings
     for k, v in pairs(self.defaultSettings) do
-        if type(v) == "table" and not self.db[k] then
-            self.db[k] = SafeCopyTable(v)
+        if self.db[k] == nil then
+            self.db[k] = type(v) == "table" and SafeCopyTable(v) or v
         end
     end
     if _G.InCombatLockdown and _G.InCombatLockdown() then

@@ -79,6 +79,17 @@ function AB:GetOptions()
                             self:UpdateAllEmptyButtons()
                         end,
                     },
+                    outOfRangeColoring = {
+                        type = "toggle",
+                        name = L["Out of Range Coloring"] or "Out of Range Coloring",
+                        desc = L["Tints action button icons red when your target is out of spell or ability range."] or "Tints action button icons red when your target is out of spell or ability range.",
+                        order = 1.7,
+                        get = function() return self.db.outOfRangeColoring ~= false end,
+                        set = function(_, val)
+                            self.db.outOfRangeColoring = val
+                            self:UpdateRangeColoringState()
+                        end,
+                    },
                     showMacroText = {
                         type = "toggle",
                         name = L["Show Macro Text"],
@@ -114,6 +125,21 @@ function AB:GetOptions()
                             self:StyleAllBars()
                         end,
                     },
+                    font = {
+                        type = "select",
+                        dialogControl = "LSM30_Font",
+                        name = L["Font"] or "Font",
+                        order = 4.8,
+                        values = function()
+                            local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+                            return LSM and LSM:HashTable("font") or (AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font) or { ["Roithi Thick"] = "Roithi Thick", ["Friz Quadrata TT"] = "Friz Quadrata TT" }
+                        end,
+                        get = function() return self.db.font or "Roithi Thick" end,
+                        set = function(_, val)
+                            self.db.font = val
+                            self:StyleAllBars()
+                        end,
+                    },
                     fontSize = {
                         type = "range",
                         name = L["Font Size"],
@@ -124,6 +150,22 @@ function AB:GetOptions()
                         get = function() return self.db.fontSize or 11 end,
                         set = function(_, val)
                             self.db.fontSize = val
+                            self:StyleAllBars()
+                        end,
+                    },
+                    fontOutline = {
+                        type = "select",
+                        name = L["Font Outline"] or "Font Outline",
+                        order = 5.2,
+                        values = {
+                            ["NONE"] = L["None"] or "None",
+                            ["OUTLINE"] = L["Outline"] or "Outline",
+                            ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
+                            ["MONOCHROME"] = L["Monochrome"] or "Monochrome",
+                        },
+                        get = function() return self.db.fontOutline or "OUTLINE" end,
+                        set = function(_, val)
+                            self.db.fontOutline = val
                             self:StyleAllBars()
                         end,
                     },
@@ -139,6 +181,41 @@ function AB:GetOptions()
                         set = function(_, r, g, b, a)
                             self.db.borderColor = { r = r, g = g, b = b, a = a }
                             self:StyleAllBars()
+                        end,
+                    },
+                },
+            },
+            fader = {
+                type = "group",
+                name = L["Action Bar Fader"] or "Action Bar Fader",
+                order = 1.5,
+                inline = true,
+                args = {
+                    enableFader = {
+                        type = "toggle",
+                        name = L["Enable Out-of-Combat Fader"] or "Enable Out-of-Combat Fader",
+                        desc = L["Fade action bars to a lower opacity when idle (out of combat, no target, not casting, and not hovering)."] or "Fade action bars to a lower opacity when idle.",
+                        order = 1,
+                        get = function() return self.db.enableFader == true end,
+                        set = function(_, val)
+                            self.db.enableFader = val
+                            self:UpdateAllBarFaders()
+                        end,
+                    },
+                    faderIdleAlpha = {
+                        type = "range",
+                        name = L["Idle Opacity"] or "Idle Opacity",
+                        desc = L["The opacity of action bars when idle out of combat."] or "The opacity of action bars when idle out of combat.",
+                        order = 2,
+                        min = 0,
+                        max = 1,
+                        step = 0.05,
+                        isPercent = true,
+                        disabled = function() return not self.db.enableFader end,
+                        get = function() return self.db.faderIdleAlpha or 0.3 end,
+                        set = function(_, val)
+                            self.db.faderIdleAlpha = val
+                            self:UpdateAllBarFaders()
                         end,
                     },
                 },

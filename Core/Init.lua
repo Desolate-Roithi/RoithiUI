@@ -209,6 +209,44 @@ function RoithiUI:OnInitialize()
         print("|cff00ccffRoithiUI:|r Migrated MidnightCastbarsDB settings to RoithiUIDB.")
     end
 
+    -- Modern RoithiUI typography: upgrade legacy "Friz Quadrata TT" → "Roithi Thick" (runs ONCE on first load only)
+    if self.db and self.db.profile and not self.db.profile.migratedTypography then
+        local p = self.db.profile
+        -- Global font fields
+        if not p.font or p.font == "Friz Quadrata TT" then
+            p.font = "Roithi Thick"
+        end
+        -- General sub-table
+        if p.General then
+            if not p.General.unitFrameFont or p.General.unitFrameFont == "Friz Quadrata TT" then
+                p.General.unitFrameFont = "Roithi Thick"
+            end
+            if not p.General.font or p.General.font == "Friz Quadrata TT" then
+                p.General.font = "Roithi Thick"
+            end
+            if not p.General.castbarFont or p.General.castbarFont == "Friz Quadrata TT" then
+                p.General.castbarFont = "Roithi Thick"
+            end
+        end
+        -- Actionbars sub-table
+        if p.Actionbars then
+            if not p.Actionbars.font or p.Actionbars.font == "Friz Quadrata TT" then
+                p.Actionbars.font = "Roithi Thick"
+            end
+            if not p.Actionbars.fontOutline then
+                p.Actionbars.fontOutline = "OUTLINE"
+            end
+        end
+        -- CooldownManager sub-table
+        if p.CooldownManager then
+            if not p.CooldownManager.font or p.CooldownManager.font == "Friz Quadrata TT" then
+                p.CooldownManager.font = "Roithi Thick"
+            end
+        end
+        -- Mark as done — will never run again for this profile
+        p.migratedTypography = true
+    end
+
     -- Register Options Table (with DualSpec support if available)
     -- We can register basic profiles too
     LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable("RoithiUI_Profiles",

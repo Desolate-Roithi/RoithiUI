@@ -8,9 +8,16 @@ local itemBackdrops = setmetatable({}, { __mode = "k" })
 local itemStackOverlays = setmetatable({}, { __mode = "k" })
 
 local function GetActiveFont(fontName)
-    if LSM and fontName then
-        local fetched = LSM:Fetch("font", fontName)
-        if fetched then return fetched end
+    if LSM then
+        if fontName then
+            local fetched = LSM:Fetch("font", fontName)
+            if fetched then return fetched end
+        end
+        local thick = LSM:Fetch("font", "Roithi Thick")
+        if thick then return thick end
+    end
+    if fontName and (fontName:find("\\") or fontName:find("/")) then
+        return fontName
     end
     return "Fonts\\FRIZQT__.TTF"
 end
@@ -57,20 +64,30 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
             regions = regions[1]
         end
         for _, region in ipairs(regions) do
-            local objType = region.GetObjectType and region:GetObjectType()
-            local isMask = (objType == "MaskTexture") or (region.IsObjectType and region:IsObjectType("MaskTexture"))
-            local atlas = region.GetAtlas and region:GetAtlas()
-            local tex = region.GetTexture and region:GetTexture()
-
-            if isMask or atlas == "UI-HUD-CoolDownManager-Mask" or tex == 6707800 then
-                if icon and icon.RemoveMaskTexture then
-                    pcall(icon.RemoveMaskTexture, icon, region)
+            if region ~= icon and region ~= itemFrame.Icon then
+                local objType = region.GetObjectType and region:GetObjectType()
+                local isMask = (objType == "MaskTexture") or (region.IsObjectType and region:IsObjectType("MaskTexture"))
+                local atlas = region.GetAtlas and region:GetAtlas()
+                local isMaskTex = false
+                local tex = region.GetTexture and region:GetTexture()
+                local isSecret = (issecretvalue and issecretvalue(tex)) or (canaccessvalue and not canaccessvalue(tex))
+                if tex and not isSecret then
+                    local ok, isMatch = pcall(function() return tex == 6707800 end)
+                    if ok and isMatch then
+                        isMaskTex = true
+                    end
                 end
-                if region.Hide then region:Hide() end
-                if region.SetAlpha then region:SetAlpha(0) end
-            elseif atlas == "UI-HUD-CoolDownManager-IconOverlay" then
-                if region.Hide then region:Hide() end
-                if region.SetAlpha then region:SetAlpha(0) end
+
+                if isMask or atlas == "UI-HUD-CoolDownManager-Mask" or isMaskTex then
+                    if icon and icon.RemoveMaskTexture then
+                        pcall(icon.RemoveMaskTexture, icon, region)
+                    end
+                    if region.Hide then region:Hide() end
+                    if region.SetAlpha then region:SetAlpha(0) end
+                elseif atlas == "UI-HUD-CoolDownManager-IconOverlay" then
+                    if region.Hide then region:Hide() end
+                    if region.SetAlpha then region:SetAlpha(0) end
+                end
             end
         end
     end
@@ -182,6 +199,16 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                 if cdFS.SetFont then
                     cdFS:SetFont(fontPath, cdSize, cdOutline)
                 end
+                if cdFS.SetDrawLayer then
+                    cdFS:SetDrawLayer("OVERLAY", 7)
+                end
+                if cdFS.SetShadowOffset then
+                    if cdOutline ~= "NONE" and cdOutline ~= "" then
+                        cdFS:SetShadowOffset(0, 0)
+                    else
+                        cdFS:SetShadowOffset(1, -1)
+                    end
+                end
             end
             local cdAnchor = (isOverridden and (vConf.cooldownAnchor or vConf.timerAnchor)) or self.db.cooldownAnchor or "CENTER"
             local defaultCdX, defaultCdY, defaultCdJustifyH = (ns.Utils and ns.Utils.GetDefaultAnchorOffsets) and ns.Utils.GetDefaultAnchorOffsets(cdAnchor, 2) or (cdAnchor:find("RIGHT") and -2 or (cdAnchor:find("LEFT") and 2 or 0)), (cdAnchor:find("TOP") and -2 or (cdAnchor:find("BOTTOM") and 2 or 0)), "CENTER"
@@ -265,6 +292,13 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
         local fontOutline = (isOverridden and vConf.stackFontOutline) or self.db.stackFontOutline or "OUTLINE"
         if stackFS.SetFont then
             stackFS:SetFont(fontPath, fontSize, fontOutline)
+        end
+        if stackFS.SetShadowOffset then
+            if fontOutline ~= "NONE" and fontOutline ~= "" then
+                stackFS:SetShadowOffset(0, 0)
+            else
+                stackFS:SetShadowOffset(1, -1)
+            end
         end
         if stackFS.SetSize then
             stackFS:SetSize(0, 0)
@@ -470,6 +504,16 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                     if nameFS.SetFont then
                         nameFS:SetFont(fontPath, nSize, nOutline)
                     end
+                    if nameFS.SetDrawLayer then
+                        nameFS:SetDrawLayer("OVERLAY", 7)
+                    end
+                    if nameFS.SetShadowOffset then
+                        if nOutline ~= "NONE" and nOutline ~= "" then
+                            nameFS:SetShadowOffset(0, 0)
+                        else
+                            nameFS:SetShadowOffset(1, -1)
+                        end
+                    end
                     if nameFS.ClearAllPoints and nameFS.SetPoint then
                         nameFS:ClearAllPoints()
                         local nX = (vConf and vConf.nameOffsetX) or 5
@@ -494,6 +538,16 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                     local tOutline = (isOverridden and vConf.timerFontOutline) or self.db.cooldownFontOutline or "OUTLINE"
                     if durFS.SetFont then
                         durFS:SetFont(fontPath, tSize, tOutline)
+                    end
+                    if durFS.SetDrawLayer then
+                        durFS:SetDrawLayer("OVERLAY", 7)
+                    end
+                    if durFS.SetShadowOffset then
+                        if tOutline ~= "NONE" and tOutline ~= "" then
+                            durFS:SetShadowOffset(0, 0)
+                        else
+                            durFS:SetShadowOffset(1, -1)
+                        end
                     end
                     if durFS.ClearAllPoints and durFS.SetPoint then
                         durFS:ClearAllPoints()

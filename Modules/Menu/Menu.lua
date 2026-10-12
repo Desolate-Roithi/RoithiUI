@@ -570,8 +570,8 @@ function MenuMod:StyleMicroButton(btn)
         if tabard.background and tabard.background.SetSize then tabard.background:SetSize(emblemW, emblemH) end
     end
 
-    if btn.UpdateTabard and not self.btnHooks[btn.UpdateTabard] and hooksecurefunc then
-        self.btnHooks[btn.UpdateTabard] = true
+    if btn.UpdateTabard and not btn.roithiTabardHooked and hooksecurefunc then
+        btn.roithiTabardHooked = true
         hooksecurefunc(btn, "UpdateTabard", function()
             if self.isUpdatingTabard then return end
             self.isUpdatingTabard = true

@@ -46,7 +46,10 @@ end
 -- @param size The size of the font
 -- @param flags Optional flags (OUTLINE, MONOCHROME, etc.)
 function lib.mixins:SetFont(obj, fontName, size, flags)
-    local fontPath = LSM:Fetch("font", fontName or "Friz Quadrata TT")
+    if not obj then return end
+    local fontPath = (LSM and LSM:Fetch("font", fontName or "Roithi Thick"))
+        or (LSM and LSM:Fetch("font", "Friz Quadrata TT"))
+        or "Fonts\\FRIZQT__.TTF"
     local fontFlags = flags
     if fontFlags == "NONE" or fontFlags == "none" then
         fontFlags = ""
@@ -54,12 +57,21 @@ function lib.mixins:SetFont(obj, fontName, size, flags)
         fontFlags = "OUTLINE"
     end
 
-    if obj.SetFont then
-        obj:SetFont(fontPath, size or 12, fontFlags)
-    elseif obj.GetFontString then
-        local fs = obj:GetFontString()
-        if fs then
-            fs:SetFont(fontPath, size or 12, fontFlags)
+    local fs = (obj.SetFont and obj) or (obj.GetFontString and obj:GetFontString())
+    if fs and fs.SetFont then
+        fs:SetFont(fontPath, size or 12, fontFlags)
+        if fs.SetShadowOffset then
+            if fontFlags and fontFlags ~= "" and fontFlags ~= "NONE" and fontFlags ~= "none" then
+                fs:SetShadowOffset(0, 0)
+            else
+                fs:SetShadowOffset(1, -1)
+            end
+        end
+        -- Always normalize text colour to opaque white; Blizzard font objects
+        -- (e.g. NumberFontNormalSmallGray) bake in a grey/yellow tint that
+        -- persists unless explicitly overridden here.
+        if fs.SetTextColor then
+            fs:SetTextColor(1, 1, 1, 1)
         end
     end
 end

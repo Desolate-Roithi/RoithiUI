@@ -294,7 +294,7 @@ function MinimapMod:UpdateAddonBarAutohide()
             bar.hoverLine:SetBackdrop({
                 bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
             })
-            bar.hoverLine:SetFrameStrata("HIGH")
+            bar.hoverLine:SetFrameStrata("MEDIUM")
             bar.hoverLine:EnableMouse(true)
 
             local function OnEnter()
@@ -545,7 +545,7 @@ function MinimapMod:CreateAddonBarExpander()
     local expander = CreateFrame("Button", "RoithiAddonBarExpander", self.addonBar, "BackdropTemplate")
     expander:SetSize(30, 14)
     if expander.SetFrameStrata then
-        expander:SetFrameStrata("HIGH")
+        expander:SetFrameStrata("MEDIUM")
     end
     if expander.SetFrameLevel then
         expander:SetFrameLevel(75)
@@ -616,14 +616,14 @@ function MinimapMod:UpdateAddonBarAttachment()
         end
 
         bar:SetParent(parent)
-        if bar.SetFrameStrata then bar:SetFrameStrata("HIGH") end
+        if bar.SetFrameStrata then bar:SetFrameStrata("MEDIUM") end
         if bar.SetFrameLevel then bar:SetFrameLevel(20) end
         bar:ClearAllPoints()
         local spacing = self.db.addonBarAttachedSpacing or 4
         bar:SetPoint("BOTTOMRIGHT", anchorTarget, "BOTTOMLEFT", -spacing, 0)
     else
         bar:SetParent(UIParent)
-        if bar.SetFrameStrata then bar:SetFrameStrata("HIGH") end
+        if bar.SetFrameStrata then bar:SetFrameStrata("MEDIUM") end
         if bar.SetFrameLevel then bar:SetFrameLevel(20) end
         bar:ClearAllPoints()
         local offset = self.db.offsets and self.db.offsets[key] or defaults
@@ -661,7 +661,7 @@ function MinimapMod:CreateAddonBar()
     local bar = CreateFrame("Frame", "RoithiAddonBar", UIParent, "BackdropTemplate")
     bar:SetSize(40, 40)
     if bar.SetFrameStrata then
-        bar:SetFrameStrata("HIGH")
+        bar:SetFrameStrata("MEDIUM")
     end
     if bar.SetFrameLevel then
         bar:SetFrameLevel(70)
@@ -696,7 +696,7 @@ function MinimapMod:CreateAddonBar()
             if inEditMode then
                 if not self.db.addonBarAttached then
                     f:SetParent(UIParent)
-                    f:SetFrameStrata("HIGH")
+                    f:SetFrameStrata("MEDIUM")
                     f:SetFrameLevel(20)
                     f:ClearAllPoints()
                     f:SetPoint(point, UIParent, point, x, y)
@@ -1240,7 +1240,7 @@ function MinimapMod:UpdateAddonBarLayout()
             end
 
             local barLevel = (self.addonBar and self.addonBar.GetFrameLevel and self.addonBar:GetFrameLevel()) or 70
-    local barStrata = (self.addonBar and self.addonBar.GetFrameStrata and self.addonBar:GetFrameStrata()) or "HIGH"
+    local barStrata = (self.addonBar and self.addonBar.GetFrameStrata and self.addonBar:GetFrameStrata()) or "MEDIUM"
 
             if custom.SetFrameStrata then
                 custom:SetFrameStrata(barStrata)
@@ -1525,7 +1525,7 @@ function MinimapMod:UpdateAddonBarLayout()
                 self:CreateFlyoutTrigger()
             end
             local barLevel = (self.addonBar and self.addonBar.GetFrameLevel and self.addonBar:GetFrameLevel()) or 20
-            local barStrata = (self.addonBar and self.addonBar.GetFrameStrata and self.addonBar:GetFrameStrata()) or "HIGH"
+            local barStrata = (self.addonBar and self.addonBar.GetFrameStrata and self.addonBar:GetFrameStrata()) or "MEDIUM"
             if self.flyoutTrigger.SetFrameStrata then self.flyoutTrigger:SetFrameStrata(barStrata) end
             if self.flyoutTrigger.SetFrameLevel then self.flyoutTrigger:SetFrameLevel(barLevel + 5) end
             self.flyoutTrigger:ClearAllPoints()
@@ -1574,7 +1574,7 @@ function MinimapMod:UpdateAddonBarLayout()
 
         if self.expanderButton then
             local barLevel = (self.addonBar and self.addonBar.GetFrameLevel and self.addonBar:GetFrameLevel()) or 20
-            local barStrata = (self.addonBar and self.addonBar.GetFrameStrata and self.addonBar:GetFrameStrata()) or "HIGH"
+            local barStrata = (self.addonBar and self.addonBar.GetFrameStrata and self.addonBar:GetFrameStrata()) or "MEDIUM"
             if self.expanderButton.SetFrameStrata then self.expanderButton:SetFrameStrata(barStrata) end
             if self.expanderButton.SetFrameLevel then self.expanderButton:SetFrameLevel(barLevel + 5) end
             self.expanderButton:ClearAllPoints()

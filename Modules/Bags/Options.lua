@@ -394,10 +394,42 @@ function BagsMod:GetOptions()
                             if self.UpdateTypography then self:UpdateTypography() end
                         end,
                     },
+                    itemCountFont = {
+                        type = "select",
+                        name = L["Item Count Font Face"] or "Item Count Font Face",
+                        order = 8,
+                        dialogControl = "LSM30_Font",
+                        values = function()
+                            local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+                            return LSM and LSM:HashTable("font") or { ["Roithi Thick"] = "Roithi Thick", ["Friz Quadrata TT"] = "Friz Quadrata TT" }
+                        end,
+                        get = function() return self.db.itemCountFont or self.db.font or "Roithi Thick" end,
+                        set = function(_, val)
+                            self.db.itemCountFont = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    itemCountFontOutline = {
+                        type = "select",
+                        name = L["Item Count Font Outline"] or "Item Count Font Outline",
+                        order = 9,
+                        values = {
+                            ["NONE"] = L["None"] or "None",
+                            ["OUTLINE"] = L["Outline"] or "Outline",
+                            ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
+                        },
+                        get = function() return self.db.itemCountFontOutline or self.db.fontOutline or "OUTLINE" end,
+                        set = function(_, val)
+                            self.db.itemCountFontOutline = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
                     itemCountFontSize = {
                         type = "range",
                         name = L["Item Count Font Size"] or "Item Count Font Size",
-                        order = 8,
+                        order = 10,
                         min = 8,
                         max = 20,
                         step = 1,
@@ -411,7 +443,7 @@ function BagsMod:GetOptions()
                     itemCountAnchor = {
                         type = "select",
                         name = L["Item Count Anchor"] or "Item Count Anchor",
-                        order = 9,
+                        order = 11,
                         values = {
                             ["TOPLEFT"] = "TOPLEFT",
                             ["TOP"] = "TOP",
@@ -433,7 +465,7 @@ function BagsMod:GetOptions()
                     itemCountX = {
                         type = "range",
                         name = L["Item Count X Offset"] or "Item Count X Offset",
-                        order = 10,
+                        order = 12,
                         min = -30,
                         max = 30,
                         step = 1,
@@ -447,7 +479,7 @@ function BagsMod:GetOptions()
                     itemCountY = {
                         type = "range",
                         name = L["Item Count Y Offset"] or "Item Count Y Offset",
-                        order = 11,
+                        order = 13,
                         min = -30,
                         max = 30,
                         step = 1,
@@ -458,10 +490,42 @@ function BagsMod:GetOptions()
                             self:UpdateInventory()
                         end,
                     },
+                    itemLevelFont = {
+                        type = "select",
+                        name = L["Item Level Font Face"] or "Item Level Font Face",
+                        order = 14,
+                        dialogControl = "LSM30_Font",
+                        values = function()
+                            local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+                            return LSM and LSM:HashTable("font") or { ["Roithi Thick"] = "Roithi Thick", ["Friz Quadrata TT"] = "Friz Quadrata TT" }
+                        end,
+                        get = function() return self.db.itemLevelFont or self.db.font or "Roithi Thick" end,
+                        set = function(_, val)
+                            self.db.itemLevelFont = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    itemLevelFontOutline = {
+                        type = "select",
+                        name = L["Item Level Font Outline"] or "Item Level Font Outline",
+                        order = 15,
+                        values = {
+                            ["NONE"] = L["None"] or "None",
+                            ["OUTLINE"] = L["Outline"] or "Outline",
+                            ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
+                        },
+                        get = function() return self.db.itemLevelFontOutline or self.db.fontOutline or "OUTLINE" end,
+                        set = function(_, val)
+                            self.db.itemLevelFontOutline = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
                     itemLevelFontSize = {
                         type = "range",
                         name = L["Item Level Font Size"] or "Item Level Font Size",
-                        order = 12,
+                        order = 16,
                         min = 7,
                         max = 18,
                         step = 1,
@@ -475,7 +539,7 @@ function BagsMod:GetOptions()
                     itemLevelAnchor = {
                         type = "select",
                         name = L["Item Level Anchor"] or "Item Level Anchor",
-                        order = 13,
+                        order = 17,
                         values = {
                             ["TOPLEFT"] = "TOPLEFT",
                             ["TOP"] = "TOP",
@@ -497,7 +561,7 @@ function BagsMod:GetOptions()
                     itemLevelX = {
                         type = "range",
                         name = L["Item Level X Offset"] or "Item Level X Offset",
-                        order = 14,
+                        order = 18,
                         min = -30,
                         max = 30,
                         step = 1,
@@ -511,7 +575,7 @@ function BagsMod:GetOptions()
                     itemLevelY = {
                         type = "range",
                         name = L["Item Level Y Offset"] or "Item Level Y Offset",
-                        order = 15,
+                        order = 19,
                         min = -30,
                         max = 30,
                         step = 1,
@@ -519,6 +583,17 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemLevelY = val
                             if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    colorItemLevelByQuality = {
+                        type = "toggle",
+                        name = L["Color Item Level by Quality"] or "Color Item Level by Quality",
+                        desc = L["Color item level text according to the item's quality color instead of fixed gold."],
+                        order = 20,
+                        get = function() return self.db.colorItemLevelByQuality ~= false end,
+                        set = function(_, val)
+                            self.db.colorItemLevelByQuality = val
                             self:UpdateInventory()
                         end,
                     },

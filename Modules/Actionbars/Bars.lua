@@ -6,7 +6,7 @@ local LibRoithi = LibStub("LibRoithi-1.0")
 local LEM = LibStub("LibEditMode-Roithi", true)
 
 local BAR_CONFIGS = {
-    bar1 = { name = "RoithiActionBar1", prefix = "ActionButton", count = 12, actionPage = 1 },
+    bar1 = { name = "RoithiActionBar1", prefix = "ActionButton", count = 12 },
     bar2 = { name = "RoithiActionBar2", prefix = "MultiBarBottomLeftButton", count = 12, actionPage = 6 },
     bar3 = { name = "RoithiActionBar3", prefix = "MultiBarBottomRightButton", count = 12, actionPage = 5 },
     bar4 = { name = "RoithiActionBar4", prefix = "MultiBarRightButton", count = 12, actionPage = 3 },
@@ -52,6 +52,19 @@ local function FormatHotkey(text)
     return text or ""
 end
 AB.FormatHotkey = FormatHotkey
+
+local function RestoreButtonUsability(btn, icon)
+    if btn.UpdateUsable then
+        btn:UpdateUsable()
+    elseif _G.ActionButton_UpdateUsable then
+        _G.ActionButton_UpdateUsable(btn)
+    elseif _G.PetActionButton_Update and btn.buttonType == "PET" then
+        _G.PetActionButton_Update(btn)
+    elseif icon and icon.SetVertexColor then
+        icon:SetVertexColor(1, 1, 1)
+    end
+end
+AB.RestoreButtonUsability = RestoreButtonUsability
 
 function AB:IsHideEmpty(barKey)
     local barDb = barKey and self.db and self.db[barKey]
@@ -230,24 +243,53 @@ function AB:IsBarMouseOver(barKey)
     return false
 end
 
+function AB:IsFaderActive(barKey)
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return true end
+    if _G.UnitExists and _G.UnitExists("target") then return true end
+    if _G.UnitCastingInfo and _G.UnitCastingInfo("player") then return true end
+    if _G.UnitChannelInfo and _G.UnitChannelInfo("player") then return true end
+    if _G.UnitEmpoweredChannelDuration and _G.UnitEmpoweredChannelDuration("player") then return true end
+    if self:IsBarMouseOver(barKey) then return true end
+    return false
+end
+
 function AB:UpdateBarMouseover(barKey)
     local container = self.bars[barKey]
     if not container then return end
-    local db = self.db[barKey] or {}
+    local db = self.db and self.db[barKey] or {}
     if db.enabled == false then
         if container.Hide then container:Hide() end
         return
     end
 
-    local alpha = (db.mouseover and not self:IsBarMouseOver(barKey)) and (db.mouseoverAlpha or 0.0) or (db.alpha or 1.0)
+    local alpha
+    if db.mouseover then
+        alpha = (not self:IsBarMouseOver(barKey)) and (db.mouseoverAlpha or 0.0) or (db.alpha or 1.0)
+    elseif self.db and self.db.enableFader then
+        if self:IsFaderActive(barKey) then
+            alpha = db.alpha or 1.0
+        else
+            alpha = self.db.faderIdleAlpha or 0.3
+        end
+    else
+        alpha = db.alpha or 1.0
+    end
+
     if container.SetAlpha then
         container:SetAlpha(alpha)
     end
 end
 
+function AB:UpdateAllBarFaders()
+    if not self.bars then return end
+    for barKey in pairs(BAR_CONFIGS) do
+        self:UpdateBarMouseover(barKey)
+    end
+end
+
 function AB:OnBarEnter(barKey)
-    local db = self.db[barKey] or {}
-    if db.mouseover then
+    local db = self.db and self.db[barKey] or {}
+    if db.mouseover or (self.db and self.db.enableFader) then
         local container = self.bars[barKey]
         if container and container.SetAlpha then
             container:SetAlpha(db.alpha or 1.0)
@@ -256,15 +298,10 @@ function AB:OnBarEnter(barKey)
 end
 
 function AB:OnBarLeave(barKey)
-    local db = self.db[barKey] or {}
-    if db.mouseover and _G.C_Timer and _G.C_Timer.After then
+    local db = self.db and self.db[barKey] or {}
+    if (db.mouseover or (self.db and self.db.enableFader)) and _G.C_Timer and _G.C_Timer.After then
         _G.C_Timer.After(0.05, function()
-            if not self:IsBarMouseOver(barKey) then
-                local container = self.bars[barKey]
-                if container and container.SetAlpha then
-                    container:SetAlpha(db.mouseoverAlpha or 0.0)
-                end
-            end
+            self:UpdateBarMouseover(barKey)
         end)
     end
 end
@@ -424,6 +461,11 @@ function AB:SetupBars()
             f.barKey = barKey
             if cfg.actionPage and f.SetAttribute then
                 f:SetAttribute("actionpage", cfg.actionPage)
+            elseif barKey == "bar1" and f.SetAttribute then
+                local page = (_G.MainActionBar and _G.MainActionBar.GetAttribute and _G.MainActionBar:GetAttribute("actionpage"))
+                    or (_G.C_ActionBar and _G.C_ActionBar.GetActionBarPage and _G.C_ActionBar.GetActionBarPage())
+                    or 1
+                f:SetAttribute("actionpage", page)
             end
             self.bars[barKey] = f
 
@@ -436,6 +478,11 @@ function AB:SetupBars()
             if self.bars[barKey].SetFrameLevel then self.bars[barKey]:SetFrameLevel(100) end
             if cfg.actionPage and self.bars[barKey].SetAttribute then
                 self.bars[barKey]:SetAttribute("actionpage", cfg.actionPage)
+            elseif barKey == "bar1" and self.bars[barKey].SetAttribute then
+                local page = (_G.MainActionBar and _G.MainActionBar.GetAttribute and _G.MainActionBar:GetAttribute("actionpage"))
+                    or (_G.C_ActionBar and _G.C_ActionBar.GetActionBarPage and _G.C_ActionBar.GetActionBarPage())
+                    or 1
+                self.bars[barKey]:SetAttribute("actionpage", page)
             end
         end
 
@@ -495,6 +542,20 @@ function AB:SetupBars()
         self.managePositionsHooked = true
     end
 
+    if _G.MainActionBar and not self.mainActionBarHooked and hooksecurefunc then
+        hooksecurefunc(_G.MainActionBar, "SetAttribute", function(_, name, value)
+            if name == "actionpage" and self.bars and self.bars.bar1 then
+                if not (_G.InCombatLockdown and _G.InCombatLockdown()) and self.bars.bar1.SetAttribute then
+                    self.bars.bar1:SetAttribute("actionpage", value)
+                end
+                if self.UpdateEmptyButtons then
+                    self:UpdateEmptyButtons("bar1")
+                end
+            end
+        end)
+        self.mainActionBarHooked = true
+    end
+
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.editModeRegistered then
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
             self:OnEditModeEnter()
@@ -551,6 +612,7 @@ function AB:SetupBars()
                 self:UpdateEmptyButtons(barKey, { btn })
             end
         end
+        self:UpdateButtonRange(btn)
     end
 
     if not self.overlayHooksRegistered and hooksecurefunc then
@@ -612,7 +674,174 @@ function AB:SetupBars()
                 end
             end)
         end
+        if _G.ActionButton_UpdateRangeIndicator and not self.rangeIndicatorHooked then
+            hooksecurefunc("ActionButton_UpdateRangeIndicator", function(btn, checksRange, inRange)
+                if (not self.IsEnabled or self:IsEnabled()) and btn then
+                    local hasTarget = _G.UnitExists and _G.UnitExists("target")
+                    local isOutOfRange = false
+
+                    if hasTarget and checksRange and not inRange then
+                        if btn.action and _G.C_ActionBar and _G.C_ActionBar.IsActionInRange then
+                            local ok, actionInRange = pcall(_G.C_ActionBar.IsActionInRange, btn.action)
+                            if ok then
+                                if actionInRange == false or actionInRange == 0 then
+                                    isOutOfRange = true
+                                end
+                            else
+                                isOutOfRange = true
+                            end
+                        else
+                            isOutOfRange = true
+                        end
+                    end
+
+                    local icon = btn.icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "Icon") or ""]
+                    if isOutOfRange then
+                        btn.roithiIsOutOfRange = true
+                        if self.db and self.db.outOfRangeColoring ~= false then
+                            if icon and icon.SetVertexColor then
+                                icon:SetVertexColor(0.85, 0.35, 0.35)
+                            end
+                        end
+                        if btn.HotKey and btn.HotKey.SetVertexColor then
+                            btn.HotKey:SetVertexColor(0.85, 0.35, 0.35)
+                        end
+                        if btn.roithiRangeDot then
+                            btn.roithiRangeDot:Show()
+                        end
+                    else
+                        if btn.roithiIsOutOfRange then
+                            btn.roithiIsOutOfRange = false
+                            RestoreButtonUsability(btn, icon)
+                        end
+                        if btn.HotKey and btn.HotKey.SetVertexColor then
+                            btn.HotKey:SetVertexColor(1, 1, 1)
+                        end
+                        if btn.roithiRangeDot then
+                            btn.roithiRangeDot:Hide()
+                        end
+                    end
+                end
+            end)
+            self.rangeIndicatorHooked = true
+        end
+        if _G.ActionBarActionButtonMixin and _G.ActionBarActionButtonMixin.UpdateUsable and not self.updateUsableHooked then
+            hooksecurefunc(_G.ActionBarActionButtonMixin, "UpdateUsable", function(btn)
+                if (not self.IsEnabled or self:IsEnabled()) and btn and self.db and self.db.outOfRangeColoring ~= false and btn.roithiIsOutOfRange then
+                    local stillOutOfRange = false
+                    if _G.UnitExists and _G.UnitExists("target") then
+                        if btn.action and _G.C_ActionBar and _G.C_ActionBar.IsActionInRange then
+                            local ok, inRange = pcall(_G.C_ActionBar.IsActionInRange, btn.action)
+                            if ok and (inRange == false or inRange == 0) then
+                                stillOutOfRange = true
+                            end
+                        else
+                            stillOutOfRange = true
+                        end
+                    end
+                    if not stillOutOfRange then
+                        btn.roithiIsOutOfRange = false
+                        if btn.HotKey and btn.HotKey.SetVertexColor then
+                            btn.HotKey:SetVertexColor(1, 1, 1)
+                        end
+                        if btn.roithiRangeDot then
+                            btn.roithiRangeDot:Hide()
+                        end
+                        return
+                    end
+                    local icon = btn.icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "Icon") or ""]
+                    if icon and icon.SetVertexColor then
+                        icon:SetVertexColor(0.85, 0.35, 0.35)
+                    end
+                end
+            end)
+            self.updateUsableHooked = true
+        end
+        if _G.ActionBarActionButtonMixin and _G.ActionBarActionButtonMixin.UpdateAction and not self.updateActionHooked then
+            hooksecurefunc(_G.ActionBarActionButtonMixin, "UpdateAction", function(btn)
+                if (not self.IsEnabled or self:IsEnabled()) and btn then
+                    self:UpdateButtonRange(btn)
+                end
+            end)
+            self.updateActionHooked = true
+        end
         self.overlayHooksRegistered = true
+    end
+end
+
+function AB:UpdateButtonRange(btn)
+    if not btn or (self.IsEnabled and not self:IsEnabled()) then return end
+    local icon = btn.icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "Icon") or ""]
+    local hasTarget = _G.UnitExists and _G.UnitExists("target")
+    local isOutOfRange = false
+
+    if hasTarget then
+        if btn.action and _G.C_ActionBar and _G.C_ActionBar.IsActionInRange then
+            local ok, inRange = pcall(_G.C_ActionBar.IsActionInRange, btn.action)
+            if ok and (inRange == false or inRange == 0) then
+                isOutOfRange = true
+            end
+        elseif btn.buttonType == "PET" and _G.GetPetActionInfo and btn.GetID and btn:GetID() then
+            local _, _, _, _, _, _, _, petChecksRange, petInRange = _G.GetPetActionInfo(btn:GetID())
+            if petChecksRange and not petInRange then
+                isOutOfRange = true
+            end
+        end
+    end
+
+    if isOutOfRange then
+        btn.roithiIsOutOfRange = true
+        if self.db and self.db.outOfRangeColoring ~= false then
+            if icon and icon.SetVertexColor then
+                icon:SetVertexColor(0.85, 0.35, 0.35)
+            end
+        end
+        if btn.HotKey and btn.HotKey.SetVertexColor then
+            btn.HotKey:SetVertexColor(0.85, 0.35, 0.35)
+        end
+        if btn.roithiRangeDot then
+            btn.roithiRangeDot:Show()
+        end
+    else
+        if btn.roithiIsOutOfRange then
+            btn.roithiIsOutOfRange = false
+            RestoreButtonUsability(btn, icon)
+        end
+        if btn.HotKey and btn.HotKey.SetVertexColor then
+            btn.HotKey:SetVertexColor(1, 1, 1)
+        end
+        if btn.roithiRangeDot then
+            btn.roithiRangeDot:Hide()
+        end
+    end
+end
+
+function AB:UpdateAllButtonsRange()
+    if not self.bars then return end
+    for barKey in pairs(BAR_CONFIGS) do
+        local buttons = self:GetBarButtons(barKey)
+        for _, btn in ipairs(buttons) do
+            self:UpdateButtonRange(btn)
+        end
+    end
+end
+
+function AB:UpdateRangeColoringState()
+    if not self.bars then return end
+    local enabled = self.db and self.db.outOfRangeColoring ~= false
+    for barKey in pairs(BAR_CONFIGS) do
+        local buttons = self:GetBarButtons(barKey)
+        for _, btn in ipairs(buttons) do
+            if not enabled then
+                if btn.roithiIsOutOfRange then
+                    btn.roithiIsOutOfRange = false
+                    local icon = btn.icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "Icon") or ""]
+                    RestoreButtonUsability(btn, icon)
+                end
+            else
+                self:UpdateButtonRange(btn)
+            end
+        end
     end
 end
 
@@ -880,8 +1109,19 @@ function AB:StyleButton(button, explicitBarKey)
             hotkey:ClearAllPoints()
             hotkey:SetPoint(pos, button, pos, ox, oy)
         end
+        local hotkeyFont = (barDb and barDb.font) or self.db.font or "Roithi Thick"
+        local hotkeyFontSize = (barDb and barDb.fontSize) or self.db.fontSize or 11
+        local hotkeyFontOutline = (barDb and barDb.fontOutline) or self.db.fontOutline or "OUTLINE"
         if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(hotkey, self.db.font or "Friz Quadrata TT", self.db.fontSize or 11, "OUTLINE")
+            LibRoithi.mixins:SetFont(hotkey, hotkeyFont, hotkeyFontSize, hotkeyFontOutline)
+        end
+        if hotkey.SetDrawLayer then hotkey:SetDrawLayer("OVERLAY", 7) end
+        if hotkey.SetShadowOffset then
+            if hotkeyFontOutline ~= "NONE" and hotkeyFontOutline ~= "" then
+                hotkey:SetShadowOffset(0, 0)
+            else
+                hotkey:SetShadowOffset(1, -1)
+            end
         end
         if not hotkey.roithiHooked and hooksecurefunc then
             hooksecurefunc(hotkey, "SetText", function(s, txt)
@@ -911,7 +1151,16 @@ function AB:StyleButton(button, explicitBarKey)
                     s:SetText(formatted)
                     s.roithiFormatting = false
                 end
+                -- Re-lock colour to white; Blizzard resets it via SetFontObject
+                if s.SetTextColor then s:SetTextColor(1, 1, 1, 1) end
             end)
+            -- Hook SetFontObject: WoW's ActionButton_UpdateHotkeys calls this with
+            -- NumberFontNormalSmallGray, which bakes in a grey colour. Lock it back.
+            if hotkey.SetFontObject then
+                hooksecurefunc(hotkey, "SetFontObject", function(s)
+                    if s.SetTextColor then s:SetTextColor(1, 1, 1, 1) end
+                end)
+            end
             hotkey.roithiHooked = true
         end
         currentText = hotkey.GetText and hotkey:GetText()
@@ -945,8 +1194,27 @@ function AB:StyleButton(button, explicitBarKey)
             name:ClearAllPoints()
             name:SetPoint(pos, button, pos, ox, oy)
         end
+        local nameFont = (barDb and barDb.font) or self.db.font or "Roithi Thick"
+        local nameFontSize = math.max(8, ((barDb and barDb.fontSize) or self.db.fontSize or 11) - 2)
+        local nameFontOutline = (barDb and barDb.fontOutline) or self.db.fontOutline or "OUTLINE"
         if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(name, self.db.font or "Friz Quadrata TT", math.max(8, (self.db.fontSize or 11) - 2), "OUTLINE")
+            LibRoithi.mixins:SetFont(name, nameFont, nameFontSize, nameFontOutline)
+        end
+        if name.SetDrawLayer then name:SetDrawLayer("OVERLAY", 7) end
+        if name.SetShadowOffset then
+            if nameFontOutline ~= "NONE" and nameFontOutline ~= "" then
+                name:SetShadowOffset(0, 0)
+            else
+                name:SetShadowOffset(1, -1)
+            end
+        end
+        -- Lock colour to white; Blizzard may reset via SetFontObject
+        if name.SetTextColor then name:SetTextColor(1, 1, 1, 1) end
+        if name.SetFontObject and not name.roithiFontObjectHooked and hooksecurefunc then
+            hooksecurefunc(name, "SetFontObject", function(s)
+                if s.SetTextColor then s:SetTextColor(1, 1, 1, 1) end
+            end)
+            name.roithiFontObjectHooked = true
         end
     end
 
@@ -997,8 +1265,18 @@ function AB:StyleButton(button, explicitBarKey)
             count:ClearAllPoints()
             count:SetPoint(pos, button, pos, ox, oy)
         end
+        local countFont = (barDb and barDb.font) or self.db.font or "Roithi Thick"
+        local countFontSize = math.max(8, ((barDb and barDb.fontSize) or self.db.fontSize or 11) - 1)
+        local countFontOutline = (barDb and barDb.fontOutline) or self.db.fontOutline or "OUTLINE"
         if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(count, self.db.font or "Friz Quadrata TT", math.max(8, (self.db.fontSize or 11) - 1), "OUTLINE")
+            LibRoithi.mixins:SetFont(count, countFont, countFontSize, countFontOutline)
+        end
+        if count.SetShadowOffset then
+            if countFontOutline ~= "NONE" and countFontOutline ~= "" then
+                count:SetShadowOffset(0, 0)
+            else
+                count:SetShadowOffset(1, -1)
+            end
         end
     end
 
@@ -1306,6 +1584,8 @@ function AB:LayoutBarInternal(barKey)
             local barCfg = BAR_CONFIGS[barKey]
             if barCfg and barCfg.actionPage and btn.SetAttribute then
                 btn:SetAttribute("actionpage", barCfg.actionPage)
+            elseif barKey == "bar1" and btn.SetAttribute then
+                btn:SetAttribute("actionpage", nil)
             end
             if btn.SetFrameStrata then
                 btn:SetFrameStrata("MEDIUM")
@@ -1458,4 +1738,37 @@ function AB:DisableActionPageSwitching()
         self.pageSwitchHooked = true
     end
 end
+
+function AB:SyncBar1Page()
+    local bar1 = self.bars and self.bars.bar1
+    local page
+    if _G.MainActionBar and _G.MainActionBar.GetAttribute then
+        page = _G.MainActionBar:GetAttribute("actionpage")
+    end
+    if not page and _G.C_ActionBar then
+        if _G.C_ActionBar.HasBonusActionBar and _G.C_ActionBar.HasBonusActionBar() and _G.C_ActionBar.GetActionBarPage and _G.C_ActionBar.GetActionBarPage() == 1 then
+            page = _G.C_ActionBar.GetBonusBarIndex and _G.C_ActionBar.GetBonusBarIndex()
+        elseif _G.C_ActionBar.HasOverrideActionBar and _G.C_ActionBar.HasOverrideActionBar() then
+            page = _G.C_ActionBar.GetOverrideBarIndex and _G.C_ActionBar.GetOverrideBarIndex()
+        elseif _G.C_ActionBar.HasVehicleActionBar and _G.C_ActionBar.HasVehicleActionBar() then
+            page = _G.C_ActionBar.GetVehicleBarIndex and _G.C_ActionBar.GetVehicleBarIndex()
+        else
+            page = _G.C_ActionBar.GetActionBarPage and _G.C_ActionBar.GetActionBarPage()
+        end
+    end
+    page = page or 1
+    if bar1 and bar1.SetAttribute and not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+        bar1:SetAttribute("actionpage", page)
+    end
+    local buttons = self:GetBarButtons("bar1")
+    for _, btn in ipairs(buttons) do
+        if not (_G.InCombatLockdown and _G.InCombatLockdown()) and btn.SetAttribute then
+            btn:SetAttribute("actionpage", nil)
+        end
+        if btn.UpdateAction then
+            btn:UpdateAction()
+        end
+    end
+end
+
 

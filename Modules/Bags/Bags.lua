@@ -16,6 +16,17 @@ local QUALITY_COLORS = {
     [7] = { r = 0.0, g = 0.8, b = 1.0 },    -- Heirloom
 }
 
+local function FormatNumberWithDots(amount)
+    local formatted = tostring(amount or 0)
+    local k
+    repeat
+        formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", "%1.%2")
+    until k == 0
+    return formatted
+end
+BagsMod.FormatNumberWithDots = FormatNumberWithDots
+
+
 function BagsMod:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Bags or self.defaultSettings
     if not self.db.bagBar then
@@ -29,6 +40,18 @@ function BagsMod:OnInitialize()
     end
     if self.db.activeCategory == "WEAPONS" then
         self.db.activeCategory = "GEAR"
+    end
+    if self.db.itemCountFont == nil then
+        self.db.itemCountFont = (self.defaultSettings and self.defaultSettings.itemCountFont) or "Roithi Thick"
+    end
+    if self.db.itemCountFontOutline == nil then
+        self.db.itemCountFontOutline = (self.defaultSettings and self.defaultSettings.itemCountFontOutline) or "OUTLINE"
+    end
+    if self.db.itemLevelFont == nil then
+        self.db.itemLevelFont = (self.defaultSettings and self.defaultSettings.itemLevelFont) or "Roithi Thick"
+    end
+    if self.db.itemLevelFontOutline == nil then
+        self.db.itemLevelFontOutline = (self.defaultSettings and self.defaultSettings.itemLevelFontOutline) or "OUTLINE"
     end
     self.itemSlots = {}
     self.categoryButtons = {}
@@ -682,15 +705,28 @@ function BagsMod:CreateMainBagFrame()
     self:UpdateTypography()
 end
 
-function BagsMod:ApplyFont(fontString, defaultSize, customSizeKey, defaultOutline)
+function BagsMod:ApplyFont(fontString, defaultSize, customSizeKey, defaultOutline, customFontKey, customOutlineKey)
     if not fontString then return end
-    local fontFace = (self.db and self.db.font) or "Friz Quadrata TT"
-    local outline = (self.db and self.db.fontOutline) or defaultOutline or "OUTLINE"
+    local fontFace = (self.db and customFontKey and self.db[customFontKey]) or (self.db and self.db.font) or "Friz Quadrata TT"
+    local outline = (self.db and customOutlineKey and self.db[customOutlineKey]) or (self.db and self.db.fontOutline) or defaultOutline or "OUTLINE"
     local size = (self.db and customSizeKey and self.db[customSizeKey]) or defaultSize or 12
     if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(fontString, fontFace, size, outline)
     else
         fontString:SetFont("Fonts\\FRIZQT__.TTF", size, outline)
+    end
+    if fontString.SetShadowOffset then
+        if outline == "OUTLINE" or outline == "THICKOUTLINE" then
+            fontString:SetShadowOffset(0, 0)
+        else
+            fontString:SetShadowOffset(1, -1)
+            if fontString.SetShadowColor then
+                fontString:SetShadowColor(0, 0, 0, 1)
+            end
+        end
+    end
+    if fontString.IsObjectType and fontString:IsObjectType("FontString") and fontString.SetDrawLayer then
+        fontString:SetDrawLayer("OVERLAY", 7)
     end
 end
 
@@ -701,8 +737,9 @@ function BagsMod:UpdateFooterLayout()
     self.sortButton:ClearAllPoints()
 
     if freeAnchor == "LEFT" then
-        if self.moneyText then
-            self.freeText:SetPoint("LEFT", self.moneyText, "RIGHT", 12, 0)
+        local leftAnchor = self.moneyButton or self.moneyText
+        if leftAnchor then
+            self.freeText:SetPoint("LEFT", leftAnchor, "RIGHT", 12, 0)
         else
             self.freeText:SetPoint("LEFT", self.footerBar, "LEFT", 120, 0)
         end
@@ -753,12 +790,12 @@ function BagsMod:UpdateTypography()
         for _, slotFrame in pairs(slots) do
             local count = slotFrame.Count or slotFrame.count
             if count then
-                self:ApplyFont(count, 12, "itemCountFontSize", "OUTLINE")
+                self:ApplyFont(count, 12, "itemCountFontSize", "OUTLINE", "itemCountFont", "itemCountFontOutline")
                 if count.ClearAllPoints then count:ClearAllPoints() end
                 count:SetPoint(countAnchor, slotFrame, countAnchor, countX, countY)
             end
             if slotFrame.ilvl then
-                self:ApplyFont(slotFrame.ilvl, 12, "itemLevelFontSize", "OUTLINE")
+                self:ApplyFont(slotFrame.ilvl, 12, "itemLevelFontSize", "OUTLINE", "itemLevelFont", "itemLevelFontOutline")
                 if slotFrame.ilvl.ClearAllPoints then slotFrame.ilvl:ClearAllPoints() end
                 slotFrame.ilvl:SetPoint(ilvlAnchor, slotFrame, ilvlAnchor, ilvlX, ilvlY)
             end
@@ -1340,12 +1377,73 @@ function BagsMod:CreateFooterBar()
     footer:SetPoint("BOTTOMRIGHT", self.mainFrame, "BOTTOMRIGHT", -6, 6)
     self.footerBar = footer
 
-    -- Money Display
-    local moneyText = footer:CreateFontString(nil, "OVERLAY")
+    -- Money Display (Interactive Widget with Wealth & Currency Breakdown)
+    local moneyBtn = CreateFrame("Button", nil, footer)
+    moneyBtn:SetHeight(20)
+    moneyBtn:SetPoint("LEFT", footer, "LEFT", 2, 0)
+
+    local moneyText = moneyBtn:CreateFontString(nil, "OVERLAY")
     self:ApplyFont(moneyText, 12, "goldFontSize", "OUTLINE")
-    moneyText:SetPoint("LEFT", footer, "LEFT", 2, 0)
+    moneyText:SetPoint("LEFT", moneyBtn, "LEFT", 0, 0)
     self.moneyText = moneyText
+    self.moneyButton = moneyBtn
     self:UpdateMoneyDisplay()
+
+    moneyBtn:SetScript("OnEnter", function(b)
+        if not _G.GameTooltip then return end
+        _G.GameTooltip:SetOwner(b, "ANCHOR_TOPLEFT")
+        _G.GameTooltip:ClearLines()
+        _G.GameTooltip:AddLine(L["Currency & Wealth"] or "Currency & Wealth", 1, 1, 1)
+        _G.GameTooltip:AddLine(" ")
+
+        local copper = _G.GetMoney and _G.GetMoney() or 0
+        local gold = math.floor(copper / 10000)
+        local silver = math.floor((copper % 10000) / 100)
+        local cop = copper % 100
+        local formattedGold = FormatNumberWithDots(gold)
+        local charMoneyStr = string.format("|cffffd700%s|rg |cffc7c7cf%d|rs |cffeda55f%d|rc", formattedGold, silver, cop)
+        _G.GameTooltip:AddDoubleLine(L["Character Gold"] or "Character Gold", charMoneyStr, 1, 0.82, 0, 1, 1, 1)
+
+        if _G.C_Bank and _G.C_Bank.FetchDepositedMoney and _G.Enum and _G.Enum.BankType and _G.Enum.BankType.Account then
+            local warbandCopper = _G.C_Bank.FetchDepositedMoney(_G.Enum.BankType.Account) or 0
+            if warbandCopper > 0 then
+                local wGold = math.floor(warbandCopper / 10000)
+                local wSilver = math.floor((warbandCopper % 10000) / 100)
+                local wCop = warbandCopper % 100
+                local wFormattedGold = FormatNumberWithDots(wGold)
+                local warbandMoneyStr = string.format("|cffffd700%s|rg |cffc7c7cf%d|rs |cffeda55f%d|rc", wFormattedGold, wSilver, wCop)
+                _G.GameTooltip:AddDoubleLine(L["Warband Gold"] or "Warband Gold", warbandMoneyStr, 0, 0.8, 1, 1, 1, 1)
+            end
+        end
+
+        if _G.C_CurrencyInfo and _G.C_CurrencyInfo.GetBackpackCurrencyInfo then
+            local hasCurrencies = false
+            for i = 1, 5 do
+                local cInfo = _G.C_CurrencyInfo.GetBackpackCurrencyInfo(i)
+                if cInfo and cInfo.name then
+                    if not hasCurrencies then
+                        _G.GameTooltip:AddLine(" ")
+                        hasCurrencies = true
+                    end
+                    local iconStr = (cInfo.iconFileID and string.format("|T%s:14:14:0:0:64:64:4:60:4:60|t ", cInfo.iconFileID)) or ""
+                    local countStr = FormatNumberWithDots(cInfo.quantity or 0)
+                    _G.GameTooltip:AddDoubleLine(iconStr .. cInfo.name, countStr, 1, 1, 1, 1, 0.82, 0)
+                end
+            end
+        end
+
+        _G.GameTooltip:AddLine(" ")
+        _G.GameTooltip:AddLine(L["Click to toggle Currency tab."] or "Click to toggle Currency tab.", 0.2, 0.8, 1, true)
+        _G.GameTooltip:Show()
+    end)
+    moneyBtn:SetScript("OnLeave", function()
+        if _G.GameTooltip then _G.GameTooltip:Hide() end
+    end)
+    moneyBtn:SetScript("OnClick", function()
+        if _G.ToggleCharacter then
+            _G.ToggleCharacter("TokenFrame")
+        end
+    end)
 
     -- Free Space Count
     local freeText = footer:CreateFontString(nil, "OVERLAY")
@@ -1469,13 +1567,18 @@ function BagsMod:CreateFooterBar()
     self.junkButton = junkBtn
 end
 
+
 function BagsMod:UpdateMoneyDisplay()
     if not self.moneyText then return end
     local copper = _G.GetMoney and _G.GetMoney() or 0
     local gold = math.floor(copper / 10000)
     local silver = math.floor((copper % 10000) / 100)
     local cop = copper % 100
-    self.moneyText:SetText(string.format("|cffffd700%d|rg |cffc7c7cf%d|rs |cffeda55f%d|rc", gold, silver, cop))
+    local formattedGold = FormatNumberWithDots(gold)
+    self.moneyText:SetText(string.format("|cffffd700%s|rg |cffc7c7cf%d|rs |cffeda55f%d|rc", formattedGold, silver, cop))
+    if self.moneyButton and self.moneyText.GetStringWidth then
+        self.moneyButton:SetWidth(math.max(40, self.moneyText:GetStringWidth() + 4))
+    end
 end
 
 function BagsMod:OnMerchantShow()
@@ -1487,25 +1590,107 @@ end
 
 function BagsMod:OnMerchantClosed()
     if self.junkButton then self.junkButton:Hide() end
+    if self.sellingJunkTicker then
+        self.sellingJunkTicker:Cancel()
+        self.sellingJunkTicker = nil
+    end
 end
 
 function BagsMod:SellAllJunk()
     if _G.InCombatLockdown and _G.InCombatLockdown() then return end
-    if _G.C_MerchantFrame and _G.C_MerchantFrame.SellAllJunkItems then
-        _G.C_MerchantFrame.SellAllJunkItems()
-        return
+    if self.sellingJunkTicker then
+        self.sellingJunkTicker:Cancel()
+        self.sellingJunkTicker = nil
     end
+
+    local junkQueue = {}
+    local totalCopper = 0
+    local totalItems = 0
+
     for _, bag in ipairs(self:GetScannableBags()) do
         local numSlots = self:GetNumBagSlots(bag)
         for slot = 1, numSlots do
             local itemInfo = self:GetItemInfoAt(bag, slot)
             if itemInfo and itemInfo.quality == 0 then
+                local price = 0
+                local itemLink = itemInfo.link or (_G.C_Container and _G.C_Container.GetContainerItemLink and _G.C_Container.GetContainerItemLink(bag, slot))
+                if itemLink and _G.GetItemInfo then
+                    local _, _, _, _, _, _, _, _, _, _, sellPrice = _G.GetItemInfo(itemLink)
+                    price = sellPrice or 0
+                elseif itemInfo.itemID and _G.GetItemInfo then
+                    local _, _, _, _, _, _, _, _, _, _, sellPrice = _G.GetItemInfo(itemInfo.itemID)
+                    price = sellPrice or 0
+                end
+                local count = itemInfo.count or 1
+                table.insert(junkQueue, { bag = bag, slot = slot, itemID = itemInfo.itemID, count = count, price = price })
+                totalItems = totalItems + 1
+                totalCopper = totalCopper + (price * count)
+            end
+        end
+    end
+
+    if #junkQueue == 0 then return end
+
+    local queueIndex = 1
+    local function ProcessNextJunk()
+        if _G.InCombatLockdown and _G.InCombatLockdown() then
+            if self.sellingJunkTicker then
+                self.sellingJunkTicker:Cancel()
+                self.sellingJunkTicker = nil
+            end
+            return
+        end
+        if not _G.MerchantFrame or not _G.MerchantFrame:IsShown() then
+            if self.sellingJunkTicker then
+                self.sellingJunkTicker:Cancel()
+                self.sellingJunkTicker = nil
+            end
+            return
+        end
+
+        local item = junkQueue[queueIndex]
+        if item then
+            local currentID = nil
+            if _G.C_Container and _G.C_Container.GetContainerItemID then
+                currentID = _G.C_Container.GetContainerItemID(item.bag, item.slot)
+            elseif _G.GetContainerItemID then
+                currentID = _G.GetContainerItemID(item.bag, item.slot)
+            end
+
+            -- Guard: verify slot still holds the expected junk item before selling
+            if (not item.itemID or currentID == item.itemID) and currentID ~= nil then
                 if _G.C_Container and _G.C_Container.UseContainerItem then
-                    pcall(_G.C_Container.UseContainerItem, bag, slot)
+                    pcall(_G.C_Container.UseContainerItem, item.bag, item.slot)
                 elseif _G.UseContainerItem then
-                    pcall(_G.UseContainerItem, bag, slot)
+                    pcall(_G.UseContainerItem, item.bag, item.slot)
                 end
             end
+            queueIndex = queueIndex + 1
+        end
+
+        if queueIndex > #junkQueue then
+            if self.sellingJunkTicker then
+                self.sellingJunkTicker:Cancel()
+                self.sellingJunkTicker = nil
+            end
+            if totalItems > 0 then
+                local gold = math.floor(totalCopper / 10000)
+                local silver = math.floor((totalCopper % 10000) / 100)
+                local cop = totalCopper % 100
+                local formattedGold = FormatNumberWithDots(gold)
+                local moneyStr = string.format("|cffffd700%s|rg |cffc7c7cf%d|rs |cffeda55f%d|rc", formattedGold, silver, cop)
+                local msg = string.format(L["Sold %d junk item%s for %s."] or "Sold %d junk item%s for %s.", totalItems, totalItems == 1 and "" or "s", moneyStr)
+                print("|cff00ccff[RoithiUI]|r " .. msg)
+            end
+        end
+    end
+    self.ProcessNextJunk = ProcessNextJunk
+
+    if _G.C_Timer and _G.C_Timer.NewTicker then
+        self.sellingJunkTicker = _G.C_Timer.NewTicker(0.04, ProcessNextJunk, #junkQueue)
+    else
+        while queueIndex <= #junkQueue do
+            ProcessNextJunk()
         end
     end
 end
@@ -1706,7 +1891,7 @@ function BagsMod:AcquireItemSlot(index)
     end
     slot.count = count
     slot.Count = count
-    self:ApplyFont(count, 12, "itemCountFontSize", "OUTLINE")
+    self:ApplyFont(count, 12, "itemCountFontSize", "OUTLINE", "itemCountFont", "itemCountFontOutline")
 
     -- Item level text
     local ilvl = slot.ilvl
@@ -1722,7 +1907,7 @@ function BagsMod:AcquireItemSlot(index)
         if ilvl.ClearAllPoints then ilvl:ClearAllPoints() end
         ilvl:SetPoint(ilvlAnchor, slot, ilvlAnchor, ilvlX, ilvlY)
     end
-    self:ApplyFont(ilvl, 12, "itemLevelFontSize", "OUTLINE")
+    self:ApplyFont(ilvl, 12, "itemLevelFontSize", "OUTLINE", "itemLevelFont", "itemLevelFontOutline")
 
     -- Favorite star indicator (Texture atlas, zero tofu box)
     local fav = slot.fav
@@ -2193,6 +2378,12 @@ function BagsMod:UpdateInventory()
                 if slotFrame.ilvl then
                     if self.db.showItemLevel and itemData.itemLevel and itemData.itemLevel > 1 and (itemData.classID == 2 or itemData.classID == 4) then
                         slotFrame.ilvl:SetText(itemData.itemLevel)
+                        if self.db.colorItemLevelByQuality ~= false and itemData.quality and QUALITY_COLORS[itemData.quality] then
+                            local qc = QUALITY_COLORS[itemData.quality]
+                            slotFrame.ilvl:SetTextColor(qc.r, qc.g, qc.b, 1)
+                        else
+                            slotFrame.ilvl:SetTextColor(1, 0.82, 0, 1)
+                        end
                         slotFrame.ilvl:Show()
                     else
                         slotFrame.ilvl:Hide()

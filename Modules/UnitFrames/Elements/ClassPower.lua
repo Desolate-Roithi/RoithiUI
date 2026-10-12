@@ -77,7 +77,8 @@ function UF:CreateClassPower(frame)
 
     element.points = {}
 
-    local fontName = RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT"
+    local fontName = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Roithi Thick"
+    local fontOutline = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE"
 
     -- Main Points (Bars/Nodes)
     for i = 1, 10 do
@@ -102,7 +103,15 @@ function UF:CreateClassPower(frame)
 
         -- Timer Text (For Runes)
         point.Timer = point:CreateFontString(nil, "OVERLAY")
-        LibRoithi.mixins:SetFont(point.Timer, fontName, 14, "OUTLINE")
+        if point.Timer.SetDrawLayer then point.Timer:SetDrawLayer("OVERLAY", 7) end
+        LibRoithi.mixins:SetFont(point.Timer, fontName, 14, fontOutline)
+        if point.Timer.SetShadowOffset then
+            if fontOutline ~= "NONE" and fontOutline ~= "" then
+                point.Timer:SetShadowOffset(0, 0)
+            else
+                point.Timer:SetShadowOffset(1, -1)
+            end
+        end
         point.Timer:SetPoint("CENTER", point, "CENTER", 0, 0)
         point.Timer:SetText("")
 
@@ -158,7 +167,8 @@ function UF:CreateClassPower(frame)
         local spacing = 2
         local pWidth = (width - (numPoints - 1) * spacing) / numPoints
 
-        local currentFont = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT"
+        local currentFont = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Roithi Thick"
+        local currentOutline = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE"
         local timerFontSize = unitDB and unitDB.classPowerTimerFontSize or 14
 
         for i = 1, numPoints do
@@ -173,7 +183,15 @@ function UF:CreateClassPower(frame)
             end
 
             if point.Timer and LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-                LibRoithi.mixins:SetFont(point.Timer, currentFont, timerFontSize, "OUTLINE")
+                if point.Timer.SetDrawLayer then point.Timer:SetDrawLayer("OVERLAY", 7) end
+                LibRoithi.mixins:SetFont(point.Timer, currentFont, timerFontSize, currentOutline)
+                if point.Timer.SetShadowOffset then
+                    if currentOutline ~= "NONE" and currentOutline ~= "" then
+                        point.Timer:SetShadowOffset(0, 0)
+                    else
+                        point.Timer:SetShadowOffset(1, -1)
+                    end
+                end
                 point.Timer:SetPoint("CENTER", point, "CENTER", 0, 0)
             end
         end

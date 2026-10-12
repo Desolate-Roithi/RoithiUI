@@ -128,8 +128,8 @@ local function CreateIconViewerGroup(viewerKey, viewerName, defaultSize, orderNu
                 values = AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font or {},
                 get = function()
                     local v = CDM.db.viewers and CDM.db.viewers[viewerKey]
-                    if v and v.overrideGlobal then return v.font or CDM.db.font or "Friz Quadrata TT" end
-                    return CDM.db.font or "Friz Quadrata TT"
+                    if v and v.overrideGlobal then return v.font or CDM.db.font or "Roithi Thick" end
+                    return CDM.db.font or "Roithi Thick"
                 end,
                 set = function(_, val)
                     if not CDM.db.viewers then CDM.db.viewers = {} end
@@ -404,7 +404,7 @@ function CDM:GetOptions()
                         name = L["Font"] or "Font",
                         order = 5,
                         values = AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font or {},
-                        get = function() return self.db.font or "Friz Quadrata TT" end,
+                        get = function() return self.db.font or "Roithi Thick" end,
                         set = function(_, val)
                             self.db.font = val
                             self:StyleAllActiveItems()
@@ -763,8 +763,8 @@ function CDM:GetOptions()
                                 values = AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font or {},
                                 get = function()
                                     local v = self.db.viewers and self.db.viewers.BuffBar
-                                    if v and v.overrideGlobal then return v.font or self.db.font or "Friz Quadrata TT" end
-                                    return self.db.font or "Friz Quadrata TT"
+                                    if v and v.overrideGlobal then return v.font or self.db.font or "Roithi Thick" end
+                                    return self.db.font or "Roithi Thick"
                                 end,
                                 set = function(_, val)
                                     if not self.db.viewers then self.db.viewers = {} end

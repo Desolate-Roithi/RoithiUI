@@ -648,8 +648,17 @@ function UF:UpdateTagFrame(tagFrame)
     local fontStrings = {}
     for i, segment in ipairs(segments) do
         local fs = tagFrame.SegmentPool:Acquire()
-        local fontName = tagFrame.font or RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT"
-        LibRoithi.mixins:SetFont(fs, fontName, tagFrame.fontSize or 12, "OUTLINE")
+        local fontName = tagFrame.font or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Roithi Thick"
+        local fontOutline = tagFrame.fontOutline or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE"
+        LibRoithi.mixins:SetFont(fs, fontName, tagFrame.fontSize or 12, fontOutline)
+        if fs.SetDrawLayer then fs:SetDrawLayer("OVERLAY", 7) end
+        if fs.SetShadowOffset then
+            if fontOutline ~= "NONE" and fontOutline ~= "" then
+                fs:SetShadowOffset(0, 0)
+            else
+                fs:SetShadowOffset(1, -1)
+            end
+        end
 
         -- Special: If the return is a table/mixed, it might be an error from GetSegments
         fs:SetText(segment.text)

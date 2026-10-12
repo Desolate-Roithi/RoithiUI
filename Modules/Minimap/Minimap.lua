@@ -34,6 +34,7 @@ function MinimapMod:OnInitialize()
     self.activeButtons = {}
     self:RegisterEvent("ADDON_LOADED")
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
+    self:RegisterEvent("CVAR_UPDATE")
 end
 
 function MinimapMod:ADDON_LOADED(event, name)
@@ -66,6 +67,7 @@ function MinimapMod:UpdateAnchorsMouseState(enable)
         self.zoomInAnchor,
         self.zoomOutAnchor,
         self.calendarAnchor,
+        self.difficultyAnchor,
     }
     for _, f in ipairs(anchors) do
         if f then
@@ -86,6 +88,7 @@ function MinimapMod:UpdateBlizzardButtonsMouseState(enable)
         Minimap.ZoomIn or _G.MinimapZoomIn,
         Minimap.ZoomOut or _G.MinimapZoomOut,
         GameTimeFrame,
+        (MinimapCluster and MinimapCluster.InstanceDifficulty) or _G.MiniMapInstanceDifficulty,
     }
     for _, btn in pairs(buttons) do
         if btn then
@@ -109,6 +112,7 @@ function MinimapMod:PrepareFramesForEditMode()
         { key = "calendarAnchor", frame = self.calendarAnchor },
         { key = "dielAnchor", frame = self.dielAnchor },
         { key = "coordsAnchor", frame = self.coordsAnchor },
+        { key = "difficultyAnchor", frame = self.difficultyAnchor },
         { key = "addonBar", frame = self.addonBar },
     }
 
@@ -146,6 +150,7 @@ function MinimapMod:ReparentFramesAfterEditMode()
         { key = "calendarAnchor", frame = self.calendarAnchor, default = { point = "TOPLEFT", x = 0, y = 0 } },
         { key = "dielAnchor", frame = self.dielAnchor, default = { point = "BOTTOMRIGHT", x = 0, y = 0 } },
         { key = "coordsAnchor", frame = self.coordsAnchor, default = { point = "BOTTOM", x = 0, y = 0 } },
+        { key = "difficultyAnchor", frame = self.difficultyAnchor, default = { point = "TOPRIGHT", x = -4, y = -4 } },
         { key = "addonBar", frame = self.addonBar, default = { point = "BOTTOMLEFT", x = 10, y = 100 } },
     }
 
@@ -153,7 +158,7 @@ function MinimapMod:ReparentFramesAfterEditMode()
         local f = entry.frame
         if f then
             local isInteractive = (entry.key ~= "zoneTextAnchor")
-            local targetStrata = (entry.key == "zoneTextAnchor") and "MEDIUM" or "HIGH"
+            local targetStrata = "MEDIUM"
             local targetLevel = isInteractive and 60 or 40
             local isDetached = (entry.key == "addonBar" and self.db.addonBarAttached == false) or (self.db.detached and self.db.detached[entry.key])
             if isDetached then
@@ -203,6 +208,7 @@ function MinimapMod:OnEnable()
 
     -- Apply styling
     self:StyleMinimap()
+    self:UpdateRotateMinimap()
 
     -- Create Addon Button Bar (always created so it is registered in Edit Mode)
     self:CreateAddonBar()
@@ -468,6 +474,14 @@ function MinimapMod:StyleMinimap()
                 set = function(_, val)
                     self.db.scale = val
                     self:UpdateMinimapSize()
+                end,
+            },
+            {
+                name = L["Rotate Minimap"] or "Rotate Minimap",
+                kind = LEM.SettingType.Checkbox,
+                get = function() return self:IsRotateMinimap() end,
+                set = function(_, val)
+                    self:SetRotateMinimap(val)
                 end,
             },
             {
@@ -767,6 +781,41 @@ function MinimapMod:UpdateMinimapSize()
     end
 end
 
+function MinimapMod:IsRotateMinimap()
+    if self.db and self.db.rotateMinimap ~= nil then
+        return self.db.rotateMinimap
+    end
+    if _G.GetCVarBool then
+        return _G.GetCVarBool("rotateMinimap")
+    elseif _G.GetCVar then
+        return _G.GetCVar("rotateMinimap") == "1"
+    end
+    return false
+end
+
+function MinimapMod:SetRotateMinimap(val)
+    if self.db then
+        self.db.rotateMinimap = val
+    end
+    if _G.SetCVar then
+        _G.SetCVar("rotateMinimap", val and "1" or "0")
+    end
+end
+
+function MinimapMod:UpdateRotateMinimap()
+    if self.db and self.db.rotateMinimap ~= nil then
+        if _G.SetCVar then
+            _G.SetCVar("rotateMinimap", self.db.rotateMinimap and "1" or "0")
+        end
+    end
+end
+
+function MinimapMod:CVAR_UPDATE(event, cvarName, value)
+    if cvarName == "rotateMinimap" and self.db then
+        self.db.rotateMinimap = (value == "1")
+    end
+end
+
 MinimapMod.defaultAnchorPositions = ns.Defaults.profile.Minimap.defaultAnchorPositions
 
 function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
@@ -781,7 +830,7 @@ function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
         f:SetParent(UIParent)
         f:SetScale(1.0)
         local isInteractive = (key ~= "zoneTextAnchor")
-        local targetStrata = (key == "zoneTextAnchor") and "MEDIUM" or "HIGH"
+        local targetStrata = "MEDIUM"
         if f.SetFrameStrata then
             f:SetFrameStrata(targetStrata)
         end
@@ -811,7 +860,7 @@ function MinimapMod:UpdateFrameAttachment(f, key, isDetached)
         f:SetParent(container)
         f:SetScale(1.0)
         local isInteractive = (key ~= "zoneTextAnchor")
-        local targetStrata = (key == "zoneTextAnchor") and "MEDIUM" or "HIGH"
+        local targetStrata = "MEDIUM"
         if f.SetFrameStrata then
             f:SetFrameStrata(targetStrata)
         end
@@ -846,6 +895,7 @@ function MinimapMod:RegisterAnchorSettings(f, key)
         zoomOutAnchor = { toggle = "showZoomOut", default = { point = "TOPRIGHT", x = 0, y = -68 }, updateVis = "UpdateZoomVisibility" },
         calendarAnchor = { toggle = "showCalendar", default = { point = "TOPLEFT", x = 0, y = 0 }, updateVis = "UpdateCalendarVisibility" },
         dielAnchor = { toggle = "showDiel", default = { point = "BOTTOMRIGHT", x = 0, y = 0 }, updateVis = "UpdateDielVisibility" },
+        difficultyAnchor = { toggle = "showDifficulty", default = { point = "TOPRIGHT", x = -4, y = -4 }, updateVis = "UpdateDifficultyVisibility" },
         addonBar = { toggle = "showAddonBar", default = { point = "BOTTOMLEFT", x = 10, y = 100 }, updateVis = "UpdateAddonBarVisibility" },
     }
 
@@ -972,7 +1022,7 @@ local function CreateAnchorFrame(mod, key, name, editModeName, w, h, defaultPos)
         f.defaultPos = defaultPos
         f:SetSize(w, h)
         local isInteractive = (key ~= "zoneTextAnchor")
-        local targetStrata = (key == "zoneTextAnchor") and "MEDIUM" or "HIGH"
+        local targetStrata = "MEDIUM"
         if f.SetFrameStrata then
             f:SetFrameStrata(targetStrata)
         end
@@ -1115,24 +1165,46 @@ function MinimapMod:LayoutDefaultButtons()
         HookBlizzardButton(zoneText, zoneTextAnchor)
         if zoneText.SetSize then zoneText:SetSize(zoneWidth, 20) end
         local fs = _G.MinimapZoneText or (zoneText.GetFontString and zoneText:GetFontString())
-        if fs then
+        -- Store refs on module so ReanchorZoneText can always find them
+        self.zoneTextFS = fs
+        self.zoneTextAnchorRef = zoneTextAnchor
+
+        local function ReanchorZoneText()
+            if not fs or self.isReanchoringZoneText then return end
+            self.isReanchoringZoneText = true
             if fs.SetJustifyH then fs:SetJustifyH("CENTER") end
-            if fs.ClearAllPoints then fs:ClearAllPoints() end
-            if fs.SetPoint then fs:SetPoint("CENTER", zoneTextAnchor, "CENTER", 0, 0) end
+            -- Use raw ClearAllPoints / SetPoint bypassing our hooks
+            local rawClear = fs.ClearAllPoints
+            local rawSetPt  = fs.SetPoint
+            if rawClear then rawClear(fs) end
+            if rawSetPt  then rawSetPt(fs, "CENTER", zoneTextAnchor, "CENTER", 0, 0) end
+            self.isReanchoringZoneText = false
+        end
+        -- Expose for use from RefreshProfile / UpdateZoneTextVisibility
+        self.ReanchorZoneText = ReanchorZoneText
+
+        if fs then
+            -- Initial centering
+            ReanchorZoneText()
+
             if not self.zoneTextJustifyHooked and hooksecurefunc then
+                -- SetText: re-center after Blizzard updates the text content
                 if fs.SetText then
                     hooksecurefunc(fs, "SetText", function()
+                        if self.isReanchoringZoneText then return end
                         if fs.SetJustifyH then fs:SetJustifyH("CENTER") end
                     end)
                 end
+                -- SetPoint: Blizzard tries to left-anchor the fontstring;
+                -- defer the correction by one frame to avoid re-entrancy.
                 if fs.SetPoint then
-                    hooksecurefunc(fs, "SetPoint", function(frame)
+                    hooksecurefunc(fs, "SetPoint", function()
                         if self.isReanchoringZoneText then return end
-                        self.isReanchoringZoneText = true
-                        if frame.ClearAllPoints then frame:ClearAllPoints() end
-                        if frame.SetPoint then frame:SetPoint("CENTER", zoneTextAnchor, "CENTER", 0, 0) end
-                        if frame.SetJustifyH then frame:SetJustifyH("CENTER") end
-                        self.isReanchoringZoneText = false
+                        if _G.C_Timer and _G.C_Timer.After then
+                            _G.C_Timer.After(0, function() ReanchorZoneText() end)
+                        else
+                            ReanchorZoneText()
+                        end
                     end)
                 end
                 self.zoneTextJustifyHooked = true
@@ -1241,6 +1313,16 @@ function MinimapMod:LayoutDefaultButtons()
     if diel then
         HookBlizzardButton(diel, dielAnchor)
     end
+
+    -- Setup Instance Difficulty Anchor
+    local difficultyAnchor = CreateAnchorFrame(self, "difficultyAnchor", "RoithiDifficultyAnchor", L["Minimap Instance Difficulty"] or "Minimap Instance Difficulty", 36, 36, defPos.difficultyAnchor)
+    local instDiff = (MinimapCluster and MinimapCluster.InstanceDifficulty) or _G.MiniMapInstanceDifficulty
+    if instDiff then
+        HookBlizzardButton(instDiff, difficultyAnchor)
+    end
+    if MinimapCluster and MinimapCluster.GuildInstanceDifficulty then
+        HookBlizzardButton(MinimapCluster.GuildInstanceDifficulty, difficultyAnchor)
+    end
 end
 
 function MinimapMod:UpdateAnchorPosition(key)
@@ -1254,7 +1336,7 @@ function MinimapMod:UpdateAnchorPosition(key)
         offset = { point = f.defaultPos.point, x = f.defaultPos.x, y = f.defaultPos.y }
         self.db.offsets[key] = offset
     end
-    
+
     offset.x = offset.x or f.defaultPos.x
     offset.y = offset.y or f.defaultPos.y
     offset.point = offset.point or f.defaultPos.point
@@ -1267,6 +1349,15 @@ function MinimapMod:UpdateAnchorPosition(key)
         f:ClearAllPoints()
         f:SetParent(container)
         f:SetPoint(offset.point, container, offset.point, offset.x, offset.y)
+    end
+
+    -- After repositioning the zoneTextAnchor, re-enforce the fontstring centering
+    if key == "zoneTextAnchor" and self.ReanchorZoneText then
+        if _G.C_Timer and _G.C_Timer.After then
+            _G.C_Timer.After(0, function() self:SafeReanchorZoneText() end)
+        else
+            self.ReanchorZoneText()
+        end
     end
 end
 
@@ -1309,6 +1400,20 @@ function MinimapMod:UpdateDielVisibility()
     end
 end
 
+function MinimapMod:UpdateDifficultyVisibility()
+    local show = (self.db.showDifficulty ~= false)
+    if self.difficultyAnchor then
+        self.difficultyAnchor:SetShown(show)
+    end
+    local instDiff = (MinimapCluster and MinimapCluster.InstanceDifficulty) or _G.MiniMapInstanceDifficulty
+    if instDiff then
+        instDiff:SetShown(show)
+    end
+    if MinimapCluster and MinimapCluster.GuildInstanceDifficulty then
+        MinimapCluster.GuildInstanceDifficulty:SetShown(show)
+    end
+end
+
 function MinimapMod:UpdateAllElementVisibilities()
     self:UpdateZoneTextVisibility()
     self:UpdateCalendarVisibility()
@@ -1318,6 +1423,7 @@ function MinimapMod:UpdateAllElementVisibilities()
     self:UpdateLFGVisibility()
     self:UpdateLandingVisibility()
     self:UpdateDielVisibility()
+    self:UpdateDifficultyVisibility()
 end
 
 function MinimapMod:UpdateZoomVisibility()
@@ -1340,11 +1446,23 @@ function MinimapMod:UpdateZoneTextVisibility()
         if self.db.showZoneText then
             zoneText:Show()
             if self.zoneTextAnchor then self.zoneTextAnchor:Show() end
+            -- Re-enforce centering after show; Blizzard's Show path can reset the fontstring position
+            if self.ReanchorZoneText then
+                if _G.C_Timer and _G.C_Timer.After then
+                    _G.C_Timer.After(0, function() self:SafeReanchorZoneText() end)
+                else
+                    if self.ReanchorZoneText then self.ReanchorZoneText() end
+                end
+            end
         else
             zoneText:Hide()
             if self.zoneTextAnchor then self.zoneTextAnchor:Hide() end
         end
     end
+end
+
+function MinimapMod:SafeReanchorZoneText()
+    if self.ReanchorZoneText then self.ReanchorZoneText() end
 end
 
 function MinimapMod:UpdateCalendarVisibility()
@@ -1442,7 +1560,7 @@ end
 function MinimapMod:SetupCoordsWidget(anchor)
     if not anchor or self.coordsText then return end
 
-    if anchor.SetFrameStrata then anchor:SetFrameStrata("HIGH") end
+    if anchor.SetFrameStrata then anchor:SetFrameStrata("MEDIUM") end
     if anchor.SetFrameLevel then anchor:SetFrameLevel(60) end
 
     local clickBtn = self.coordsClickButton
@@ -1454,7 +1572,7 @@ function MinimapMod:SetupCoordsWidget(anchor)
             clickBtn:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
             clickBtn:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 0, 0)
         end
-        if clickBtn.SetFrameStrata then clickBtn:SetFrameStrata("HIGH") end
+        if clickBtn.SetFrameStrata then clickBtn:SetFrameStrata("MEDIUM") end
         if clickBtn.SetFrameLevel and anchor.GetFrameLevel then clickBtn:SetFrameLevel(anchor:GetFrameLevel() + 5) end
         if clickBtn.RegisterForClicks then clickBtn:RegisterForClicks("AnyUp") end
         if clickBtn.EnableMouse then clickBtn:EnableMouse(true) end
@@ -1809,7 +1927,7 @@ function MinimapMod:UpdateDataTextBarLayout()
     bar:ClearAllPoints()
     bar:SetParent(container)
     if bar.SetFrameStrata then
-        bar:SetFrameStrata("HIGH")
+        bar:SetFrameStrata("MEDIUM")
     end
     if bar.SetFrameLevel then
         bar:SetFrameLevel(25)
@@ -1902,7 +2020,7 @@ function MinimapMod:CreateDataTextBar()
     bar:SetClampedToScreen(true)
     bar:EnableMouse(true)
     if bar.SetFrameStrata then
-        bar:SetFrameStrata("HIGH")
+        bar:SetFrameStrata("MEDIUM")
     end
     if bar.SetFrameLevel then
         bar:SetFrameLevel(25)

@@ -11,8 +11,17 @@ function UF:CreateHealthText(frame)
     -- Parent to Health Bar so it layers correctly
     local parent = frame.Health or frame
     local text = parent:CreateFontString(nil, "OVERLAY")
-    local font = RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT"
-    LibRoithi.mixins:SetFont(text, font, 12, "OUTLINE")
+    local font = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Roithi Thick"
+    local outline = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE"
+    LibRoithi.mixins:SetFont(text, font, 12, outline)
+    if text.SetDrawLayer then text:SetDrawLayer("OVERLAY", 7) end
+    if text.SetShadowOffset then
+        if outline ~= "NONE" and outline ~= "" then
+            text:SetShadowOffset(0, 0)
+        else
+            text:SetShadowOffset(1, -1)
+        end
+    end
     text:SetPoint("CENTER", parent, "CENTER", 0, 0)
     frame.HealthText = text
 
@@ -43,8 +52,17 @@ end
 function UF:CreatePowerText(frame)
     local parent = frame.Power or frame
     local text = parent:CreateFontString(nil, "OVERLAY")
-    local font = RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT"
-    LibRoithi.mixins:SetFont(text, font, 12, "OUTLINE")
+    local font = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Roithi Thick"
+    local outline = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE"
+    LibRoithi.mixins:SetFont(text, font, 12, outline)
+    if text.SetDrawLayer then text:SetDrawLayer("OVERLAY", 7) end
+    if text.SetShadowOffset then
+        if outline ~= "NONE" and outline ~= "" then
+            text:SetShadowOffset(0, 0)
+        else
+            text:SetShadowOffset(1, -1)
+        end
+    end
     text:SetPoint("CENTER", parent, "CENTER", 0, 0)
     frame.PowerText = text
 
@@ -73,8 +91,17 @@ end
 -- ----------------------------------------------------------------------------
 function UF:CreateName(frame)
     local text = frame:CreateFontString(nil, "OVERLAY")
-    local font = RoithiUI.db.profile.General.unitFrameFont or "Friz Quadrata TT"
-    LibRoithi.mixins:SetFont(text, font, 12, "OUTLINE")
+    local font = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Roithi Thick"
+    local outline = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE"
+    LibRoithi.mixins:SetFont(text, font, 12, outline)
+    if text.SetDrawLayer then text:SetDrawLayer("OVERLAY", 7) end
+    if text.SetShadowOffset then
+        if outline ~= "NONE" and outline ~= "" then
+            text:SetShadowOffset(0, 0)
+        else
+            text:SetShadowOffset(1, -1)
+        end
+    end
     -- Default position: Top of frame
     text:SetPoint("BOTTOM", frame, "TOP", 0, 4)
     frame.Name = text

@@ -69,6 +69,16 @@ function MinimapMod:GetOptions()
                             self:UpdateMinimapSize()
                         end,
                     },
+                    rotateMinimap = {
+                        type = "toggle",
+                        name = L["Rotate Minimap"] or "Rotate Minimap",
+                        desc = L["Rotate the minimap with player facing instead of keeping north up."] or "Rotate the minimap with player facing instead of keeping north up.",
+                        order = 4.5,
+                        get = function() return self:IsRotateMinimap() end,
+                        set = function(_, val)
+                            self:SetRotateMinimap(val)
+                        end,
+                    },
                     borderSize = {
                         type = "range",
                         name = L["Minimap Border Size"],
@@ -145,6 +155,16 @@ function MinimapMod:GetOptions()
                         set = function(_, val)
                             self.db.showCoords = val
                             self:UpdateCoordsVisibility()
+                        end,
+                    },
+                    showDifficulty = {
+                        type = "toggle",
+                        name = L["Show Instance Difficulty"] or "Show Instance Difficulty",
+                        order = 5,
+                        get = function() return self.db.showDifficulty ~= false end,
+                        set = function(_, val)
+                            self.db.showDifficulty = val
+                            self:UpdateDifficultyVisibility()
                         end,
                     },
                 },
