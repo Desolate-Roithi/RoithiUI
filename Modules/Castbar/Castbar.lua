@@ -136,29 +136,39 @@ function ns.RefreshAllCastbars()
     if not ns.bars then return end
     local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar
     for unit, bar in pairs(ns.bars) do
-        ns.UpdateCastBarMedia(bar)
-        local db = cbDB and cbDB[unit]
-        if db then
-            if not db.enabled then
-                bar:Hide()
-            end
-            if db.detached then
-                bar:SetParent(UIParent)
-                bar:SetMovable(true)
-                bar:SetClampedToScreen(true)
-                local iconExtra = (db.showIcon ~= false) and ((db.height or 20) * (db.iconScale or 1.0)) or 0
-                bar:SetClampRectInsets(-iconExtra - 5, 0, 0, 0)
-                local point, x, y = ns.ClampCastbarCoordinates(bar, db.point, db.x, db.y, db)
-                db.point = point
-                db.x = x
-                db.y = y
-                if not bar.isInEditMode then
-                    bar:ClearAllPoints()
-                    bar:SetPoint(point, UIParent, point, x, y)
+        if ns.UpdateBar then
+            ns.UpdateBar(unit)
+        else
+            ns.UpdateCastBarMedia(bar)
+            local db = cbDB and cbDB[unit]
+            if db then
+                if not db.enabled then
+                    bar:Hide()
                 end
-            else
-                if ns.SetCastbarAttachment then
-                    ns.SetCastbarAttachment(unit, true)
+                local finalW = db.width or 200
+                local finalH = db.height or 20
+                if bar.SetSize then bar:SetSize(finalW, finalH) end
+                if db.detached then
+                    if bar.SetParent then bar:SetParent(UIParent) end
+                    if bar.SetMovable then bar:SetMovable(true) end
+                    if bar.SetClampedToScreen then bar:SetClampedToScreen(true) end
+                    local iconExtra = (db.showIcon ~= false) and (finalH * (db.iconScale or 1.0)) or 0
+                    if bar.SetClampRectInsets then bar:SetClampRectInsets(-iconExtra - 5, 0, 0, 0) end
+                    local point, x, y = db.point, db.x, db.y
+                    if ns.ClampCastbarCoordinates then
+                        point, x, y = ns.ClampCastbarCoordinates(bar, db.point, db.x, db.y, db)
+                    end
+                    db.point = point
+                    db.x = x
+                    db.y = y
+                    if not bar.isInEditMode then
+                        if bar.ClearAllPoints then bar:ClearAllPoints() end
+                        if bar.SetPoint then bar:SetPoint(point, UIParent, point, x, y) end
+                    end
+                else
+                    if ns.SetCastbarAttachment then
+                        ns.SetCastbarAttachment(unit, true)
+                    end
                 end
             end
         end
@@ -169,6 +179,12 @@ function ns.InitializeBars()
     for unit, _ in pairs(ns.DEFAULTS) do
         local bar = ns.CreateCastBar(unit)
         ns.bars[unit] = bar
+        if ns.UpdateBar then
+            ns.UpdateBar(unit)
+        end
+        if ns.RegisterBarUnitEvents then
+            ns.RegisterBarUnitEvents(bar)
+        end
         if ns.RegisterCastbarLEM then
             ns.RegisterCastbarLEM(bar, unit)
         end
@@ -371,16 +387,17 @@ local function OnCastbarUpdate(self, elapsed)
 end
 
 function ns.UpdateCast(bar, unitOverride)
-    local unit = unitOverride or (bar and bar.unit)
-    if not bar or not unit then return end
+    if not bar then return end
+    if bar.isInEditMode then return end
+
+    local unit = unitOverride or bar.unit
+    if not unit then return end
 
     local db = RoithiUI.db.profile.Castbar[bar.unit]
     if not db or not db.enabled then
         bar:Hide(); bar:SetScript("OnUpdate", nil)
         return
     end
-
-    if bar.isInEditMode then return end
 
     if not db.detached and not (InCombatLockdown and InCombatLockdown()) and ns.SetCastbarAttachment then
         ns.SetCastbarAttachment(bar.unit, true)
@@ -610,8 +627,8 @@ function ns.HandleInterrupt(bar)
     -- 4. Vanish after 1 second
     C_Timer.After(1.0, function()
         -- Only hide if we are STILL interrupted (didn't start a new cast)
-        -- Using local closure safety
-        if bar.isInterrupted then
+        -- and not in Edit Mode
+        if bar.isInterrupted and not bar.isInEditMode then
             bar.isInterrupted = false
             bar:Hide()
         end

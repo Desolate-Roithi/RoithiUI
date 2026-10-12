@@ -255,10 +255,6 @@ RoithiUI:RegisterChatCommand("rui", "ChatCommand") -- Fix: Register /rui as alia
 RoithiUI:RegisterChatCommand("rl", function()
     ReloadUI()
 end)
-_G.SLASH_ROITHIRL1 = "/rl"
-_G.SlashCmdList["ROITHIRL"] = function()
-    ReloadUI()
-end
 RoithiUI:RegisterChatCommand("lemdiag", function()
     local lib = LibStub("LibRoithi-1.0", true)
     if lib and lib.Diagnostic then

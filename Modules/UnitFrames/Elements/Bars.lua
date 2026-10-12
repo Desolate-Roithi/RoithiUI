@@ -166,6 +166,13 @@ function UF:CreatePowerBar(frame)
         if power.Text then power.Text:Hide() end
 
         local unit = frame.unit
+        if unit == "player" then
+            if (_G.UnitHasVehicleUI and _G.UnitHasVehicleUI("player")) or (_G.UnitInVehicle and _G.UnitInVehicle("player")) then
+                if _G.UnitExists("vehicle") then
+                    unit = "vehicle"
+                end
+            end
+        end
         if not UnitExists(unit) then return end
 
         -- Main Power always shows unless specifically disabled?
@@ -199,9 +206,17 @@ function UF:CreatePowerBar(frame)
     end
 
     power:SetScript("OnEvent", UpdatePower)
-    power:RegisterUnitEvent("UNIT_POWER_UPDATE", frame.unit)
-    power:RegisterUnitEvent("UNIT_MAXPOWER", frame.unit)
-    power:RegisterUnitEvent("UNIT_DISPLAYPOWER", frame.unit)
+    if frame.unit == "player" then
+        power:RegisterUnitEvent("UNIT_POWER_UPDATE", "player", "vehicle")
+        power:RegisterUnitEvent("UNIT_MAXPOWER", "player", "vehicle")
+        power:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player", "vehicle")
+        power:RegisterEvent("UNIT_ENTERED_VEHICLE")
+        power:RegisterEvent("UNIT_EXITED_VEHICLE")
+    else
+        power:RegisterUnitEvent("UNIT_POWER_UPDATE", frame.unit)
+        power:RegisterUnitEvent("UNIT_MAXPOWER", frame.unit)
+        power:RegisterUnitEvent("UNIT_DISPLAYPOWER", frame.unit)
+    end
     -- Also hook OnShow
     power:SetScript("OnShow", UpdatePower)
 

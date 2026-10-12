@@ -18,13 +18,19 @@ local skinnedFrames = setmetatable({}, { __mode = "k" })
 local skinnedTabs = setmetatable({}, { __mode = "k" })
 local skinnedEditBoxes = setmetatable({}, { __mode = "k" })
 local tabTextures = setmetatable({}, { __mode = "k" })
+local editBoxBackdrops = setmetatable({}, { __mode = "k" })
+local editBoxShowHooked = setmetatable({}, { __mode = "k" })
+local editBoxFocusHooked = setmetatable({}, { __mode = "k" })
 
 function ChatMod:GetFontPath()
     local f = (self.db and self.db.font)
         or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
-        or "Interface\\AddOns\\RoithiUI\\Media\\Fonts\\Expressway.ttf"
+        or "Expressway"
     if LSM and LSM:Fetch("font", f, true) then
         return LSM:Fetch("font", f)
+    end
+    if LSM and LSM:Fetch("font", "Expressway", true) then
+        return LSM:Fetch("font", "Expressway")
     end
     return f
 end
@@ -501,6 +507,43 @@ function ChatMod:OnEnable()
         end
         self.filterRegistered = true
     end
+
+    self:AdjustToastFrameStrata()
+end
+
+function ChatMod:AdjustToastFrameStrata()
+    local targetStrata = "DIALOG"
+    local toastFrames = {
+        _G.BNToastFrame,
+        _G.QuickJoinToastButton and _G.QuickJoinToastButton.Toast,
+        _G.QuickJoinToastButton and _G.QuickJoinToastButton.Toast2,
+    }
+    for _, toast in ipairs(toastFrames) do
+        if toast and toast.SetFrameStrata then
+            toast:SetFrameStrata(targetStrata)
+            if toast.SetFrameLevel and toast.GetFrameLevel then
+                toast:SetFrameLevel(math.max(toast:GetFrameLevel(), 100))
+            end
+            if not toast.roithiStrataHooked and _G.hooksecurefunc then
+                toast.roithiStrataHooked = true
+                _G.hooksecurefunc(toast, "SetFrameStrata", function(f, strata)
+                    if strata ~= targetStrata and not f.settingRoithiStrata then
+                        f.settingRoithiStrata = true
+                        f:SetFrameStrata(targetStrata)
+                        f.settingRoithiStrata = nil
+                    end
+                end)
+            end
+            if not toast.roithiShowHooked and toast.HookScript then
+                toast.roithiShowHooked = true
+                toast:HookScript("OnShow", function(f)
+                    if f.SetFrameStrata then
+                        f:SetFrameStrata(targetStrata)
+                    end
+                end)
+            end
+        end
+    end
 end
 
 function ChatMod:OnDisable()
@@ -531,6 +574,9 @@ function ChatMod:OnPlayerEnteringWorld()
         if self.ApplyTimestampFormat then
             self:ApplyTimestampFormat()
         end
+        if self.AdjustToastFrameStrata then
+            self:AdjustToastFrameStrata()
+        end
     end)
 end
 
@@ -540,6 +586,9 @@ function ChatMod:OnPlayerLogin()
     C_Timer.After(0, function()
         if self.ApplyTimestampFormat then
             self:ApplyTimestampFormat()
+        end
+        if self.AdjustToastFrameStrata then
+            self:AdjustToastFrameStrata()
         end
     end)
 
@@ -1199,18 +1248,19 @@ function ChatMod:SkinEditBox(eb, cf, idx)
     -- Reposition EditBox
     self:RepositionEditBox(eb, cf)
 
-    if not eb.roithiShowHooked and eb.HookScript then
-        eb:HookScript("OnShow", function(editBox)
+    if not editBoxShowHooked[eb] and hooksecurefunc then
+        editBoxShowHooked[eb] = true
+        hooksecurefunc(eb, "Show", function(editBox)
             if self:IsEnabled() and self.RepositionEditBox then
                 self:RepositionEditBox(editBox, cf)
             end
         end)
-        eb.roithiShowHooked = true
     end
 
-    -- Create backdrop frame behind editbox
-    if not eb.roithiBackdrop then
-        local bg = CreateFrame("Frame", nil, eb, "BackdropTemplate")
+    -- Create backdrop frame behind editbox (stored in weak table)
+    local bg = editBoxBackdrops[eb]
+    if not bg then
+        bg = CreateFrame("Frame", nil, eb, "BackdropTemplate")
         bg:SetAllPoints(eb)
         bg:SetFrameLevel(math.max(0, eb:GetFrameLevel() - 1))
         bg:EnableMouse(false)
@@ -1220,6 +1270,7 @@ function ChatMod:SkinEditBox(eb, cf, idx)
         local cfgBorder = self.db.editBoxBorderColor or self.defaultSettings.editBoxBorderColor
         bg:SetBackdropColor(cfgBg.r or 0.05, cfgBg.g or 0.065, cfgBg.b or 0.08, cfgBg.a or 0.9)
         bg:SetBackdropBorderColor(cfgBorder.r or 0.2, cfgBorder.g or 0.2, cfgBorder.b or 0.2, cfgBorder.a or 1.0)
+        editBoxBackdrops[eb] = bg
         eb.roithiBackdrop = bg
     end
 
@@ -1235,9 +1286,16 @@ function ChatMod:SkinEditBox(eb, cf, idx)
         eb:SetAltArrowKeyMode(false)
     end
 
-    -- Hook focus for header text styling (only for docked frames 1-10)
-    if idx <= 10 then
-        eb:HookScript("OnEditFocusGained", function()
+    -- Header text styling
+    if eb.header then
+        pcall(eb.header.SetFont, eb.header, font, size, outline)
+    end
+    if eb.headerSuffix then
+        pcall(eb.headerSuffix.SetFont, eb.headerSuffix, font, size, outline)
+    end
+    if idx <= 10 and not editBoxFocusHooked[eb] and hooksecurefunc then
+        editBoxFocusHooked[eb] = true
+        hooksecurefunc(eb, "SetFocus", function()
             if eb.header then
                 pcall(eb.header.SetFont, eb.header, font, size, outline)
             end

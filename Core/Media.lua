@@ -12,6 +12,7 @@ local LSM = LibStub("LibSharedMedia-3.0")
 -- Fonts
 LSM:Register("font", "Roithi Thin", [[Interface\AddOns\]] .. addonName .. [[\Media\Fonts\AvantGarde LT Book Regular.ttf]])
 LSM:Register("font", "Roithi Thick", [[Interface\AddOns\]] .. addonName .. [[\Media\Fonts\Gotham Narrow Ultra.ttf]])
+LSM:Register("font", "Expressway", [[Interface\AddOns\]] .. addonName .. [[\Media\Fonts\Expressway.ttf]])
 
 -- ----------------------------------------------------------------------------
 -- Themes

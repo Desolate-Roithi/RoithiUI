@@ -332,7 +332,14 @@ function ChatMod:GetOptions()
                             local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
                             return (LSM and LSM:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
                         end,
-                        get = function() return self.db.font or "Expressway" end,
+                        get = function()
+                            local f = self.db and self.db.font
+                            if not f or f == "" or f:find("\\") or f:find("%.ttf$") then
+                                if self.db then self.db.font = "Expressway" end
+                                return "Expressway"
+                            end
+                            return f
+                        end,
                         set = function(_, val)
                             self.db.font = val
                             self:SkinAllChatFrames()

@@ -1,4 +1,4 @@
-local MAJOR, MINOR = "LibRoithi-1.0", 1
+local MAJOR, MINOR = "LibRoithi-1.0", 2
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -98,6 +98,13 @@ function lib.mixins:SafeFormat(formatString, ...)
         end
     end
     return string.format(formatString, ...)
+end
+
+--- Returns a default or named statusbar texture
+-- @param name Optional name registered in LSM (defaults to "Solid")
+function lib:GetStatusBarTexture(name)
+    local tex = LSM and LSM:Fetch("statusbar", name or "Solid")
+    return tex or "Interface\\TargetingFrame\\UI-StatusBar"
 end
 
 -- Global Access for convenience if needed, but LibStub is preferred

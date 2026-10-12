@@ -40,6 +40,8 @@ end
 
 local castbarDefaults = {
     colors_v4 = true,
+    font = "Roithi Thick",
+    fontOutline = "OUTLINE",
     boss1 = CreateBossCastbar(),
     boss2 = CreateBossCastbar(),
     boss3 = CreateBossCastbar(),

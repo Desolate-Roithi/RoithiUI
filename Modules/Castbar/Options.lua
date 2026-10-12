@@ -530,11 +530,11 @@ function UpdateBar(unit)
     local iconSize = finalHeight * iconScale
 
     if db.detached then
-        bar:SetParent(UIParent)
-        bar:SetMovable(true)
-        bar:SetClampedToScreen(true)
+        if bar.SetParent and UIParent then bar:SetParent(UIParent) end
+        if bar.SetMovable then bar:SetMovable(true) end
+        if bar.SetClampedToScreen then bar:SetClampedToScreen(true) end
         local iconExtra = (db.showIcon ~= false) and iconSize or 0
-        bar:SetClampRectInsets(-iconExtra - 5, 0, 0, 0)
+        if bar.SetClampRectInsets then bar:SetClampRectInsets(-iconExtra - 5, 0, 0, 0) end
 
         local point, x, y = db.point or "CENTER", db.x or 0, db.y or 0
         if ns.ClampCastbarCoordinates then
@@ -544,8 +544,8 @@ function UpdateBar(unit)
             db.y = y
         end
 
-        bar:ClearAllPoints()
-        bar:SetPoint(point, UIParent, point, x, y)
+        if bar.ClearAllPoints then bar:ClearAllPoints() end
+        if bar.SetPoint and UIParent then bar:SetPoint(point, UIParent, point, x, y) end
     else
         if ns.SetCastbarAttachment then
             ns.SetCastbarAttachment(unit, true)
@@ -554,7 +554,7 @@ function UpdateBar(unit)
         local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
         ---@diagnostic disable-next-line: undefined-field
         local uFrame = UF and UF.units and UF.units[unit]
-        if uFrame then
+        if uFrame and uFrame.GetWidth then
             finalWidth = uFrame:GetWidth()
             if db.showIcon ~= false then
                 finalWidth = finalWidth - iconSize
@@ -565,17 +565,17 @@ function UpdateBar(unit)
         if AL and AL.GlobalLayoutRefresh then AL:GlobalLayoutRefresh(unit) end
     end
 
-    bar:SetSize(finalWidth, finalHeight)
+    if bar.SetSize then bar:SetSize(finalWidth, finalHeight) end
 
     if db.showIcon ~= false and bar.Icon then
-        bar.Icon:Show()
-        bar.Icon:SetSize(iconSize, iconSize)
-        if bar.isInEditMode then bar.Icon:SetTexture(136243) end
+        if bar.Icon.Show then bar.Icon:Show() end
+        if bar.Icon.SetSize then bar.Icon:SetSize(iconSize, iconSize) end
+        if bar.isInEditMode and bar.Icon.SetTexture then bar.Icon:SetTexture(136243) end
     elseif bar.Icon then
-        bar.Icon:Hide()
+        if bar.Icon.Hide then bar.Icon:Hide() end
     end
 
-    if bar.Spark then bar.Spark:SetSize(20, finalHeight * 2.2) end
+    if bar.Spark and bar.Spark.SetSize then bar.Spark:SetSize(20, finalHeight * 2.2) end
 
     -- Real-time Media Update
     if ns.UpdateCastBarMedia then
@@ -591,6 +591,7 @@ function UpdateBar(unit)
         end
     end
 end
+ns.UpdateBar = UpdateBar
 
 local colorSectionsExpanded = {}
 
@@ -891,34 +892,111 @@ function ns.InitializeCastbarConfig()
         ns.ApplyLEMCastbarConfiguration(bar, unit)
         UpdateBar(unit)
     end
+
+    if LEM and LEM.IsInEditMode and LEM:IsInEditMode() and ns.ForceCastbarsOnScreen then
+        ns.ForceCastbarsOnScreen()
+    end
 end
 
 if LEM then
-    LEM:RegisterCallback('enter', function()
+    local function ForceCastbarsOnScreen()
         if not ns.bars then return end
         for unit, bar in pairs(ns.bars) do
             local db = GetCastbarDB(unit)
-            if db and db.enabled then
+            if db and db.enabled ~= false then
                 bar.isInEditMode = true
-                bar:SetParent(UIParent)
-                bar:SetMovable(true)
-                bar:Show()
-                bar:SetAlpha(1)
-                bar:SetMinMaxValues(0, 1)
-                bar:SetValue(1)
-                local c = db.colors and db.colors.cast or { 1, 1, 0, 1 }
-                bar:SetStatusBarColor(c[1], c[2], c[3], 1)
-                if bar.Background then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
-                if bar.Icon and db.showIcon then
-                    bar.Icon:SetTexture(136243)
-                    bar.Icon:Show()
-                elseif bar.Icon then
-                    bar.Icon:Hide()
-                end
-                if bar.Text then bar.Text:SetText(unit:upper() .. " CASTBAR") end
+                bar.isInterrupted = false
+                bar.casting = false
+                bar.channeling = false
+                bar.durationObj = nil
+                bar.castID = nil
+                if bar.SetScript then bar:SetScript("OnUpdate", nil) end
+
+                -- Apply base sizing and styling
                 UpdateBar(unit)
+
+                -- Ensure coordinates are valid and on screen
+                local defCB = ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Castbar and ns.Defaults.profile.Castbar[unit]
+                local defPoint = (defCB and defCB.point) or "CENTER"
+                local defX = (defCB and defCB.x) or 0
+                local defY = (defCB and defCB.y) or 0
+
+                local point = db.point or defPoint
+                local x = db.x or defX
+                local y = db.y or defY
+
+                if ns.ClampCastbarCoordinates then
+                    point, x, y = ns.ClampCastbarCoordinates(bar, point, x, y, db)
+                end
+                db.point = point
+                db.x = x
+                db.y = y
+
+                -- FORCE ON SCREEN: If attached frame is hidden/missing, fallback to UIParent on screen
+                local isAttached = not db.detached
+                local UF = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("UnitFrames", true)
+                local uFrame = UF and UF.units and UF.units[unit]
+                if isAttached and uFrame and uFrame:IsShown() then
+                    if ns.SetCastbarAttachment then
+                        ns.SetCastbarAttachment(unit, true)
+                    end
+                else
+                    bar:SetParent(UIParent)
+                    bar:ClearAllPoints()
+                    bar:SetPoint(point, UIParent, point, x, y)
+                end
+
+                if bar.SetFrameStrata then bar:SetFrameStrata("MEDIUM") end
+                local curLevel = (bar.GetFrameLevel and bar:GetFrameLevel()) or 20
+                if curLevel < 30 and bar.SetFrameLevel then bar:SetFrameLevel(30) end
+                if bar.SetMovable then bar:SetMovable(true) end
+                if bar.SetClampedToScreen then bar:SetClampedToScreen(true) end
+
+                -- Force visibility and visual preview
+                if bar.SetAlpha then bar:SetAlpha(1) end
+                if bar.SetMinMaxValues then bar:SetMinMaxValues(0, 1) end
+                if bar.SetValue then bar:SetValue(1) end
+                local c = db.colors and db.colors.cast or { 1, 1, 0, 1 }
+                if bar.SetStatusBarColor then bar:SetStatusBarColor(c[1], c[2], c[3], 1) end
+                if bar.Background then
+                    if bar.Background.SetColorTexture then bar.Background:SetColorTexture(0, 0, 0, 0.5) end
+                    if bar.Background.Show then bar.Background:Show() end
+                end
+                if bar.Icon then
+                    if db.showIcon ~= false then
+                        if bar.Icon.SetTexture then bar.Icon:SetTexture(136243) end
+                        if bar.Icon.Show then bar.Icon:Show() end
+                    else
+                        if bar.Icon.Hide then bar.Icon:Hide() end
+                    end
+                end
+                if bar.Text then
+                    if bar.Text.SetText then bar.Text:SetText(unit:upper() .. " CASTBAR") end
+                    if bar.Text.Show then bar.Text:Show() end
+                end
+                if bar.TimeFS then
+                    if bar.TimeFS.SetText then bar.TimeFS:SetText("1.5 / 2.0") end
+                    if bar.TimeFS.Show then bar.TimeFS:Show() end
+                end
+                if bar.Spark and bar.Spark.Hide then
+                    bar.Spark:Hide()
+                end
+
+                if bar.Show then bar:Show() end
+
+                if LEM and LEM.RefreshFrame then
+                    LEM:RefreshFrame(bar)
+                end
+                if LEM and LEM.RefreshFrameSettings then
+                    LEM:RefreshFrameSettings(bar)
+                end
             end
         end
+    end
+    ns.ForceCastbarsOnScreen = ForceCastbarsOnScreen
+
+    LEM:RegisterCallback('enter', function()
+        ForceCastbarsOnScreen()
     end)
 
     LEM:RegisterCallback('exit', function()

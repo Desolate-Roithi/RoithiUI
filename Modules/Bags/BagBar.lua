@@ -28,11 +28,36 @@ function BagsMod:SetBagButtonsMouse(enable)
             btn:EnableMouse(enable)
         end
     end
+    if self.expanderButton then
+        if self.expanderButton.EnableMouse then
+            self.expanderButton:EnableMouse(enable)
+        end
+        if enable and self.bagBarFrame and self.expanderButton.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
+            self.expanderButton:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 25)
+        end
+    end
     if self.bagBarFrame and LEM and LEM.frameSelections and LEM.frameSelections[self.bagBarFrame] then
         local sel = LEM.frameSelections[self.bagBarFrame]
         if sel then
-            if sel.SetFrameLevel then sel:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 100) end
-            if sel.EnableMouse then sel:EnableMouse(not enable) end
+            if enable then
+                if sel.Hide then sel:Hide() end
+                if sel.EnableMouse then sel:EnableMouse(false) end
+                if sel.SetFrameLevel then sel:SetFrameLevel(1) end
+            else
+                if sel.Show then sel:Show() end
+                if sel.EnableMouse then sel:EnableMouse(true) end
+                if sel.SetFrameLevel then sel:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 100) end
+            end
+        end
+    end
+    if _G.BagsBar then
+        if _G.BagsBar.Selection then
+            if _G.BagsBar.Selection.Hide then _G.BagsBar.Selection:Hide() end
+            if _G.BagsBar.Selection.EnableMouse then _G.BagsBar.Selection:EnableMouse(false) end
+        end
+        if _G.BagBarExpandToggle then
+            if _G.BagBarExpandToggle.Hide then _G.BagBarExpandToggle:Hide() end
+            if _G.BagBarExpandToggle.EnableMouse then _G.BagBarExpandToggle:EnableMouse(false) end
         end
     end
 end
@@ -253,16 +278,36 @@ function BagsMod:SetupBagBar()
     end
 
     if not self.editModeBagHooked then
+        local function OnEditModeExit()
+            if LEM then LEM.isEditing = false end
+            self:SetBagButtonsMouse(true)
+            self:UpdateBagBarLayout()
+            if _G.C_Timer and _G.C_Timer.After then
+                _G.C_Timer.After(0, function()
+                    self:SetBagButtonsMouse(true)
+                    self:UpdateBagBarLayout()
+                end)
+            end
+        end
+
+        local function OnEditModeEnter()
+            self:SetBagButtonsMouse(false)
+        end
+
         if _G.EventRegistry and _G.EventRegistry.RegisterCallback then
-            _G.EventRegistry:RegisterCallback("EditMode.Enter", function() self:SetBagButtonsMouse(false) end, self)
-            _G.EventRegistry:RegisterCallback("EditMode.Exit", function() self:SetBagButtonsMouse(true) end, self)
+            _G.EventRegistry:RegisterCallback("EditMode.Enter", OnEditModeEnter, self)
+            _G.EventRegistry:RegisterCallback("EditMode.Exit", OnEditModeExit, self)
         end
         if LEM and LEM.RegisterCallback then
-            LEM:RegisterCallback("enter", function() self:SetBagButtonsMouse(false) end)
-            LEM:RegisterCallback("exit", function() self:SetBagButtonsMouse(true) end)
+            LEM:RegisterCallback("enter", OnEditModeEnter)
+            LEM:RegisterCallback("exit", OnEditModeExit)
         elseif LEM and LEM.anonCallbacksEnter and LEM.anonCallbacksExit then
-            table.insert(LEM.anonCallbacksEnter, function() self:SetBagButtonsMouse(false) end)
-            table.insert(LEM.anonCallbacksExit, function() self:SetBagButtonsMouse(true) end)
+            table.insert(LEM.anonCallbacksEnter, OnEditModeEnter)
+            table.insert(LEM.anonCallbacksExit, OnEditModeExit)
+        end
+        if _G.EditModeManagerFrame and _G.EditModeManagerFrame.HookScript then
+            _G.EditModeManagerFrame:HookScript("OnShow", OnEditModeEnter)
+            _G.EditModeManagerFrame:HookScript("OnHide", OnEditModeExit)
         end
         self.editModeBagHooked = true
     end
@@ -306,6 +351,11 @@ function BagsMod:CreateBagBarExpander()
 
     if expander.RegisterForClicks then expander:RegisterForClicks("AnyUp") end
     expander:SetScript("OnClick", function()
+        if _G.InCombatLockdown and _G.InCombatLockdown() then
+            self.pendingBagBarLayout = true
+            self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnPlayerRegenEnabledBagBar")
+            return
+        end
         self.db.bagBar = self.db.bagBar or {}
         self.db.bagBar.expanded = not self.db.bagBar.expanded
         local expanded = self.db.bagBar.expanded
@@ -686,7 +736,16 @@ function BagsMod:UpdateBagBarLayout()
     local spacing = cfg.spacing or 4
     local isExpanded = cfg.expanded == true
 
-    local isEditMode = (LEM and LEM.IsInEditMode and LEM:IsInEditMode()) or false
+    local isEditMode = false
+    if _G.EditModeManagerFrame and _G.EditModeManagerFrame.IsShown and _G.EditModeManagerFrame:IsShown() then
+        isEditMode = true
+    elseif LEM and LEM.IsInEditMode and LEM:IsInEditMode() then
+        if _G.EditModeManagerFrame and _G.EditModeManagerFrame.IsShown and not _G.EditModeManagerFrame:IsShown() then
+            isEditMode = false
+        else
+            isEditMode = true
+        end
+    end
     local btnMouse = not isEditMode
 
     local xOffset = 0
@@ -716,7 +775,7 @@ function BagsMod:UpdateBagBarLayout()
         self.expanderButton:ClearAllPoints()
         self.expanderButton:SetSize(14, btnSize)
         if self.expanderButton.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
-            self.expanderButton:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + 10)
+            self.expanderButton:SetFrameLevel(self.bagBarFrame:GetFrameLevel() + (isEditMode and 10 or 25))
         end
         if self.expanderButton.EnableMouse then self.expanderButton:EnableMouse(btnMouse) end
         self.expanderButton:SetPoint("LEFT", self.bagBarFrame, "LEFT", xOffset, 0)
@@ -823,6 +882,18 @@ function BagsMod:UpdateBagBarLayout()
 
     local totalW = math.max(40, xOffset - spacing)
     local totalH = btnSize
+    local oldW = self.bagBarFrame.GetWidth and self.bagBarFrame:GetWidth() or 0
+    if cfg.point and cfg.point:find("RIGHT") and self.bagBarFrame.GetLeft and oldW > 0 and oldW ~= totalW then
+        local curLeft = self.bagBarFrame:GetLeft()
+        local curBottom = self.bagBarFrame:GetBottom()
+        if curLeft and curBottom and self.bagBarFrame.SetPoint then
+            self.bagBarFrame:ClearAllPoints()
+            self.bagBarFrame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", curLeft, curBottom)
+            cfg.point = "BOTTOMLEFT"
+            cfg.x = curLeft
+            cfg.y = curBottom
+        end
+    end
     if self.bagBarFrame.SetSize then
         self.bagBarFrame:SetSize(totalW, totalH)
     end

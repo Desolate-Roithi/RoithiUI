@@ -61,6 +61,7 @@ function BagsMod:OnInitialize()
     self.hoveredNewSlots = {}
     self.dismissedNewHighlights = {}
     self.knownSlots = {}
+    self.initialInventoryScanned = false
     self.searchText = ""
     self:RegisterPopups()
 end
@@ -78,9 +79,11 @@ function BagsMod:OnEnable()
     end
     if self.db.enabled == false then return end
 
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
     self:RegisterEvent("BAG_UPDATE_DELAYED", "OnBagUpdate")
     self:RegisterEvent("BAG_UPDATE", "OnBagUpdate")
     self:RegisterEvent("BAG_CONTAINER_UPDATE", "OnBagUpdate")
+    self:RegisterEvent("ITEM_LOCK_CHANGED", "OnBagUpdate")
     self:RegisterEvent("BAG_UPDATE_COOLDOWN", "OnBagCooldownUpdate")
     self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnBagUpdate")
     self:RegisterEvent("PLAYER_MONEY", "UpdateMoneyDisplay")
@@ -92,8 +95,13 @@ function BagsMod:OnEnable()
     self:HookTooltipShortcuts()
     self:SetupBagBar()
     self:HookBlizzardBagFunctions()
-    self:ScanInventoryOnce()
+    self:ScanInventoryOnce(true)
     self:PrewarmItemSlots()
+end
+
+function BagsMod:OnEnteringWorld()
+    self:KillBlizzardBags()
+    self:ScanInventoryOnce(true)
 end
 
 function BagsMod:PrewarmItemSlots()
@@ -151,13 +159,32 @@ function BagsMod:KillBlizzardBags()
     local hidden = GetBlizzBagHidden()
     for i = 1, 13 do
         local f = _G["ContainerFrame" .. i]
-        if f and f.SetParent and f:GetParent() ~= hidden then
-            f:SetParent(hidden)
+        if f then
+            if f.SetParent and f:GetParent() ~= hidden then
+                f:SetParent(hidden)
+            end
+            if f.Hide and f:IsShown() then
+                f:Hide()
+            end
+            if f.UnregisterAllEvents then
+                f:UnregisterAllEvents()
+            end
         end
     end
     local cb = _G.ContainerFrameCombinedBags
-    if cb and cb.SetParent and cb:GetParent() ~= hidden then
-        cb:SetParent(hidden)
+    if cb then
+        if cb.SetParent and cb:GetParent() ~= hidden then
+            cb:SetParent(hidden)
+        end
+        if cb.Hide and cb:IsShown() then
+            cb:Hide()
+        end
+        if cb.UnregisterAllEvents then
+            cb:UnregisterAllEvents()
+        end
+    end
+    if _G.BagUpdaterFrame and _G.BagUpdaterFrame.SetScript then
+        _G.BagUpdaterFrame:SetScript("OnUpdate", nil)
     end
 end
 
@@ -223,6 +250,7 @@ function BagsMod:CloseBags()
     if self.mainFrame and self.mainFrame.Hide then
         self.mainFrame:Hide()
     end
+    self:KillBlizzardBags()
 end
 
 local lastToggleBagsTime = 0
@@ -278,6 +306,18 @@ function BagsMod:GetSlotKey(bag, slot)
 end
 
 function BagsMod:HasActiveTradeTimer(bag, slot, customTooltipData)
+    if not bag or not slot then return false end
+    local slotKey = GetSlotKey(bag, slot)
+    local now = (_G.GetTime and _G.GetTime()) or 0
+
+    if not customTooltipData and self.tradeTimerCache and self.tradeTimerCache[slotKey] then
+        local entry = self.tradeTimerCache[slotKey]
+        if (now - entry.time) < 30 then
+            return entry.hasTimer
+        end
+    end
+
+    local hasTimer = false
     local tooltipData = customTooltipData or (_G.C_TooltipInfo and _G.C_TooltipInfo.GetBagItem and _G.C_TooltipInfo.GetBagItem(bag, slot))
     if tooltipData and tooltipData.lines then
         if not customTooltipData and _G.TooltipUtil and _G.TooltipUtil.SurfaceArgs then
@@ -290,23 +330,23 @@ function BagsMod:HasActiveTradeTimer(bag, slot, customTooltipData)
 
         for _, line in ipairs(tooltipData.lines) do
             if line.type == tradeTimeType then
-                return true
+                hasTimer = true
+                break
             end
             if line.leftText then
                 if pattern and string.find(line.leftText, pattern) then
-                    return true
+                    hasTimer = true
+                    break
                 end
                 local lowerText = string.lower(line.leftText)
-                if string.find(lowerText, "tradeable") or string.find(lowerText, "handeln") or string.find(lowerText, "trade time") then
-                    return true
+                if string.find(lowerText, "eligible to loot") or string.find(lowerText, "berechtigt") or string.find(lowerText, "trade time remaining") then
+                    hasTimer = true
+                    break
                 end
             end
         end
-        return false
-    end
-
-    -- Classic / Forever fallback using hidden scanning tooltip
-    if _G.CreateFrame and bag and slot then
+    elseif _G.CreateFrame and bag and slot then
+        -- Classic / Forever fallback using hidden scanning tooltip
         if not self.tradeScanTooltip then
             self.tradeScanTooltip = _G.CreateFrame("GameTooltip", "RoithiBagTradeScanTooltip", nil, "GameTooltipTemplate")
         end
@@ -328,13 +368,13 @@ function BagsMod:HasActiveTradeTimer(bag, slot, customTooltipData)
                     local lineText = leftTextObj and leftTextObj:GetText()
                     if lineText then
                         if pattern and string.find(lineText, pattern) then
-                            if tt.Hide then tt:Hide() end
-                            return true
+                            hasTimer = true
+                            break
                         end
                         local lowerText = string.lower(lineText)
-                        if string.find(lowerText, "tradeable") or string.find(lowerText, "handeln") or string.find(lowerText, "trade time") then
-                            if tt.Hide then tt:Hide() end
-                            return true
+                        if string.find(lowerText, "eligible to loot") or string.find(lowerText, "berechtigt") or string.find(lowerText, "trade time remaining") then
+                            hasTimer = true
+                            break
                         end
                     end
                 end
@@ -343,7 +383,12 @@ function BagsMod:HasActiveTradeTimer(bag, slot, customTooltipData)
         end
     end
 
-    return false
+    if not customTooltipData then
+        self.tradeTimerCache = self.tradeTimerCache or {}
+        self.tradeTimerCache[slotKey] = { hasTimer = hasTimer, time = now }
+    end
+
+    return hasTimer
 end
 
 function BagsMod:IsSlotNew(bag, slot, itemData)
@@ -514,22 +559,44 @@ function BagsMod:HookTooltipShortcuts()
     self.tooltipShortcutsHooked = true
 end
 
-function BagsMod:ScanInventoryOnce()
+function BagsMod:ScanInventoryOnce(isInitial)
     self.knownSlots = self.knownSlots or {}
     self.newSlots = self.newSlots or {}
     self.knownItemIDs = self.knownItemIDs or {}
+    local anySlotScanned = false
+    local initialScan = (isInitial == true) or (not self.initialInventoryScanned)
+
+    if initialScan then
+        self.newSlots = {}
+        self.hoveredNewSlots = {}
+        self.dismissedNewHighlights = {}
+        self.tradeTimerCache = {}
+        if _G.C_NewItems and _G.C_NewItems.ClearAll then
+            pcall(_G.C_NewItems.ClearAll)
+        end
+    end
+
     for _, bag in ipairs(self:GetScannableBags()) do
         local numSlots = self:GetNumBagSlots(bag)
         for slot = 1, numSlots do
             local slotKey = GetSlotKey(bag, slot)
             local itemInfo = self:GetItemInfoAt(bag, slot)
             if itemInfo and itemInfo.itemID then
+                anySlotScanned = true
                 self.knownItemIDs[itemInfo.itemID] = true
                 self.knownSlots[slotKey] = itemInfo.itemID
-                -- If item has an active trade timer, keep it marked new even on relog
+                -- If item has an active trade timer, keep it marked new even on relog / login
                 if self:HasActiveTradeTimer(bag, slot) then
                     self.newSlots[slotKey] = true
                     itemInfo.isNew = true
+                else
+                    if initialScan then
+                        self.newSlots[slotKey] = nil
+                        itemInfo.isNew = false
+                        if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
+                            pcall(_G.C_NewItems.RemoveNewItem, bag, slot)
+                        end
+                    end
                 end
             else
                 self.knownSlots[slotKey] = nil
@@ -538,6 +605,9 @@ function BagsMod:ScanInventoryOnce()
                 if self.dismissedNewHighlights then self.dismissedNewHighlights[slotKey] = nil end
             end
         end
+    end
+    if anySlotScanned then
+        self.initialInventoryScanned = true
     end
 end
 
@@ -594,18 +664,22 @@ function BagsMod:GetItemInfoAt(bag, slot)
                 local qInfo = _G.C_Container.GetContainerItemQuestInfo(bag, slot)
                 if qInfo then
                     local qState = self:EvaluateQuestItemState(itemID, qInfo.questID, qInfo.isActive)
-                    isQuest = qState.isQuest or qInfo.isQuestItem
+                    isQuest = qState.isQuest or (qInfo.isQuestItem == true) or (qInfo.questID ~= nil)
                     showQuestBang = qState.showQuestBang
-                    showQuestBorder = qState.showQuestBorder
+                    showQuestBorder = qState.showQuestBorder or (qInfo.isQuestItem == true)
                 end
             elseif _G.GetContainerItemQuestInfo then
                 local isQuestItem, qID, act = _G.GetContainerItemQuestInfo(bag, slot)
                 if isQuestItem or qID or act then
                     local qState = self:EvaluateQuestItemState(itemID, qID, act)
-                    isQuest = qState.isQuest or isQuestItem
+                    isQuest = qState.isQuest or (isQuestItem == true) or (qID ~= nil)
                     showQuestBang = qState.showQuestBang
-                    showQuestBorder = qState.showQuestBorder
+                    showQuestBorder = qState.showQuestBorder or (isQuestItem == true)
                 end
+            end
+            if classID == 12 then
+                isQuest = true
+                showQuestBorder = true
             end
 
             return {
@@ -637,11 +711,32 @@ function BagsMod:GetItemInfoAt(bag, slot)
 end
 
 function BagsMod:OnBagUpdate()
-    if self.UpdateBagButtonsVisual then
-        self:UpdateBagButtonsVisual()
+    if not self.mainFrame or not self.mainFrame:IsShown() then
+        if self.UpdateBagButtonsVisual then
+            self:UpdateBagButtonsVisual()
+        end
+        return
     end
-    if self.mainFrame and self.mainFrame:IsShown() then
-        self:UpdateInventory()
+
+    if self.pendingBagUpdate then return end
+    self.pendingBagUpdate = true
+
+    local function PerformUpdate()
+        self.pendingBagUpdate = nil
+        if self.UpdateBagButtonsVisual then
+            self:UpdateBagButtonsVisual()
+        end
+        if self.mainFrame and self.mainFrame:IsShown() then
+            self:UpdateInventory()
+        end
+    end
+
+    if _G.RunNextFrame then
+        _G.RunNextFrame(PerformUpdate)
+    elseif _G.C_Timer and _G.C_Timer.After then
+        _G.C_Timer.After(0.05, PerformUpdate)
+    else
+        PerformUpdate()
     end
 end
 
@@ -996,26 +1091,56 @@ function BagsMod:CreateHeaderBar()
         search:SetBackdropBorderColor(0.25, 0.25, 0.25, 1.0)
     end
     self:ApplyFont(search, 12, "searchFontSize", "")
-    if search.SetTextInsets then search:SetTextInsets(6, 6, 0, 0) end
+    if search.SetTextInsets then search:SetTextInsets(6, 20, 0, 0) end
     if search.SetTextColor then search:SetTextColor(0.9, 0.9, 0.9, 1) end
 
     local placeholder = search:CreateFontString(nil, "OVERLAY")
     self:ApplyFont(placeholder, 12, "searchFontSize", "")
     placeholder:SetPoint("LEFT", search, "LEFT", 6, 0)
-    placeholder:SetPoint("RIGHT", search, "RIGHT", -6, 0)
+    placeholder:SetPoint("RIGHT", search, "RIGHT", -20, 0)
     placeholder:SetJustifyH("LEFT")
     if placeholder.SetWordWrap then placeholder:SetWordWrap(false) end
     placeholder:SetText(L["Search items (e.g. ring or trinket, type:gear)..."] or "Search items (e.g. ring or trinket, type:gear)...")
     placeholder:SetTextColor(0.5, 0.5, 0.5, 0.8)
     self.searchPlaceholder = placeholder
 
+    -- Clear search field button (inside search field on the right)
+    local clearBtn = CreateFrame("Button", "RoithiBagSearchClearButton", search)
+    clearBtn:SetSize(14, 14)
+    clearBtn:SetPoint("RIGHT", search, "RIGHT", -4, 0)
+    local clearTex = clearBtn:CreateTexture(nil, "ARTWORK")
+    clearTex:SetAllPoints(clearBtn)
+    local clearAtlasOk = false
+    if clearTex.SetAtlas and _G.C_Texture and _G.C_Texture.GetAtlasInfo and _G.C_Texture.GetAtlasInfo("common-search-clear") then
+        clearAtlasOk = pcall(function() clearTex:SetAtlas("common-search-clear") end)
+    end
+    if not clearAtlasOk then
+        clearTex:SetTexture("Interface\\FriendsFrame\\ClearBroadcastIcon")
+    end
+    clearTex:SetAlpha(0.6)
+    clearBtn.icon = clearTex
+    clearBtn:SetScript("OnEnter", function()
+        clearTex:SetAlpha(1.0)
+    end)
+    clearBtn:SetScript("OnLeave", function()
+        clearTex:SetAlpha(0.6)
+    end)
+    clearBtn:SetScript("OnClick", function()
+        search:SetText("")
+        if search.ClearFocus then search:ClearFocus() end
+    end)
+    clearBtn:Hide()
+    self.searchClearButton = clearBtn
+
     search:SetScript("OnTextChanged", function(s)
         local txt = s:GetText() or ""
         self.searchText = txt
         if txt == "" then
             placeholder:Show()
+            if self.searchClearButton then self.searchClearButton:Hide() end
         else
             placeholder:Hide()
+            if self.searchClearButton then self.searchClearButton:Show() end
         end
         self:UpdateInventory()
     end)
@@ -1023,13 +1148,19 @@ function BagsMod:CreateHeaderBar()
         s:SetText("")
         s:ClearFocus()
     end)
-    search:SetScript("OnEnter", function(s)
-        ShowSearchGuide(s)
-    end)
-    search:SetScript("OnLeave", function()
-        if _G.GameTooltip then _G.GameTooltip:Hide() end
-    end)
     self.searchBox = search
+end
+
+function BagsMod:ClearSearch()
+    if self.searchBox then
+        self.searchBox:SetText("")
+        if self.searchBox.ClearFocus then
+            self.searchBox:ClearFocus()
+        end
+    else
+        self.searchText = ""
+        self:UpdateInventory()
+    end
 end
 
 function BagsMod:RegisterPopups()
@@ -2036,6 +2167,10 @@ function BagsMod:OnSlotEnter(s)
         end
         _G.GameTooltip:Show()
     end
+
+    if _G.C_Container and _G.C_Container.ShowContainerSellCursor and _G.MerchantFrame and _G.MerchantFrame:IsShown() and s.bag and s.slot then
+        _G.C_Container.ShowContainerSellCursor(s.bag, s.slot)
+    end
 end
 
 function BagsMod:AcquireItemSlot(index)
@@ -2057,6 +2192,30 @@ function BagsMod:AcquireItemSlot(index)
     local slot = CreateFrame("ItemButton", "RoithiBagSlot" .. index, slotParent, template)
     slot:SetAllPoints(slotParent)
     slot.slotParent = slotParent
+
+    -- Strip Blizzard template emptyBackground atlas and textures so empty slots never show native slot artwork
+    slot.emptyBackgroundAtlas = nil
+    slot.emptyBackgroundTexture = nil
+    slot.GetItemButtonBackgroundTexture = function() return nil, false end
+
+    -- Override SetItemButtonTexture to prevent native ItemButtonTemplate from falling back to emptyBackgroundAtlas
+    slot.SetItemButtonTexture = function(s, texture)
+        local iconTex = s.icon or s.Icon
+        if not iconTex then return end
+        if texture and texture ~= "" then
+            if iconTex.SetTexture then iconTex:SetTexture(texture) end
+            iconTex:Show()
+        else
+            if iconTex.SetAtlas then iconTex:SetAtlas(nil) end
+            if iconTex.SetTexture then iconTex:SetTexture(nil) end
+            iconTex:Hide()
+        end
+    end
+
+    if slot.ExtendedSlot then
+        slot.ExtendedSlot:SetAlpha(0)
+        if slot.ExtendedSlot.Hide then slot.ExtendedSlot:Hide() end
+    end
 
     slotParent:SetFrameLevel(self.mainFrame:GetFrameLevel() + 5)
     slot:SetFrameLevel(slotParent:GetFrameLevel() + 1)
@@ -2102,10 +2261,12 @@ function BagsMod:AcquireItemSlot(index)
     if norm then
         if norm.SetTexture then norm:SetTexture(nil) end
         if norm.SetAlpha then norm:SetAlpha(0) end
+        if norm.Hide then norm:Hide() end
     end
     if slot.NormalTexture then
         if slot.NormalTexture.SetTexture then slot.NormalTexture:SetTexture(nil) end
         if slot.NormalTexture.SetAlpha then slot.NormalTexture:SetAlpha(0) end
+        if slot.NormalTexture.Hide then slot.NormalTexture:Hide() end
     end
     for _, region in ipairs({ slot:GetRegions() }) do
         if region.IsObjectType and region:IsObjectType("Texture") and region ~= icon then
@@ -2116,11 +2277,12 @@ function BagsMod:AcquireItemSlot(index)
             if sLower:find("border") or sLower:find("normal") or sLower:find("slot") or sLower:find("glow") or sLower:find("ring") or sLower:find("itemslotbackground") then
                 region:SetAlpha(0)
                 if region.SetTexture then region:SetTexture(nil) end
+                if region.Hide then region:Hide() end
             end
         end
     end
 
-    -- Cooldown swirl and text
+    -- Cooldown swirl and text (hidden by default to avoid GPU swipe evaluations)
     local cooldown = slot.Cooldown or slot.cooldown
     if not cooldown then
         cooldown = CreateFrame("Cooldown", nil, slot, "CooldownFrameTemplate")
@@ -2132,6 +2294,7 @@ function BagsMod:AcquireItemSlot(index)
         slot.Cooldown = cooldown
         slot.cooldown = cooldown
     end
+    if cooldown.Hide then cooldown:Hide() end
 
     -- 1px overlay border to guarantee border renders above the icon
     if not slot.roithiBorder then
@@ -2208,8 +2371,8 @@ function BagsMod:AcquireItemSlot(index)
         newOverlay = slot:CreateTexture(nil, "OVERLAY")
         newOverlay:SetAllPoints(slot)
         newOverlay:SetTexture("Interface\\Buttons\\CheckButtonHilight")
-        newOverlay:SetBlendMode("ADD")
-        newOverlay:SetAlpha(0.65)
+        newOverlay:SetBlendMode("BLEND")
+        newOverlay:SetAlpha(0.4)
         newOverlay:Hide()
         slot.newOverlay = newOverlay
     end
@@ -2224,10 +2387,58 @@ function BagsMod:AcquireItemSlot(index)
         slot.questIcon = questIcon
     end
 
-    if slot.NewItemTexture then slot.NewItemTexture:Hide() end
-    if slot.BattlepayItemTexture then slot.BattlepayItemTexture:Hide() end
-    if slot.newitemglowAnim and slot.newitemglowAnim.Stop then slot.newitemglowAnim:Stop() end
+    -- Stop and disable unused Blizzard animation groups from ContainerFrameItemButtonTemplate
+    if slot.newitemglowAnim then
+        slot.newitemglowAnim:Stop()
+        if slot.newitemglowAnim.SetLooping then slot.newitemglowAnim:SetLooping("NONE") end
+    end
     if slot.flashAnim and slot.flashAnim.Stop then slot.flashAnim:Stop() end
+    if slot.AugmentBorderAnim and slot.AugmentBorderAnim.Stop then slot.AugmentBorderAnim:Stop() end
+
+    -- Hide and clear unused Blizzard decorative textures to eliminate overdraw
+    if slot.NewItemTexture then
+        if slot.NewItemTexture.SetTexture then slot.NewItemTexture:SetTexture(nil) end
+        slot.NewItemTexture:Hide()
+    end
+    if slot.BattlepayItemTexture then
+        if slot.BattlepayItemTexture.SetTexture then slot.BattlepayItemTexture:SetTexture(nil) end
+        slot.BattlepayItemTexture:Hide()
+    end
+    if slot.BagIndicator then
+        if slot.BagIndicator.SetTexture then slot.BagIndicator:SetTexture(nil) end
+        slot.BagIndicator:Hide()
+    end
+    if slot.ExtendedSlot then
+        if slot.ExtendedSlot.SetTexture then slot.ExtendedSlot:SetTexture(nil) end
+        slot.ExtendedSlot:Hide()
+    end
+    if slot.UpgradeIcon then
+        if slot.UpgradeIcon.SetTexture then slot.UpgradeIcon:SetTexture(nil) end
+        slot.UpgradeIcon:Hide()
+    end
+    if slot.flash then
+        if slot.flash.SetTexture then slot.flash:SetTexture(nil) end
+        slot.flash:Hide()
+    end
+    if slot.AugmentBorderAnimTexture then
+        if slot.AugmentBorderAnimTexture.SetTexture then slot.AugmentBorderAnimTexture:SetTexture(nil) end
+        slot.AugmentBorderAnimTexture:Hide()
+    end
+    if slot.IconQuestTexture then
+        if slot.IconQuestTexture.SetTexture then slot.IconQuestTexture:SetTexture(nil) end
+        slot.IconQuestTexture:Hide()
+    end
+    if slot.JunkIcon then
+        if slot.JunkIcon.SetTexture then slot.JunkIcon:SetTexture(nil) end
+        slot.JunkIcon:Hide()
+    end
+    if slot.searchOverlay then slot.searchOverlay:Hide() end
+    if slot.ItemContextOverlay then slot.ItemContextOverlay:Hide() end
+    if slot.IconOverlay then slot.IconOverlay:Hide() end
+    if slot.IconOverlay2 then slot.IconOverlay2:Hide() end
+    if slot.SetScript then
+        slot:SetScript("OnEvent", nil)
+    end
 
     slot.UpdateNewItem = function(s)
         if not s.itemData then
@@ -2235,6 +2446,7 @@ function BagsMod:AcquireItemSlot(index)
             if s.BattlepayItemTexture then s.BattlepayItemTexture:Hide() end
             if s.newitemglowAnim and s.newitemglowAnim.Stop then s.newitemglowAnim:Stop() end
             if s.flashAnim and s.flashAnim.Stop then s.flashAnim:Stop() end
+            if s.AugmentBorderAnim and s.AugmentBorderAnim.Stop then s.AugmentBorderAnim:Stop() end
             if s.newOverlay then s.newOverlay:Hide() end
             return
         end
@@ -2249,6 +2461,7 @@ function BagsMod:AcquireItemSlot(index)
         if s.BattlepayItemTexture then s.BattlepayItemTexture:Hide() end
         if s.newitemglowAnim and s.newitemglowAnim.Stop then s.newitemglowAnim:Stop() end
         if s.flashAnim and s.flashAnim.Stop then s.flashAnim:Stop() end
+        if s.AugmentBorderAnim and s.AugmentBorderAnim.Stop then s.AugmentBorderAnim:Stop() end
     end
 
     -- Click & Drag handling
@@ -2257,6 +2470,8 @@ function BagsMod:AcquireItemSlot(index)
 
     local function HandlePickup(s)
         if s.bag and s.slot then
+            self:ClearNewSlot(s.bag, s.slot)
+            if s.newOverlay then s.newOverlay:Hide() end
             if _G.C_Container and _G.C_Container.PickupContainerItem then
                 _G.C_Container.PickupContainerItem(s.bag, s.slot)
             elseif _G.PickupContainerItem then
@@ -2324,6 +2539,9 @@ function BagsMod:AcquireItemSlot(index)
             _G.GameTooltip.roithiBagSlot = nil
             _G.GameTooltip:Hide()
         end
+        if _G.ResetCursor then
+            _G.ResetCursor()
+        end
         if s and s.needsTabRefreshOnLeave then
             s.needsTabRefreshOnLeave = nil
             if self.db and self.db.activeCategory == "NEW" and self.mainFrame and self.mainFrame:IsShown() then
@@ -2339,18 +2557,48 @@ end
 function BagsMod:UpdateInventory()
     if not self.mainFrame or not self.mainFrame:IsShown() then return end
 
-    local allItems = {}
+    if not self.initialInventoryScanned then
+        self:ScanInventoryOnce(true)
+    end
+
+    self.cachedAllItems = self.cachedAllItems or {}
+    self.cachedDisplaySlots = self.cachedDisplaySlots or {}
+    self.cachedNormalSlots = self.cachedNormalSlots or {}
+    self.cachedReagentSlots = self.cachedReagentSlots or {}
+    self.slotEntryPool = self.slotEntryPool or {}
+
+    local wipeTable = _G.wipe or function(t) for k in pairs(t) do t[k] = nil end return t end
+    wipeTable(self.cachedAllItems)
+    wipeTable(self.cachedDisplaySlots)
+    wipeTable(self.cachedNormalSlots)
+    wipeTable(self.cachedReagentSlots)
+
+    local allItems = self.cachedAllItems
+    local displaySlots = self.cachedDisplaySlots
+    local normalDisplaySlots = self.cachedNormalSlots
+    local reagentDisplaySlots = self.cachedReagentSlots
+    local entryPool = self.slotEntryPool
+    local entryIndex = 0
+
+    local function AllocSlotEntry(b, s, data)
+        entryIndex = entryIndex + 1
+        local entry = entryPool[entryIndex]
+        if not entry then
+            entry = {}
+            entryPool[entryIndex] = entry
+        end
+        entry.bag = b
+        entry.slot = s
+        entry.itemData = data
+        return entry
+    end
+
     local totalSlots = 0
     local freeSlots = 0
-
-    local displaySlots = {}
     local activeCat = self.db.activeCategory or "ALL"
 
     local reagentBagID = (_G.Enum and _G.Enum.BagIndex and _G.Enum.BagIndex.ReagentBag) or 5
     local keyringID = (_G.KEYRING_CONTAINER or -2)
-
-    local normalDisplaySlots = {}
-    local reagentDisplaySlots = {}
 
     for _, bag in ipairs(self:GetScannableBags()) do
         local isReagentBag = (bag == reagentBagID)
@@ -2381,22 +2629,24 @@ function BagsMod:UpdateInventory()
             local slotKey = GetSlotKey(bag, slot)
             local itemInfo = self:GetItemInfoAt(bag, slot)
             if itemInfo and itemInfo.itemID then
-                local isTradeableBoP = self:HasActiveTradeTimer(bag, slot)
+                local isTradeableBoP = false
+                if (itemInfo.quality or 0) >= 2 and (itemInfo.bindType == 1 or itemInfo.bindType == 4 or not itemInfo.bindType) then
+                    isTradeableBoP = self:HasActiveTradeTimer(bag, slot)
+                end
                 if isTradeableBoP then
-                    self.newSlots[slotKey] = true
-                    itemInfo.isNew = true
-                elseif _G.C_NewItems and _G.C_NewItems.IsNewItem then
-                    if _G.C_NewItems.IsNewItem(bag, slot) then
-                        self.newSlots[slotKey] = true
-                        itemInfo.isNew = true
-                    elseif self.newSlots[slotKey] then
-                        itemInfo.isNew = true
-                    end
-                elseif not self.knownItemIDs[itemInfo.itemID] then
                     self.newSlots[slotKey] = true
                     itemInfo.isNew = true
                 elseif self.newSlots[slotKey] then
                     itemInfo.isNew = true
+                elseif _G.C_NewItems and _G.C_NewItems.IsNewItem and _G.C_NewItems.IsNewItem(bag, slot) then
+                    self.newSlots[slotKey] = true
+                    itemInfo.isNew = true
+                elseif not (_G.C_NewItems and _G.C_NewItems.IsNewItem) and self.initialInventoryScanned and self.knownSlots and self.knownSlots[slotKey] == nil and not self.knownItemIDs[itemInfo.itemID] then
+                    self.newSlots[slotKey] = true
+                    itemInfo.isNew = true
+                else
+                    self.newSlots[slotKey] = nil
+                    itemInfo.isNew = false
                 end
                 if self.knownSlots[slotKey] and self.knownSlots[slotKey] ~= itemInfo.itemID then
                     if self.dismissedNewHighlights then
@@ -2405,6 +2655,9 @@ function BagsMod:UpdateInventory()
                     if self.hoveredNewSlots then
                         self.hoveredNewSlots[slotKey] = nil
                     end
+                    if self.tradeTimerCache then
+                        self.tradeTimerCache[slotKey] = nil
+                    end
                 end
                 self.knownSlots[slotKey] = itemInfo.itemID
                 self.knownItemIDs[itemInfo.itemID] = true
@@ -2412,6 +2665,7 @@ function BagsMod:UpdateInventory()
             else
                 self.knownSlots[slotKey] = nil
                 self.newSlots[slotKey] = nil
+                if self.tradeTimerCache then self.tradeTimerCache[slotKey] = nil end
                 if self.hoveredNewSlots then self.hoveredNewSlots[slotKey] = nil end
                 if self.dismissedNewHighlights then self.dismissedNewHighlights[slotKey] = nil end
                 if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
@@ -2427,50 +2681,26 @@ function BagsMod:UpdateInventory()
 
             if activeCat == "ALL" then
                 if isNormalBag then
-                    table.insert(normalDisplaySlots, {
-                        bag = bag,
-                        slot = slot,
-                        itemData = itemInfo,
-                    })
+                    table.insert(normalDisplaySlots, AllocSlotEntry(bag, slot, itemInfo))
                 elseif isReagentBag then
-                    table.insert(reagentDisplaySlots, {
-                        bag = bag,
-                        slot = slot,
-                        itemData = itemInfo,
-                    })
+                    table.insert(reagentDisplaySlots, AllocSlotEntry(bag, slot, itemInfo))
                 end
             elseif activeCat == "REAGENTS" then
                 if isNormalBag then
                     if itemInfo and itemInfo.itemID and self:ItemMatchesCategory(itemInfo, activeCat) then
-                        table.insert(normalDisplaySlots, {
-                            bag = bag,
-                            slot = slot,
-                            itemData = itemInfo,
-                        })
+                        table.insert(normalDisplaySlots, AllocSlotEntry(bag, slot, itemInfo))
                         totalSlots = totalSlots + 1
                     end
                 elseif isReagentBag then
-                    table.insert(reagentDisplaySlots, {
-                        bag = bag,
-                        slot = slot,
-                        itemData = itemInfo,
-                    })
+                    table.insert(reagentDisplaySlots, AllocSlotEntry(bag, slot, itemInfo))
                 end
             elseif activeCat == "KEYRING" then
                 if isKeyringBag then
-                    table.insert(displaySlots, {
-                        bag = bag,
-                        slot = slot,
-                        itemData = itemInfo,
-                    })
+                    table.insert(displaySlots, AllocSlotEntry(bag, slot, itemInfo))
                 end
             else
                 if itemInfo and itemInfo.itemID and self:ItemMatchesCategory(itemInfo, activeCat) then
-                    table.insert(displaySlots, {
-                        bag = bag,
-                        slot = slot,
-                        itemData = itemInfo,
-                    })
+                    table.insert(displaySlots, AllocSlotEntry(bag, slot, itemInfo))
                 end
             end
         end
@@ -2491,7 +2721,11 @@ function BagsMod:UpdateInventory()
     self.lastNumNormalReagents = (activeCat == "REAGENTS") and numNormal or nil
 
     if self.freeText then
-        self.freeText:SetText(string.format("%d / %d %s", freeSlots, totalSlots, L["Free"]))
+        local freeStr = string.format("%d / %d %s", freeSlots, totalSlots, L["Free"])
+        if self.lastFreeText ~= freeStr then
+            self.freeText:SetText(freeStr)
+            self.lastFreeText = freeStr
+        end
     end
     self:UpdateMoneyDisplay()
 
@@ -2543,16 +2777,15 @@ function BagsMod:UpdateInventory()
         self.reagentGridSeparator:ClearAllPoints()
         self.reagentGridSeparator:SetPoint("TOPLEFT", self.mainFrame, "TOPLEFT", 8, sepY)
         self.reagentGridSeparator:SetWidth(gridW)
-        self.reagentGridSeparator:Show()
+        if not self.reagentGridSeparator:IsShown() then self.reagentGridSeparator:Show() end
     else
-        if self.reagentGridSeparator then
+        if self.reagentGridSeparator and self.reagentGridSeparator:IsShown() then
             self.reagentGridSeparator:Hide()
         end
     end
 
     if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
         self.mainFrame:SetSize(frameW, frameH)
-        self:UpdateCategoryButtonsLayout(frameW - 12)
     end
 
     local isSearching = (self.searchText and self.searchText ~= "")
@@ -2562,8 +2795,10 @@ function BagsMod:UpdateInventory()
         local slotFrame = self:AcquireItemSlot(i)
         if slotFrame then
             local parent = slotFrame.slotParent or slotFrame
-            parent:SetSize(slotSize, slotSize)
-            parent:ClearAllPoints()
+            if slotFrame.lastSlotSize ~= slotSize then
+                parent:SetSize(slotSize, slotSize)
+                slotFrame.lastSlotSize = slotSize
+            end
 
             local x, y
             if isSplitCategory and i > numNormal then
@@ -2579,11 +2814,15 @@ function BagsMod:UpdateInventory()
                 y = -(headerH + row * (slotSize + spacing))
             end
 
-            parent:SetFrameLevel(self.mainFrame:GetFrameLevel() + 5)
-            slotFrame:SetFrameLevel(parent:GetFrameLevel() + 1)
-            parent:SetPoint("TOPLEFT", self.mainFrame, "TOPLEFT", x, y)
-            parent:Show()
-            slotFrame:Show()
+            if slotFrame.lastX ~= x or slotFrame.lastY ~= y then
+                parent:ClearAllPoints()
+                parent:SetPoint("TOPLEFT", self.mainFrame, "TOPLEFT", x, y)
+                slotFrame.lastX = x
+                slotFrame.lastY = y
+            end
+
+            if not parent:IsShown() then parent:Show() end
+            if not slotFrame:IsShown() then slotFrame:Show() end
 
             slotFrame:SetID(entry.slot or 0)
             if slotFrame.slotParent then
@@ -2596,14 +2835,15 @@ function BagsMod:UpdateInventory()
 
             local itemData = entry.itemData
             if itemData then
-                if slotFrame.IconBorder then
+                if slotFrame.IconBorder and slotFrame.IconBorder:IsShown() then
                     slotFrame.IconBorder:SetAlpha(0)
-                    if slotFrame.IconBorder.Hide then slotFrame.IconBorder:Hide() end
+                    slotFrame.IconBorder:Hide()
                 end
                 local normTex = slotFrame.GetNormalTexture and slotFrame:GetNormalTexture()
-                if normTex then
+                if type(normTex) == "table" and normTex.IsShown and normTex:IsShown() then
                     if normTex.SetTexture then normTex:SetTexture(nil) end
                     if normTex.SetAlpha then normTex:SetAlpha(0) end
+                    if normTex.Hide then normTex:Hide() end
                 end
                 local isMatch = true
                 if isSearching then
@@ -2611,62 +2851,94 @@ function BagsMod:UpdateInventory()
                 end
 
                 local tex = itemData.texture or "Interface\\Icons\\INV_Misc_QuestionMark"
-                if slotFrame.SetItemButtonTexture then
-                    slotFrame:SetItemButtonTexture(tex)
+                if slotFrame.lastTexture ~= tex then
+                    if slotFrame.SetItemButtonTexture then
+                        slotFrame:SetItemButtonTexture(tex)
+                    end
+                    local iconTex = slotFrame.icon or slotFrame.Icon
+                    if iconTex then
+                        iconTex:SetTexture(tex)
+                    end
+                    slotFrame.lastTexture = tex
                 end
                 local iconTex = slotFrame.icon or slotFrame.Icon
-                if iconTex then
-                    iconTex:SetTexture(tex)
+                if iconTex and not iconTex:IsShown() then
                     iconTex:Show()
                 end
 
-                if isSearching and not isMatch then
-                    -- Dim non-matching items
-                    slotFrame:SetAlpha(0.2)
-                    if iconTex and iconTex.SetDesaturated then iconTex:SetDesaturated(true) end
-                    slotFrame:SetBackdropBorderColor(0.15, 0.15, 0.15, 0.5)
-                else
-                    -- Highlight matching items
-                    slotFrame:SetAlpha(1.0)
-                    if iconTex and iconTex.SetDesaturated then iconTex:SetDesaturated(false) end
-                    if isSearching then
-                        slotFrame:SetBackdropBorderColor(1.0, 0.82, 0.0, 1.0)
-                    elseif itemData.showQuestBang or itemData.showQuestBorder then
-                        slotFrame:SetBackdropBorderColor(1.0, 0.85, 0.0, 1.0)
-                    else
-                        local qc = QUALITY_COLORS[itemData.quality or 1] or QUALITY_COLORS[1]
-                        if self.db.qualityBorders ~= false then
-                            slotFrame:SetBackdropBorderColor(qc.r, qc.g, qc.b, 1.0)
-                        else
-                            slotFrame:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
-                        end
+                local targetAlpha = (isSearching and not isMatch) and 0.2 or 1.0
+                if slotFrame.lastAlpha ~= targetAlpha then
+                    slotFrame:SetAlpha(targetAlpha)
+                    slotFrame.lastAlpha = targetAlpha
+                end
+                if iconTex and iconTex.SetDesaturated then
+                    local desat = (isSearching and not isMatch)
+                    if slotFrame.lastDesat ~= desat then
+                        iconTex:SetDesaturated(desat)
+                        slotFrame.lastDesat = desat
                     end
+                end
+
+                local br, bg, bb, ba
+                if isSearching and not isMatch then
+                    br, bg, bb, ba = 0.15, 0.15, 0.15, 0.5
+                elseif isSearching then
+                    br, bg, bb, ba = 1.0, 0.82, 0.0, 1.0
+                elseif itemData.showQuestBang or itemData.showQuestBorder or itemData.isQuest or (itemData.classID == 12) then
+                    br, bg, bb, ba = 1.0, 0.85, 0.0, 1.0
+                else
+                    local qc = QUALITY_COLORS[itemData.quality or 1] or QUALITY_COLORS[1]
+                    if self.db.qualityBorders ~= false then
+                        br, bg, bb, ba = qc.r, qc.g, qc.b, 1.0
+                    else
+                        br, bg, bb, ba = 0.2, 0.2, 0.2, 1.0
+                    end
+                end
+                if slotFrame.lastBorderR ~= br or slotFrame.lastBorderG ~= bg or slotFrame.lastBorderB ~= bb or slotFrame.lastBorderA ~= ba then
+                    slotFrame:SetBackdropBorderColor(br, bg, bb, ba)
+                    slotFrame.lastBorderR, slotFrame.lastBorderG, slotFrame.lastBorderB, slotFrame.lastBorderA = br, bg, bb, ba
                 end
 
                 -- Count
                 local countText = slotFrame.count or slotFrame.Count
                 if countText then
                     if itemData.count and itemData.count > 1 then
-                        countText:SetText(itemData.count)
-                        countText:Show()
+                        local countStr = tostring(itemData.count)
+                        if slotFrame.lastCountText ~= countStr then
+                            countText:SetText(countStr)
+                            slotFrame.lastCountText = countStr
+                        end
+                        if not countText:IsShown() then countText:Show() end
                     else
-                        countText:Hide()
+                        if slotFrame.lastCountText ~= nil then
+                            countText:SetText("")
+                            slotFrame.lastCountText = nil
+                        end
+                        if countText:IsShown() then countText:Hide() end
                     end
                 end
 
                 -- Item Level
                 if slotFrame.ilvl then
                     if self.db.showItemLevel and itemData.itemLevel and itemData.itemLevel > 1 and (itemData.classID == 2 or itemData.classID == 4) then
-                        slotFrame.ilvl:SetText(itemData.itemLevel)
+                        local ilvlStr = tostring(itemData.itemLevel)
+                        if slotFrame.lastIlvlText ~= ilvlStr then
+                            slotFrame.ilvl:SetText(ilvlStr)
+                            slotFrame.lastIlvlText = ilvlStr
+                        end
                         if self.db.colorItemLevelByQuality ~= false and itemData.quality and QUALITY_COLORS[itemData.quality] then
                             local qc = QUALITY_COLORS[itemData.quality]
                             slotFrame.ilvl:SetTextColor(qc.r, qc.g, qc.b, 1)
                         else
                             slotFrame.ilvl:SetTextColor(1, 0.82, 0, 1)
                         end
-                        slotFrame.ilvl:Show()
+                        if not slotFrame.ilvl:IsShown() then slotFrame.ilvl:Show() end
                     else
-                        slotFrame.ilvl:Hide()
+                        if slotFrame.lastIlvlText ~= nil then
+                            slotFrame.ilvl:SetText("")
+                            slotFrame.lastIlvlText = nil
+                        end
+                        if slotFrame.ilvl:IsShown() then slotFrame.ilvl:Hide() end
                     end
                 end
 
@@ -2674,28 +2946,37 @@ function BagsMod:UpdateInventory()
                 if slotFrame.fav then
                     local favs = self.db.favorites or {}
                     if favs[itemData.itemID] then
-                        slotFrame.fav:Show()
+                        if not slotFrame.fav:IsShown() then slotFrame.fav:Show() end
                     else
-                        slotFrame.fav:Hide()
+                        if slotFrame.fav:IsShown() then slotFrame.fav:Hide() end
                     end
                 end
 
                 -- New item highlight
                 if slotFrame.newOverlay then
                     if self:ShouldShowNewHighlight(slotFrame.bag, slotFrame.slot, itemData) then
-                        slotFrame.newOverlay:Show()
+                        if not slotFrame.newOverlay:IsShown() then slotFrame.newOverlay:Show() end
                     else
-                        slotFrame.newOverlay:Hide()
+                        if slotFrame.newOverlay:IsShown() then slotFrame.newOverlay:Hide() end
                     end
                 end
 
+                -- Stop any background animations on active slot
+                if slotFrame.NewItemTexture and slotFrame.NewItemTexture:IsShown() then slotFrame.NewItemTexture:Hide() end
+                if slotFrame.BattlepayItemTexture and slotFrame.BattlepayItemTexture:IsShown() then slotFrame.BattlepayItemTexture:Hide() end
+                if slotFrame.newitemglowAnim and slotFrame.newitemglowAnim.Stop then slotFrame.newitemglowAnim:Stop() end
+                if slotFrame.flashAnim and slotFrame.flashAnim.Stop then slotFrame.flashAnim:Stop() end
+                if slotFrame.AugmentBorderAnim and slotFrame.AugmentBorderAnim.Stop then slotFrame.AugmentBorderAnim:Stop() end
+
                 -- Quest indicator
                 if slotFrame.questIcon then
-                    if itemData.showQuestBang then
-                        slotFrame.questIcon:SetTexture("Interface\\QuestFrame\\UI-QuestLog-ItemQuestIcon")
-                        slotFrame.questIcon:Show()
+                    local isQuest = itemData.showQuestBang or itemData.showQuestBorder or itemData.isQuest or (itemData.classID == 12)
+                    if isQuest then
+                        local questTex = _G.TEXTURE_ITEM_QUEST_BANG or "Interface\\ContainerFrame\\UI-Icon-QuestBang"
+                        slotFrame.questIcon:SetTexture(questTex)
+                        if not slotFrame.questIcon:IsShown() then slotFrame.questIcon:Show() end
                     else
-                        slotFrame.questIcon:Hide()
+                        if slotFrame.questIcon:IsShown() then slotFrame.questIcon:Hide() end
                     end
                 end
 
@@ -2703,31 +2984,44 @@ function BagsMod:UpdateInventory()
                 slotFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
             else
                 -- Empty slot
-                if slotFrame.questIcon then slotFrame.questIcon:Hide() end
-                if slotFrame.IconBorder then
+                if slotFrame.questIcon and slotFrame.questIcon:IsShown() then slotFrame.questIcon:Hide() end
+                if slotFrame.IconBorder and slotFrame.IconBorder:IsShown() then
                     slotFrame.IconBorder:SetAlpha(0)
-                    if slotFrame.IconBorder.Hide then slotFrame.IconBorder:Hide() end
+                    slotFrame.IconBorder:Hide()
                 end
                 local normEmpty = slotFrame.GetNormalTexture and slotFrame:GetNormalTexture()
-                if normEmpty then
+                if type(normEmpty) == "table" and normEmpty.IsShown and normEmpty:IsShown() then
                     if normEmpty.SetTexture then normEmpty:SetTexture(nil) end
                     if normEmpty.SetAlpha then normEmpty:SetAlpha(0) end
+                    if normEmpty.Hide then normEmpty:Hide() end
                 end
                 local iconTex = slotFrame.icon or slotFrame.Icon
                 if iconTex then
-                    iconTex:Hide()
+                    if iconTex.SetDesaturated then iconTex:SetDesaturated(false) end
+                    if iconTex.SetVertexColor then iconTex:SetVertexColor(1, 1, 1, 1) end
+                    if iconTex.SetAtlas then iconTex:SetAtlas(nil) end
                     if iconTex.SetTexture then iconTex:SetTexture(nil) end
+                    if iconTex:IsShown() then iconTex:Hide() end
                 end
                 if slotFrame.SetItemButtonTexture then slotFrame:SetItemButtonTexture(nil) end
+                slotFrame.emptyBackgroundAtlas = nil
+                slotFrame.emptyBackgroundTexture = nil
+                slotFrame.lastTexture = nil
+                slotFrame.lastDesat = nil
                 local countText = slotFrame.count or slotFrame.Count
-                if countText then countText:Hide() end
-                if slotFrame.ilvl then slotFrame.ilvl:Hide() end
-                if slotFrame.fav then slotFrame.fav:Hide() end
-                if slotFrame.newOverlay then slotFrame.newOverlay:Hide() end
-                if slotFrame.NewItemTexture then slotFrame.NewItemTexture:Hide() end
-                if slotFrame.BattlepayItemTexture then slotFrame.BattlepayItemTexture:Hide() end
+                if countText and countText:IsShown() then countText:Hide() end
+                if slotFrame.lastCountText ~= nil then slotFrame.lastCountText = nil end
+
+                if slotFrame.ilvl and slotFrame.ilvl:IsShown() then slotFrame.ilvl:Hide() end
+                if slotFrame.lastIlvlText ~= nil then slotFrame.lastIlvlText = nil end
+
+                if slotFrame.fav and slotFrame.fav:IsShown() then slotFrame.fav:Hide() end
+                if slotFrame.newOverlay and slotFrame.newOverlay:IsShown() then slotFrame.newOverlay:Hide() end
+                if slotFrame.NewItemTexture and slotFrame.NewItemTexture:IsShown() then slotFrame.NewItemTexture:Hide() end
+                if slotFrame.BattlepayItemTexture and slotFrame.BattlepayItemTexture:IsShown() then slotFrame.BattlepayItemTexture:Hide() end
                 if slotFrame.newitemglowAnim and slotFrame.newitemglowAnim.Stop then slotFrame.newitemglowAnim:Stop() end
                 if slotFrame.flashAnim and slotFrame.flashAnim.Stop then slotFrame.flashAnim:Stop() end
+                if slotFrame.AugmentBorderAnim and slotFrame.AugmentBorderAnim.Stop then slotFrame.AugmentBorderAnim:Stop() end
                 if slotFrame.Cooldown then
                     slotFrame.Cooldown:Hide()
                     if slotFrame.Cooldown.Clear then
@@ -2736,13 +3030,16 @@ function BagsMod:UpdateInventory()
                         slotFrame.Cooldown:SetCooldown(0, 0)
                     end
                 end
-                if isSearching then
-                    slotFrame:SetAlpha(0.2)
-                else
-                    slotFrame:SetAlpha(1.0)
+                local targetAlpha = isSearching and 0.2 or 1.0
+                if slotFrame.lastAlpha ~= targetAlpha then
+                    slotFrame:SetAlpha(targetAlpha)
+                    slotFrame.lastAlpha = targetAlpha
                 end
                 slotFrame:SetBackdropColor(0.03, 0.03, 0.03, 0.4)
-                slotFrame:SetBackdropBorderColor(0.15, 0.15, 0.15, 0.5)
+                if slotFrame.lastBorderR ~= 0.15 or slotFrame.lastBorderG ~= 0.15 or slotFrame.lastBorderB ~= 0.15 or slotFrame.lastBorderA ~= 0.5 then
+                    slotFrame:SetBackdropBorderColor(0.15, 0.15, 0.15, 0.5)
+                    slotFrame.lastBorderR, slotFrame.lastBorderG, slotFrame.lastBorderB, slotFrame.lastBorderA = 0.15, 0.15, 0.15, 0.5
+                end
             end
         end
     end
@@ -2752,6 +3049,9 @@ function BagsMod:UpdateInventory()
         if s then
             s:Hide()
             if s.slotParent then s.slotParent:Hide() end
+            if s.Cooldown then s.Cooldown:Hide() end
+            if s.newOverlay then s.newOverlay:Hide() end
+            if s.roithiBorder then s.roithiBorder:Hide() end
         end
     end
 end

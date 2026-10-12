@@ -53,6 +53,7 @@ ns.DEFAULTS = {
     },
     focus = {
         enabled = true,
+        detached = true,
         colorOnInterruptCD = false,
         point = "CENTER",
         relPoint = "CENTER",
@@ -279,6 +280,47 @@ function Castbar:OnInitialize()
     end
 end
 
+local CAST_UNIT_EVENTS = {
+    "UNIT_SPELLCAST_START",
+    "UNIT_SPELLCAST_CHANNEL_START",
+    "UNIT_SPELLCAST_EMPOWER_START",
+    "UNIT_SPELLCAST_EMPOWER_UPDATE",
+    "UNIT_SPELLCAST_INTERRUPTIBLE",
+    "UNIT_SPELLCAST_NOT_INTERRUPTIBLE",
+    "UNIT_SPELLCAST_DELAYED",
+    "UNIT_SPELLCAST_CHANNEL_UPDATE",
+    "UNIT_SPELLCAST_STOP",
+    "UNIT_SPELLCAST_CHANNEL_STOP",
+    "UNIT_SPELLCAST_EMPOWER_STOP",
+    "UNIT_SPELLCAST_INTERRUPTED",
+}
+
+function ns.RegisterBarUnitEvents(bar)
+    if not bar or not bar.unit or not bar.RegisterUnitEvent then return end
+    for _, ev in ipairs(CAST_UNIT_EVENTS) do
+        bar:RegisterUnitEvent(ev, bar.unit)
+    end
+    bar:SetScript("OnEvent", function(self, event, ...)
+        if event == "UNIT_SPELLCAST_INTERRUPTED" then
+            ns.HandleInterrupt(self)
+        elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
+            local _, castGUID = ...
+            local isSecretID = (issecretvalue and (issecretvalue(self.castID) or issecretvalue(castGUID))) or (canaccessvalue and (not canaccessvalue(self.castID) or not canaccessvalue(castGUID)))
+            if not isSecretID and self.castID and castGUID and self.castID ~= castGUID then
+                return
+            end
+            if not self.isInterrupted and not self.isInEditMode then
+                self.casting = false
+                self.channeling = false
+                self:Hide()
+                self:SetScript("OnUpdate", nil)
+            end
+        else
+            ns.UpdateCast(self, self.unit)
+        end
+    end)
+end
+
 function Castbar:OnEnable()
     castbarsDB = RoithiUI.db.profile.Castbar -- Ensure defined
 
@@ -286,6 +328,9 @@ function Castbar:OnEnable()
     ns.InitializeBars()          -- Defined in Castbar.lua
     if ns.InitializeCastbarConfig then
         ns.InitializeCastbarConfig()
+    end
+    if ns.RefreshAllCastbars then
+        ns.RefreshAllCastbars()
     end
 
     -- Register Cast Events
@@ -304,14 +349,18 @@ function Castbar:OnEnable()
             ns.UpdateCast(ns.bars["target"])
             ns.UpdateCast(ns.bars["targettarget"])
         elseif event == "PLAYER_FOCUS_CHANGED" then
-            if ns.bars and ns.bars["focus"] and not (InCombatLockdown and InCombatLockdown()) then
-                local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar["focus"]
-                if cbDB and not cbDB.detached and ns.SetCastbarAttachment then
-                    ns.SetCastbarAttachment("focus", true)
+            if ns.bars and ns.bars["focus"] then
+                if not (InCombatLockdown and InCombatLockdown()) then
+                    local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar["focus"]
+                    if cbDB and not cbDB.detached and ns.SetCastbarAttachment then
+                        ns.SetCastbarAttachment("focus", true)
+                    end
                 end
+                ns.UpdateCast(ns.bars["focus"], "focus")
             end
-            ns.UpdateCast(ns.bars["focus"])
-            ns.UpdateCast(ns.bars["focustarget"])
+            if ns.bars and ns.bars["focustarget"] then
+                ns.UpdateCast(ns.bars["focustarget"], "focustarget")
+            end
         elseif event == "UNIT_TARGET" then
             local unit = ...
             if unit == "target" then
@@ -394,9 +443,8 @@ function Castbar:OnEnable()
 end
 
 -- Slash Command
-_G.SLASH_MIDNIGHTCB1 = "/mcb"
-if SlashCmdList then
-    SlashCmdList["MIDNIGHTCB"] = function(msg)
+if RoithiUI and RoithiUI.RegisterChatCommand then
+    RoithiUI:RegisterChatCommand("mcb", function(_)
         if EditModeManagerFrame then
             if not EditModeManagerFrame:IsVisible() then
                 ShowUIPanel(EditModeManagerFrame)
@@ -406,7 +454,7 @@ if SlashCmdList then
         else
             RoithiUI:Log("MidnightCastbars: Edit Mode not available.")
         end
-    end
+    end)
 end
 
 -- ----------------------------------------------------------------------------
@@ -427,9 +475,8 @@ function ns.SetCastbarAttachment(unit, attached)
     if AL then
         AL:ApplyLayout(unit, "Castbar")
     else
-        -- Fallback fallback
-        bar:ClearAllPoints()
-        bar:SetParent(UIParent)
-        bar:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        if bar.ClearAllPoints then bar:ClearAllPoints() end
+        if bar.SetParent and UIParent then bar:SetParent(UIParent) end
+        if bar.SetPoint and UIParent then bar:SetPoint("CENTER", UIParent, "CENTER", 0, 0) end
     end
 end

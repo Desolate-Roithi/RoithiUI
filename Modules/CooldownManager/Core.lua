@@ -36,6 +36,10 @@ function CDM:OnEnable()
     self:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED", "OnSpecOrTalentsChanged")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnSpecOrTalentsChanged")
     self:RegisterEvent("SPELLS_CHANGED", "OnSpecOrTalentsChanged")
+    self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "UpdateAllCustomBarCooldowns")
+    self:RegisterEvent("SPELL_UPDATE_CHARGES", "UpdateAllCustomBarCooldowns")
+    self:RegisterEvent("BAG_UPDATE_COOLDOWN", "UpdateAllCustomBarCooldowns")
+    self:RegisterEvent("BAG_UPDATE", "UpdateAllCustomBarCooldowns")
 
     self:HookAllViewers()
     self:StyleAllActiveItems()
@@ -539,6 +543,7 @@ function CDM:PopulateSettingsPanel(panel)
         end
         contentFrame.widgets = {}
 
+        local savedScroll = scrollFrame and scrollFrame:GetVerticalScroll() or 0
         local bKey = panel.selectedBar
         local isCustom = bKey:find("^CustomBar") ~= nil
 
@@ -1011,7 +1016,10 @@ function CDM:PopulateSettingsPanel(panel)
 
             contentFrame.neededHeight = math.abs(dropZoneY) + 60
             contentFrame:SetHeight(math.max(500, contentFrame.neededHeight))
-            if scrollFrame then scrollFrame:SetVerticalScroll(0) end
+            if scrollFrame then
+                local maxScroll = math.max(0, (contentFrame.neededHeight or 500) - scrollFrame:GetHeight())
+                scrollFrame:SetVerticalScroll(math.min(maxScroll, savedScroll))
+            end
 
             return
         end
@@ -1226,7 +1234,10 @@ function CDM:PopulateSettingsPanel(panel)
 
         contentFrame.neededHeight = 350
         contentFrame:SetHeight(500)
-        if scrollFrame then scrollFrame:SetVerticalScroll(0) end
+        if scrollFrame then
+            local maxScroll = math.max(0, (contentFrame.neededHeight or 500) - scrollFrame:GetHeight())
+            scrollFrame:SetVerticalScroll(math.min(maxScroll, savedScroll))
+        end
     end
 
     local function RebuildTabs()
@@ -1532,9 +1543,6 @@ function CDM:OpenBlizzardSettings(fromEditMode)
     if InCombatLockdown() then
         RoithiUI:Print(L["Cannot open cooldown settings while in combat."] or "Cannot open cooldown settings while in combat.")
         return
-    end
-    if fromEditMode and _G.EditModeManagerFrame and _G.EditModeManagerFrame.CheckHideAndLockEditMode then
-        _G.EditModeManagerFrame:CheckHideAndLockEditMode()
     end
     if C_AddOns and C_AddOns.LoadAddOn and not (C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Blizzard_CooldownViewer")) then
         pcall(C_AddOns.LoadAddOn, "Blizzard_CooldownViewer")

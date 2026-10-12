@@ -552,11 +552,19 @@ function UF:CreateTags(frame)
     frame.UpdateTags = function() self:UpdateTags(frame) end
 end
 
-function UF:UpdateTags(frame)
-    local unit = frame.unit
-    if unit == "player" and UnitHasVehicleUI("player") then
-        unit = "vehicle"
+local function GetEffectiveTagUnit(unit)
+    if unit == "player" then
+        if (_G.UnitHasVehicleUI and _G.UnitHasVehicleUI("player")) or (_G.UnitInVehicle and _G.UnitInVehicle("player")) then
+            if _G.UnitExists("vehicle") then
+                return "vehicle"
+            end
+        end
     end
+    return unit
+end
+
+function UF:UpdateTags(frame)
+    local unit = GetEffectiveTagUnit(frame.unit)
 
     -- Boss Inheritance: Boss 2-5 use Boss 1 settings
     local dbUnit = unit
@@ -639,7 +647,12 @@ end
 function UF:UpdateTagFrame(tagFrame)
     if not tagFrame.SegmentPool then return end
 
-    local segments = TM:GetSegments(tagFrame.formatString, tagFrame.unit or "player")
+    local unit = tagFrame.unit or "player"
+    if unit == "player" then
+        unit = GetEffectiveTagUnit("player")
+    end
+
+    local segments = TM:GetSegments(tagFrame.formatString, unit)
     tagFrame.SegmentPool:ReleaseAll()
 
     local count = #segments
@@ -747,16 +760,21 @@ function UF:EnableTags(frame)
     local function OnTagEvent(_, event, unit)
         -- Standard Unit Events
         -- Use UnitIsUnit to handle dynamic units (e.g., targettarget == player)
-        local match = unit and frame.unit and (unit == frame.unit or UnitIsUnit(unit, frame.unit))
+        local effectiveUnit = GetEffectiveTagUnit(frame.unit)
+        local match = unit and frame.unit and (unit == frame.unit or unit == effectiveUnit or UnitIsUnit(unit, frame.unit))
         if (issecretvalue and issecretvalue(match)) or match then
             if event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
-                C_Timer.After(0.5, UpdateTags)
+                C_Timer.After(0.1, function()
+                    if frame.UpdateTags then frame.UpdateTags() else UpdateTags() end
+                end)
             else
                 UpdateTags()
             end
             -- Context Switch Events
         elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" or event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
-            C_Timer.After(0.5, UpdateTags)
+            C_Timer.After(0.1, function()
+                if frame.UpdateTags then frame.UpdateTags() else UpdateTags() end
+            end)
         elseif event == "UNIT_TARGET" then
             UpdateTags()
         end

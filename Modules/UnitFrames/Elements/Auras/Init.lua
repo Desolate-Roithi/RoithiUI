@@ -23,12 +23,12 @@ local function RADLog(fmt, ...)
 end
 
 -- Slash command /rad to toggle debug logging
-_G.SLASH_ROITHIAURADEBUG1 = "/rad"
-_G.SlashCmdList = _G.SlashCmdList or {}
-_G.SlashCmdList["ROITHIAURADEBUG"] = function(_)
-    RoithiUI.AuraDebug = not RoithiUI.AuraDebug
-    local stateStr = RoithiUI.AuraDebug and "|cff00ff00ENABLED|r" or "|cffff0000DISABLED|r"
-    print("|cff00ffff[RAD - Roithi Aura Debugger 12.1.0]|r Debug logging is now " .. stateStr)
+if RoithiUI and RoithiUI.RegisterChatCommand then
+    RoithiUI:RegisterChatCommand("rad", function(_)
+        RoithiUI.AuraDebug = not RoithiUI.AuraDebug
+        local stateStr = RoithiUI.AuraDebug and "|cff00ff00ENABLED|r" or "|cffff0000DISABLED|r"
+        print("|cff00ffff[RAD - Roithi Aura Debugger 12.1.0]|r Debug logging is now " .. stateStr)
+    end)
 end
 
 -------------------------------------------------------------------------------

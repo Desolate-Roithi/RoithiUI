@@ -39,6 +39,8 @@ function MinimapMod:OnInitialize()
     self:RegisterEvent("UPDATE_INSTANCE_INFO")
     self:RegisterEvent("INSTANCE_GROUP_SIZE_CHANGED")
     self:RegisterEvent("GROUP_ROSTER_UPDATE")
+    self:RegisterEvent("ZONE_CHANGED")
+    self:RegisterEvent("ZONE_CHANGED_INDOORS")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     self:RegisterEvent("CHALLENGE_MODE_START")
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED")
@@ -54,6 +56,7 @@ end
 function MinimapMod:PLAYER_ENTERING_WORLD()
     self:LayoutDefaultButtons()
     self:UpdateDifficultyText()
+    self:SafeReanchorZoneText()
     if self.db and self.db.showDataTextBar then
         self:UpdateDataTextBarVisibility()
     end
@@ -82,8 +85,17 @@ function MinimapMod:GROUP_ROSTER_UPDATE()
     self:UpdateDifficultyText()
 end
 
+function MinimapMod:ZONE_CHANGED()
+    self:SafeReanchorZoneText()
+end
+
+function MinimapMod:ZONE_CHANGED_INDOORS()
+    self:SafeReanchorZoneText()
+end
+
 function MinimapMod:ZONE_CHANGED_NEW_AREA()
     self:UpdateDifficultyText()
+    self:SafeReanchorZoneText()
 end
 
 function MinimapMod:CHALLENGE_MODE_START()
@@ -273,6 +285,25 @@ function MinimapMod:OnEnable()
     C_Timer.After(2, function()
         self:ScanAddonButtons()
     end)
+    C_Timer.After(5, function()
+        self:ScanAddonButtons()
+    end)
+
+    local ldbi = LibStub and LibStub("LibDBIcon-1.0", true)
+    if ldbi and ldbi.RegisterCallback and not self.ldbiCallbackRegistered then
+        ldbi.RegisterCallback(self, "LibDBIcon_IconCreated", function()
+            self:ScanAddonButtons()
+        end)
+        self.ldbiCallbackRegistered = true
+    end
+
+    local ldb = LibStub and LibStub("LibDataBroker-1.1", true)
+    if ldb and ldb.RegisterCallback and not self.ldbCallbackRegistered then
+        ldb.RegisterCallback(self, "LibDataBroker_DataObjectCreated", function()
+            C_Timer.After(0.2, function() self:ScanAddonButtons() end)
+        end)
+        self.ldbCallbackRegistered = true
+    end
 
     local objMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Objectives", true)
     if objMod and objMod.ApplyPosition then
@@ -1212,52 +1243,126 @@ function MinimapMod:LayoutDefaultButtons()
     if zoneText then
         HookBlizzardButton(zoneText, zoneTextAnchor)
         if zoneText.SetSize then zoneText:SetSize(zoneWidth, 20) end
-        local fs = _G.MinimapZoneText or (zoneText.GetFontString and zoneText:GetFontString())
-        -- Store refs on module so ReanchorZoneText can always find them
-        self.zoneTextFS = fs
-        self.zoneTextAnchorRef = zoneTextAnchor
+    end
 
-        local function ReanchorZoneText()
-            if not fs or self.isReanchoringZoneText then return end
-            self.isReanchoringZoneText = true
-            if fs.SetJustifyH then fs:SetJustifyH("CENTER") end
-            -- Use raw ClearAllPoints / SetPoint bypassing our hooks
-            local rawClear = fs.ClearAllPoints
-            local rawSetPt  = fs.SetPoint
-            if rawClear then rawClear(fs) end
-            if rawSetPt  then rawSetPt(fs, "CENTER", zoneTextAnchor, "CENTER", 0, 0) end
-            self.isReanchoringZoneText = false
+    local fs = _G.MinimapZoneText or (zoneText and zoneText.GetFontString and zoneText:GetFontString())
+    self.zoneTextFS = fs
+    self.zoneTextAnchorRef = zoneTextAnchor
+
+    local function HookZoneTextFS(fontStr)
+        if not fontStr or fontStr.isRoithiZoneTextHooked or not hooksecurefunc then return end
+        fontStr.isRoithiZoneTextHooked = true
+
+        if fontStr.SetJustifyH then
+            hooksecurefunc(fontStr, "SetJustifyH", function(frame, justifyH)
+                if not self.isReanchoringZoneText and justifyH ~= "CENTER" then
+                    self.isReanchoringZoneText = true
+                    fontStr:SetJustifyH("CENTER")
+                    self.isReanchoringZoneText = false
+                end
+            end)
         end
-        -- Expose for use from RefreshProfile / UpdateZoneTextVisibility
-        self.ReanchorZoneText = ReanchorZoneText
 
-        if fs then
-            -- Initial centering
-            ReanchorZoneText()
+        if fontStr.SetText then
+            hooksecurefunc(fontStr, "SetText", function()
+                if not self.isReanchoringZoneText and self.ReanchorZoneText then
+                    self.ReanchorZoneText()
+                end
+            end)
+        end
 
-            if not self.zoneTextJustifyHooked and hooksecurefunc then
-                -- SetText: re-center after Blizzard updates the text content
-                if fs.SetText then
-                    hooksecurefunc(fs, "SetText", function()
-                        if self.isReanchoringZoneText then return end
-                        if fs.SetJustifyH then fs:SetJustifyH("CENTER") end
-                    end)
+        if fontStr.SetFormattedText then
+            hooksecurefunc(fontStr, "SetFormattedText", function()
+                if not self.isReanchoringZoneText and self.ReanchorZoneText then
+                    self.ReanchorZoneText()
                 end
-                -- SetPoint: Blizzard tries to left-anchor the fontstring;
-                -- defer the correction by one frame to avoid re-entrancy.
-                if fs.SetPoint then
-                    hooksecurefunc(fs, "SetPoint", function()
-                        if self.isReanchoringZoneText then return end
-                        if _G.C_Timer and _G.C_Timer.After then
-                            _G.C_Timer.After(0, function() ReanchorZoneText() end)
-                        else
-                            ReanchorZoneText()
-                        end
-                    end)
+            end)
+        end
+
+        if fontStr.SetPoint then
+            hooksecurefunc(fontStr, "SetPoint", function()
+                if not self.isReanchoringZoneText and self.ReanchorZoneText then
+                    self.ReanchorZoneText()
                 end
-                self.zoneTextJustifyHooked = true
+            end)
+        end
+
+        if fontStr.ClearAllPoints then
+            hooksecurefunc(fontStr, "ClearAllPoints", function()
+                if not self.isReanchoringZoneText and self.ReanchorZoneText then
+                    self.ReanchorZoneText()
+                end
+            end)
+        end
+
+        if fontStr.SetFontObject then
+            hooksecurefunc(fontStr, "SetFontObject", function()
+                if not self.isReanchoringZoneText and self.ReanchorZoneText then
+                    self.ReanchorZoneText()
+                end
+            end)
+        end
+    end
+
+    local function ReanchorZoneText()
+        local targetFS = self.zoneTextFS or _G.MinimapZoneText or (zoneText and zoneText.GetFontString and zoneText:GetFontString())
+        local targetAnchor = self.zoneTextAnchorRef or self.zoneTextAnchor
+        if not targetFS or not targetAnchor or self.isReanchoringZoneText then return end
+        self.isReanchoringZoneText = true
+
+        if not targetFS.isRoithiZoneTextHooked then
+            HookZoneTextFS(targetFS)
+        end
+
+        local currentZoneWidth = (self.db and self.db.size) or 200
+
+        -- Keep button aligned with anchor
+        local zBtn = (MinimapCluster and (MinimapCluster.ZoneTextButton or MinimapCluster.ZoneTextFrame)) or _G.MinimapZoneTextButton
+        if zBtn then
+            if zBtn.SetSize then zBtn:SetSize(currentZoneWidth, 20) end
+            if zBtn.ClearAllPoints and zBtn.SetPoint then
+                zBtn:ClearAllPoints()
+                zBtn:SetPoint("CENTER", targetAnchor, "CENTER", 0, 0)
             end
         end
+
+        -- Enforce fontstring styling, sizing, and centering
+        if targetFS.SetJustifyH then targetFS:SetJustifyH("CENTER") end
+        if targetFS.SetJustifyV then targetFS:SetJustifyV("MIDDLE") end
+        if targetFS.SetWidth then targetFS:SetWidth(currentZoneWidth) end
+        if targetFS.ClearAllPoints then targetFS:ClearAllPoints() end
+        if targetFS.SetPoint then
+            targetFS:SetPoint("CENTER", targetAnchor, "CENTER", 0, 0)
+        end
+
+        self.isReanchoringZoneText = false
+    end
+    self.ReanchorZoneText = function() ReanchorZoneText() end
+
+    if fs then
+        HookZoneTextFS(fs)
+        ReanchorZoneText()
+    end
+
+    if not self.minimapUpdateHooked and hooksecurefunc then
+        if _G.Minimap_Update then
+            hooksecurefunc("Minimap_Update", function()
+                if self.SafeReanchorZoneText then self:SafeReanchorZoneText() end
+            end)
+        end
+        if MinimapCluster then
+            if MinimapCluster.SetHeaderUnderneath then
+                hooksecurefunc(MinimapCluster, "SetHeaderUnderneath", function()
+                    if self.SafeReanchorZoneText then self:SafeReanchorZoneText() end
+                end)
+            end
+            if MinimapCluster.SetEditModeScale then
+                hooksecurefunc(MinimapCluster, "SetEditModeScale", function()
+                    if self.SafeReanchorZoneText then self:SafeReanchorZoneText() end
+                end)
+            end
+        end
+        self.minimapUpdateHooked = true
     end
 
     -- Setup Coordinates Anchor
@@ -2328,8 +2433,8 @@ _G.GetMinimapShape = function()
     return MinimapMod.db and MinimapMod.db.shape or "SQUARE"
 end
 
-if _G.SlashCmdList then
-    _G.SlashCmdList["ROITHIDEBUG"] = function()
+if RoithiUI and RoithiUI.RegisterChatCommand then
+    RoithiUI:RegisterChatCommand("roithiminimapdebug", function()
         local debugFrames = {
             { name = "QueueStatusMinimapButton", ref = _G.QueueStatusMinimapButton },
             { name = "QueueStatusButton", ref = _G.QueueStatusButton },
@@ -2374,8 +2479,7 @@ if _G.SlashCmdList then
             print("    Scale:", anchor:GetScale())
             print("    Alpha:", anchor:GetAlpha())
         end
-    end
-    _G.SLASH_ROITHIDEBUG1 = "/roithidebug"
+    end)
 end
 
 function MinimapMod:RefreshProfile()

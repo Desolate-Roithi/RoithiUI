@@ -67,18 +67,34 @@ function UF:CreatePowerText(frame)
     frame.PowerText = text
 
     local function Update()
-        if not UnitExists(frame.unit) then return end
-        local curr = UnitPower(frame.unit)
-        local max = UnitPowerMax(frame.unit)
+        local unit = frame.unit
+        if unit == "player" then
+            if (_G.UnitHasVehicleUI and _G.UnitHasVehicleUI("player")) or (_G.UnitInVehicle and _G.UnitInVehicle("player")) then
+                if _G.UnitExists("vehicle") then
+                    unit = "vehicle"
+                end
+            end
+        end
+        if not UnitExists(unit) then return end
+        local curr = UnitPower(unit)
+        local max = UnitPowerMax(unit)
 
         text:SetText(LibRoithi.mixins:SafeFormat("%s / %s", curr, max))
     end
 
     local el = CreateFrame("Frame", nil, parent)
     el:SetScript("OnEvent", Update)
-    el:RegisterUnitEvent("UNIT_POWER_UPDATE", frame.unit)
-    el:RegisterUnitEvent("UNIT_MAXPOWER", frame.unit)
-    el:RegisterUnitEvent("UNIT_DISPLAYPOWER", frame.unit)
+    if frame.unit == "player" then
+        el:RegisterUnitEvent("UNIT_POWER_UPDATE", "player", "vehicle")
+        el:RegisterUnitEvent("UNIT_MAXPOWER", "player", "vehicle")
+        el:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player", "vehicle")
+        el:RegisterUnitEvent("UNIT_ENTERED_VEHICLE", "player")
+        el:RegisterUnitEvent("UNIT_EXITED_VEHICLE", "player")
+    else
+        el:RegisterUnitEvent("UNIT_POWER_UPDATE", frame.unit)
+        el:RegisterUnitEvent("UNIT_MAXPOWER", frame.unit)
+        el:RegisterUnitEvent("UNIT_DISPLAYPOWER", frame.unit)
+    end
 
     frame:HookScript("OnShow", Update)
     if UnitExists(frame.unit) then Update() end

@@ -212,13 +212,7 @@ end
 
 function AB:SetButtonsMouseInteractivity(enable)
     if not self.bars then return end
-    for barKey, container in pairs(self.bars) do
-        local buttons = self:GetBarButtons(barKey)
-        for _, btn in ipairs(buttons) do
-            if btn and btn.EnableMouse then
-                btn:EnableMouse(enable)
-            end
-        end
+    for _, container in pairs(self.bars) do
         if container and LEM and LEM.frameSelections and LEM.frameSelections[container] then
             local sel = LEM.frameSelections[container]
             if sel then

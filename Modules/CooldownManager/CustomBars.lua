@@ -97,11 +97,15 @@ function CDM:GetCursorSpellInfo()
     elseif cursorType == "petaction" then
         return arg1
     elseif cursorType == "item" then
-        return arg1
+        return { itemID = arg1, isItem = true }
     elseif cursorType == "macro" then
         if _G.GetMacroSpell then
             local macroSpellID = _G.GetMacroSpell(arg1)
             if macroSpellID then return macroSpellID end
+        end
+        if _G.GetMacroItem then
+            local macroItemID = _G.GetMacroItem(arg1)
+            if macroItemID then return { itemID = macroItemID, isItem = true } end
         end
         return nil
     end
@@ -110,6 +114,27 @@ end
 
 function CDM:ResolveSpellInfo(spellIdentifier)
     if not spellIdentifier then return nil end
+
+    if type(spellIdentifier) == "table" and spellIdentifier.isItem then
+        local itemID = tonumber(spellIdentifier.itemID)
+        if itemID then
+            local itemInfo = { (_G.C_Item and _G.C_Item.GetItemInfo and _G.C_Item.GetItemInfo(itemID)) or (_G.GetItemInfo and _G.GetItemInfo(itemID)) }
+            local iName = itemInfo[1]
+            local iIcon = itemInfo[10]
+            if not iName then
+                iName = "Item " .. tostring(itemID)
+                iIcon = iIcon or (_G.C_Item and _G.C_Item.GetItemIconByID and _G.C_Item.GetItemIconByID(itemID)) or 134400
+            end
+            return {
+                itemID = itemID,
+                isItem = true,
+                name = iName,
+                icon = iIcon or (_G.C_Item and _G.C_Item.GetItemIconByID and _G.C_Item.GetItemIconByID(itemID)) or 134400,
+            }
+        end
+        return nil
+    end
+
     local spellID = tonumber(spellIdentifier)
     local name, icon
     if spellID then
@@ -145,6 +170,7 @@ function CDM:ResolveSpellInfo(spellIdentifier)
             end
         end
     end
+
     if spellID and not name then
         name = "Spell " .. tostring(spellID)
         icon = 134400
@@ -214,8 +240,9 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
     if not iconBtn then return end
 
     local spellInfo = cfg.spells and cfg.spells[slotIndex]
-    if not spellInfo or not spellInfo.spellID then
+    if not spellInfo or (not spellInfo.spellID and not spellInfo.itemID) then
         iconBtn.spellID = nil
+        iconBtn.itemID = nil
         iconBtn.Icon:SetTexture(nil)
         iconBtn.Icon:SetColorTexture(0.12, 0.12, 0.12, 0.5)
         if iconBtn.Cooldown and iconBtn.Cooldown.Clear then iconBtn.Cooldown:Clear() end
@@ -235,8 +262,81 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
         return
     end
 
+    if spellInfo.isItem then
+        local itemID = spellInfo.itemID
+        iconBtn.itemID = itemID
+        iconBtn.spellID = nil
+
+        local tex = spellInfo.icon or (_G.C_Item and _G.C_Item.GetItemIconByID and _G.C_Item.GetItemIconByID(itemID)) or 134400
+        if tex then
+            iconBtn.Icon:SetTexture(tex)
+        end
+
+        local cd = iconBtn.Cooldown
+        local showTimer = (cfg.showTimer ~= false)
+        if cd then
+            if cd.SetHideCountdownNumbers then
+                pcall(cd.SetHideCountdownNumbers, cd, not showTimer)
+            end
+            local cdFS = cd.GetCountdownFontString and cd:GetCountdownFontString()
+            if cdFS then
+                if not showTimer then
+                    if cdFS.Hide then cdFS:Hide() end
+                else
+                    if cdFS.Show then cdFS:Show() end
+                end
+            end
+            if cd.SetCooldown then
+                local start, dur, enable = 0, 0, 0
+                if _G.C_Container and _G.C_Container.GetItemCooldown then
+                    start, dur, enable = _G.C_Container.GetItemCooldown(itemID)
+                elseif _G.C_Item and _G.C_Item.GetItemCooldown then
+                    start, dur, enable = _G.C_Item.GetItemCooldown(itemID)
+                elseif _G.GetItemCooldown then
+                    start, dur, enable = _G.GetItemCooldown(itemID)
+                end
+                if enable and enable == 1 and dur and (type(dur) ~= "number" or dur > 0) then
+                    pcall(cd.SetCooldown, cd, start, dur)
+                elseif cd.Clear then
+                    cd:Clear()
+                elseif cd.SetCooldown then
+                    pcall(cd.SetCooldown, cd, 0, 0)
+                end
+            end
+        end
+
+        local showStacks = (cfg.showStacks ~= false)
+        if iconBtn.ChargeCount and iconBtn.ChargeCount.Current then
+            local chargeFS = iconBtn.ChargeCount.Current
+            if not showStacks then
+                chargeFS:SetText("")
+                chargeFS:Hide()
+            else
+                local itemCount = 0
+                if _G.C_Item and _G.C_Item.GetItemCount then
+                    itemCount = _G.C_Item.GetItemCount(itemID) or 0
+                elseif _G.GetItemCount then
+                    itemCount = _G.GetItemCount(itemID) or 0
+                end
+                if itemCount and itemCount > 1 then
+                    chargeFS:SetText(tostring(itemCount))
+                    chargeFS:Show()
+                    if chargeFS.SetTextColor then
+                        chargeFS:SetTextColor(1, 1, 1, 1)
+                    end
+                else
+                    chargeFS:SetText("")
+                end
+            end
+        end
+
+        iconBtn:Show()
+        return
+    end
+
     local spellID = spellInfo.spellID
     iconBtn.spellID = spellID
+    iconBtn.itemID = nil
 
     local tex = spellInfo.icon or (_G.C_Spell and _G.C_Spell.GetSpellTexture and _G.C_Spell.GetSpellTexture(spellID))
     if tex then
@@ -258,19 +358,35 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                 if cdFS.Show then cdFS:Show() end
             end
         end
-        if cd.SetCooldown then
+
+        local cdApplied = false
+        if cd.SetCooldownFromDurationObject and _G.C_Spell and _G.C_Spell.GetSpellCooldownDuration then
+            local durObj = _G.C_Spell.GetSpellCooldownDuration(spellID)
+            if durObj then
+                local ok = pcall(cd.SetCooldownFromDurationObject, cd, durObj)
+                if ok then cdApplied = true end
+            end
+        end
+
+        if not cdApplied and cd.SetCooldown then
             local cdInfo = _G.C_Spell and _G.C_Spell.GetSpellCooldown and _G.C_Spell.GetSpellCooldown(spellID)
             if cdInfo and cdInfo.startTime and cdInfo.duration and cdInfo.isEnabled then
                 pcall(cd.SetCooldown, cd, cdInfo.startTime, cdInfo.duration, cdInfo.modRate or 1)
+                cdApplied = true
             elseif _G.GetSpellCooldown then
                 local start, dur, enable, modRate = _G.GetSpellCooldown(spellID)
                 if start and dur and enable == 1 then
                     pcall(cd.SetCooldown, cd, start, dur, modRate or 1)
-                elseif cd.Clear then
-                    cd:Clear()
+                    cdApplied = true
                 end
-            elseif cd.Clear then
+            end
+        end
+
+        if not cdApplied then
+            if cd.Clear then
                 cd:Clear()
+            elseif cd.SetCooldown then
+                pcall(cd.SetCooldown, cd, 0, 0)
             end
         end
     end

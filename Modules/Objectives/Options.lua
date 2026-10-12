@@ -130,6 +130,20 @@ function ObjectivesMod:GetOptions()
                             self:CheckAutoCollapse()
                         end,
                     },
+                    hideInMythicPlus = {
+                        type = "toggle",
+                        name = L["Hide in Mythic+"] or "Hide in Mythic+",
+                        desc = L["Completely hide the objective tracker when a Mythic+ dungeon run is active."] or "Completely hide the objective tracker when a Mythic+ dungeon run is active.",
+                        order = 9.2,
+                        get = function() return self.db.hideInMythicPlus == true end,
+                        set = function(info, val)
+                            self.db.hideInMythicPlus = val
+                            if self.CheckMythicPlusVisibility then
+                                self:CheckMythicPlusVisibility()
+                            end
+                            self:CheckAutoCollapse()
+                        end,
+                    },
                     attachedToMinimap = {
                         type = "toggle",
                         name = L["Attach to Minimap"] or "Attach to Minimap",
@@ -293,22 +307,58 @@ function ObjectivesMod:GetOptions()
                         order = 1,
                         values = function()
                             local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
-                            return (LSM and LSM:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                            return (LSM and LSM:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {
+                                ["Expressway"] = "Expressway",
+                                ["Roithi Thick"] = "Roithi Thick",
+                                ["Roithi Thin"] = "Roithi Thin",
+                                ["Friz Quadrata TT"] = "Friz Quadrata TT",
+                            }
                         end,
-                        get = function() return self.db.font or "Expressway" end,
+                        get = function()
+                            local f = self.db and self.db.font
+                            if not f or f == "" or f:find("\\") or f:find("%.ttf$") then
+                                local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+                                if LSM and f then
+                                    for fontName, fontPath in pairs(LSM:HashTable("font")) do
+                                        if fontPath == f then
+                                            self.db.font = fontName
+                                            return fontName
+                                        end
+                                    end
+                                end
+                                if self.db then self.db.font = "Expressway" end
+                                return "Expressway"
+                            end
+                            return f
+                        end,
                         set = function(_, val)
                             self.db.font = val
+                            self:SkinAllExisting()
+                        end,
+                    },
+                    fontOutline = {
+                        type = "select",
+                        name = L["Font Outline"] or "Font Outline",
+                        order = 2,
+                        values = {
+                            ["NONE"] = L["None"] or "None",
+                            ["OUTLINE"] = L["Outline"] or "Outline",
+                            ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
+                        },
+                        get = function() return (self.db and self.db.fontOutline) or "OUTLINE" end,
+                        set = function(_, val)
+                            self.db.fontOutline = val
                             self:SkinAllExisting()
                         end,
                     },
                     headerFontSize = {
                         type = "range",
                         name = L["Header Font Size"] or "Header Font Size",
-                        order = 2,
+                        order = 3,
                         min = 9,
                         max = 20,
                         step = 1,
-                        get = function() return self.db.headerFontSize or 13 end,
+                        get = function() return (self.db and self.db.headerFontSize) or 13 end,
                         set = function(_, val)
                             self.db.headerFontSize = val
                             self:SkinAllExisting()
@@ -317,11 +367,11 @@ function ObjectivesMod:GetOptions()
                     titleFontSize = {
                         type = "range",
                         name = L["Title Font Size"] or "Title Font Size",
-                        order = 2,
+                        order = 4,
                         min = 9,
                         max = 20,
                         step = 1,
-                        get = function() return self.db.titleFontSize or 12 end,
+                        get = function() return (self.db and self.db.titleFontSize) or 12 end,
                         set = function(_, val)
                             self.db.titleFontSize = val
                             self:SkinAllExisting()
@@ -330,28 +380,13 @@ function ObjectivesMod:GetOptions()
                     objectiveFontSize = {
                         type = "range",
                         name = L["Objective Font Size"] or "Objective Font Size",
-                        order = 3,
+                        order = 5,
                         min = 8,
                         max = 18,
                         step = 1,
-                        get = function() return self.db.objectiveFontSize or 11 end,
+                        get = function() return (self.db and self.db.objectiveFontSize) or 11 end,
                         set = function(_, val)
                             self.db.objectiveFontSize = val
-                            self:SkinAllExisting()
-                        end,
-                    },
-                    fontOutline = {
-                        type = "select",
-                        name = L["Font Outline"] or "Font Outline",
-                        order = 4,
-                        values = {
-                            ["NONE"] = L["None"] or "None",
-                            ["OUTLINE"] = L["Outline"] or "Outline",
-                            ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
-                        },
-                        get = function() return self.db.fontOutline or "OUTLINE" end,
-                        set = function(_, val)
-                            self.db.fontOutline = val
                             self:SkinAllExisting()
                         end,
                     },
