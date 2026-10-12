@@ -8,6 +8,9 @@ local itemBackdrops = setmetatable({}, { __mode = "k" })
 local itemStackOverlays = setmetatable({}, { __mode = "k" })
 
 local function GetActiveFont(fontName)
+    if fontName and (fontName:find("\\") or fontName:find("/")) then
+        return fontName
+    end
     if LSM then
         if fontName then
             local fetched = LSM:Fetch("font", fontName)
@@ -15,9 +18,6 @@ local function GetActiveFont(fontName)
         end
         local thick = LSM:Fetch("font", "Roithi Thick")
         if thick then return thick end
-    end
-    if fontName and (fontName:find("\\") or fontName:find("/")) then
-        return fontName
     end
     return "Fonts\\FRIZQT__.TTF"
 end
@@ -574,6 +574,45 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
             if sz > 0 then
                 itemFrame:SetSize(sz, sz)
             end
+        end
+
+        if viewerKey == "BuffIcon" then
+            if not itemFrame.roithiShownHooked and itemFrame.HookScript then
+                itemFrame.roithiShownHooked = true
+                itemFrame:HookScript("OnShow", function()
+                    local viewer = _G.BuffIconCooldownViewer
+                    if viewer and CDM.AlignViewerItems then
+                        CDM:AlignViewerItems("BuffIcon", viewer)
+                    end
+                end)
+                itemFrame:HookScript("OnHide", function()
+                    local viewer = _G.BuffIconCooldownViewer
+                    if viewer and CDM.AlignViewerItems then
+                        CDM:AlignViewerItems("BuffIcon", viewer)
+                    end
+                end)
+            end
+        end
+    end
+
+    -- 6. Ensure spell alert highlight matches itemFrame dimensions
+    self:UpdateItemSpellAlert(itemFrame)
+end
+
+function CDM:UpdateItemSpellAlert(itemFrame)
+    if not itemFrame or not itemFrame.GetSize then return end
+    local alert = itemFrame.SpellActivationAlert
+    if alert and alert.SetSize then
+        local w, h = itemFrame:GetSize()
+        if w and h and w > 0 and h > 0 then
+            alert:SetSize(w * 1.4, h * 1.4)
+            if alert.ClearAllPoints and alert.SetPoint then
+                alert:ClearAllPoints()
+                alert:SetPoint("CENTER", itemFrame, "CENTER", 0, 0)
+            end
+        end
+        if alert.SetFrameLevel and itemFrame.GetFrameLevel then
+            alert:SetFrameLevel(itemFrame:GetFrameLevel() + 5)
         end
     end
 end

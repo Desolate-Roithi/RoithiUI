@@ -35,6 +35,14 @@ function MinimapMod:OnInitialize()
     self:RegisterEvent("ADDON_LOADED")
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
     self:RegisterEvent("CVAR_UPDATE")
+    self:RegisterEvent("PLAYER_DIFFICULTY_CHANGED")
+    self:RegisterEvent("UPDATE_INSTANCE_INFO")
+    self:RegisterEvent("INSTANCE_GROUP_SIZE_CHANGED")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE")
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    self:RegisterEvent("CHALLENGE_MODE_START")
+    self:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+    self:RegisterEvent("CHALLENGE_MODE_RESET")
 end
 
 function MinimapMod:ADDON_LOADED(event, name)
@@ -45,6 +53,7 @@ end
 
 function MinimapMod:PLAYER_ENTERING_WORLD()
     self:LayoutDefaultButtons()
+    self:UpdateDifficultyText()
     if self.db and self.db.showDataTextBar then
         self:UpdateDataTextBarVisibility()
     end
@@ -55,6 +64,38 @@ function MinimapMod:PLAYER_ENTERING_WORLD()
     if objMod and objMod.ApplyPosition then
         objMod:ApplyPosition()
     end
+end
+
+function MinimapMod:PLAYER_DIFFICULTY_CHANGED()
+    self:UpdateDifficultyText()
+end
+
+function MinimapMod:UPDATE_INSTANCE_INFO()
+    self:UpdateDifficultyText()
+end
+
+function MinimapMod:INSTANCE_GROUP_SIZE_CHANGED()
+    self:UpdateDifficultyText()
+end
+
+function MinimapMod:GROUP_ROSTER_UPDATE()
+    self:UpdateDifficultyText()
+end
+
+function MinimapMod:ZONE_CHANGED_NEW_AREA()
+    self:UpdateDifficultyText()
+end
+
+function MinimapMod:CHALLENGE_MODE_START()
+    self:UpdateDifficultyText()
+end
+
+function MinimapMod:CHALLENGE_MODE_COMPLETED()
+    self:UpdateDifficultyText()
+end
+
+function MinimapMod:CHALLENGE_MODE_RESET()
+    self:UpdateDifficultyText()
 end
 
 function MinimapMod:UpdateAnchorsMouseState(enable)
@@ -291,9 +332,14 @@ function MinimapMod:OnEnable()
                 self.zoomInAnchor,
                 self.zoomOutAnchor,
                 self.calendarAnchor,
+                self.difficultyAnchor,
             }
             for _, f in ipairs(anchors) do
                 if f then f:Show() end
+            end
+
+            if self.difficultyTextFS and (not self.difficultyTextFS:GetText() or self.difficultyTextFS:GetText() == "") then
+                self.difficultyTextFS:SetText("20M")
             end
 
             self:UpdateAddonBarVisibility()
@@ -312,6 +358,8 @@ function MinimapMod:OnEnable()
             self:UpdateZoneTextVisibility()
             self:UpdateCalendarVisibility()
             self:UpdateZoomVisibility()
+            self:UpdateDifficultyVisibility()
+            self:UpdateDifficultyText()
 
             -- Restore original visibility and Hide/SetShown of LFG, Mail, Landing buttons
 
@@ -1315,14 +1363,56 @@ function MinimapMod:LayoutDefaultButtons()
     end
 
     -- Setup Instance Difficulty Anchor
-    local difficultyAnchor = CreateAnchorFrame(self, "difficultyAnchor", "RoithiDifficultyAnchor", L["Minimap Instance Difficulty"] or "Minimap Instance Difficulty", 36, 36, defPos.difficultyAnchor)
+    local difficultyAnchor = CreateAnchorFrame(self, "difficultyAnchor", "RoithiDifficultyAnchor", L["Minimap Instance Difficulty"] or "Minimap Instance Difficulty", 36, 20, defPos.difficultyAnchor)
+    self.difficultyAnchor = difficultyAnchor
+
+    if not self.difficultyTextFS then
+        local textFS = difficultyAnchor:CreateFontString(nil, "OVERLAY")
+        if textFS.SetAllPoints then
+            textFS:SetAllPoints(difficultyAnchor)
+        elseif textFS.SetPoint then
+            textFS:SetPoint("CENTER", difficultyAnchor, "CENTER", 0, 0)
+        end
+        if textFS.SetJustifyH then textFS:SetJustifyH("CENTER") end
+        if textFS.SetJustifyV then textFS:SetJustifyV("MIDDLE") end
+        if textFS.SetShadowOffset then textFS:SetShadowOffset(1, -1) end
+        if textFS.SetShadowColor then textFS:SetShadowColor(0, 0, 0, 1) end
+        if textFS.SetTextColor then textFS:SetTextColor(1, 1, 1, 1) end
+        difficultyAnchor.difficultyTextFS = textFS
+        self.difficultyTextFS = textFS
+        self:UpdateDifficultyFont()
+    end
+
     local instDiff = (MinimapCluster and MinimapCluster.InstanceDifficulty) or _G.MiniMapInstanceDifficulty
     if instDiff then
         HookBlizzardButton(instDiff, difficultyAnchor)
+        if not instDiff.roithiDiffHooked then
+            instDiff.roithiDiffHooked = true
+            self:StripDifficultyBlizzardArt(instDiff)
+            if hooksecurefunc and instDiff.Update then
+                hooksecurefunc(instDiff, "Update", function(f)
+                    self:StripDifficultyBlizzardArt(f)
+                    self:UpdateDifficultyText()
+                end)
+            end
+        end
     end
     if MinimapCluster and MinimapCluster.GuildInstanceDifficulty then
         HookBlizzardButton(MinimapCluster.GuildInstanceDifficulty, difficultyAnchor)
+        if not MinimapCluster.GuildInstanceDifficulty.roithiDiffHooked then
+            MinimapCluster.GuildInstanceDifficulty.roithiDiffHooked = true
+            self:StripDifficultyBlizzardArt(MinimapCluster.GuildInstanceDifficulty)
+            if hooksecurefunc and MinimapCluster.GuildInstanceDifficulty.Update then
+                hooksecurefunc(MinimapCluster.GuildInstanceDifficulty, "Update", function(f)
+                    self:StripDifficultyBlizzardArt(f)
+                    self:UpdateDifficultyText()
+                end)
+            end
+        end
     end
+
+    self:StripDifficultyBlizzardArt(instDiff)
+    self:UpdateDifficultyText()
 end
 
 function MinimapMod:UpdateAnchorPosition(key)
@@ -1400,18 +1490,178 @@ function MinimapMod:UpdateDielVisibility()
     end
 end
 
+function MinimapMod:StripDifficultyBlizzardArt(frame)
+    if not frame then return end
+    if frame.Default then
+        if frame.Default.Background and frame.Default.Background.SetAlpha then frame.Default.Background:SetAlpha(0) end
+        if frame.Default.Border and frame.Default.Border.SetAlpha then frame.Default.Border:SetAlpha(0) end
+        if frame.Default.NormalTexture and frame.Default.NormalTexture.SetAlpha then frame.Default.NormalTexture:SetAlpha(0) end
+        if frame.Default.HeroicTexture and frame.Default.HeroicTexture.SetAlpha then frame.Default.HeroicTexture:SetAlpha(0) end
+        if frame.Default.MythicTexture and frame.Default.MythicTexture.SetAlpha then frame.Default.MythicTexture:SetAlpha(0) end
+        if frame.Default.WalkInTexture and frame.Default.WalkInTexture.SetAlpha then frame.Default.WalkInTexture:SetAlpha(0) end
+        if frame.Default.Text and frame.Default.Text.SetAlpha then frame.Default.Text:SetAlpha(0) end
+        if frame.Default.DifficultyTextures then
+            for _, tex in ipairs(frame.Default.DifficultyTextures) do
+                if tex.SetAlpha then tex:SetAlpha(0) end
+            end
+        end
+    end
+    if frame.Guild then
+        if frame.Guild.Background and frame.Guild.Background.SetAlpha then frame.Guild.Background:SetAlpha(0) end
+        if frame.Guild.Border and frame.Guild.Border.SetAlpha then frame.Guild.Border:SetAlpha(0) end
+        if frame.Guild.Emblem and frame.Guild.Emblem.SetAlpha then frame.Guild.Emblem:SetAlpha(0) end
+        if frame.Guild.Instance then
+            if frame.Guild.Instance.Text and frame.Guild.Instance.Text.SetAlpha then frame.Guild.Instance.Text:SetAlpha(0) end
+            if frame.Guild.Instance.DifficultyTextures then
+                for _, tex in ipairs(frame.Guild.Instance.DifficultyTextures) do
+                    if tex.SetAlpha then tex:SetAlpha(0) end
+                end
+            end
+        end
+    end
+    if frame.ChallengeMode then
+        if frame.ChallengeMode.Background and frame.ChallengeMode.Background.SetAlpha then frame.ChallengeMode.Background:SetAlpha(0) end
+        if frame.ChallengeMode.Border and frame.ChallengeMode.Border.SetAlpha then frame.ChallengeMode.Border:SetAlpha(0) end
+        if frame.ChallengeMode.ChallengeModeTexture and frame.ChallengeMode.ChallengeModeTexture.SetAlpha then frame.ChallengeMode.ChallengeModeTexture:SetAlpha(0) end
+    end
+    if _G.MiniMapInstanceDifficultyTexture and _G.MiniMapInstanceDifficultyTexture.SetAlpha then
+        _G.MiniMapInstanceDifficultyTexture:SetAlpha(0)
+    end
+    if _G.MiniMapInstanceDifficultyText and _G.MiniMapInstanceDifficultyText.SetAlpha then
+        _G.MiniMapInstanceDifficultyText:SetAlpha(0)
+    end
+    if frame.texture and frame.texture.SetAlpha then frame.texture:SetAlpha(0) end
+    if frame.text and frame.text.SetAlpha then frame.text:SetAlpha(0) end
+end
+
+function MinimapMod:UpdateDifficultyFont()
+    local textFS = self.difficultyTextFS
+    if not textFS then return end
+    local fontSize = (self.db and self.db.difficultyFontSize) or 12
+    local fontOutline = (self.db and self.db.difficultyFontOutline) or "OUTLINE"
+    local fontPath = nil
+    if RoithiUI and RoithiUI.FontEngine and RoithiUI.GetFontInfo then
+        fontPath = select(1, RoithiUI:GetFontInfo("Minimap", "difficulty", fontSize, fontOutline))
+    end
+    if not fontPath then fontPath = "Fonts\\FRIZQT__.TTF" end
+    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        LibRoithi.mixins:SetFont(textFS, fontPath, fontSize, fontOutline)
+    elseif textFS.SetFont then
+        textFS:SetFont(fontPath, fontSize, fontOutline)
+    end
+end
+
+function MinimapMod:UpdateDifficultyText()
+    local textFS = self.difficultyTextFS
+    if not textFS then return end
+
+    if self.db and self.db.showDifficulty == false then
+        textFS:SetText("")
+        return
+    end
+
+    if LEM and LEM.IsInEditMode and LEM:IsInEditMode() then
+        local inInst = _G.IsInInstance and _G.IsInInstance()
+        if not inInst then
+            textFS:SetText("20M")
+            return
+        end
+    end
+
+    if not _G.GetInstanceInfo then
+        textFS:SetText("")
+        return
+    end
+
+    local _, instanceType, diffID, _, maxPlayers, _, _, _, groupSize, _, hasWorldTier = _G.GetInstanceInfo()
+    if not diffID or diffID == 0 or instanceType == "none" then
+        textFS:SetText("")
+        return
+    end
+
+    -- 1. Mythic+ / Challenge Mode
+    local isChallengeMode = false
+    local isHeroic = false
+    local displayHeroic = false
+    local displayMythic = false
+    if _G.GetDifficultyInfo then
+        local _, _, ih, icm, dh, dm = _G.GetDifficultyInfo(diffID)
+        isHeroic = ih
+        isChallengeMode = icm
+        displayHeroic = dh
+        displayMythic = dm
+    end
+
+    if isChallengeMode or diffID == 8 then
+        local keyLevel = _G.C_ChallengeMode and _G.C_ChallengeMode.GetActiveKeystoneInfo and _G.C_ChallengeMode.GetActiveKeystoneInfo()
+        if keyLevel and keyLevel > 0 then
+            textFS:SetText("M+" .. keyLevel)
+        else
+            textFS:SetText("M+")
+        end
+        return
+    end
+
+    -- 2. Delves
+    if hasWorldTier or diffID == 208 then
+        local tier = nil
+        if _G.C_UIWidgetManager and _G.C_UIWidgetManager.GetScenarioHeaderDelvesWidgetVisualizationInfo then
+            local ok, info = pcall(_G.C_UIWidgetManager.GetScenarioHeaderDelvesWidgetVisualizationInfo, 6183)
+            if ok and info and info.tierText then
+                tier = tostring(info.tierText):match("%d+")
+            end
+        end
+        if not tier and _G.C_DelvesUI and _G.C_DelvesUI.GetWorldTierDifficultyForActivePlayer then
+            local wt = _G.C_DelvesUI.GetWorldTierDifficultyForActivePlayer()
+            if wt and wt > 0 then tier = wt end
+        end
+        if tier then
+            textFS:SetText("T" .. tier)
+        else
+            textFS:SetText("Delve")
+        end
+        return
+    end
+
+    -- 3. Standard Dungeons & Raids
+    local letter = "N"
+    if diffID == 24 or diffID == 33 or diffID == 151 then
+        letter = "TW"
+    elseif displayMythic or diffID == 16 or diffID == 23 or diffID == 233 then
+        letter = "M"
+    elseif isHeroic or displayHeroic or diffID == 2 or diffID == 5 or diffID == 6 or diffID == 15 or diffID == 174 then
+        letter = "H"
+    elseif (_G.GetDifficultyInfo and select(8, _G.GetDifficultyInfo(diffID))) or diffID == 7 or diffID == 17 then
+        letter = "LFR"
+    elseif diffID == 220 then
+        letter = "Story"
+    elseif diffID == 205 then
+        letter = "F"
+    end
+
+    local count = (groupSize and groupSize > 0 and groupSize) or (maxPlayers and maxPlayers > 0 and maxPlayers) or nil
+    if count and count > 0 then
+        textFS:SetText(count .. letter)
+    else
+        textFS:SetText(letter)
+    end
+end
+
 function MinimapMod:UpdateDifficultyVisibility()
-    local show = (self.db.showDifficulty ~= false)
+    local show = (self.db and self.db.showDifficulty ~= false)
     if self.difficultyAnchor then
         self.difficultyAnchor:SetShown(show)
     end
     local instDiff = (MinimapCluster and MinimapCluster.InstanceDifficulty) or _G.MiniMapInstanceDifficulty
     if instDiff then
         instDiff:SetShown(show)
+        self:StripDifficultyBlizzardArt(instDiff)
     end
     if MinimapCluster and MinimapCluster.GuildInstanceDifficulty then
         MinimapCluster.GuildInstanceDifficulty:SetShown(show)
+        self:StripDifficultyBlizzardArt(MinimapCluster.GuildInstanceDifficulty)
     end
+    self:UpdateDifficultyText()
 end
 
 function MinimapMod:UpdateAllElementVisibilities()
@@ -1967,7 +2217,9 @@ function MinimapMod:UpdateDataTextBarLayout()
         bar.textRight = bar:CreateFontString(nil, "OVERLAY")
     end
 
-    local font = self.db.unitFrameFont or "Friz Quadrata TT"
+    local font = (self.db and self.db.dataTextFont)
+        or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
+        or "Roithi Thick"
 
     -- Left Section
     bar.textLeft:ClearAllPoints()
@@ -2185,3 +2437,9 @@ function MinimapMod:RefreshProfile()
     end
 end
 MinimapMod.RefreshSettings = MinimapMod.RefreshProfile
+
+function MinimapMod:UpdateFonts()
+    if self.UpdateDifficultyFont then self:UpdateDifficultyFont() end
+    if self.UpdateAllBuffButtons then self:UpdateAllBuffButtons() end
+    if self.UpdateDataTexts then self:UpdateDataTexts() end
+end

@@ -238,3 +238,15 @@ function UF:RefreshProfile()
 end
 UF.RefreshSettings = UF.RefreshProfile
 
+function UF:UpdateFonts()
+    if ns and ns.RefreshAllUnitFrames then
+        ns.RefreshAllUnitFrames()
+    elseif self.units then
+        for unit in pairs(self.units) do
+            if self:IsUnitEnabled(unit) and self.UpdateFrameFromSettings then
+                self:UpdateFrameFromSettings(unit)
+            end
+        end
+    end
+end
+

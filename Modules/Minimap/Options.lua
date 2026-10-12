@@ -167,6 +167,37 @@ function MinimapMod:GetOptions()
                             self:UpdateDifficultyVisibility()
                         end,
                     },
+                    difficultyFontSize = {
+                        type = "range",
+                        name = L["Difficulty Font Size"] or "Difficulty Font Size",
+                        order = 6,
+                        min = 8,
+                        max = 24,
+                        step = 1,
+                        get = function() return self.db.difficultyFontSize or 12 end,
+                        set = function(_, val)
+                            self.db.difficultyFontSize = val
+                            self:UpdateDifficultyFont()
+                        end,
+                        disabled = function() return self.db.showDifficulty == false end,
+                    },
+                    difficultyFontOutline = {
+                        type = "select",
+                        name = L["Difficulty Font Outline"] or "Difficulty Font Outline",
+                        order = 7,
+                        values = {
+                            ["NONE"] = L["None"] or "None",
+                            ["OUTLINE"] = L["Outline"] or "Outline",
+                            ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
+                            ["MONOCHROME"] = L["Monochrome"] or "Monochrome",
+                        },
+                        get = function() return self.db.difficultyFontOutline or "OUTLINE" end,
+                        set = function(_, val)
+                            self.db.difficultyFontOutline = val
+                            self:UpdateDifficultyFont()
+                        end,
+                        disabled = function() return self.db.showDifficulty == false end,
+                    },
                 },
             },
             addonBar = self.GetAddonBarOptions and self:GetAddonBarOptions() or nil,
@@ -543,7 +574,10 @@ function MinimapMod:GetOptions()
                         dialogControl = "LSM30_Font",
                         name = L["Font"] or "Font",
                         order = 7,
-                        values = AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font,
+                        values = function()
+                            local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+                            return (LSM and LSM:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                        end,
                         get = function() return self.db.buffFrameFont or "Friz Quadrata TT" end,
                         set = function(_, val)
                             self.db.buffFrameFont = val

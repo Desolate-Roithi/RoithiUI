@@ -93,11 +93,51 @@ function ns.GetEncounterBarOptions()
                                 set = function(_, v)
                                     local db = RoithiUI.db.profile.EncounterResource
                                     if db then db.fontSize = v end
-                                    local bar = _G.RoithiEncounterResource
-                                    if bar and bar.Text then
-                                        local LibR = LibStub("LibRoithi-1.0")
-                                        if LibR then LibR.mixins:SetFont(bar.Text, "Friz Quadrata TT", v, "OUTLINE") end
-                                    end
+                                    local EBMod = RoithiUI:GetModule("EncounterBar", true)
+                                    if EBMod and EBMod.UpdateBarLayout then EBMod:UpdateBarLayout() end
+                                end,
+                            },
+                            font = {
+                                type = "select",
+                                dialogControl = "LSM30_Font",
+                                name = L["Font"] or "Font",
+                                order = 1.1,
+                                values = function()
+                                    local LSM3 = LibStub and LibStub("LibSharedMedia-3.0", true)
+                                    return (LSM3 and LSM3:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                                end,
+                                get = function()
+                                    local db = RoithiUI.db.profile.EncounterResource
+                                    local general = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General
+                                    return (db and db.font) or (general and general.font) or "Roithi Thick"
+                                end,
+                                set = function(_, v)
+                                    local db = RoithiUI.db.profile.EncounterResource
+                                    if db then db.font = v end
+                                    local EBMod = RoithiUI:GetModule("EncounterBar", true)
+                                    if EBMod and EBMod.UpdateBarLayout then EBMod:UpdateBarLayout() end
+                                end,
+                            },
+                            fontOutline = {
+                                type = "select",
+                                name = L["Font Outline"] or "Font Outline",
+                                order = 1.2,
+                                values = {
+                                    ["NONE"] = L["None"] or "None",
+                                    ["OUTLINE"] = L["Outline"] or "Outline",
+                                    ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
+                                    ["MONOCHROME"] = "MONOCHROME",
+                                },
+                                get = function()
+                                    local db = RoithiUI.db.profile.EncounterResource
+                                    local general = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General
+                                    return (db and db.fontOutline) or (general and general.fontOutline) or "OUTLINE"
+                                end,
+                                set = function(_, v)
+                                    local db = RoithiUI.db.profile.EncounterResource
+                                    if db then db.fontOutline = v end
+                                    local EBMod = RoithiUI:GetModule("EncounterBar", true)
+                                    if EBMod and EBMod.UpdateBarLayout then EBMod:UpdateBarLayout() end
                                 end,
                             },
                             texture = {

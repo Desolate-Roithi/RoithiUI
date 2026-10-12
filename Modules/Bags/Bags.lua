@@ -84,6 +84,7 @@ function BagsMod:OnEnable()
     self:RegisterEvent("BAG_UPDATE_COOLDOWN", "OnBagCooldownUpdate")
     self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnBagUpdate")
     self:RegisterEvent("PLAYER_MONEY", "UpdateMoneyDisplay")
+    self:RegisterEvent("CURRENCY_DISPLAY_UPDATE", "UpdateMoneyDisplay")
     self:RegisterEvent("MERCHANT_SHOW", "OnMerchantShow")
     self:RegisterEvent("MERCHANT_CLOSED", "OnMerchantClosed")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
@@ -737,7 +738,7 @@ function BagsMod:UpdateFooterLayout()
     self.sortButton:ClearAllPoints()
 
     if freeAnchor == "LEFT" then
-        local leftAnchor = self.moneyButton or self.moneyText
+        local leftAnchor = (self.lastCurrencyButton and self.lastCurrencyButton:IsShown() and self.lastCurrencyButton) or self.moneyButton or self.moneyText
         if leftAnchor then
             self.freeText:SetPoint("LEFT", leftAnchor, "RIGHT", 12, 0)
         else
@@ -772,6 +773,13 @@ function BagsMod:UpdateTypography()
     end
     if self.moneyText then
         self:ApplyFont(self.moneyText, 12, "goldFontSize", "OUTLINE")
+    end
+    if self.currencyButtons then
+        for _, btn in pairs(self.currencyButtons) do
+            if btn.text then
+                self:ApplyFont(btn.text, 12, "goldFontSize", "OUTLINE")
+            end
+        end
     end
     if self.freeText then
         self:ApplyFont(self.freeText, 12, "freeSlotsFontSize", "OUTLINE")
@@ -1076,6 +1084,26 @@ function BagsMod:RegisterPopups()
         end,
         timeout = 0,
         whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3,
+    }
+
+    _G.StaticPopupDialogs["ROITHI_CONFIRM_SELL_CUSTOM_JUNK"] = {
+        text = "%s",
+        button1 = _G.YES or "Yes",
+        button2 = _G.NO or "No",
+        OnAccept = function(_, data)
+            if data and data.onConfirm then
+                data.onConfirm()
+            end
+        end,
+        OnCancel = function(_, data)
+            if data and data.onCancel then
+                data.onCancel()
+            end
+        end,
+        timeout = 0,
+        whileDead = false,
         hideOnEscape = true,
         preferredIndex = 3,
     }
@@ -1387,6 +1415,7 @@ function BagsMod:CreateFooterBar()
     moneyText:SetPoint("LEFT", moneyBtn, "LEFT", 0, 0)
     self.moneyText = moneyText
     self.moneyButton = moneyBtn
+    self.currencyButtons = {}
     self:UpdateMoneyDisplay()
 
     moneyBtn:SetScript("OnEnter", function(b)
@@ -1413,22 +1442,6 @@ function BagsMod:CreateFooterBar()
                 local wFormattedGold = FormatNumberWithDots(wGold)
                 local warbandMoneyStr = string.format("|cffffd700%s|rg |cffc7c7cf%d|rs |cffeda55f%d|rc", wFormattedGold, wSilver, wCop)
                 _G.GameTooltip:AddDoubleLine(L["Warband Gold"] or "Warband Gold", warbandMoneyStr, 0, 0.8, 1, 1, 1, 1)
-            end
-        end
-
-        if _G.C_CurrencyInfo and _G.C_CurrencyInfo.GetBackpackCurrencyInfo then
-            local hasCurrencies = false
-            for i = 1, 5 do
-                local cInfo = _G.C_CurrencyInfo.GetBackpackCurrencyInfo(i)
-                if cInfo and cInfo.name then
-                    if not hasCurrencies then
-                        _G.GameTooltip:AddLine(" ")
-                        hasCurrencies = true
-                    end
-                    local iconStr = (cInfo.iconFileID and string.format("|T%s:14:14:0:0:64:64:4:60:4:60|t ", cInfo.iconFileID)) or ""
-                    local countStr = FormatNumberWithDots(cInfo.quantity or 0)
-                    _G.GameTooltip:AddDoubleLine(iconStr .. cInfo.name, countStr, 1, 1, 1, 1, 0.82, 0)
-                end
             end
         end
 
@@ -1568,6 +1581,150 @@ function BagsMod:CreateFooterBar()
 end
 
 
+function BagsMod:GetOrCreateCurrencyButton(index)
+    self.currencyButtons = self.currencyButtons or {}
+    if self.currencyButtons[index] then
+        return self.currencyButtons[index]
+    end
+
+    local footer = self.footerBar
+    if not footer then return nil end
+
+    local btn = CreateFrame("Button", nil, footer)
+    btn:SetHeight(20)
+
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(14, 14)
+    icon:SetPoint("LEFT", btn, "LEFT", 0, 0)
+    if icon.SetTexCoord then
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    end
+    btn.icon = icon
+
+    local text = btn:CreateFontString(nil, "OVERLAY")
+    self:ApplyFont(text, 12, "goldFontSize", "OUTLINE")
+    text:SetPoint("LEFT", icon, "RIGHT", 3, 0)
+    btn.text = text
+
+    btn:SetScript("OnEnter", function(b)
+        if not _G.GameTooltip then return end
+        _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
+        local showed = false
+        if _G.GameTooltip.SetBackpackToken and b.tokenIndex then
+            _G.GameTooltip:SetBackpackToken(b.tokenIndex)
+            showed = true
+        elseif _G.C_CurrencyInfo and _G.C_CurrencyInfo.GetCurrencyInfo and b.currencyID then
+            local info = _G.C_CurrencyInfo.GetCurrencyInfo(b.currencyID)
+            if info and info.name then
+                _G.GameTooltip:SetText(info.name, 1, 1, 1)
+                if info.description and info.description ~= "" then
+                    _G.GameTooltip:AddLine(info.description, 0.8, 0.8, 0.8, true)
+                end
+                showed = true
+            end
+        end
+        if not showed and b.currencyName then
+            _G.GameTooltip:SetText(b.currencyName, 1, 1, 1)
+            showed = true
+        end
+        if showed then
+            if _G.TOKEN_REMOVE_FROM_BACKPACK_INSTRUCTION and _G.GameTooltip_AddInstructionLine then
+                if _G.GameTooltip_AddBlankLineToTooltip then
+                    _G.GameTooltip_AddBlankLineToTooltip(_G.GameTooltip)
+                end
+                _G.GameTooltip_AddInstructionLine(_G.GameTooltip, _G.TOKEN_REMOVE_FROM_BACKPACK_INSTRUCTION)
+            end
+            _G.GameTooltip:Show()
+        end
+    end)
+
+    btn:SetScript("OnLeave", function()
+        if _G.GameTooltip then _G.GameTooltip:Hide() end
+    end)
+
+    btn:SetScript("OnClick", function(b)
+        if _G.IsModifiedClick and _G.IsModifiedClick("TOKENWATCHTOGGLE") and b.currencyID and _G.C_CurrencyInfo and _G.C_CurrencyInfo.SetCurrencyBackpackByID then
+            _G.C_CurrencyInfo.SetCurrencyBackpackByID(b.currencyID, false)
+            if self.UpdateMoneyDisplay then
+                self:UpdateMoneyDisplay()
+            end
+            return
+        end
+        if _G.IsModifiedClick and _G.IsModifiedClick("CHATLINK") and b.currencyID and _G.C_CurrencyInfo and _G.C_CurrencyInfo.GetCurrencyLink and _G.HandleModifiedItemClick then
+            local link = _G.C_CurrencyInfo.GetCurrencyLink(b.currencyID, b.quantity or 0)
+            if link and _G.HandleModifiedItemClick(link) then
+                return
+            end
+        end
+        if _G.ToggleCharacter then
+            _G.ToggleCharacter("TokenFrame")
+        end
+    end)
+
+    self.currencyButtons[index] = btn
+    return btn
+end
+
+function BagsMod:UpdateBackpackCurrencies()
+    if not self.footerBar then return end
+
+    local prevAnchor = self.moneyButton
+    local maxTokens = 5
+    local lastBtn = nil
+
+    for i = 1, maxTokens do
+        local cInfo = nil
+        if _G.C_CurrencyInfo and _G.C_CurrencyInfo.GetBackpackCurrencyInfo then
+            cInfo = _G.C_CurrencyInfo.GetBackpackCurrencyInfo(i)
+        end
+
+        if cInfo and cInfo.name then
+            local btn = self:GetOrCreateCurrencyButton(i)
+            if btn then
+                btn.tokenIndex = i
+                btn.currencyID = cInfo.currencyTypesID
+                btn.currencyName = cInfo.name
+                btn.quantity = cInfo.quantity
+
+                if btn.icon and btn.icon.SetTexture then
+                    btn.icon:SetTexture(cInfo.iconFileID)
+                end
+
+                local countStr = FormatNumberWithDots(cInfo.quantity or 0)
+                if btn.text and btn.text.SetText then
+                    self:ApplyFont(btn.text, 12, "goldFontSize", "OUTLINE")
+                    btn.text:SetText(countStr)
+                end
+
+                local textW = (btn.text and btn.text.GetStringWidth and btn.text:GetStringWidth()) or 24
+                if btn.SetWidth then
+                    btn:SetWidth(14 + 3 + textW)
+                end
+
+                if btn.ClearAllPoints and btn.SetPoint then
+                    btn:ClearAllPoints()
+                    if prevAnchor == self.moneyButton then
+                        btn:SetPoint("LEFT", prevAnchor, "RIGHT", 8, 0)
+                    else
+                        btn:SetPoint("LEFT", prevAnchor, "RIGHT", 6, 0)
+                    end
+                end
+                if btn.Show then
+                    btn:Show()
+                end
+                prevAnchor = btn
+                lastBtn = btn
+            end
+        else
+            if self.currencyButtons and self.currencyButtons[i] and self.currencyButtons[i].Hide then
+                self.currencyButtons[i]:Hide()
+            end
+        end
+    end
+
+    self.lastCurrencyButton = lastBtn
+end
+
 function BagsMod:UpdateMoneyDisplay()
     if not self.moneyText then return end
     local copper = _G.GetMoney and _G.GetMoney() or 0
@@ -1579,6 +1736,7 @@ function BagsMod:UpdateMoneyDisplay()
     if self.moneyButton and self.moneyText.GetStringWidth then
         self.moneyButton:SetWidth(math.max(40, self.moneyText:GetStringWidth() + 4))
     end
+    self:UpdateBackpackCurrencies()
 end
 
 function BagsMod:OnMerchantShow()
@@ -1594,45 +1752,65 @@ function BagsMod:OnMerchantClosed()
         self.sellingJunkTicker:Cancel()
         self.sellingJunkTicker = nil
     end
+    if _G.StaticPopup_Hide then
+        _G.StaticPopup_Hide("ROITHI_CONFIRM_SELL_CUSTOM_JUNK")
+    end
 end
 
-function BagsMod:SellAllJunk()
-    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
-    if self.sellingJunkTicker then
-        self.sellingJunkTicker:Cancel()
-        self.sellingJunkTicker = nil
+function BagsMod:PromptSellCustomJunk(customQueue, customItemDisplay, customItemCounts)
+    if not customQueue or #customQueue == 0 then return end
+
+    local lines = {}
+    local maxDisplay = 5
+    for i = 1, math.min(#customItemDisplay, maxDisplay) do
+        local display = customItemDisplay[i]
+        local count = customItemCounts[display.itemID] or 1
+        local line = "• " .. tostring(display.link or display.itemID)
+        if count > 1 then
+            line = line .. " (x" .. count .. ")"
+        end
+        table.insert(lines, line)
+    end
+    if #customItemDisplay > maxDisplay then
+        local remaining = #customItemDisplay - maxDisplay
+        table.insert(lines, string.format(L["... and %d more custom item(s)"] or "... and %d more custom item(s)", remaining))
     end
 
-    local junkQueue = {}
+    local itemsText = table.concat(lines, "\n")
+    local template = L["The following custom items are marked as Junk and will be sold:\n\n%s\n\nDo you want to sell them? (Their Junk status will be reset)"]
+        or "The following custom items are marked as Junk and will be sold:\n\n%s\n\nDo you want to sell them? (Their Junk status will be reset)"
+    local promptText = string.format(template, itemsText)
+
+    local data = {
+        onConfirm = function()
+            self:ExecuteSellQueue(customQueue, true)
+        end,
+    }
+
+    if _G.StaticPopup_Show then
+        _G.StaticPopup_Show("ROITHI_CONFIRM_SELL_CUSTOM_JUNK", promptText, nil, data)
+    else
+        data.onConfirm()
+    end
+end
+
+function BagsMod:ExecuteSellQueue(queue, isCustom, onFinished)
+    if not queue or #queue == 0 then
+        if onFinished then onFinished() end
+        return
+    end
+
     local totalCopper = 0
     local totalItems = 0
+    local resetItemIDs = {}
 
-    for _, bag in ipairs(self:GetScannableBags()) do
-        local numSlots = self:GetNumBagSlots(bag)
-        for slot = 1, numSlots do
-            local itemInfo = self:GetItemInfoAt(bag, slot)
-            if itemInfo and itemInfo.quality == 0 then
-                local price = 0
-                local itemLink = itemInfo.link or (_G.C_Container and _G.C_Container.GetContainerItemLink and _G.C_Container.GetContainerItemLink(bag, slot))
-                if itemLink and _G.GetItemInfo then
-                    local _, _, _, _, _, _, _, _, _, _, sellPrice = _G.GetItemInfo(itemLink)
-                    price = sellPrice or 0
-                elseif itemInfo.itemID and _G.GetItemInfo then
-                    local _, _, _, _, _, _, _, _, _, _, sellPrice = _G.GetItemInfo(itemInfo.itemID)
-                    price = sellPrice or 0
-                end
-                local count = itemInfo.count or 1
-                table.insert(junkQueue, { bag = bag, slot = slot, itemID = itemInfo.itemID, count = count, price = price })
-                totalItems = totalItems + 1
-                totalCopper = totalCopper + (price * count)
-            end
-        end
+    for _, item in ipairs(queue) do
+        totalItems = totalItems + (item.count or 1)
+        totalCopper = totalCopper + ((item.price or 0) * (item.count or 1))
     end
 
-    if #junkQueue == 0 then return end
-
     local queueIndex = 1
-    local function ProcessNextJunk()
+    local function ProcessNext()
         if _G.InCombatLockdown and _G.InCombatLockdown() then
             if self.sellingJunkTicker then
                 self.sellingJunkTicker:Cancel()
@@ -1648,7 +1826,7 @@ function BagsMod:SellAllJunk()
             return
         end
 
-        local item = junkQueue[queueIndex]
+        local item = queue[queueIndex]
         if item then
             local currentID = nil
             if _G.C_Container and _G.C_Container.GetContainerItemID then
@@ -1664,14 +1842,23 @@ function BagsMod:SellAllJunk()
                 elseif _G.UseContainerItem then
                     pcall(_G.UseContainerItem, item.bag, item.slot)
                 end
+                if isCustom and item.itemID then
+                    resetItemIDs[item.itemID] = true
+                    if self.db and self.db.customCategoryAssignments then
+                        self.db.customCategoryAssignments[item.itemID] = nil
+                    end
+                end
             end
             queueIndex = queueIndex + 1
         end
 
-        if queueIndex > #junkQueue then
+        if queueIndex > #queue then
             if self.sellingJunkTicker then
                 self.sellingJunkTicker:Cancel()
                 self.sellingJunkTicker = nil
+            end
+            if isCustom and next(resetItemIDs) then
+                self:UpdateInventory()
             end
             if totalItems > 0 then
                 local gold = math.floor(totalCopper / 10000)
@@ -1679,19 +1866,111 @@ function BagsMod:SellAllJunk()
                 local cop = totalCopper % 100
                 local formattedGold = FormatNumberWithDots(gold)
                 local moneyStr = string.format("|cffffd700%s|rg |cffc7c7cf%d|rs |cffeda55f%d|rc", formattedGold, silver, cop)
-                local msg = string.format(L["Sold %d junk item%s for %s."] or "Sold %d junk item%s for %s.", totalItems, totalItems == 1 and "" or "s", moneyStr)
+                local msg
+                if isCustom then
+                    msg = string.format(L["Sold %d custom junk item%s for %s and reset their Junk status."] or "Sold %d custom junk item%s for %s and reset their Junk status.", totalItems, totalItems == 1 and "" or "s", moneyStr)
+                else
+                    msg = string.format(L["Sold %d junk item%s for %s."] or "Sold %d junk item%s for %s.", totalItems, totalItems == 1 and "" or "s", moneyStr)
+                end
                 print("|cff00ccff[RoithiUI]|r " .. msg)
+            end
+            if onFinished then
+                onFinished()
             end
         end
     end
-    self.ProcessNextJunk = ProcessNextJunk
+
+    self.ProcessNextJunk = ProcessNext
 
     if _G.C_Timer and _G.C_Timer.NewTicker then
-        self.sellingJunkTicker = _G.C_Timer.NewTicker(0.04, ProcessNextJunk, #junkQueue)
+        self.sellingJunkTicker = _G.C_Timer.NewTicker(0.04, ProcessNext, #queue)
     else
-        while queueIndex <= #junkQueue do
-            ProcessNextJunk()
+        while queueIndex <= #queue do
+            ProcessNext()
         end
+    end
+end
+
+function BagsMod:SellAllJunk()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+    if self.sellingJunkTicker then
+        self.sellingJunkTicker:Cancel()
+        self.sellingJunkTicker = nil
+    end
+
+    local nativeQueue = {}
+    local customQueue = {}
+    local customItemCounts = {}
+    local customItemDisplay = {}
+
+    for _, bag in ipairs(self:GetScannableBags()) do
+        local numSlots = self:GetNumBagSlots(bag)
+        for slot = 1, numSlots do
+            local itemInfo = self:GetItemInfoAt(bag, slot)
+            if itemInfo and itemInfo.itemID then
+                local isFav = self.db and self.db.favorites and self.db.favorites[itemInfo.itemID]
+                if not isFav then
+                    local price = 0
+                    local itemLink = itemInfo.link or (_G.C_Container and _G.C_Container.GetContainerItemLink and _G.C_Container.GetContainerItemLink(bag, slot))
+                    if itemLink and _G.GetItemInfo then
+                        local _, _, _, _, _, _, _, _, _, _, sellPrice = _G.GetItemInfo(itemLink)
+                        price = sellPrice or 0
+                    elseif itemInfo.itemID and _G.GetItemInfo then
+                        local _, _, _, _, _, _, _, _, _, _, sellPrice = _G.GetItemInfo(itemInfo.itemID)
+                        price = sellPrice or 0
+                    end
+
+                    if price > 0 then
+                        local count = itemInfo.count or 1
+                        local customCat = self.db and self.db.customCategoryAssignments and self.db.customCategoryAssignments[itemInfo.itemID]
+                        if customCat == "JUNK" then
+                            table.insert(customQueue, {
+                                bag = bag,
+                                slot = slot,
+                                itemID = itemInfo.itemID,
+                                count = count,
+                                price = price,
+                                isCustomJunk = true,
+                                link = itemLink or itemInfo.name or ("item:" .. itemInfo.itemID),
+                                name = itemInfo.name or itemLink or ("item:" .. itemInfo.itemID),
+                            })
+                            if not customItemCounts[itemInfo.itemID] then
+                                customItemCounts[itemInfo.itemID] = 0
+                                table.insert(customItemDisplay, {
+                                    itemID = itemInfo.itemID,
+                                    link = itemLink or itemInfo.name or ("item:" .. itemInfo.itemID),
+                                })
+                            end
+                            customItemCounts[itemInfo.itemID] = customItemCounts[itemInfo.itemID] + count
+                        elseif itemInfo.quality == 0 and not customCat then
+                            table.insert(nativeQueue, {
+                                bag = bag,
+                                slot = slot,
+                                itemID = itemInfo.itemID,
+                                count = count,
+                                price = price,
+                                isCustomJunk = false,
+                            })
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if #nativeQueue == 0 and #customQueue == 0 then return end
+
+    local function StartCustomJunkPrompt()
+        if #customQueue == 0 then return end
+        self:PromptSellCustomJunk(customQueue, customItemDisplay, customItemCounts)
+    end
+
+    if #nativeQueue > 0 then
+        self:ExecuteSellQueue(nativeQueue, false, function()
+            StartCustomJunkPrompt()
+        end)
+    else
+        StartCustomJunkPrompt()
     end
 end
 
@@ -2214,6 +2493,7 @@ function BagsMod:UpdateInventory()
     if self.freeText then
         self.freeText:SetText(string.format("%d / %d %s", freeSlots, totalSlots, L["Free"]))
     end
+    self:UpdateMoneyDisplay()
 
     local cols = self.db.columns or 10
     local slotSize = self.db.slotSize or 36
@@ -2526,3 +2806,8 @@ function BagsMod:RefreshProfile()
     end
 end
 BagsMod.RefreshSettings = BagsMod.RefreshProfile
+
+function BagsMod:UpdateFonts()
+    if self.UpdateTypography then self:UpdateTypography() end
+    self:UpdateInventory()
+end

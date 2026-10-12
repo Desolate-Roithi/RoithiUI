@@ -431,7 +431,8 @@ function Totems:CreateTotemBar()
         btn.cooldown = cd
 
         local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
-        local fontPath = (LSM and LSM:Fetch("font", "Roithi Thick")) or STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
+        local fontName = (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Roithi Thick"
+        local fontPath = (LSM and LSM:Fetch("font", fontName)) or (LSM and LSM:Fetch("font", "Roithi Thick")) or STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
 
         local fsCooldown = btn:CreateFontString(nil, "OVERLAY", nil, 7)
         fsCooldown:SetPoint("CENTER", btn, "CENTER", 0, 0)
@@ -1123,7 +1124,8 @@ function Totems:UpdateBarLayout()
                 btn:Show()
                 if btn.timerText then
                     local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
-                    local fontPath = (LSM and LSM:Fetch("font", "Roithi Thick")) or STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
+                    local fontName = (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Roithi Thick"
+                    local fontPath = (LSM and LSM:Fetch("font", fontName)) or (LSM and LSM:Fetch("font", "Roithi Thick")) or STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
                     btn.timerText:SetFont(fontPath, self.db.fontSize or 11, "OUTLINE")
                 end
                 if btn.extender then
@@ -1731,3 +1733,7 @@ function Totems:RefreshProfile()
     end
 end
 Totems.RefreshSettings = Totems.RefreshProfile
+
+function Totems:UpdateFonts()
+    self:UpdateBarLayout()
+end

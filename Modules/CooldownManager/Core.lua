@@ -42,6 +42,15 @@ function CDM:OnEnable()
     if self.InitializeAllCustomBars then
         self:InitializeAllCustomBars()
     end
+
+    if _G.ActionButtonSpellAlertManager and _G.ActionButtonSpellAlertManager.ShowAlert and not self.spellAlertHooked then
+        self.spellAlertHooked = true
+        hooksecurefunc(_G.ActionButtonSpellAlertManager, "ShowAlert", function(_, btn)
+            if btn and btn.SpellActivationAlert and CDM.UpdateItemSpellAlert then
+                CDM:UpdateItemSpellAlert(btn)
+            end
+        end)
+    end
 end
 
 function CDM:OnDisable()
@@ -88,7 +97,7 @@ function CDM:HookAllViewers()
             self.hookedViewers[viewerKey] = true
             if viewer.RefreshLayout and hooksecurefunc then
                 hooksecurefunc(viewer, "RefreshLayout", function()
-                    if not InCombatLockdown() and self:IsEnabled() and self.db and self.db.enabled ~= false then
+                    if (viewerKey == "BuffIcon" or not InCombatLockdown()) and self:IsEnabled() and self.db and self.db.enabled ~= false then
                         self:AlignViewerItems(viewerKey, viewer)
                     end
                 end)
@@ -96,7 +105,7 @@ function CDM:HookAllViewers()
             local container = (viewer.GetItemContainerFrame and viewer:GetItemContainerFrame()) or viewer
             if container and container.Layout and hooksecurefunc then
                 hooksecurefunc(container, "Layout", function()
-                    if not InCombatLockdown() and self:IsEnabled() and self.db and self.db.enabled ~= false then
+                    if (viewerKey == "BuffIcon" or not InCombatLockdown()) and self:IsEnabled() and self.db and self.db.enabled ~= false then
                         self:AlignViewerItems(viewerKey, viewer)
                     end
                 end)
@@ -123,8 +132,29 @@ function CDM:HookItemMixins()
             hooksecurefunc(mixin, "OnCooldownIDSet", function(itemFrame)
                 if self:IsEnabled() and self.db and self.db.enabled ~= false then
                     self:StyleItemFrame(viewerKey, itemFrame)
+                    if viewerKey == "BuffIcon" then
+                        local viewer = _G.BuffIconCooldownViewer
+                        if viewer then self:AlignViewerItems("BuffIcon", viewer) end
+                    end
                 end
             end)
+        end
+    end
+
+    -- NOTE: Never write fields into Blizzard CooldownViewer mixins/item frames
+    -- (e.g. includeAsLayoutChildWhenHidden). Blizzard reads them during Layout/
+    -- RefreshData and the tainted value poisons the secure aura-instance map.
+    if _G.CooldownViewerBuffIconItemMixin then
+        if _G.CooldownViewerBuffIconItemMixin.UpdateShownState and not self.buffIconUpdateShownStateHooked then
+            hooksecurefunc(_G.CooldownViewerBuffIconItemMixin, "UpdateShownState", function()
+                if self:IsEnabled() and self.db and self.db.enabled ~= false then
+                    local viewer = _G.BuffIconCooldownViewer
+                    if viewer then
+                        self:AlignViewerItems("BuffIcon", viewer)
+                    end
+                end
+            end)
+            self.buffIconUpdateShownStateHooked = true
         end
     end
 
@@ -1556,6 +1586,21 @@ function CDM:SetupEditMode()
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.roithiEditModeCallbacksRegistered then
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
             if CDM.InitializeAllCustomBars then CDM:InitializeAllCustomBars() end
+            if CDM:IsEnabled() and CDM.db and CDM.db.enabled ~= false then
+                if C_Timer and C_Timer.After then
+                    C_Timer.After(0.05, function()
+                        for vKey, gName in pairs(CDM.VIEWER_KEYS) do
+                            local v = _G[gName]
+                            if v then CDM:AlignViewerItems(vKey, v) end
+                        end
+                    end)
+                else
+                    for vKey, gName in pairs(CDM.VIEWER_KEYS) do
+                        local v = _G[gName]
+                        if v then CDM:AlignViewerItems(vKey, v) end
+                    end
+                end
+            end
         end, CDM)
         _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
             if CDM.InitializeAllCustomBars then CDM:InitializeAllCustomBars() end
@@ -1571,8 +1616,11 @@ function CDM:SetupEditMode()
     end
 end
 
+-- Addon-owned state kept outside Blizzard frame tables to avoid taint.
+local maxBuffWidthByViewer = setmetatable({}, { __mode = "k" })
+
 function CDM:AlignViewerItems(viewerKey, viewer)
-    if InCombatLockdown() then return end
+    if viewerKey ~= "BuffIcon" and InCombatLockdown() then return end
     if not viewer or not self.db then return end
 
     local vConf = self.db.viewers and self.db.viewers[viewerKey]
@@ -1644,25 +1692,82 @@ function CDM:AlignViewerItems(viewerKey, viewer)
 
     -- BuffIcon single row alignment & centering
     if viewerKey == "BuffIcon" then
-        if align == "CENTER" or align == "RIGHT" then
-            local firstItem = items[1]
-            local itemW = (vConf and vConf.iconSize) or firstItem:GetWidth() or 40
-            local spacing = (vConf and vConf.spacing) or (container.childXPadding or 0)
-            local pitch = itemW + spacing
-            local totalW = (#items * itemW) + math.max(0, #items - 1) * spacing
-            local cW = container:GetWidth() or 0
-            if cW > 0 then
-                local shift = (align == "CENTER") and ((cW - totalW) / 2) or (cW - totalW)
-                for idx, itemFrame in ipairs(items) do
-                    local numPoints = itemFrame:GetNumPoints()
-                    if numPoints and numPoints > 0 then
-                        local point, relTo, relPoint, _, y = itemFrame:GetPoint(1)
-                        if point and y then
-                            itemFrame:ClearAllPoints()
-                            itemFrame:SetPoint(point, relTo, relPoint, shift + (idx - 1) * pitch, y)
-                        end
-                    end
-                end
+        local firstItem = items[1]
+        local itemW = (vConf and vConf.iconSize) or (firstItem and firstItem:GetWidth()) or 40
+        if not itemW or itemW <= 0 then itemW = 40 end
+        local itemH = (vConf and vConf.iconSize) or (firstItem and firstItem:GetHeight()) or 40
+        if not itemH or itemH <= 0 then itemH = 40 end
+        local spacing = (vConf and vConf.spacing)
+        if spacing == nil then
+            spacing = container.childXPadding or 4
+        end
+        local pitch = itemW + spacing
+        local totalW = (#items * itemW) + math.max(0, #items - 1) * spacing
+
+        -- Blizzard applies viewer.iconScale to each item via SetScale(). Item SetPoint offsets
+        -- are in the item's (scaled) units, but the container size is in container units.
+        -- All math below is done in item units; convert only when touching the container.
+        local itemScale = (firstItem and firstItem.GetScale and firstItem:GetScale()) or 1
+        if not itemScale or itemScale <= 0 then itemScale = 1 end
+
+        local isEditing = false
+        if viewer.IsEditing then
+            isEditing = viewer:IsEditing()
+        elseif _G.EditModeManagerFrame and _G.EditModeManagerFrame.IsEditModeActive then
+            isEditing = _G.EditModeManagerFrame:IsEditModeActive()
+        end
+
+        if isEditing then
+            maxBuffWidthByViewer[viewer] = totalW
+        end
+
+        -- Do NOT call viewer:GetCooldownIDs() here: it lazily (re)builds Blizzard's
+        -- shared CooldownViewerSettings display data, and doing so from addon code
+        -- taints every Cooldown Viewer (secret compare / forbidden table errors).
+        local totalTrackedCount = 0
+        if viewer.itemFramePool.GetNumActive then
+            totalTrackedCount = viewer.itemFramePool:GetNumActive() or 0
+        end
+        local maxW = 0
+        if totalTrackedCount > 0 then
+            maxW = (totalTrackedCount * itemW) + math.max(0, totalTrackedCount - 1) * spacing
+        end
+
+        local containerW = (container:GetWidth() or 0) / itemScale
+        local cW = isEditing and totalW or math.max(totalW, maxW, containerW, maxBuffWidthByViewer[viewer] or 0)
+        local targetW = isEditing and totalW or cW
+
+        pcall(function()
+            local w = math.max(targetW, itemW) * itemScale
+            local h = itemH * itemScale
+            container:SetSize(w, h)
+            if viewer ~= container then
+                viewer:SetSize(w, h)
+            end
+        end)
+
+        if align == "RIGHT" then
+            -- Place 1 is the rightmost active buff. Place 2 is immediately to its left, growing left.
+            local startRight = cW - itemW
+            for idx, itemFrame in ipairs(items) do
+                local xOffset = startRight - ((idx - 1) * pitch)
+                itemFrame:ClearAllPoints()
+                itemFrame:SetPoint("TOPLEFT", container, "TOPLEFT", xOffset, 0)
+            end
+        elseif align == "CENTER" then
+            -- Symmetrically centered in the frame, contiguous with no empty spaces.
+            local shift = (cW - totalW) / 2
+            for idx, itemFrame in ipairs(items) do
+                local xOffset = shift + ((idx - 1) * pitch)
+                itemFrame:ClearAllPoints()
+                itemFrame:SetPoint("TOPLEFT", container, "TOPLEFT", xOffset, 0)
+            end
+        else -- "LEFT"
+            -- Place 1 is on the far left, growing to the right.
+            for idx, itemFrame in ipairs(items) do
+                local xOffset = (idx - 1) * pitch
+                itemFrame:ClearAllPoints()
+                itemFrame:SetPoint("TOPLEFT", container, "TOPLEFT", xOffset, 0)
             end
         end
         return
@@ -1833,3 +1938,7 @@ function CDM:RefreshProfile()
     self:StyleAllActiveItems()
 end
 CDM.RefreshSettings = CDM.RefreshProfile
+
+function CDM:UpdateFonts()
+    self:StyleAllActiveItems()
+end

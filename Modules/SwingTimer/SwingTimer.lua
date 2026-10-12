@@ -474,7 +474,13 @@ local function CreateBarWidget(parent, name)
         bar:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
     end
 
-    local fontPath = (LSM and LSM:Fetch("font", "Friz Quadrata TT")) or "Fonts\\FRIZQT__.TTF"
+    local fontName = (SwingTimer.db and SwingTimer.db.font)
+        or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
+        or "Roithi Thick"
+    local fontPath = (LSM and LSM:Fetch("font", fontName))
+        or (LSM and LSM:Fetch("font", "Roithi Thick"))
+        or (LSM and LSM:Fetch("font", "Friz Quadrata TT"))
+        or "Fonts\\FRIZQT__.TTF"
 
     local labelText = bar:CreateFontString(nil, "OVERLAY")
     labelText:SetPoint("LEFT", bar, "LEFT", 4, 0)
@@ -1447,3 +1453,26 @@ function SwingTimer:RefreshProfile()
     end
 end
 SwingTimer.RefreshSettings = SwingTimer.RefreshProfile
+
+function SwingTimer:UpdateFonts()
+    local fontName = (self.db and self.db.font)
+        or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
+        or "Roithi Thick"
+    local fontPath = (LSM and LSM:Fetch("font", fontName))
+        or (LSM and LSM:Fetch("font", "Roithi Thick"))
+        or (LSM and LSM:Fetch("font", "Friz Quadrata TT"))
+        or "Fonts\\FRIZQT__.TTF"
+    local bars = { self.playerBars, self.targetBars }
+    for _, group in ipairs(bars) do
+        if group then
+            for _, bar in pairs(group) do
+                if bar and bar.labelText and bar.labelText.SetFont then
+                    bar.labelText:SetFont(fontPath, 9, "OUTLINE")
+                end
+                if bar and bar.timeText and bar.timeText.SetFont then
+                    bar.timeText:SetFont(fontPath, 9, "OUTLINE")
+                end
+            end
+        end
+    end
+end

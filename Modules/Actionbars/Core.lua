@@ -109,7 +109,7 @@ function AB:OnEnable()
     if self.db.enabled == false then return end
 
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
-    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnFaderEvent")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED")
     self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
     if self.RegisterUnitEvent then
         self:RegisterUnitEvent("UNIT_SPELLCAST_START", "OnSpellcastEvent", "player")
@@ -147,6 +147,9 @@ function AB:OnEnable()
     self:StyleAllBars()
     self:LayoutAllBars()
     self:DisableActionPageSwitching()
+    if self.ProtectOverrideActionBar then
+        self:ProtectOverrideActionBar()
+    end
     self:SetupLEM()
 end
 
@@ -159,7 +162,25 @@ function AB:OnDisable()
     end
 end
 
+function AB:PLAYER_REGEN_DISABLED()
+    if _G.OverrideActionBar and _G.OverrideActionBar.slideOut then
+        if _G.OverrideActionBar.slideOut.IsPlaying and _G.OverrideActionBar.slideOut:IsPlaying() then
+            _G.OverrideActionBar.hideOnFinish = false
+        end
+    end
+    self:OnFaderEvent()
+end
+
 function AB:PLAYER_REGEN_ENABLED()
+    if _G.OverrideActionBar and _G.OverrideActionBar.IsShown and _G.OverrideActionBar:IsShown() then
+        local hasSpecialBar = _G.C_ActionBar and (
+            (_G.C_ActionBar.HasOverrideActionBar and _G.C_ActionBar.HasOverrideActionBar()) or
+            (_G.C_ActionBar.HasVehicleActionBar and _G.C_ActionBar.HasVehicleActionBar())
+        )
+        if not hasSpecialBar and _G.OverrideActionBar.Hide then
+            _G.OverrideActionBar:Hide()
+        end
+    end
     if self.queuedLayout then
         self.queuedLayout = false
         self:LayoutAllBars()
@@ -376,3 +397,9 @@ function AB:RefreshProfile()
     end
 end
 AB.RefreshSettings = AB.RefreshProfile
+
+function AB:UpdateFonts()
+    if self.StyleAllBars then
+        self:StyleAllBars()
+    end
+end

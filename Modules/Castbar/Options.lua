@@ -135,6 +135,47 @@ local function BuildCastbarGroup(uKey, orderIdx)
                     UpdateCastbar(uKey)
                 end,
             },
+            font = {
+                type = "select",
+                dialogControl = "LSM30_Font",
+                name = L["Font"] or "Font",
+                order = 6.1,
+                scope = "ace",
+                values = function()
+                    local LSM3 = LibStub and LibStub("LibSharedMedia-3.0", true)
+                    return (LSM3 and LSM3:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                end,
+                get = function()
+                    local db = GetCastbarDB(uKey)
+                    local general = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General
+                    return db.font or (general and general.castbarFont) or (general and general.font) or "Roithi Thick"
+                end,
+                set = function(_, v)
+                    GetCastbarDB(uKey).font = v
+                    UpdateCastbar(uKey)
+                end,
+            },
+            fontOutline = {
+                type = "select",
+                name = L["Font Outline"] or "Font Outline",
+                order = 6.2,
+                scope = "ace",
+                values = {
+                    ["NONE"] = L["None"] or "None",
+                    ["OUTLINE"] = L["Outline"] or "Outline",
+                    ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
+                    ["MONOCHROME"] = "MONOCHROME",
+                },
+                get = function()
+                    local db = GetCastbarDB(uKey)
+                    local general = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General
+                    return db.fontOutline or (general and general.fontOutline) or "OUTLINE"
+                end,
+                set = function(_, v)
+                    GetCastbarDB(uKey).fontOutline = v
+                    UpdateCastbar(uKey)
+                end,
+            },
             colorOnInterruptCD = (uKey ~= "player") and {
                 type = "toggle",
                 name = L["Color when Interrupt on Cooldown"],
@@ -536,13 +577,10 @@ function UpdateBar(unit)
 
     if bar.Spark then bar.Spark:SetSize(20, finalHeight * 2.2) end
 
-    -- Real-time Font Update
-    local LSM = LibStub("LibSharedMedia-3.0")
-    local general = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General
-    local font = (LSM and LSM:Fetch("font", (general and general.font) or "Friz Quadrata TT")) or [[Fonts\FRIZQT__.TTF]]
-    local fontSize = db.fontSize or 12
-    if bar.Text then bar.Text:SetFont(font, fontSize, "OUTLINE") end
-    if bar.TimeFS then bar.TimeFS:SetFont(font, fontSize, "OUTLINE") end
+    -- Real-time Media Update
+    if ns.UpdateCastBarMedia then
+        ns.UpdateCastBarMedia(bar)
+    end
 
     -- Real-time Edit Mode Color & Preview Update
     if bar.isInEditMode then

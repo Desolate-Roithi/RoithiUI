@@ -45,7 +45,9 @@ local function SharesWidgetPool(tracker)
 end
 
 function ObjectivesMod:GetFontPath()
-    local f = self.db and self.db.font or "Interface\\AddOns\\RoithiUI\\Media\\Fonts\\Expressway.ttf"
+    local f = (self.db and self.db.font)
+        or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
+        or "Interface\\AddOns\\RoithiUI\\Media\\Fonts\\Expressway.ttf"
     if LSM and LSM:Fetch("font", f, true) then
         return LSM:Fetch("font", f)
     end
@@ -84,6 +86,28 @@ function ObjectivesMod:OnEnable()
     self:RegisterEvent("QUEST_TURNED_IN", "OnQuestLogUpdate")
     self:RegisterEvent("QUEST_REMOVED", "OnQuestLogUpdate")
     self:RegisterEvent("QUEST_WATCH_UPDATE", "OnQuestLogUpdate")
+    self:RegisterEvent("SCENARIO_UPDATE", "OnScenarioUpdate")
+    self:RegisterEvent("SCENARIO_CRITERIA_UPDATE", "OnScenarioUpdate")
+    self:RegisterEvent("ACTIVE_DELVE_DATA_UPDATE", "OnScenarioUpdate")
+    self:RegisterEvent("SCENARIO_CRITERIA_SHOW_STATE_UPDATE", "OnScenarioUpdate")
+end
+
+function ObjectivesMod:OnScenarioUpdate()
+    local scn = _G.ScenarioObjectiveTracker
+    if scn then
+        self:AlignEventTracker(scn)
+        local otf = _G.ObjectiveTrackerFrame
+        local targetWidth = (otf and otf.GetWidth and otf:GetWidth())
+        if targetWidth and targetWidth > 50 then
+            if scn.SetWidth then scn:SetWidth(targetWidth) end
+            if scn.Header and scn.Header.SetWidth then scn.Header:SetWidth(targetWidth) end
+        end
+        if scn.Header then
+            self:EnsureAccentDivider(scn.Header)
+            self:SkinHeader(scn.Header)
+        end
+        self:UpdateAllDividers()
+    end
 end
 
 function ObjectivesMod:OnRegenEnabled()
@@ -137,6 +161,10 @@ function ObjectivesMod:OnZoneChanged()
     self:ApplyPosition()
     self:CheckAutoCollapse()
     UpdateQuestLogData()
+    local scn = _G.ScenarioObjectiveTracker
+    if scn then self:AlignEventTracker(scn) end
+    local uiw = _G.UIWidgetObjectiveTracker
+    if uiw then self:AlignEventTracker(uiw) end
     self:RefreshTrackers()
 end
 
@@ -313,6 +341,9 @@ function ObjectivesMod:ApplyPosition()
                 local tracker = _G[trackerName]
                 if tracker then
                     tracker.blockOffsetX = 4
+                    if SharesWidgetPool(tracker) then
+                        self:AlignEventTracker(tracker)
+                    end
                     if tracker.SetWidth then tracker:SetWidth(mmWidth) end
                     if tracker.Header and tracker.Header.SetWidth then
                         tracker.Header:SetWidth(mmWidth)
@@ -342,6 +373,9 @@ function ObjectivesMod:ApplyPosition()
                 local tracker = _G[trackerName]
                 if tracker then
                     tracker.blockOffsetX = 4
+                    if SharesWidgetPool(tracker) then
+                        self:AlignEventTracker(tracker)
+                    end
                     if tracker.SetWidth then tracker:SetWidth(customWidth) end
                     if tracker.Header and tracker.Header.SetWidth then
                         tracker.Header:SetWidth(customWidth)
@@ -826,6 +860,190 @@ function ForEachBlockLine(block, func)
     end
 end
 
+function ObjectivesMod:AlignWidgetContainer(wc, parentBlock, topOffsetY)
+    if not wc or not parentBlock then return end
+
+    local otf = _G.ObjectiveTrackerFrame
+    local trackerWidth = (otf and otf.GetWidth and otf:GetWidth()) or 235
+    if trackerWidth < 50 then trackerWidth = 235 end
+    local yOffset = topOffsetY or 0
+
+    if not self.settingWidgetContainerPoint then
+        self.settingWidgetContainerPoint = true
+        wc:ClearAllPoints()
+        wc:SetPoint("TOPLEFT", parentBlock, "TOPLEFT", 0, yOffset)
+        self.settingWidgetContainerPoint = nil
+    end
+
+    wc.verticalAnchorPoint = "TOPLEFT"
+    wc.verticalRelativePoint = "TOPLEFT"
+    wc.horizontalAnchorPoint = "TOPLEFT"
+    wc.horizontalRelativePoint = "TOPLEFT"
+
+    local function FitWidgets()
+        if not wc.widgetFrames then return end
+        local maxW = trackerWidth - 4
+        for _, widgetFrame in pairs(wc.widgetFrames) do
+            if widgetFrame and widgetFrame.GetWidth then
+                local w = widgetFrame:GetWidth()
+                if w and w > 0 then
+                    local scale = math.min(1, maxW / w)
+                    if scale < 0.99 then
+                        widgetFrame:SetScale(scale)
+                    else
+                        widgetFrame:SetScale(1)
+                    end
+                end
+                if widgetFrame.ClearAllPoints and widgetFrame.SetPoint then
+                    widgetFrame:ClearAllPoints()
+                    widgetFrame:SetPoint("TOPLEFT", wc, "TOPLEFT", 0, 0)
+                end
+            end
+        end
+    end
+
+    FitWidgets()
+
+    if not wc.roithiFitHooked and hooksecurefunc then
+        wc.roithiFitHooked = true
+        hooksecurefunc(wc, "Layout", function()
+            FitWidgets()
+        end)
+    end
+end
+
+function ObjectivesMod:AlignEventTracker(tracker)
+    if not tracker then return end
+    tracker.leftMargin = 0
+    tracker.blockOffsetX = 4
+
+    if tracker == _G.ScenarioObjectiveTracker then
+        if tracker.ObjectivesBlock then
+            tracker.ObjectivesBlock.offsetX = 4
+        end
+        if tracker.StageBlock then
+            tracker.StageBlock.offsetX = 0
+            if tracker.StageBlock.WidgetContainer then
+                self:AlignWidgetContainer(tracker.StageBlock.WidgetContainer, tracker.StageBlock, 0)
+            end
+        end
+        if tracker.TopWidgetContainerBlock then
+            tracker.TopWidgetContainerBlock.offsetX = 0
+            if tracker.TopWidgetContainerBlock.WidgetContainer then
+                self:AlignWidgetContainer(tracker.TopWidgetContainerBlock.WidgetContainer, tracker.TopWidgetContainerBlock, -7)
+            end
+        end
+        if tracker.BottomWidgetContainerBlock then
+            tracker.BottomWidgetContainerBlock.offsetX = 0
+            if tracker.BottomWidgetContainerBlock.WidgetContainer then
+                self:AlignWidgetContainer(tracker.BottomWidgetContainerBlock.WidgetContainer, tracker.BottomWidgetContainerBlock, -15)
+            end
+        end
+        if tracker.Header then
+            if not self.settingHeaderPoint then
+                self.settingHeaderPoint = true
+                tracker.Header:ClearAllPoints()
+                tracker.Header:SetPoint("TOPLEFT", tracker, "TOPLEFT", 0, 0)
+                self.settingHeaderPoint = nil
+            end
+            if not tracker.Header.roithiAlignHooked and hooksecurefunc then
+                tracker.Header.roithiAlignHooked = true
+                hooksecurefunc(tracker.Header, "SetPoint", function(hdr, point, _, _, x, y)
+                    if not self.settingHeaderPoint then
+                        if point ~= "TOPLEFT" or x ~= 0 or y ~= 0 then
+                            self.settingHeaderPoint = true
+                            hdr:ClearAllPoints()
+                            hdr:SetPoint("TOPLEFT", tracker, "TOPLEFT", 0, 0)
+                            self.settingHeaderPoint = nil
+                        end
+                    end
+                end)
+            end
+        end
+        if not tracker.roithiPointHooked and hooksecurefunc then
+            tracker.roithiPointHooked = true
+            hooksecurefunc(tracker, "SetPoint", function(tr, point, relTo, relPoint, x, y)
+                if not self.settingTrackerPoint and point == "LEFT" and x == -20 then
+                    self.settingTrackerPoint = true
+                    tr:SetPoint(point, relTo, relPoint, 0, y)
+                    self.settingTrackerPoint = nil
+                end
+            end)
+        end
+        if not tracker.roithiAnchorHooked and hooksecurefunc then
+            tracker.roithiAnchorHooked = true
+            hooksecurefunc(tracker, "AnchorBlock", function(tr, block)
+                if not block then return end
+                block.offsetX = 4
+                if block == tr.ObjectivesBlock then
+                    block:SetPoint("LEFT", tr, "LEFT", 4, 0)
+                elseif block == tr.StageBlock and tr.StageBlock.WidgetContainer then
+                    block:SetPoint("LEFT", tr, "LEFT", 0, 0)
+                    self:AlignWidgetContainer(tr.StageBlock.WidgetContainer, tr.StageBlock, 0)
+                elseif block == tr.TopWidgetContainerBlock and tr.TopWidgetContainerBlock.WidgetContainer then
+                    block:SetPoint("LEFT", tr, "LEFT", 0, 0)
+                    self:AlignWidgetContainer(tr.TopWidgetContainerBlock.WidgetContainer, tr.TopWidgetContainerBlock, -7)
+                elseif block == tr.BottomWidgetContainerBlock and tr.BottomWidgetContainerBlock.WidgetContainer then
+                    block:SetPoint("LEFT", tr, "LEFT", 0, 0)
+                    self:AlignWidgetContainer(tr.BottomWidgetContainerBlock.WidgetContainer, tr.BottomWidgetContainerBlock, -15)
+                end
+            end)
+        end
+    elseif tracker == _G.UIWidgetObjectiveTracker then
+        if tracker.Block then
+            tracker.Block.fixedWidth = nil
+            tracker.Block.offsetX = 0
+            if _G.ObjectiveTrackerUIWidgetContainer then
+                self:AlignWidgetContainer(_G.ObjectiveTrackerUIWidgetContainer, tracker.Block, 0)
+            end
+        end
+        if tracker.Header then
+            if not self.settingHeaderPoint then
+                self.settingHeaderPoint = true
+                tracker.Header:ClearAllPoints()
+                tracker.Header:SetPoint("TOPLEFT", tracker, "TOPLEFT", 0, 0)
+                self.settingHeaderPoint = nil
+            end
+            if not tracker.Header.roithiAlignHooked and hooksecurefunc then
+                tracker.Header.roithiAlignHooked = true
+                hooksecurefunc(tracker.Header, "SetPoint", function(hdr, point, _, _, x, y)
+                    if not self.settingHeaderPoint then
+                        if point ~= "TOPLEFT" or x ~= 0 or y ~= 0 then
+                            self.settingHeaderPoint = true
+                            hdr:ClearAllPoints()
+                            hdr:SetPoint("TOPLEFT", tracker, "TOPLEFT", 0, 0)
+                            self.settingHeaderPoint = nil
+                        end
+                    end
+                end)
+            end
+        end
+        if not tracker.roithiAnchorHooked and hooksecurefunc then
+            tracker.roithiAnchorHooked = true
+            hooksecurefunc(tracker, "AnchorBlock", function(tr, block)
+                if block and block == tr.Block then
+                    block:SetPoint("LEFT", tr, "LEFT", 0, 0)
+                    if _G.ObjectiveTrackerUIWidgetContainer then
+                        self:AlignWidgetContainer(_G.ObjectiveTrackerUIWidgetContainer, tr.Block, 0)
+                    end
+                end
+            end)
+        end
+    end
+
+    if not self.settingTrackerPoint and tracker.GetNumPoints and tracker.GetPoint and tracker.SetPoint then
+        for i = 1, tracker:GetNumPoints() do
+            local point, relativeTo, relativePoint, x, y = tracker:GetPoint(i)
+            if point == "LEFT" and x == -20 then
+                self.settingTrackerPoint = true
+                tracker:SetPoint(point, relativeTo, relativePoint, 0, y)
+                self.settingTrackerPoint = nil
+                break
+            end
+        end
+    end
+end
+
 function ObjectivesMod:HookTracker(tracker)
     if not tracker or hookedTrackers[tracker] then return end
     hookedTrackers[tracker] = true
@@ -833,6 +1051,10 @@ function ObjectivesMod:HookTracker(tracker)
     tracker.blockOffsetX = 4
     if self.db and self.db.hoverObjectiveText then
         tracker.fromBlockOffsetY = -4
+    end
+
+    if SharesWidgetPool(tracker) then
+        self:AlignEventTracker(tracker)
     end
 
     if tracker.SetCollapsed and not self:IsHooked(tracker, "SetCollapsed") then
@@ -855,6 +1077,35 @@ function ObjectivesMod:HookTracker(tracker)
                 end)
             end)
         end
+    end
+
+    -- Hook update via lightweight dirty flag for ALL trackers
+    local isDirty = false
+    if tracker.Update and not self:IsHooked(tracker, "Update") then
+        self:SecureHook(tracker, "Update", function()
+            if isDirty then return end
+            isDirty = true
+            C_Timer.After(0, function()
+                isDirty = false
+                if SharesWidgetPool(tracker) then
+                    self:AlignEventTracker(tracker)
+                end
+                local otf = _G.ObjectiveTrackerFrame
+                local targetWidth = (otf and otf.GetWidth and otf:GetWidth())
+                if targetWidth and targetWidth > 50 then
+                    if tracker.SetWidth then tracker:SetWidth(targetWidth) end
+                    if tracker.Header and tracker.Header.SetWidth then
+                        tracker.Header:SetWidth(targetWidth)
+                    end
+                end
+                if tracker.Header then
+                    self:EnsureAccentDivider(tracker.Header)
+                    self:SkinHeader(tracker.Header)
+                end
+                self:SkinExistingBlocks(tracker)
+                self:UpdateAllDividers()
+            end)
+        end)
     end
 
     -- If this tracker shares the UI-widget pool (Scenario / UIWidget), stop here!
@@ -906,32 +1157,6 @@ function ObjectivesMod:HookTracker(tracker)
                 skinnedBlocks[block] = nil
                 self:SkinBlock(block)
             end
-        end)
-    end
-
-    -- Hook update via lightweight dirty flag
-    local isDirty = false
-    if tracker.Update then
-        self:SecureHook(tracker, "Update", function()
-            if isDirty then return end
-            isDirty = true
-            C_Timer.After(0, function()
-                isDirty = false
-                local otf = _G.ObjectiveTrackerFrame
-                local targetWidth = (otf and otf.GetWidth and otf:GetWidth())
-                if targetWidth and targetWidth > 50 then
-                    if tracker.SetWidth then tracker:SetWidth(targetWidth) end
-                    if tracker.Header and tracker.Header.SetWidth then
-                        tracker.Header:SetWidth(targetWidth)
-                    end
-                end
-                if tracker.Header then
-                    self:EnsureAccentDivider(tracker.Header)
-                    self:SkinHeader(tracker.Header)
-                end
-                self:SkinExistingBlocks(tracker)
-                self:UpdateAllDividers()
-            end)
         end)
     end
 end
@@ -1858,6 +2083,9 @@ function ObjectivesMod:SkinAllExisting()
         if tracker then
             tracker.blockOffsetX = 4
             tracker.fromHeaderOffsetY = -10
+            if SharesWidgetPool(tracker) then
+                self:AlignEventTracker(tracker)
+            end
             if tracker.Header then
                 self:SkinHeader(tracker.Header)
             end
@@ -1898,3 +2126,7 @@ function ObjectivesMod:RefreshSettings()
     end
 end
 ObjectivesMod.RefreshProfile = ObjectivesMod.RefreshSettings
+
+function ObjectivesMod:UpdateFonts()
+    self:SkinAllExisting()
+end

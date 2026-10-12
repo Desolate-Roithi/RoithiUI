@@ -20,7 +20,9 @@ local skinnedEditBoxes = setmetatable({}, { __mode = "k" })
 local tabTextures = setmetatable({}, { __mode = "k" })
 
 function ChatMod:GetFontPath()
-    local f = self.db and self.db.font or "Interface\\AddOns\\RoithiUI\\Media\\Fonts\\Expressway.ttf"
+    local f = (self.db and self.db.font)
+        or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
+        or "Interface\\AddOns\\RoithiUI\\Media\\Fonts\\Expressway.ttf"
     if LSM and LSM:Fetch("font", f, true) then
         return LSM:Fetch("font", f)
     end
@@ -1996,4 +1998,8 @@ function ChatMod:RefreshSettings()
     end
 end
 ChatMod.RefreshProfile = ChatMod.RefreshSettings
+
+function ChatMod:UpdateFonts()
+    self:SkinAllChatFrames()
+end
 

@@ -22,7 +22,7 @@ local BAR_CONFIGS = {
 AB.BAR_CONFIGS = BAR_CONFIGS
 
 local BLIZZARD_BAR_FRAMES = {
-    bar1 = { "MainActionBar", "MainMenuBar" },
+    bar1 = { "MainActionBar", "MainMenuBar", "OverrideActionBar" },
     bar2 = { "MultiBarBottomLeft" },
     bar3 = { "MultiBarBottomRight" },
     bar4 = { "MultiBarRight" },
@@ -35,6 +35,7 @@ local BLIZZARD_BAR_FRAMES = {
     extraAction = { "ExtraActionBarFrame" },
     zoneAction = { "ZoneAbilityFrame" },
 }
+AB.BLIZZARD_BAR_FRAMES = BLIZZARD_BAR_FRAMES
 
 local function IsRangeIndicator(text)
     if not text or text == "" then return false end
@@ -556,6 +557,8 @@ function AB:SetupBars()
         self.mainActionBarHooked = true
     end
 
+    self:ProtectOverrideActionBar()
+
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.editModeRegistered then
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
             self:OnEditModeEnter()
@@ -669,7 +672,14 @@ function AB:SetupBars()
                 if (not self.IsEnabled or self:IsEnabled()) and actionButton and actionButton.SpellActivationAlert then
                     local w, h = actionButton:GetSize()
                     if w and h and w > 0 and h > 0 then
-                        actionButton.SpellActivationAlert:SetSize(w, h)
+                        actionButton.SpellActivationAlert:SetSize(w * 1.4, h * 1.4)
+                        if actionButton.SpellActivationAlert.ClearAllPoints and actionButton.SpellActivationAlert.SetPoint then
+                            actionButton.SpellActivationAlert:ClearAllPoints()
+                            actionButton.SpellActivationAlert:SetPoint("CENTER", actionButton, "CENTER", 0, 0)
+                        end
+                    end
+                    if actionButton.SpellActivationAlert.SetFrameLevel and actionButton.GetFrameLevel then
+                        actionButton.SpellActivationAlert:SetFrameLevel(actionButton:GetFrameLevel() + 5)
                     end
                 end
             end)
@@ -1729,13 +1739,34 @@ function AB:DisableActionPageSwitching()
             local pagingDisabled = self.db and (self.db.disableBarPaging ~= nil and self.db.disableBarPaging or (self.db.general and self.db.general.disableBarPaging))
             if pagingDisabled ~= false and page ~= 1 then
                 if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
-                    isResettingActionBarPage = true
-                    _G.ChangeActionBarPage(1)
-                    isResettingActionBarPage = false
+                    local hasSpecialBar = _G.C_ActionBar and (
+                        (_G.C_ActionBar.HasOverrideActionBar and _G.C_ActionBar.HasOverrideActionBar()) or
+                        (_G.C_ActionBar.HasVehicleActionBar and _G.C_ActionBar.HasVehicleActionBar()) or
+                        (_G.C_ActionBar.HasBonusActionBar and _G.C_ActionBar.HasBonusActionBar()) or
+                        (_G.C_ActionBar.HasTempShapeshiftActionBar and _G.C_ActionBar.HasTempShapeshiftActionBar())
+                    )
+                    if not hasSpecialBar then
+                        isResettingActionBarPage = true
+                        _G.ChangeActionBarPage(1)
+                        isResettingActionBarPage = false
+                    end
                 end
             end
         end)
         self.pageSwitchHooked = true
+    end
+end
+
+function AB:ProtectOverrideActionBar()
+    if _G.OverrideActionBar and _G.OverrideActionBar.slideOut and not self.overrideSlideOutHooked and hooksecurefunc then
+        hooksecurefunc(_G.OverrideActionBar.slideOut, "Play", function()
+            if _G.InCombatLockdown and _G.InCombatLockdown() then
+                if _G.OverrideActionBar then
+                    _G.OverrideActionBar.hideOnFinish = false
+                end
+            end
+        end)
+        self.overrideSlideOutHooked = true
     end
 end
 

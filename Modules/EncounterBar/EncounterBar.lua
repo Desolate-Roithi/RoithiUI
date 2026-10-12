@@ -526,8 +526,14 @@ function EB:OnInitialize()
     bg:SetVertexColor(0.1, 0.1, 0.1)
     encounterBar.bg = bg
 
+    local fontName = (db and db.font)
+        or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
+        or "Roithi Thick"
+    local fontOutline = (db and db.fontOutline)
+        or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline)
+        or "OUTLINE"
     local text = encounterBar:CreateFontString(nil, "OVERLAY")
-    LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", db.fontSize, "OUTLINE")
+    LibRoithi.mixins:SetFont(text, fontName, db.fontSize or 12, fontOutline)
     text:SetPoint("CENTER", encounterBar, "CENTER", 0, 0)
     encounterBar.Text = text
 
@@ -589,8 +595,14 @@ function EB:RefreshProfile()
         if self.db.texture and LSM then
             bar:SetStatusBarTexture(LSM:Fetch("statusbar", self.db.texture) or "Interface\\TargetingFrame\\UI-StatusBar")
         end
-        if bar.Text and self.db.fontSize and LibRoithi and LibRoithi.mixins then
-            LibRoithi.mixins:SetFont(bar.Text, "Friz Quadrata TT", self.db.fontSize, "OUTLINE")
+        if bar.Text and LibRoithi and LibRoithi.mixins then
+            local fontName = (self.db and self.db.font)
+                or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
+                or "Roithi Thick"
+            local fontOutline = (self.db and self.db.fontOutline)
+                or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline)
+                or "OUTLINE"
+            LibRoithi.mixins:SetFont(bar.Text, fontName, self.db.fontSize or 12, fontOutline)
         end
         local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
         if LEM and LEM.RefreshFrameSettings then
@@ -599,4 +611,8 @@ function EB:RefreshProfile()
     end
 end
 EB.RefreshSettings = EB.RefreshProfile
+
+function EB:UpdateFonts()
+    if self.UpdateBarLayout then self:UpdateBarLayout() end
+end
 

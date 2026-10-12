@@ -204,7 +204,10 @@ function RoithiUI.Config.GetCustomTagsOptions()
                         name = "Font",
                         desc = "Leave empty to use general Unit Frame font.",
                         order = 2.4,
-                        values = AceGUIWidgetLSMlists.font,
+                        values = function()
+                            local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+                            return (LSM and LSM:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                        end,
                         get = function() return tagConfig.font end,
                         set = function(_, v)
                             tagConfig.font = v

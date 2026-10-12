@@ -3,15 +3,52 @@ if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local LSM = LibStub("LibSharedMedia-3.0")
 
+function ns.GetCastbarFontInfo(unit)
+    local profile = RoithiUI and RoithiUI.db and RoithiUI.db.profile
+    local general = profile and profile.General
+    local cbDB = profile and profile.Castbar and unit and profile.Castbar[unit]
+    local fontName = (cbDB and cbDB.font)
+        or (general and general.castbarFont)
+        or (general and general.font)
+        or "Roithi Thick"
+    local fontOutline = (cbDB and cbDB.fontOutline)
+        or (general and general.fontOutline)
+        or "OUTLINE"
+    local fontSize = (cbDB and cbDB.fontSize) or 12
+    local fontPath = nil
+    if fontName and (fontName:find("\\") or fontName:find("/")) then
+        fontPath = fontName
+    elseif LSM and fontName then
+        fontPath = LSM:Fetch("font", fontName)
+    end
+    if not fontPath then
+        fontPath = (LSM and LSM:Fetch("font", "Roithi Thick"))
+            or (LSM and LSM:Fetch("font", "Friz Quadrata TT"))
+            or [[Fonts\FRIZQT__.TTF]]
+    end
+    return fontPath, fontSize, fontOutline, fontName
+end
+
+function ns.GetCastbarTexture(unit)
+    local profile = RoithiUI and RoithiUI.db and RoithiUI.db.profile
+    local general = profile and profile.General
+    local cbDB = profile and profile.Castbar and unit and profile.Castbar[unit]
+    local texName = (cbDB and cbDB.barTexture)
+        or (general and general.castbarBar)
+        or (general and general.barTexture)
+        or "Solid"
+    return (LSM and LSM:Fetch("statusbar", texName))
+        or "Interface\\TargetingFrame\\UI-StatusBar"
+end
+
 -- ----------------------------------------------------------------------------
 -- 1. Bar Creation
 -- ----------------------------------------------------------------------------
 function ns.CreateCastBar(unit)
     local bar = CreateFrame("StatusBar", "MidnightCastBar_" .. unit, UIParent)
-    local profile = RoithiUI.db and RoithiUI.db.profile
-    local general = profile and profile.General
-    local texture = LSM:Fetch("statusbar", (general and general.barTexture) or "Solid") or
-        "Interface\\TargetingFrame\\UI-StatusBar"
+    bar.unit = unit
+
+    local texture = ns.GetCastbarTexture(unit)
     bar:SetStatusBarTexture(texture)
 
     local bg = bar:CreateTexture(nil, "BACKGROUND")
@@ -22,16 +59,16 @@ function ns.CreateCastBar(unit)
     icon:SetTexCoord(0.1, 0.9, 0.1, 0.9) -- Square crop/zoom
     bar.Icon = icon
 
-    local font = LSM:Fetch("font", (general and general.font) or "Friz Quadrata TT") or [[Fonts\FRIZQT__.TTF]]
+    local fontPath, fontSize, fontOutline = ns.GetCastbarFontInfo(unit)
 
     -- 1. Create sub-widgets first to allow relative anchoring
     local timeText = bar:CreateFontString(nil, "OVERLAY")
-    timeText:SetFont(font, 12, "OUTLINE")
+    timeText:SetFont(fontPath, fontSize, fontOutline)
     timeText:SetPoint("RIGHT", -4, 0)
     bar.TimeFS = timeText
 
     local text = bar:CreateFontString(nil, "OVERLAY");
-    text:SetFont(font, 12, "OUTLINE")
+    text:SetFont(fontPath, fontSize, fontOutline)
     text:SetPoint("LEFT", 4, 0);                      -- Align Left with padding
     text:SetPoint("RIGHT", bar.TimeFS, "LEFT", -4, 0) -- Now valid as TimeFS exists
     bar.Text = text
@@ -55,25 +92,24 @@ function ns.CreateCastBar(unit)
     latency:Hide()
     bar.Latency = latency
 
-    bar.unit = unit; bar:Hide()
+    bar:Hide()
     bar:SetClampedToScreen(true)
     return bar
 end
 
 function ns.UpdateCastBarMedia(bar)
     if not bar then return end
-    local profile = RoithiUI.db and RoithiUI.db.profile
-    local general = profile and profile.General
-    local texture = LSM:Fetch("statusbar", (general and general.barTexture) or "Solid") or
-        "Interface\\TargetingFrame\\UI-StatusBar"
-    bar:SetStatusBarTexture(texture) -- Keep this line as it's essential for setting the texture
-    local font = LSM:Fetch("font", (general and general.font) or "Friz Quadrata TT") or [[Fonts\FRIZQT__.TTF]]
-    -- We assume standard size 12 here, or we could fetch from DB if we added size option
+    local unit = bar.unit
+    local texture = ns.GetCastbarTexture(unit)
+    bar:SetStatusBarTexture(texture)
+
+    local fontPath, fontSize, fontOutline = ns.GetCastbarFontInfo(unit)
     if bar.Text then
-        bar.Text:SetFont(font, 12, "OUTLINE")
+        bar.Text:SetFont(fontPath, fontSize, fontOutline)
     end
-    -- Update Font for Time string
-    if bar.TimeFS then bar.TimeFS:SetFont(font, 12, "OUTLINE") end
+    if bar.TimeFS then
+        bar.TimeFS:SetFont(fontPath, fontSize, fontOutline)
+    end
 end
 
 function ns.ClampCastbarCoordinates(bar, point, x, y, db)

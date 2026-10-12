@@ -125,7 +125,10 @@ local function CreateIconViewerGroup(viewerKey, viewerName, defaultSize, orderNu
                     local v = CDM.db.viewers and CDM.db.viewers[viewerKey]
                     return not (v and v.overrideGlobal)
                 end,
-                values = AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font or {},
+                values = function()
+                    local LSM3 = LibStub and LibStub("LibSharedMedia-3.0", true)
+                    return (LSM3 and LSM3:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                end,
                 get = function()
                     local v = CDM.db.viewers and CDM.db.viewers[viewerKey]
                     if v and v.overrideGlobal then return v.font or CDM.db.font or "Roithi Thick" end
@@ -403,7 +406,10 @@ function CDM:GetOptions()
                         dialogControl = "LSM30_Font",
                         name = L["Font"] or "Font",
                         order = 5,
-                        values = AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font or {},
+                        values = function()
+                            local LSM3 = LibStub and LibStub("LibSharedMedia-3.0", true)
+                            return (LSM3 and LSM3:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                        end,
                         get = function() return self.db.font or "Roithi Thick" end,
                         set = function(_, val)
                             self.db.font = val
@@ -760,7 +766,10 @@ function CDM:GetOptions()
                                     local v = self.db.viewers and self.db.viewers.BuffBar
                                     return not (v and v.overrideGlobal)
                                 end,
-                                values = AceGUIWidgetLSMlists and AceGUIWidgetLSMlists.font or {},
+                                values = function()
+                                    local LSM3 = LibStub and LibStub("LibSharedMedia-3.0", true)
+                                    return (LSM3 and LSM3:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                                end,
                                 get = function()
                                     local v = self.db.viewers and self.db.viewers.BuffBar
                                     if v and v.overrideGlobal then return v.font or self.db.font or "Roithi Thick" end

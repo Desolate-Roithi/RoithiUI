@@ -46,10 +46,17 @@ end
 -- @param size The size of the font
 -- @param flags Optional flags (OUTLINE, MONOCHROME, etc.)
 function lib.mixins:SetFont(obj, fontName, size, flags)
-    if not obj then return end
-    local fontPath = (LSM and LSM:Fetch("font", fontName or "Roithi Thick"))
-        or (LSM and LSM:Fetch("font", "Friz Quadrata TT"))
-        or "Fonts\\FRIZQT__.TTF"
+    local fontPath = nil
+    if fontName and (fontName:find("\\") or fontName:find("/")) then
+        fontPath = fontName
+    elseif LSM and fontName then
+        fontPath = LSM:Fetch("font", fontName)
+    end
+    if not fontPath then
+        fontPath = (LSM and LSM:Fetch("font", "Roithi Thick"))
+            or (LSM and LSM:Fetch("font", "Friz Quadrata TT"))
+            or "Fonts\\FRIZQT__.TTF"
+    end
     local fontFlags = flags
     if fontFlags == "NONE" or fontFlags == "none" then
         fontFlags = ""

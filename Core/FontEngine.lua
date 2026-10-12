@@ -12,6 +12,9 @@ RoithiUI.FontEngine = FontEngine
 local DEFAULT_FALLBACK_FONT = "Fonts\\FRIZQT__.TTF"
 
 local function ResolveLSMFont(fontName)
+    if fontName and (fontName:find("\\") or fontName:find("/")) then
+        return fontName
+    end
     if LSM then
         if fontName then
             local fetched = LSM:Fetch("font", fontName)
@@ -19,9 +22,6 @@ local function ResolveLSMFont(fontName)
         end
         local thick = LSM:Fetch("font", "Roithi Thick")
         if thick then return thick end
-    end
-    if fontName and (fontName:find("\\") or fontName:find("/")) then
-        return fontName
     end
     return DEFAULT_FALLBACK_FONT
 end
@@ -80,8 +80,14 @@ function RoithiUI:TriggerFontUpdate()
     if self.SendMessage then
         self:SendMessage("ROITHIUI_FONT_CHANGED")
     end
+    if ns and ns.RefreshAllCastbars then
+        pcall(ns.RefreshAllCastbars)
+    end
+    if ns and ns.RefreshAllUnitFrames then
+        pcall(ns.RefreshAllUnitFrames)
+    end
     if self.modules then
-        for name, module in self:IterateModules() do
+        for _, module in self:IterateModules() do
             if module.UpdateFonts then
                 pcall(module.UpdateFonts, module)
             elseif module.StyleAll then

@@ -328,7 +328,10 @@ function ChatMod:GetOptions()
                         dialogControl = "LSM30_Font",
                         name = L["Font"] or "Font",
                         order = 1,
-                        values = _G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font or {},
+                        values = function()
+                            local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+                            return (LSM and LSM:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                        end,
                         get = function() return self.db.font or "Expressway" end,
                         set = function(_, val)
                             self.db.font = val

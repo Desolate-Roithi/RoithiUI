@@ -524,8 +524,8 @@ function MenuMod:StyleMicroButton(btn)
     end
     if btn.Portrait then
         btn.Portrait:ClearAllPoints()
-        btn.Portrait:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
-        btn.Portrait:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+        btn.Portrait:SetPoint("TOPLEFT", btn, "TOPLEFT", 3, -3)
+        btn.Portrait:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
         if btn.Portrait.SetTexCoord then
             btn.Portrait:SetTexCoord(0.18, 0.82, 0.18, 0.82)
         end
