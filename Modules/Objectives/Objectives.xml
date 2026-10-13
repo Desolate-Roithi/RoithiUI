@@ -1,5 +1,8 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
     <Script file="Defaults.lua"/>
     <Script file="Objectives.lua"/>
+    <Script file="Skinning.lua"/>
+    <Script file="Quests.lua"/>
+    <Script file="Scenario.lua"/>
     <Script file="Options.lua"/>
 </Ui>

@@ -292,6 +292,54 @@ function ObjectivesMod:GetOptions()
                             self:SkinAllExisting()
                         end,
                     },
+                    scenarioStageHeight = {
+                        type = "range",
+                        name = L["Scenario Stage Height"] or "Scenario Stage Height",
+                        desc = L["Custom height in pixels for the scenario stage block when text-only (e.g. Awakening) or toast background is active."] or "Custom height in pixels for the scenario stage block.",
+                        order = 16,
+                        min = 16,
+                        max = 100,
+                        step = 1,
+                        get = function() return self.db.scenarioStageHeight or 63 end,
+                        set = function(info, val)
+                            self.db.scenarioStageHeight = val
+                            if self.AlignScenarioElements then
+                                self:AlignScenarioElements()
+                            end
+                        end,
+                    },
+                    scenarioStageWidgetHeight = {
+                        type = "range",
+                        name = L["Scenario Stage Widget Height"] or "Scenario Stage Widget Height",
+                        desc = L["Fallback height in pixels for scenario stage blocks when a widget is present (e.g. Horrific Visions, Delves, Torghast)."] or "Fallback height in pixels for scenario stage blocks when a widget is present.",
+                        order = 17,
+                        min = 50,
+                        max = 140,
+                        step = 1,
+                        get = function() return self.db.scenarioStageWidgetHeight or 83 end,
+                        set = function(info, val)
+                            self.db.scenarioStageWidgetHeight = val
+                            if self.AlignScenarioElements then
+                                self:AlignScenarioElements()
+                            end
+                        end,
+                    },
+                    scenarioStageXOffset = {
+                        type = "range",
+                        name = L["Scenario Stage X-Offset"] or "Scenario Stage X-Offset",
+                        desc = L["Horizontal offset in pixels for fine-tuning the scenario stage block position."] or "Horizontal offset in pixels for fine-tuning the scenario stage block position.",
+                        order = 18,
+                        min = -50,
+                        max = 50,
+                        step = 1,
+                        get = function() return (self.db and self.db.scenarioStageXOffset) or 0 end,
+                        set = function(info, val)
+                            self.db.scenarioStageXOffset = val
+                            if self.AlignScenarioElements then
+                                self:AlignScenarioElements()
+                            end
+                        end,
+                    },
                 },
             },
             typography = {

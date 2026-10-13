@@ -34,48 +34,33 @@ local WIDGET_BLACKLIST = {
 -- Blizzard PlayerPowerBarAlt toggle helper
 -- Suppresses the native bar while our custom one is active.
 -- ─────────────────────────────────────────────────────────────────────────────
+local showHooked = false
+
 local function ToggleBlizzard(enableCustom)
     if not PlayerPowerBarAlt then return end
 
     if enableCustom then
         PlayerPowerBarAlt:UnregisterEvent("UNIT_POWER_BAR_SHOW")
+        PlayerPowerBarAlt:UnregisterEvent("UNIT_POWER_BAR_HIDE")
+        PlayerPowerBarAlt:UnregisterEvent("PLAYER_ENTERING_WORLD")
         PlayerPowerBarAlt:Hide()
 
-        -- Prevent OnUpdate crash by removing the script entirely
-        if not PlayerPowerBarAlt.RoithiOriginalOnUpdate then
-            PlayerPowerBarAlt.RoithiOriginalOnUpdate = PlayerPowerBarAlt:GetScript("OnUpdate")
-        end
-        PlayerPowerBarAlt:SetScript("OnUpdate", nil)
-
-        -- Prevent re-showing via hook
-        if not PlayerPowerBarAlt.RoithiHookedShow then
+        -- Prevent re-showing via hook without mutating Blizzard frame table
+        if not showHooked then
+            showHooked = true
             hooksecurefunc(PlayerPowerBarAlt, "Show", function(self)
-                if RoithiUI.db.profile.EncounterResource and RoithiUI.db.profile.EncounterResource.enabled then
+                local db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.EncounterResource
+                if db and db.enabled then
                     self:Hide()
                 end
             end)
-            PlayerPowerBarAlt.RoithiHookedShow = true
         end
-
-        -- Suppression removed to fix missing overlays in Hide and Seek mode
     else
-        -- Restore Blizzard bar
-        if PlayerPowerBarAlt.RoithiOriginalOnUpdate then
-            PlayerPowerBarAlt:SetScript("OnUpdate", PlayerPowerBarAlt.RoithiOriginalOnUpdate)
-            PlayerPowerBarAlt.RoithiOriginalOnUpdate = nil
-        end
-
+        -- Restore Blizzard bar events natively without tainting execution context
         PlayerPowerBarAlt:RegisterEvent("UNIT_POWER_BAR_SHOW")
-        if UnitPowerBarID and UnitPowerBarID("player") then
-            -- FIX: Force initialization so 'barInfo' exists before OnUpdate runs
-            local onEvent = PlayerPowerBarAlt:GetScript("OnEvent")
-            if onEvent then
-                onEvent(PlayerPowerBarAlt, "UNIT_POWER_BAR_SHOW", "player")
-            end
-            if PlayerPowerBarAlt.barInfo then
-                PlayerPowerBarAlt:Show()
-            end
-        end
+        PlayerPowerBarAlt:RegisterEvent("UNIT_POWER_BAR_HIDE")
+        PlayerPowerBarAlt:RegisterEvent("PLAYER_ENTERING_WORLD")
+
         if UIWidgetPowerBarContainerFrame then
             UIWidgetPowerBarContainerFrame:Show()
         end

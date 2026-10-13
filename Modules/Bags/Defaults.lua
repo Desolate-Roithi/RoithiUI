@@ -37,6 +37,10 @@ local defaultSettings = {
     itemLevelAnchor = "TOPLEFT",
     itemLevelX = 2,
     itemLevelY = -2,
+    questIndicatorSize = 16,
+    questIndicatorAnchor = "BOTTOMLEFT",
+    questIndicatorX = 1,
+    questIndicatorY = 1,
 }
 
 local mod = RoithiUI and RoithiUI:GetModule("Bags", true)

@@ -39,7 +39,7 @@ if _G.WOW_PROJECT_ID == _G.WOW_PROJECT_CLASSIC or _G.KeyRingButton then
     table.insert(BagsMod.CATEGORIES, { id = CATEGORY_KEYRING, name = L["Keyring"] or "Keyring", order = 10 })
 end
 
-BagsMod.defaultSettings = {
+local filterDefaults = {
     enabled = true,
     slotSize = 36,
     spacing = 4,
@@ -64,6 +64,10 @@ BagsMod.defaultSettings = {
     itemLevelAnchor = "TOPLEFT",
     itemLevelX = 2,
     itemLevelY = -2,
+    questIndicatorSize = 16,
+    questIndicatorAnchor = "BOTTOMLEFT",
+    questIndicatorX = 1,
+    questIndicatorY = 1,
     activeCategory = CATEGORY_ALL,
     categoryOrder = {
         CATEGORY_ALL,
@@ -103,6 +107,16 @@ BagsMod.defaultSettings = {
         y = 10,
     },
 }
+
+if not BagsMod.defaultSettings then
+    BagsMod.defaultSettings = filterDefaults
+else
+    for k, v in pairs(filterDefaults) do
+        if BagsMod.defaultSettings[k] == nil then
+            BagsMod.defaultSettings[k] = v
+        end
+    end
+end
 
 function BagsMod:GetOrderedCategories()
     local order = (self.db and self.db.categoryOrder) or self.defaultSettings.categoryOrder

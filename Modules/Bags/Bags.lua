@@ -53,6 +53,18 @@ function BagsMod:OnInitialize()
     if self.db.itemLevelFontOutline == nil then
         self.db.itemLevelFontOutline = (self.defaultSettings and self.defaultSettings.itemLevelFontOutline) or "OUTLINE"
     end
+    if self.db.questIndicatorSize == nil then
+        self.db.questIndicatorSize = (self.defaultSettings and self.defaultSettings.questIndicatorSize) or 16
+    end
+    if self.db.questIndicatorAnchor == nil then
+        self.db.questIndicatorAnchor = (self.defaultSettings and self.defaultSettings.questIndicatorAnchor) or "BOTTOMLEFT"
+    end
+    if self.db.questIndicatorX == nil then
+        self.db.questIndicatorX = (self.defaultSettings and self.defaultSettings.questIndicatorX) or 1
+    end
+    if self.db.questIndicatorY == nil then
+        self.db.questIndicatorY = (self.defaultSettings and self.defaultSettings.questIndicatorY) or 1
+    end
     self.itemSlots = {}
     self.categoryButtons = {}
     self.newItems = {}
@@ -102,6 +114,10 @@ end
 function BagsMod:OnEnteringWorld()
     self:KillBlizzardBags()
     self:ScanInventoryOnce(true)
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.pendingCombatRelogBagUpdate = true
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
+    end
 end
 
 function BagsMod:PrewarmItemSlots()
@@ -117,6 +133,13 @@ function BagsMod:PrewarmItemSlots()
 end
 
 function BagsMod:OnRegenEnabled()
+    if self.pendingCombatRelogBagUpdate then
+        self.pendingCombatRelogBagUpdate = nil
+        self:PrewarmItemSlots()
+        if self.UpdateBagBarLayout then
+            self:UpdateBagBarLayout()
+        end
+    end
     if self.mainFrame and self.mainFrame:IsShown() then
         self:UpdateInventory()
     end
@@ -889,6 +912,10 @@ function BagsMod:UpdateTypography()
         local ilvlAnchor = (self.db and self.db.itemLevelAnchor) or "TOPLEFT"
         local ilvlX = (self.db and self.db.itemLevelX) or 2
         local ilvlY = (self.db and self.db.itemLevelY) or -2
+        local questAnchor = (self.db and self.db.questIndicatorAnchor) or "BOTTOMLEFT"
+        local questX = (self.db and self.db.questIndicatorX) or 1
+        local questY = (self.db and self.db.questIndicatorY) or 1
+        local questSize = (self.db and self.db.questIndicatorSize) or 16
 
         for _, slotFrame in pairs(slots) do
             local count = slotFrame.Count or slotFrame.count
@@ -901,6 +928,11 @@ function BagsMod:UpdateTypography()
                 self:ApplyFont(slotFrame.ilvl, 12, "itemLevelFontSize", "OUTLINE", "itemLevelFont", "itemLevelFontOutline")
                 if slotFrame.ilvl.ClearAllPoints then slotFrame.ilvl:ClearAllPoints() end
                 slotFrame.ilvl:SetPoint(ilvlAnchor, slotFrame, ilvlAnchor, ilvlX, ilvlY)
+            end
+            if slotFrame.questIcon then
+                if slotFrame.questIcon.SetSize then slotFrame.questIcon:SetSize(questSize, questSize) end
+                if slotFrame.questIcon.ClearAllPoints then slotFrame.questIcon:ClearAllPoints() end
+                slotFrame.questIcon:SetPoint(questAnchor, slotFrame, questAnchor, questX, questY)
             end
         end
     end
@@ -2197,6 +2229,7 @@ function BagsMod:AcquireItemSlot(index)
     slot.emptyBackgroundAtlas = nil
     slot.emptyBackgroundTexture = nil
     slot.GetItemButtonBackgroundTexture = function() return nil, false end
+    slot.UpdateQuestItem = function() end
 
     -- Override SetItemButtonTexture to prevent native ItemButtonTemplate from falling back to emptyBackgroundAtlas
     slot.SetItemButtonTexture = function(s, texture)
@@ -2377,15 +2410,20 @@ function BagsMod:AcquireItemSlot(index)
         slot.newOverlay = newOverlay
     end
 
-    -- Quest indicator icon (exclamation mark or quest border)
+    -- Quest indicator icon (clean exclamation mark)
     local questIcon = slot.questIcon
+    local qSize = (self.db and self.db.questIndicatorSize) or 16
+    local qAnchor = (self.db and self.db.questIndicatorAnchor) or "BOTTOMLEFT"
+    local qX = (self.db and self.db.questIndicatorX) or 1
+    local qY = (self.db and self.db.questIndicatorY) or 1
     if not questIcon then
         questIcon = slot:CreateTexture(nil, "OVERLAY", nil, 6)
-        questIcon:SetSize(16, 16)
-        questIcon:SetPoint("BOTTOMLEFT", slot, "BOTTOMLEFT", 1, 1)
         questIcon:Hide()
         slot.questIcon = questIcon
     end
+    questIcon:SetSize(qSize, qSize)
+    if questIcon.ClearAllPoints then questIcon:ClearAllPoints() end
+    questIcon:SetPoint(qAnchor, slot, qAnchor, qX, qY)
 
     -- Stop and disable unused Blizzard animation groups from ContainerFrameItemButtonTemplate
     if slot.newitemglowAnim then
@@ -2966,14 +3004,26 @@ function BagsMod:UpdateInventory()
                 if slotFrame.BattlepayItemTexture and slotFrame.BattlepayItemTexture:IsShown() then slotFrame.BattlepayItemTexture:Hide() end
                 if slotFrame.newitemglowAnim and slotFrame.newitemglowAnim.Stop then slotFrame.newitemglowAnim:Stop() end
                 if slotFrame.flashAnim and slotFrame.flashAnim.Stop then slotFrame.flashAnim:Stop() end
-                if slotFrame.AugmentBorderAnim and slotFrame.AugmentBorderAnim.Stop then slotFrame.AugmentBorderAnim:Stop() end
+                if slotFrame.IconQuestTexture and slotFrame.IconQuestTexture:IsShown() then
+                    slotFrame.IconQuestTexture:Hide()
+                end
 
-                -- Quest indicator
+                -- Quest indicator (clean exclamation mark without squashed box/border)
                 if slotFrame.questIcon then
                     local isQuest = itemData.showQuestBang or itemData.showQuestBorder or itemData.isQuest or (itemData.classID == 12)
                     if isQuest then
-                        local questTex = _G.TEXTURE_ITEM_QUEST_BANG or "Interface\\ContainerFrame\\UI-Icon-QuestBang"
+                        local questTex = "Interface\\GossipFrame\\AvailableQuestIcon"
                         slotFrame.questIcon:SetTexture(questTex)
+                        if slotFrame.questIcon.SetTexCoord then
+                            slotFrame.questIcon:SetTexCoord(0, 1, 0, 1)
+                        end
+                        local qSize = (self.db and self.db.questIndicatorSize) or 16
+                        local qAnchor = (self.db and self.db.questIndicatorAnchor) or "BOTTOMLEFT"
+                        local qX = (self.db and self.db.questIndicatorX) or 1
+                        local qY = (self.db and self.db.questIndicatorY) or 1
+                        if slotFrame.questIcon.SetSize then slotFrame.questIcon:SetSize(qSize, qSize) end
+                        if slotFrame.questIcon.ClearAllPoints then slotFrame.questIcon:ClearAllPoints() end
+                        slotFrame.questIcon:SetPoint(qAnchor, slotFrame, qAnchor, qX, qY)
                         if not slotFrame.questIcon:IsShown() then slotFrame.questIcon:Show() end
                     else
                         if slotFrame.questIcon:IsShown() then slotFrame.questIcon:Hide() end

@@ -597,6 +597,75 @@ function BagsMod:GetOptions()
                             self:UpdateInventory()
                         end,
                     },
+                    questIndicatorHeader = {
+                        type = "header",
+                        name = L["Quest Indicator"] or "Quest Indicator",
+                        order = 21,
+                    },
+                    questIndicatorSize = {
+                        type = "range",
+                        name = L["Quest Indicator Size"] or "Quest Indicator Size",
+                        order = 22,
+                        min = 10,
+                        max = 32,
+                        step = 1,
+                        get = function() return self.db.questIndicatorSize or 16 end,
+                        set = function(_, val)
+                            self.db.questIndicatorSize = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    questIndicatorAnchor = {
+                        type = "select",
+                        name = L["Quest Indicator Anchor"] or "Quest Indicator Anchor",
+                        order = 23,
+                        values = {
+                            ["TOPLEFT"] = "TOPLEFT",
+                            ["TOP"] = "TOP",
+                            ["TOPRIGHT"] = "TOPRIGHT",
+                            ["LEFT"] = "LEFT",
+                            ["CENTER"] = "CENTER",
+                            ["RIGHT"] = "RIGHT",
+                            ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                            ["BOTTOM"] = "BOTTOM",
+                            ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                        },
+                        get = function() return self.db.questIndicatorAnchor or "BOTTOMLEFT" end,
+                        set = function(_, val)
+                            self.db.questIndicatorAnchor = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    questIndicatorX = {
+                        type = "range",
+                        name = L["Quest Indicator X Offset"] or "Quest Indicator X Offset",
+                        order = 24,
+                        min = -30,
+                        max = 30,
+                        step = 1,
+                        get = function() return self.db.questIndicatorX or 1 end,
+                        set = function(_, val)
+                            self.db.questIndicatorX = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    questIndicatorY = {
+                        type = "range",
+                        name = L["Quest Indicator Y Offset"] or "Quest Indicator Y Offset",
+                        order = 25,
+                        min = -30,
+                        max = 30,
+                        step = 1,
+                        get = function() return self.db.questIndicatorY or 1 end,
+                        set = function(_, val)
+                            self.db.questIndicatorY = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
                 },
             },
             categories = {

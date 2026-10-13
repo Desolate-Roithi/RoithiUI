@@ -494,7 +494,10 @@ function ChatMod:OnEnable()
         end)
     end
     if _G.FCFDock_UpdateTabs and not self:IsHooked("FCFDock_UpdateTabs") then
-        self:SecureHook("FCFDock_UpdateTabs", function()
+        self:SecureHook("FCFDock_UpdateTabs", function(dock)
+            if self.AutoFitChatTabs then
+                self:AutoFitChatTabs(dock)
+            end
             if self.UpdateButtonsDock then
                 self:UpdateButtonsDock()
             end
@@ -1432,6 +1435,43 @@ function ChatMod:SkinTab(tab, cf, idx)
 
     local isInitSel = (_G.SELECTED_CHAT_FRAME == cf) or (cf and cf:IsShown())
     self:UpdateTabVisuals(tab, isInitSel)
+
+    if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
+        self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
+    end
+end
+
+function ChatMod:AutoFitChatTabs(dock)
+    if self.db.enabled == false or self.db.styleTabs == false then return end
+    dock = dock or _G.GENERAL_CHAT_DOCK
+    if not dock or not dock.DOCKED_CHAT_FRAMES then return end
+
+    local lastTab = nil
+    for _, chatFrame in ipairs(dock.DOCKED_CHAT_FRAMES) do
+        local cfName = chatFrame.GetName and chatFrame:GetName()
+        local chatTab = cfName and _G[cfName .. "Tab"]
+        if chatTab then
+            local tabText = chatTab.Text or (cfName and _G[cfName .. "TabText"])
+            if tabText then
+                if tabText.SetWidth then
+                    tabText:SetWidth(0)
+                end
+                local strWidth = (tabText.GetStringWidth and tabText:GetStringWidth()) or 0
+                local fullWidth = math.max(60, math.ceil(strWidth) + 16)
+                if chatTab.SetWidth then
+                    chatTab:SetWidth(fullWidth)
+                end
+                if tabText.SetWidth then
+                    tabText:SetWidth(strWidth + 2)
+                end
+            end
+            if lastTab and chatTab.ClearAllPoints and chatTab.SetPoint then
+                chatTab:ClearAllPoints()
+                chatTab:SetPoint("LEFT", lastTab, "RIGHT", 2, 0)
+            end
+            lastTab = chatTab
+        end
+    end
 end
 
 -------------------------------------------------------------------------------
