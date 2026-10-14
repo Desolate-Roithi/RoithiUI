@@ -6,7 +6,7 @@ local defaultSettings = {
     activeCategory = "ALL",
     autoSellJunk = false,
     bagBar = { buttonSize = 30, enabled = true, expanded = false, point = "BOTTOMLEFT", spacing = 4, x = 286, y = 285 },
-    bagWindow = { point = "BOTTOMRIGHT", x = -10, y = 10 },
+    bagWindow = { point = "BOTTOMRIGHT", x = -10, y = 10, width = 380, height = 420 },
     colorItemLevelByQuality = true,
     columns = 10,
     customCategoryAssignments = {},
@@ -41,6 +41,11 @@ local defaultSettings = {
     questIndicatorAnchor = "BOTTOMLEFT",
     questIndicatorX = 1,
     questIndicatorY = 1,
+    showJunkIndicator = true,
+    junkIndicatorSize = 14,
+    junkIndicatorAnchor = "BOTTOMLEFT",
+    junkIndicatorX = 1,
+    junkIndicatorY = 1,
 }
 
 local mod = RoithiUI and RoithiUI:GetModule("Bags", true)

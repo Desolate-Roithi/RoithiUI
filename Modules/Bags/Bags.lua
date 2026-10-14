@@ -65,6 +65,21 @@ function BagsMod:OnInitialize()
     if self.db.questIndicatorY == nil then
         self.db.questIndicatorY = (self.defaultSettings and self.defaultSettings.questIndicatorY) or 1
     end
+    if self.db.showJunkIndicator == nil then
+        self.db.showJunkIndicator = (self.defaultSettings and self.defaultSettings.showJunkIndicator ~= false) or true
+    end
+    if self.db.junkIndicatorSize == nil then
+        self.db.junkIndicatorSize = (self.defaultSettings and self.defaultSettings.junkIndicatorSize) or 14
+    end
+    if self.db.junkIndicatorAnchor == nil then
+        self.db.junkIndicatorAnchor = (self.defaultSettings and self.defaultSettings.junkIndicatorAnchor) or "BOTTOMLEFT"
+    end
+    if self.db.junkIndicatorX == nil then
+        self.db.junkIndicatorX = (self.defaultSettings and self.defaultSettings.junkIndicatorX) or 1
+    end
+    if self.db.junkIndicatorY == nil then
+        self.db.junkIndicatorY = (self.defaultSettings and self.defaultSettings.junkIndicatorY) or 1
+    end
     self.itemSlots = {}
     self.categoryButtons = {}
     self.newItems = {}
@@ -73,9 +88,19 @@ function BagsMod:OnInitialize()
     self.hoveredNewSlots = {}
     self.dismissedNewHighlights = {}
     self.knownSlots = {}
+    self.knownSlotCounts = {}
     self.initialInventoryScanned = false
     self.searchText = ""
     self:RegisterPopups()
+
+    -- Sanitize any legacy numeric itemID assignments to "JUNK" to prevent auto-junking duplicate items
+    if self.db and self.db.customCategoryAssignments then
+        for k, v in pairs(self.db.customCategoryAssignments) do
+            if type(k) == "number" and v == "JUNK" then
+                self.db.customCategoryAssignments[k] = nil
+            end
+        end
+    end
 end
 
 function BagsMod:OnEnable()
@@ -111,9 +136,15 @@ function BagsMod:OnEnable()
     self:PrewarmItemSlots()
 end
 
-function BagsMod:OnEnteringWorld()
+function BagsMod:OnEnteringWorld(event, isInitialLogin, isReloadingUi)
     self:KillBlizzardBags()
-    self:ScanInventoryOnce(true)
+    local isInitial = (isInitialLogin == true) or (isReloadingUi == true) or (not self.initialInventoryScanned)
+    if isInitial then
+        self:ScanInventoryOnce(true)
+    else
+        local now = _G.GetTime and _G.GetTime() or 0
+        self.teleportGraceUntil = now + 4.0
+    end
     if _G.InCombatLockdown and _G.InCombatLockdown() then
         self.pendingCombatRelogBagUpdate = true
         self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
@@ -418,6 +449,31 @@ function BagsMod:IsSlotNew(bag, slot, itemData)
     if not bag or not slot then return false end
     local slotKey = GetSlotKey(bag, slot)
 
+    local data = itemData
+    if not data and _G.C_Container and _G.C_Container.GetContainerItemInfo then
+        local cInfo = _G.C_Container.GetContainerItemInfo(bag, slot)
+        if cInfo then
+            local itemGUID = cInfo.itemGUID
+            if not itemGUID and _G.C_Item and _G.C_Item.GetItemGUID and _G.ItemLocation and _G.ItemLocation.CreateFromBagAndSlot then
+                local itemLoc = _G.ItemLocation:CreateFromBagAndSlot(bag, slot)
+                if itemLoc and _G.C_Item.DoesItemExist and _G.C_Item.DoesItemExist(itemLoc) then
+                    itemGUID = _G.C_Item.GetItemGUID(itemLoc)
+                end
+            end
+            data = {
+                bag = bag,
+                slot = slot,
+                itemID = cInfo.itemID,
+                quality = cInfo.quality,
+                link = cInfo.hyperlink,
+                itemGUID = itemGUID,
+            }
+        end
+    end
+    if data and self.IsItemJunk and self:IsItemJunk(data) then
+        return false
+    end
+
     -- If active trade timer is present, it is always considered new (persists even across relogs)
     if self:HasActiveTradeTimer(bag, slot) then
         return true
@@ -584,6 +640,7 @@ end
 
 function BagsMod:ScanInventoryOnce(isInitial)
     self.knownSlots = self.knownSlots or {}
+    self.knownSlotCounts = self.knownSlotCounts or {}
     self.newSlots = self.newSlots or {}
     self.knownItemIDs = self.knownItemIDs or {}
     local anySlotScanned = false
@@ -594,6 +651,7 @@ function BagsMod:ScanInventoryOnce(isInitial)
         self.hoveredNewSlots = {}
         self.dismissedNewHighlights = {}
         self.tradeTimerCache = {}
+        self.knownSlotCounts = {}
         if _G.C_NewItems and _G.C_NewItems.ClearAll then
             pcall(_G.C_NewItems.ClearAll)
         end
@@ -608,6 +666,7 @@ function BagsMod:ScanInventoryOnce(isInitial)
                 anySlotScanned = true
                 self.knownItemIDs[itemInfo.itemID] = true
                 self.knownSlots[slotKey] = itemInfo.itemID
+                self.knownSlotCounts[slotKey] = itemInfo.count or 1
                 -- If item has an active trade timer, keep it marked new even on relog / login
                 if self:HasActiveTradeTimer(bag, slot) then
                     self.newSlots[slotKey] = true
@@ -623,6 +682,7 @@ function BagsMod:ScanInventoryOnce(isInitial)
                 end
             else
                 self.knownSlots[slotKey] = nil
+                self.knownSlotCounts[slotKey] = nil
                 self.newSlots[slotKey] = nil
                 if self.hoveredNewSlots then self.hoveredNewSlots[slotKey] = nil end
                 if self.dismissedNewHighlights then self.dismissedNewHighlights[slotKey] = nil end
@@ -652,6 +712,14 @@ function BagsMod:GetItemInfoAt(bag, slot)
             local count = info.stackCount or 1
             local link = info.hyperlink or info.hyperLink or (_G.C_Container.GetContainerItemLink and _G.C_Container.GetContainerItemLink(bag, slot))
             local texture = info.iconFileID or info.icon
+
+            local itemGUID = info.itemGUID
+            if not itemGUID and _G.C_Item and _G.C_Item.GetItemGUID and _G.ItemLocation and _G.ItemLocation.CreateFromBagAndSlot then
+                local itemLoc = _G.ItemLocation:CreateFromBagAndSlot(bag, slot)
+                if itemLoc and _G.C_Item.DoesItemExist and _G.C_Item.DoesItemExist(itemLoc) then
+                    itemGUID = _G.C_Item.GetItemGUID(itemLoc)
+                end
+            end
 
             local name, itemType, itemSubType, equipLoc, classID, subclassID, bindType, expID, isCraftingReagent, itemLevel
             if itemID and _G.C_Item and _G.C_Item.GetItemInfoInstant then
@@ -705,7 +773,7 @@ function BagsMod:GetItemInfoAt(bag, slot)
                 showQuestBorder = true
             end
 
-            return {
+            local itemInfo = {
                 bag = bag,
                 slot = slot,
                 itemID = itemID,
@@ -726,8 +794,10 @@ function BagsMod:GetItemInfoAt(bag, slot)
                 showQuestBang = showQuestBang,
                 showQuestBorder = showQuestBorder,
                 isCraftingReagent = isCraftingReagent,
-                isNew = self:IsSlotNew(bag, slot),
+                itemGUID = itemGUID,
             }
+            itemInfo.isNew = self:IsSlotNew(bag, slot, itemInfo)
+            return itemInfo
         end
     end
     return nil
@@ -790,8 +860,10 @@ function BagsMod:CreateMainBagFrame()
     local cols = self.db.columns or 10
     local slotSize = self.db.slotSize or 36
     local spacing = self.db.spacing or 4
-    local initialW = math.max(380, cols * slotSize + (cols - 1) * spacing + 16)
-    frame:SetSize(initialW, 420)
+    local calculatedW = math.max(380, cols * slotSize + (cols - 1) * spacing + 16)
+    local initialW = (cfg.width and cfg.width > 0) and cfg.width or calculatedW
+    local initialH = (cfg.height and cfg.height > 0) and cfg.height or 420
+    frame:SetSize(initialW, initialH)
     frame:ClearAllPoints()
     frame:SetPoint(pt, UIParent, pt, cfg.x or defBW.x, cfg.y or defBW.y)
 
@@ -804,6 +876,8 @@ function BagsMod:CreateMainBagFrame()
         self.db.bagWindow.point = sPoint
         self.db.bagWindow.x = sX
         self.db.bagWindow.y = sY
+        self.db.bagWindow.width = s:GetWidth()
+        self.db.bagWindow.height = s:GetHeight()
     end)
 
     self.mainFrame = frame
@@ -820,6 +894,9 @@ function BagsMod:CreateMainBagFrame()
 
     self:CreateHeaderBar()
     self:CreateCategoryButtons()
+    if self.UpdateCategoryButtonsLayout then
+        self:UpdateCategoryButtonsLayout(initialW - 12)
+    end
     self:CreateFooterBar()
     self:UpdateTypography()
 end
@@ -916,6 +993,10 @@ function BagsMod:UpdateTypography()
         local questX = (self.db and self.db.questIndicatorX) or 1
         local questY = (self.db and self.db.questIndicatorY) or 1
         local questSize = (self.db and self.db.questIndicatorSize) or 16
+        local junkAnchor = (self.db and self.db.junkIndicatorAnchor) or "BOTTOMLEFT"
+        local junkX = (self.db and self.db.junkIndicatorX) or 1
+        local junkY = (self.db and self.db.junkIndicatorY) or 1
+        local junkSize = (self.db and self.db.junkIndicatorSize) or 14
 
         for _, slotFrame in pairs(slots) do
             local count = slotFrame.Count or slotFrame.count
@@ -933,6 +1014,11 @@ function BagsMod:UpdateTypography()
                 if slotFrame.questIcon.SetSize then slotFrame.questIcon:SetSize(questSize, questSize) end
                 if slotFrame.questIcon.ClearAllPoints then slotFrame.questIcon:ClearAllPoints() end
                 slotFrame.questIcon:SetPoint(questAnchor, slotFrame, questAnchor, questX, questY)
+            end
+            if slotFrame.junkIcon then
+                if slotFrame.junkIcon.SetSize then slotFrame.junkIcon:SetSize(junkSize, junkSize) end
+                if slotFrame.junkIcon.ClearAllPoints then slotFrame.junkIcon:ClearAllPoints() end
+                slotFrame.junkIcon:SetPoint(junkAnchor, slotFrame, junkAnchor, junkX, junkY)
             end
         end
     end
@@ -1315,9 +1401,10 @@ function BagsMod:OpenCategoryContextMenu(owner, cat)
     end
 end
 
-function BagsMod:OpenItemCategoryMenu(owner, itemID)
-    if not itemID then return end
-    local currentCat = (self.db.customCategoryAssignments and self.db.customCategoryAssignments[itemID])
+function BagsMod:OpenItemCategoryMenu(owner, itemDataOrID)
+    if not itemDataOrID then return end
+    local itemData = type(itemDataOrID) == "table" and itemDataOrID or { itemID = itemDataOrID }
+    local currentCat = self:GetItemAssignedCategory(itemData)
     if currentCat == "WEAPONS" then currentCat = "GEAR" end
     local categories = {
         { id = "GEAR", name = L["Gear"] or "Gear" },
@@ -1332,18 +1419,35 @@ function BagsMod:OpenItemCategoryMenu(owner, itemID)
         _G.MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
             rootDescription:CreateTitle(L["Assign Category"] or "Assign Category")
             for _, cat in ipairs(categories) do
-                local label = cat.name
-                if currentCat == cat.id then
-                    label = "|cff00ff00✓ " .. label .. "|r"
+                if rootDescription.CreateRadio then
+                    rootDescription:CreateRadio(cat.name, function()
+                        return currentCat == cat.id
+                    end, function()
+                        if currentCat == cat.id then
+                            self:ResetItemCategory(itemData)
+                        else
+                            self:AssignItemCategory(itemData, cat.id)
+                        end
+                    end)
+                else
+                    local label = cat.name
+                    if currentCat == cat.id then
+                        label = "|cff00ff00* " .. label .. "|r"
+                    end
+                    rootDescription:CreateButton(label, function()
+                        if currentCat == cat.id then
+                            self:ResetItemCategory(itemData)
+                        else
+                            self:AssignItemCategory(itemData, cat.id)
+                        end
+                    end)
                 end
-                rootDescription:CreateButton(label, function()
-                    self:AssignItemCategory(itemID, cat.id)
-                end)
             end
             if currentCat then
                 rootDescription:CreateDivider()
-                rootDescription:CreateButton("|cffff8800" .. (L["Reset to Default Category"] or "Reset to Default Category") .. "|r", function()
-                    self:ResetItemCategory(itemID)
+                local resetText = (currentCat == "JUNK") and (L["Remove from Junk"] or "Remove from Junk") or (L["Reset to Default Category"] or "Reset to Default Category")
+                rootDescription:CreateButton("|cffff8800" .. resetText .. "|r", function()
+                    self:ResetItemCategory(itemData)
                 end)
             end
         end)
@@ -1435,13 +1539,14 @@ function BagsMod:CreateCategoryButtons()
 
         if btn.RegisterForClicks then btn:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
         btn:SetScript("OnClick", function(b, button)
-            local infoType, itemID
+            local infoType, itemID, itemLink
             if _G.GetCursorInfo then
-                infoType, itemID = _G.GetCursorInfo()
+                infoType, itemID, itemLink = _G.GetCursorInfo()
             end
             if infoType == "item" and itemID then
                 if cat.id ~= "ALL" and cat.id ~= "NEW" and cat.id ~= "FAVORITES" then
-                    self:AssignItemCategory(itemID, cat.id)
+                    local targetKey = (cat.id == "JUNK" and (itemLink or itemID)) or itemID
+                    self:AssignItemCategory(targetKey, cat.id)
                     if _G.ClearCursor then _G.ClearCursor() end
                     return
                 end
@@ -1463,13 +1568,14 @@ function BagsMod:CreateCategoryButtons()
         end)
 
         btn:SetScript("OnReceiveDrag", function()
-            local infoType, itemID
+            local infoType, itemID, itemLink
             if _G.GetCursorInfo then
-                infoType, itemID = _G.GetCursorInfo()
+                infoType, itemID, itemLink = _G.GetCursorInfo()
             end
             if infoType == "item" and itemID then
                 if cat.id ~= "ALL" and cat.id ~= "NEW" and cat.id ~= "FAVORITES" then
-                    self:AssignItemCategory(itemID, cat.id)
+                    local targetKey = (cat.id == "JUNK" and (itemLink or itemID)) or itemID
+                    self:AssignItemCategory(targetKey, cat.id)
                     if _G.ClearCursor then _G.ClearCursor() end
                 end
             end
@@ -1652,6 +1758,8 @@ function BagsMod:CreateFooterBar()
     sortText:SetJustifyH("CENTER")
     sortText:SetText(L["Sort"])
     sortBtn:SetScript("OnClick", function()
+        local now = _G.GetTime and _G.GetTime() or 0
+        self.isSortingBagsUntil = now + 2.5
         if _G.C_Container and _G.C_Container.SortBags then
             _G.C_Container.SortBags()
         elseif _G.SortBags then
@@ -1905,7 +2013,15 @@ end
 function BagsMod:OnMerchantShow()
     if self.junkButton then self.junkButton:Show() end
     if self.db.autoSellJunk then
-        self:SellAllJunk()
+        if _G.C_Timer and _G.C_Timer.After then
+            _G.C_Timer.After(0.1, function()
+                if _G.MerchantFrame and _G.MerchantFrame:IsShown() then
+                    self:SellAllJunk()
+                end
+            end)
+        else
+            self:SellAllJunk()
+        end
     end
 end
 
@@ -2005,11 +2121,9 @@ function BagsMod:ExecuteSellQueue(queue, isCustom, onFinished)
                 elseif _G.UseContainerItem then
                     pcall(_G.UseContainerItem, item.bag, item.slot)
                 end
-                if isCustom and item.itemID then
-                    resetItemIDs[item.itemID] = true
-                    if self.db and self.db.customCategoryAssignments then
-                        self.db.customCategoryAssignments[item.itemID] = nil
-                    end
+                if isCustom then
+                    resetItemIDs[item.itemID or 0] = true
+                    self:ResetItemCategory(item)
                 end
             end
             queueIndex = queueIndex + 1
@@ -2046,7 +2160,7 @@ function BagsMod:ExecuteSellQueue(queue, isCustom, onFinished)
     self.ProcessNextJunk = ProcessNext
 
     if _G.C_Timer and _G.C_Timer.NewTicker then
-        self.sellingJunkTicker = _G.C_Timer.NewTicker(0.04, ProcessNext, #queue)
+        self.sellingJunkTicker = _G.C_Timer.NewTicker(0.15, ProcessNext, #queue)
     else
         while queueIndex <= #queue do
             ProcessNext()
@@ -2075,7 +2189,10 @@ function BagsMod:SellAllJunk()
                 if not isFav then
                     local price = 0
                     local itemLink = itemInfo.link or (_G.C_Container and _G.C_Container.GetContainerItemLink and _G.C_Container.GetContainerItemLink(bag, slot))
-                    if itemLink and _G.GetItemInfo then
+                    if itemLink and _G.C_Item and _G.C_Item.GetItemInfo then
+                        local _, _, _, _, _, _, _, _, _, _, sellPrice = _G.C_Item.GetItemInfo(itemLink)
+                        price = sellPrice or 0
+                    elseif itemLink and _G.GetItemInfo then
                         local _, _, _, _, _, _, _, _, _, _, sellPrice = _G.GetItemInfo(itemLink)
                         price = sellPrice or 0
                     elseif itemInfo.itemID and _G.GetItemInfo then
@@ -2083,33 +2200,44 @@ function BagsMod:SellAllJunk()
                         price = sellPrice or 0
                     end
 
-                    if price > 0 then
+                    local canSell = (price > 0)
+                    if not canSell and _G.C_Container and _G.C_Container.GetContainerItemInfo then
+                        local cInfo = _G.C_Container.GetContainerItemInfo(bag, slot)
+                        if cInfo and cInfo.hasNoValue == false then
+                            canSell = true
+                        end
+                    end
+
+                    if canSell then
                         local count = itemInfo.count or 1
-                        local customCat = self.db and self.db.customCategoryAssignments and self.db.customCategoryAssignments[itemInfo.itemID]
-                        if customCat == "JUNK" then
+                        local customCat = self:GetItemAssignedCategory(itemInfo)
+                        if customCat == "JUNK" or (itemInfo.quality ~= 0 and self:IsItemJunk(itemInfo)) then
                             table.insert(customQueue, {
                                 bag = bag,
                                 slot = slot,
                                 itemID = itemInfo.itemID,
+                                itemGUID = itemInfo.itemGUID,
+                                link = itemLink or itemInfo.link or itemInfo.name or ("item:" .. itemInfo.itemID),
                                 count = count,
                                 price = price,
                                 isCustomJunk = true,
-                                link = itemLink or itemInfo.name or ("item:" .. itemInfo.itemID),
                                 name = itemInfo.name or itemLink or ("item:" .. itemInfo.itemID),
                             })
-                            if not customItemCounts[itemInfo.itemID] then
-                                customItemCounts[itemInfo.itemID] = 0
+                            local displayKey = itemInfo.itemGUID or itemLink or itemInfo.itemID
+                            if not customItemCounts[displayKey] then
+                                customItemCounts[displayKey] = 0
                                 table.insert(customItemDisplay, {
                                     itemID = itemInfo.itemID,
                                     link = itemLink or itemInfo.name or ("item:" .. itemInfo.itemID),
                                 })
                             end
-                            customItemCounts[itemInfo.itemID] = customItemCounts[itemInfo.itemID] + count
+                            customItemCounts[displayKey] = customItemCounts[displayKey] + count
                         elseif itemInfo.quality == 0 and not customCat then
                             table.insert(nativeQueue, {
                                 bag = bag,
                                 slot = slot,
                                 itemID = itemInfo.itemID,
+                                itemGUID = itemInfo.itemGUID,
                                 count = count,
                                 price = price,
                                 isCustomJunk = false,
@@ -2121,12 +2249,25 @@ function BagsMod:SellAllJunk()
         end
     end
 
-    if #nativeQueue == 0 and #customQueue == 0 then return end
-
     local function StartCustomJunkPrompt()
         if #customQueue == 0 then return end
         self:PromptSellCustomJunk(customQueue, customItemDisplay, customItemCounts)
     end
+
+    -- Priority 1: Native Blizzard C_MerchantFrame engine API (Dragonflight/TWW/Midnight)
+    if _G.C_MerchantFrame and _G.C_MerchantFrame.SellAllJunkItems then
+        local numJunk = (_G.C_MerchantFrame.GetNumJunkItems and _G.C_MerchantFrame.GetNumJunkItems()) or #nativeQueue
+        if numJunk > 0 then
+            _G.C_MerchantFrame.SellAllJunkItems()
+            local msg = string.format(L["Sold %d junk item%s."] or "Sold %d junk item%s.", numJunk, numJunk == 1 and "" or "s")
+            print("|cff00ccff[RoithiUI]|r " .. msg)
+        end
+        StartCustomJunkPrompt()
+        return
+    end
+
+    -- Priority 2: Graceful fallback sell queue (Classic / legacy clients)
+    if #nativeQueue == 0 and #customQueue == 0 then return end
 
     if #nativeQueue > 0 then
         self:ExecuteSellQueue(nativeQueue, false, function()
@@ -2142,7 +2283,7 @@ function BagsMod:OnSlotEnter(s)
     if s.bag and s.slot then
         local slotKey = GetSlotKey(s.bag, s.slot)
         local hasTradeTimer = self:HasActiveTradeTimer(s.bag, s.slot)
-        local isNew = self:IsSlotNew(s.bag, s.slot)
+        local isNew = self:IsSlotNew(s.bag, s.slot, s.itemInfo)
 
         if isNew then
             self.dismissedNewHighlights = self.dismissedNewHighlights or {}
@@ -2165,15 +2306,10 @@ function BagsMod:OnSlotEnter(s)
                     s.itemData.isNew = true
                 end
             end
-        elseif not isNew and not hasTradeTimer then
-            self:ClearNewSlot(s.bag, s.slot)
-            if s.itemData then
-                s.itemData.isNew = false
-            end
+        else
             if s.newOverlay then
                 s.newOverlay:Hide()
             end
-            s.needsTabRefreshOnLeave = true
         end
     end
 
@@ -2425,6 +2561,40 @@ function BagsMod:AcquireItemSlot(index)
     if questIcon.ClearAllPoints then questIcon:ClearAllPoints() end
     questIcon:SetPoint(qAnchor, slot, qAnchor, qX, qY)
 
+    -- Cosmetic indicator icon
+    local cosmeticIcon = slot.cosmeticIcon
+    if not cosmeticIcon then
+        cosmeticIcon = slot:CreateTexture(nil, "OVERLAY", nil, 6)
+        cosmeticIcon:Hide()
+        slot.cosmeticIcon = cosmeticIcon
+    end
+    cosmeticIcon:SetSize(14, 14)
+    if cosmeticIcon.ClearAllPoints then cosmeticIcon:ClearAllPoints() end
+    cosmeticIcon:SetPoint("TOPLEFT", slot, "TOPLEFT", 2, -2)
+    if cosmeticIcon.SetAtlas then
+        cosmeticIcon:SetAtlas("transmog-icon-ui")
+    end
+
+    -- Junk indicator icon (bags-junkcoin)
+    local junkIcon = slot.junkIcon
+    local jSize = (self.db and self.db.junkIndicatorSize) or 14
+    local jAnchor = (self.db and self.db.junkIndicatorAnchor) or "BOTTOMLEFT"
+    local jX = (self.db and self.db.junkIndicatorX) or 1
+    local jY = (self.db and self.db.junkIndicatorY) or 1
+    if not junkIcon then
+        junkIcon = slot:CreateTexture(nil, "OVERLAY", nil, 6)
+        junkIcon:Hide()
+        slot.junkIcon = junkIcon
+    end
+    junkIcon:SetSize(jSize, jSize)
+    if junkIcon.ClearAllPoints then junkIcon:ClearAllPoints() end
+    junkIcon:SetPoint(jAnchor, slot, jAnchor, jX, jY)
+    if junkIcon.SetAtlas then
+        junkIcon:SetAtlas("bags-junkcoin")
+    else
+        junkIcon:SetTexture("Interface\\Icons\\inv_misc_coin_01")
+    end
+
     -- Stop and disable unused Blizzard animation groups from ContainerFrameItemButtonTemplate
     if slot.newitemglowAnim then
         slot.newitemglowAnim:Stop()
@@ -2466,7 +2636,7 @@ function BagsMod:AcquireItemSlot(index)
         if slot.IconQuestTexture.SetTexture then slot.IconQuestTexture:SetTexture(nil) end
         slot.IconQuestTexture:Hide()
     end
-    if slot.JunkIcon then
+    if slot.JunkIcon and slot.JunkIcon ~= slot.junkIcon then
         if slot.JunkIcon.SetTexture then slot.JunkIcon:SetTexture(nil) end
         slot.JunkIcon:Hide()
     end
@@ -2506,14 +2676,33 @@ function BagsMod:AcquireItemSlot(index)
     if slot.RegisterForClicks then slot:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
     if slot.RegisterForDrag then slot:RegisterForDrag("LeftButton") end
 
-    local function HandlePickup(s)
+    local function HandlePickup(s, doPickup)
         if s.bag and s.slot then
+            local itemData = s.itemData or self:GetItemInfoAt(s.bag, s.slot)
+            if itemData and itemData.itemID then
+                local slotKey = GetSlotKey(s.bag, s.slot)
+                local now = _G.GetTime and _G.GetTime() or 0
+                local wasNew = (self.newSlots and self.newSlots[slotKey] == true)
+                    or (self.hoveredNewSlots and self.hoveredNewSlots[slotKey] and now < self.hoveredNewSlots[slotKey])
+                    or (_G.C_NewItems and _G.C_NewItems.IsNewItem and _G.C_NewItems.IsNewItem(s.bag, s.slot))
+                self.draggedItemInfo = {
+                    itemID = itemData.itemID,
+                    count = itemData.count or 1,
+                    fromBag = s.bag,
+                    fromSlot = s.slot,
+                    fromSlotKey = slotKey,
+                    time = now,
+                    isNew = wasNew and true or false,
+                }
+            end
             self:ClearNewSlot(s.bag, s.slot)
             if s.newOverlay then s.newOverlay:Hide() end
-            if _G.C_Container and _G.C_Container.PickupContainerItem then
-                _G.C_Container.PickupContainerItem(s.bag, s.slot)
-            elseif _G.PickupContainerItem then
-                _G.PickupContainerItem(s.bag, s.slot)
+            if doPickup then
+                if _G.C_Container and _G.C_Container.PickupContainerItem then
+                    _G.C_Container.PickupContainerItem(s.bag, s.slot)
+                elseif _G.PickupContainerItem then
+                    _G.PickupContainerItem(s.bag, s.slot)
+                end
             end
         end
     end
@@ -2522,7 +2711,7 @@ function BagsMod:AcquireItemSlot(index)
         slot:HookScript("PreClick", function(s, button)
             if button == "RightButton" then
                 if _G.IsShiftKeyDown and _G.IsShiftKeyDown() and s.itemData and s.itemData.itemID then
-                    self:OpenItemCategoryMenu(s, s.itemData.itemID)
+                    self:OpenItemCategoryMenu(s, s.itemData)
                 elseif _G.IsAltKeyDown and _G.IsAltKeyDown() and s.itemData and s.itemData.itemID then
                     self.db.favorites = self.db.favorites or {}
                     self.db.favorites[s.itemData.itemID] = not self.db.favorites[s.itemData.itemID]
@@ -2530,15 +2719,18 @@ function BagsMod:AcquireItemSlot(index)
                 end
             end
         end)
+        slot:HookScript("OnDragStart", function(s)
+            HandlePickup(s, false)
+        end)
     end
 
     if not slot:GetScript("OnClick") then
         slot:SetScript("OnClick", function(s, button)
             if button == "LeftButton" then
-                HandlePickup(s)
+                HandlePickup(s, true)
             elseif button == "RightButton" then
                 if _G.IsShiftKeyDown and _G.IsShiftKeyDown() and s.itemData and s.itemData.itemID then
-                    self:OpenItemCategoryMenu(s, s.itemData.itemID)
+                    self:OpenItemCategoryMenu(s, s.itemData)
                 elseif _G.IsAltKeyDown and _G.IsAltKeyDown() and s.itemData and s.itemData.itemID then
                     self.db.favorites = self.db.favorites or {}
                     self.db.favorites[s.itemData.itemID] = not self.db.favorites[s.itemData.itemID]
@@ -2557,10 +2749,10 @@ function BagsMod:AcquireItemSlot(index)
     end
 
     if not slot:GetScript("OnDragStart") then
-        slot:SetScript("OnDragStart", function(s) HandlePickup(s) end)
+        slot:SetScript("OnDragStart", function(s) HandlePickup(s, true) end)
     end
     if not slot:GetScript("OnReceiveDrag") then
-        slot:SetScript("OnReceiveDrag", function(s) HandlePickup(s) end)
+        slot:SetScript("OnReceiveDrag", function(s) HandlePickup(s, true) end)
     end
 
 
@@ -2579,12 +2771,6 @@ function BagsMod:AcquireItemSlot(index)
         end
         if _G.ResetCursor then
             _G.ResetCursor()
-        end
-        if s and s.needsTabRefreshOnLeave then
-            s.needsTabRefreshOnLeave = nil
-            if self.db and self.db.activeCategory == "NEW" and self.mainFrame and self.mainFrame:IsShown() then
-                self:UpdateInventory()
-            end
         end
     end)
 
@@ -2638,6 +2824,69 @@ function BagsMod:UpdateInventory()
     local reagentBagID = (_G.Enum and _G.Enum.BagIndex and _G.Enum.BagIndex.ReagentBag) or 5
     local keyringID = (_G.KEYRING_CONTAINER or -2)
 
+    local now = _G.GetTime and _G.GetTime() or 0
+    local isSorting = self.isSortingBagsUntil and now < self.isSortingBagsUntil
+    local isTeleporting = self.teleportGraceUntil and now < self.teleportGraceUntil
+
+    -- Take snapshots of previous state for cross-slot move and total count detection
+    local prevKnownSlots = {}
+    local prevKnownCounts = {}
+    local prevNewSlots = {}
+    local prevItemCounts = {}
+
+    if self.knownSlots then
+        for k, v in pairs(self.knownSlots) do
+            prevKnownSlots[k] = v
+        end
+    end
+    if self.knownSlotCounts then
+        for k, v in pairs(self.knownSlotCounts) do
+            prevKnownCounts[k] = v
+        end
+    end
+    if self.newSlots then
+        for k, v in pairs(self.newSlots) do
+            prevNewSlots[k] = v
+        end
+    end
+    for k, itemID in pairs(prevKnownSlots) do
+        local count = prevKnownCounts[k] or 1
+        prevItemCounts[itemID] = (prevItemCounts[itemID] or 0) + count
+    end
+
+    -- Pre-pass: scan current contents of all scannable bags to detect vacated slots and current item counts
+    local currentSlotItems = {}
+    local currentItemCounts = {}
+    for _, bag in ipairs(self:GetScannableBags()) do
+        local numSlots = self:GetNumBagSlots(bag)
+        for slot = 1, numSlots do
+            local slotKey = GetSlotKey(bag, slot)
+            local itemInfo = self:GetItemInfoAt(bag, slot)
+            if itemInfo and itemInfo.itemID then
+                currentSlotItems[slotKey] = itemInfo
+                currentItemCounts[itemInfo.itemID] = (currentItemCounts[itemInfo.itemID] or 0) + (itemInfo.count or 1)
+            else
+                currentSlotItems[slotKey] = false
+            end
+        end
+    end
+
+    -- Find all slots that previously held itemID but now do not (vacated / moved / swapped)
+    local vacatedSlotsByItemID = {}
+    for sKey, oldID in pairs(prevKnownSlots) do
+        local curr = currentSlotItems[sKey]
+        if not curr or curr.itemID ~= oldID then
+            if not vacatedSlotsByItemID[oldID] then
+                vacatedSlotsByItemID[oldID] = {}
+            end
+            table.insert(vacatedSlotsByItemID[oldID], {
+                slotKey = sKey,
+                wasNew = (prevNewSlots[sKey] == true),
+                count = prevKnownCounts[sKey] or 1,
+            })
+        end
+    end
+
     for _, bag in ipairs(self:GetScannableBags()) do
         local isReagentBag = (bag == reagentBagID)
         local isKeyringBag = (bag == keyringID)
@@ -2665,28 +2914,89 @@ function BagsMod:UpdateInventory()
 
         for slot = 1, numSlots do
             local slotKey = GetSlotKey(bag, slot)
-            local itemInfo = self:GetItemInfoAt(bag, slot)
+            local itemInfo = currentSlotItems[slotKey] or self:GetItemInfoAt(bag, slot)
             if itemInfo and itemInfo.itemID then
                 local isTradeableBoP = false
                 if (itemInfo.quality or 0) >= 2 and (itemInfo.bindType == 1 or itemInfo.bindType == 4 or not itemInfo.bindType) then
                     isTradeableBoP = self:HasActiveTradeTimer(bag, slot)
                 end
+
+                local prevID = prevKnownSlots[slotKey]
+                local isNewSlot = false
+
+                -- Check if this slot was just filled by user drag
+                local isSlotChanged = (prevID ~= itemInfo.itemID)
+                local isFromDrag = false
+                local draggedItemWasNew = false
+                if isSlotChanged and self.draggedItemInfo and (now - self.draggedItemInfo.time) <= 3.0 and self.draggedItemInfo.itemID == itemInfo.itemID then
+                    if self.draggedItemInfo.fromSlotKey ~= slotKey then
+                        isFromDrag = true
+                        draggedItemWasNew = (self.draggedItemInfo.isNew == true)
+                        self.draggedItemInfo = nil
+                    end
+                end
+
+                -- Check if this item was moved/swapped/split from another slot in inventory
+                local isMovedItem = false
+                local movedWasNew = false
+                if isSlotChanged then
+                    local vacatedList = vacatedSlotsByItemID[itemInfo.itemID]
+                    if vacatedList and #vacatedList > 0 then
+                        local vac = table.remove(vacatedList, 1)
+                        isMovedItem = true
+                        if vac.wasNew then
+                            movedWasNew = true
+                        end
+                    end
+                end
+
                 if isTradeableBoP then
-                    self.newSlots[slotKey] = true
-                    itemInfo.isNew = true
+                    isNewSlot = true
                 elseif self.newSlots[slotKey] then
-                    itemInfo.isNew = true
+                    isNewSlot = true
+                elseif self.hoveredNewSlots and self.hoveredNewSlots[slotKey] and now < self.hoveredNewSlots[slotKey] then
+                    isNewSlot = true
+                elseif isFromDrag then
+                    if draggedItemWasNew then
+                        isNewSlot = true
+                    end
+                elseif isMovedItem then
+                    -- Moved items inherit new status if and only if they were already new
+                    if movedWasNew then
+                        isNewSlot = true
+                    end
                 elseif _G.C_NewItems and _G.C_NewItems.IsNewItem and _G.C_NewItems.IsNewItem(bag, slot) then
-                    self.newSlots[slotKey] = true
-                    itemInfo.isNew = true
-                elseif not (_G.C_NewItems and _G.C_NewItems.IsNewItem) and self.initialInventoryScanned and self.knownSlots and self.knownSlots[slotKey] == nil and not self.knownItemIDs[itemInfo.itemID] then
+                    isNewSlot = true
+                elseif self.initialInventoryScanned and not isSorting and not isTeleporting and isSlotChanged then
+                    -- Fallback for newly acquired items (boss drop, vendor buy, quest reward):
+                    -- Must NOT be an already-known item whose total count in inventory did not increase!
+                    local prevTotal = prevItemCounts[itemInfo.itemID] or 0
+                    local currentTotal = currentItemCounts[itemInfo.itemID] or (itemInfo.count or 1)
+                    if prevTotal == 0 then
+                        -- Item was never seen in inventory before -> truly new acquisition
+                        isNewSlot = true
+                    elseif currentTotal > prevTotal then
+                        -- Total count increased (e.g. duplicate boss drop)
+                        if (itemInfo.maxStack or 1) == 1 then
+                            isNewSlot = true
+                        end
+                    end
+                end
+
+                -- Junk items (poor quality or custom assigned junk) are strictly never marked as new
+                if isNewSlot and self.IsItemJunk and self:IsItemJunk(itemInfo) then
+                    isNewSlot = false
+                end
+
+                if isNewSlot then
                     self.newSlots[slotKey] = true
                     itemInfo.isNew = true
                 else
                     self.newSlots[slotKey] = nil
                     itemInfo.isNew = false
                 end
-                if self.knownSlots[slotKey] and self.knownSlots[slotKey] ~= itemInfo.itemID then
+
+                if prevID and prevID ~= itemInfo.itemID then
                     if self.dismissedNewHighlights then
                         self.dismissedNewHighlights[slotKey] = nil
                     end
@@ -2698,10 +3008,15 @@ function BagsMod:UpdateInventory()
                     end
                 end
                 self.knownSlots[slotKey] = itemInfo.itemID
+                self.knownSlotCounts = self.knownSlotCounts or {}
+                self.knownSlotCounts[slotKey] = itemInfo.count or 1
                 self.knownItemIDs[itemInfo.itemID] = true
                 table.insert(allItems, itemInfo)
             else
-                self.knownSlots[slotKey] = nil
+                if not isTeleporting then
+                    self.knownSlots[slotKey] = nil
+                    if self.knownSlotCounts then self.knownSlotCounts[slotKey] = nil end
+                end
                 self.newSlots[slotKey] = nil
                 if self.tradeTimerCache then self.tradeTimerCache[slotKey] = nil end
                 if self.hoveredNewSlots then self.hoveredNewSlots[slotKey] = nil end
@@ -2822,9 +3137,13 @@ function BagsMod:UpdateInventory()
         end
     end
 
-    if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
-        self.mainFrame:SetSize(frameW, frameH)
+    if self.db then
+        self.db.bagWindow = self.db.bagWindow or {}
+        self.db.bagWindow.width = frameW
+        self.db.bagWindow.height = frameH
     end
+
+    self.mainFrame:SetSize(frameW, frameH)
 
     local isSearching = (self.searchText and self.searchText ~= "")
 
@@ -3030,10 +3349,59 @@ function BagsMod:UpdateInventory()
                     end
                 end
 
+                -- Cosmetic indicator (shows on cosmetic items that can be learned)
+                if slotFrame.cosmeticIcon then
+                    local isCosmetic = false
+                    if itemData and (itemData.hyperlink or itemData.itemID) then
+                        if _G.C_Item and _G.C_Item.IsCosmeticItem then
+                            local ok, cosmetic = pcall(_G.C_Item.IsCosmeticItem, itemData.hyperlink or itemData.itemID)
+                            if ok and cosmetic then
+                                isCosmetic = true
+                            end
+                        end
+                    end
+                    local isLearnable = false
+                    if isCosmetic and itemData.itemID then
+                        if _G.C_TransmogCollection and _G.C_TransmogCollection.PlayerHasTransmog then
+                            local ok, hasTransmog = pcall(_G.C_TransmogCollection.PlayerHasTransmog, itemData.itemID)
+                            if ok and not hasTransmog then
+                                isLearnable = true
+                            end
+                        else
+                            isLearnable = true
+                        end
+                    end
+
+                    if isCosmetic and isLearnable then
+                        if not slotFrame.cosmeticIcon:IsShown() then slotFrame.cosmeticIcon:Show() end
+                    else
+                        if slotFrame.cosmeticIcon:IsShown() then slotFrame.cosmeticIcon:Hide() end
+                    end
+                end
+
+                -- Junk indicator (gold coin for poor quality or custom junk items)
+                if slotFrame.junkIcon then
+                    local isJunk = (self.db.showJunkIndicator ~= false) and self:IsItemJunk(itemData)
+                    if isJunk then
+                        local jSize = (self.db and self.db.junkIndicatorSize) or 14
+                        local jAnchor = (self.db and self.db.junkIndicatorAnchor) or "BOTTOMLEFT"
+                        local jX = (self.db and self.db.junkIndicatorX) or 1
+                        local jY = (self.db and self.db.junkIndicatorY) or 1
+                        if slotFrame.junkIcon.SetSize then slotFrame.junkIcon:SetSize(jSize, jSize) end
+                        if slotFrame.junkIcon.ClearAllPoints then slotFrame.junkIcon:ClearAllPoints() end
+                        slotFrame.junkIcon:SetPoint(jAnchor, slotFrame, jAnchor, jX, jY)
+                        if not slotFrame.junkIcon:IsShown() then slotFrame.junkIcon:Show() end
+                    else
+                        if slotFrame.junkIcon:IsShown() then slotFrame.junkIcon:Hide() end
+                    end
+                end
+
                 self:UpdateSlotCooldown(slotFrame)
                 slotFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
             else
                 -- Empty slot
+                if slotFrame.junkIcon and slotFrame.junkIcon:IsShown() then slotFrame.junkIcon:Hide() end
+                if slotFrame.cosmeticIcon and slotFrame.cosmeticIcon:IsShown() then slotFrame.cosmeticIcon:Hide() end
                 if slotFrame.questIcon and slotFrame.questIcon:IsShown() then slotFrame.questIcon:Hide() end
                 if slotFrame.IconBorder and slotFrame.IconBorder:IsShown() then
                     slotFrame.IconBorder:SetAlpha(0)

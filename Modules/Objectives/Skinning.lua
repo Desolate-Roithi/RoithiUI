@@ -15,6 +15,8 @@ local titleFSCache = objState.titleFSCache
 local SUB_TRACKERS = objState.SUB_TRACKERS
 local hoverHookedBlocks = objState.hoverHookedBlocks or setmetatable({}, { __mode = "k" })
 objState.hoverHookedBlocks = hoverHookedBlocks
+local barBackdrops = objState.barBackdrops or setmetatable({}, { __mode = "k" })
+objState.barBackdrops = barBackdrops
 
 function ObjectivesMod:GetFontPath()
     local f = (self.db and self.db.font)
@@ -344,17 +346,30 @@ function ObjectivesMod:SkinBlock(block)
         end
     end
 
+    if block.AddProgressBar and not self:IsHooked(block, "AddProgressBar") then
+        self:SecureHook(block, "AddProgressBar", function(b)
+            local bar = b and b.lastRegion
+            if bar then
+                self:SkinProgressBar(bar)
+            end
+        end)
+    end
+
     if not hoverHookedBlocks[block] then
         hoverHookedBlocks[block] = true
         if block.EnableMouse then block:EnableMouse(true) end
         if block.HookScript then
             block:HookScript("OnEnter", function(b)
-                if self.UpdateBlockHoverObjectives then
+                if self.HandleBlockEnter then
+                    self:HandleBlockEnter(b)
+                elseif self.UpdateBlockHoverObjectives then
                     self:UpdateBlockHoverObjectives(b, true)
                 end
             end)
             block:HookScript("OnLeave", function(b)
-                if self.UpdateBlockHoverObjectives then
+                if self.HandleBlockLeave then
+                    self:HandleBlockLeave(b)
+                elseif self.UpdateBlockHoverObjectives then
                     self:UpdateBlockHoverObjectives(b, false)
                 end
             end)
@@ -367,12 +382,16 @@ function ObjectivesMod:SkinBlock(block)
         if block.HeaderButton then
             if block.HeaderButton.HookScript then
                 block.HeaderButton:HookScript("OnEnter", function()
-                    if self.UpdateBlockHoverObjectives then
+                    if self.HandleBlockEnter then
+                        self:HandleBlockEnter(block)
+                    elseif self.UpdateBlockHoverObjectives then
                         self:UpdateBlockHoverObjectives(block, true)
                     end
                 end)
                 block.HeaderButton:HookScript("OnLeave", function()
-                    if self.UpdateBlockHoverObjectives then
+                    if self.HandleBlockLeave then
+                        self:HandleBlockLeave(block)
+                    elseif self.UpdateBlockHoverObjectives then
                         self:UpdateBlockHoverObjectives(block, false)
                     end
                 end)
@@ -400,10 +419,27 @@ function ObjectivesMod:SkinBlock(block)
             itemBtn:SetFrameLevel(block:GetFrameLevel() + 20)
         end
         if itemBtn.EnableMouse then itemBtn:EnableMouse(true) end
+        if itemBtn.HookScript then
+            itemBtn:HookScript("OnEnter", function()
+                if self.HandleBlockEnter then
+                    self:HandleBlockEnter(block)
+                elseif self.UpdateBlockHoverObjectives then
+                    self:UpdateBlockHoverObjectives(block, true)
+                end
+            end)
+            itemBtn:HookScript("OnLeave", function()
+                if self.HandleBlockLeave then
+                    self:HandleBlockLeave(block)
+                elseif self.UpdateBlockHoverObjectives then
+                    self:UpdateBlockHoverObjectives(block, false)
+                end
+            end)
+        end
     end
 
     if self.UpdateBlockHoverObjectives then
-        self:UpdateBlockHoverObjectives(block, false)
+        local isHovered = self.IsMouseOverBlock and self:IsMouseOverBlock(block)
+        self:UpdateBlockHoverObjectives(block, isHovered or false)
     end
 end
 
@@ -444,6 +480,12 @@ function ObjectivesMod:SkinProgressBar(bar)
     local height = self.db.progressBarHeight or 8
 
     local sb = bar.Bar or bar
+    if bar.Bar and bar.Bar ~= bar and bar.Bar.ClearAllPoints and bar.Bar.SetPoint then
+        bar.Bar:ClearAllPoints()
+        bar.Bar:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
+        bar.Bar:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 0)
+    end
+
     if sb and sb.SetStatusBarTexture then
         sb:SetStatusBarTexture(barTex)
         if sb.SetHeight then sb:SetHeight(height) end
@@ -451,11 +493,12 @@ function ObjectivesMod:SkinProgressBar(bar)
 
     if bar.SetHeight then bar:SetHeight(height) end
 
-    if not bar.roithiBackdrop then
-        local bg = CreateFrame("Frame", nil, bar, "BackdropTemplate")
+    local bg = barBackdrops[bar]
+    if not bg then
+        bg = CreateFrame("Frame", nil, bar, "BackdropTemplate")
         bg:SetPoint("TOPLEFT", bar, "TOPLEFT", -1, 1)
         bg:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 1, -1)
-        LibRoithi.mixins.CreateBackdrop(bg, {
+        bg:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = 1,
@@ -464,16 +507,41 @@ function ObjectivesMod:SkinProgressBar(bar)
         bg:SetBackdropColor(0.08, 0.08, 0.10, 0.8)
         bg:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.8)
         bg:SetFrameLevel(math.max(0, bar:GetFrameLevel() - 1))
-        bar.roithiBackdrop = bg
-    else
-        bar.roithiBackdrop:Show()
+        barBackdrops[bar] = bg
+    end
+    if bg then
+        local isShown = bar.IsShown and bar:IsShown()
+        bg:SetShown(isShown)
+        bg:SetAlpha((bar.GetAlpha and bar:GetAlpha()) or 1)
     end
 
-    local decorNames = { "Border", "BorderLeft", "BorderRight", "BorderMid", "BarFrame", "BarBG" }
-    for _, k in ipairs(decorNames) do
+    if sb and sb.GetRegions then
+        local activeBarTex = sb.GetStatusBarTexture and sb:GetStatusBarTexture()
+        for regionIdx, region in ipairs({ sb:GetRegions() }) do
+            if region and region.IsObjectType and region:IsObjectType("Texture") and region ~= activeBarTex then
+                if region.SetAlpha then
+                    region:SetAlpha(0)
+                end
+            end
+        end
+    end
+
+    local decorNames = { "Border", "BorderLeft", "BorderRight", "BorderMid", "BarFrame", "BarFrame2", "BarFrame3", "BarBG", "IconBG", "Sheen" }
+    for decorIdx, k in ipairs(decorNames) do
         local tex = bar[k] or (sb and sb[k])
         if tex and tex.SetAlpha then
             tex:SetAlpha(0)
+        end
+    end
+
+    local label = (sb and sb.Label) or bar.Label
+    if label and label.SetFont then
+        pcall(label.SetFont, label, self:GetFontPath(), self.db.objectiveFontSize or 10, self.db.fontOutline or "OUTLINE")
+        if label.SetShadowOffset then
+            label:SetShadowOffset(0, 0)
+        end
+        if label.SetDrawLayer then
+            label:SetDrawLayer("OVERLAY", 7)
         end
     end
 end
@@ -490,6 +558,12 @@ function ObjectivesMod:SkinExistingBlocks(tracker)
                 self:SkinBlock(block)
             end
         end)
+    end
+
+    if tracker.usedProgressBars then
+        for _, bar in pairs(tracker.usedProgressBars) do
+            self:SkinProgressBar(bar)
+        end
     end
 end
 
@@ -581,7 +655,7 @@ function ObjectivesMod:SkinAllExisting()
             if self.ApplyQuestIconVisibility then
                 self:ApplyQuestIconVisibility(block)
             end
-            if block.lines and self.UpdateBlockHoverObjectives then
+            if (block.usedLines or block.lines or block.HeaderText) and self.UpdateBlockHoverObjectives then
                 local isHovered = (block.IsMouseOver and block:IsMouseOver()) or (block.HeaderButton and block.HeaderButton.IsMouseOver and block.HeaderButton:IsMouseOver())
                 self:UpdateBlockHoverObjectives(block, isHovered or false)
             end
@@ -651,3 +725,225 @@ function ObjectivesMod:UpdateFonts()
 
     self:UpdateAllDividers()
 end
+
+function ObjectivesMod:IsAwakeningTheMachine()
+    if not _G.C_Scenario or not _G.C_Scenario.GetInfo then
+        return true
+    end
+    local name = _G.C_Scenario.GetInfo()
+    if name and name:find("Awakening the Machine") then
+        return true
+    end
+    local sot = _G.ScenarioObjectiveTracker
+    local sb = sot and sot.StageBlock
+    local stageText = sb and sb.Name and sb.Name.GetText and sb.Name:GetText()
+    if stageText and stageText:find("Awakening the Machine") then
+        return true
+    end
+    local headerText = sot and sot.Header and sot.Header.Text and sot.Header.Text.GetText and sot.Header.Text:GetText()
+    if headerText and headerText:find("Awakening the Machine") then
+        return true
+    end
+    return false
+end
+
+function ObjectivesMod:SkinStageBlock(stageBlock)
+    if not stageBlock then return end
+    if not self:IsAwakeningTheMachine() then return end
+    local hasToast = (stageBlock.NormalBG and stageBlock.NormalBG.IsShown and stageBlock.NormalBG:IsShown() and (stageBlock.NormalBG:GetAlpha() or 1) > 0.1)
+        or (stageBlock.FinalBG and stageBlock.FinalBG.IsShown and stageBlock.FinalBG:IsShown() and (stageBlock.FinalBG:GetAlpha() or 1) > 0.1)
+    local hasWidget, hasFrameTexture = false, false
+    if self.GetStageBlockWidgetHeight then
+        local _, hw, _, hft = self:GetStageBlockWidgetHeight(stageBlock)
+        hasWidget = hw and true or false
+        hasFrameTexture = hft and true or false
+    end
+    if hasToast or hasFrameTexture then
+        return
+    end
+
+    local font = self:GetFontPath()
+    local hSize = self.db.headerFontSize or 13
+    local tSize = self.db.titleFontSize or 12
+    local outline = self.db.fontOutline or "OUTLINE"
+    local tc = self.db.titleColor or self.defaultSettings.titleColor
+    if stageBlock.Stage and stageBlock.Stage.SetFont then
+        pcall(stageBlock.Stage.SetFont, stageBlock.Stage, font, hSize, outline)
+        stageBlock.Stage:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
+        if stageBlock.Stage.SetShadowOffset then
+            stageBlock.Stage:SetShadowOffset(0, 0)
+        end
+        if not hasToast and stageBlock.Stage.ClearAllPoints and stageBlock.Stage.SetPoint then
+            stageBlock.Stage:ClearAllPoints()
+            stageBlock.Stage:SetPoint("TOPLEFT", stageBlock, "TOPLEFT", 0, 0)
+        end
+    end
+    if stageBlock.Name and stageBlock.Name.SetFont then
+        pcall(stageBlock.Name.SetFont, stageBlock.Name, font, tSize, outline)
+        stageBlock.Name:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
+        if stageBlock.Name.SetShadowOffset then
+            stageBlock.Name:SetShadowOffset(0, 0)
+        end
+    end
+
+    if not hasWidget and self.GetStageBlockWidgetHeight then
+        local _, hw = self:GetStageBlockWidgetHeight(stageBlock)
+        hasWidget = hw and true or false
+    end
+    if hasWidget then
+        if stageBlock.NormalBG and stageBlock.NormalBG.SetAlpha then stageBlock.NormalBG:SetAlpha(0) end
+        if stageBlock.FinalBG and stageBlock.FinalBG.SetAlpha then stageBlock.FinalBG:SetAlpha(0) end
+        if stageBlock.GlowTexture and stageBlock.GlowTexture.SetAlpha then stageBlock.GlowTexture:SetAlpha(0) end
+        if stageBlock.ThemeOverlay and stageBlock.ThemeOverlay.SetAlpha then stageBlock.ThemeOverlay:SetAlpha(0) end
+    else
+        if stageBlock.NormalBG and stageBlock.NormalBG.SetAlpha then stageBlock.NormalBG:SetAlpha(1) end
+        if stageBlock.FinalBG and stageBlock.FinalBG.SetAlpha then stageBlock.FinalBG:SetAlpha(1) end
+        if stageBlock.ThemeOverlay and stageBlock.ThemeOverlay.SetAlpha then stageBlock.ThemeOverlay:SetAlpha(1) end
+    end
+end
+
+function ObjectivesMod:SkinChallengeModeBlock(cmBlock)
+    if not cmBlock then return end
+    local font = self:GetFontPath()
+    local tSize = self.db.titleFontSize or 12
+    local outline = self.db.fontOutline or "OUTLINE"
+    local tc = self.db.titleColor or self.defaultSettings.titleColor
+    local textChildren = { "Level", "TimeLeft", "TimeLost" }
+    for _, key in ipairs(textChildren) do
+        local fs = cmBlock[key]
+        if fs and fs.SetFont then
+            pcall(fs.SetFont, fs, font, tSize, outline)
+            if fs.SetTextColor then
+                fs:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
+            end
+            if fs.SetShadowOffset then fs:SetShadowOffset(0, 0) end
+        end
+    end
+end
+
+function ObjectivesMod:SkinScenarioLine(line)
+    if not line or line.progressBar then return end
+    if not self:IsAwakeningTheMachine() then return end
+    if line.Dash then
+        if line.Dash.SetText then line.Dash:SetText("") end
+        if line.Dash.SetAlpha then line.Dash:SetAlpha(0) end
+        if line.Dash.Hide then line.Dash:Hide() end
+    end
+    if line.Icon then
+        if line.Icon.SetAlpha then line.Icon:SetAlpha(0) end
+        if line.Icon.Hide then line.Icon:Hide() end
+    end
+    if line.CheckGlow then
+        if line.CheckGlow.SetAlpha then line.CheckGlow:SetAlpha(0) end
+        if line.CheckGlow.Hide then line.CheckGlow:Hide() end
+    end
+    if line.Check then
+        if line.Check.SetAlpha then line.Check:SetAlpha(0) end
+        if line.Check.Hide then line.Check:Hide() end
+    end
+
+    if line.Text then
+        if line.Text.ClearAllPoints and line.Text.SetPoint then
+            line.Text:ClearAllPoints()
+            line.Text:SetPoint("RIGHT", line, "RIGHT", 0, 0)
+            line.Text:SetPoint("TOPLEFT", line, "TOPLEFT", 0, 0)
+        end
+
+        local font = self:GetFontPath()
+        local objSize = self.db.objectiveFontSize or 11
+        local outline = self.db.fontOutline or "OUTLINE"
+        local oc = self.db.objectiveColor or self.defaultSettings.objectiveColor
+
+        if line.Text.SetFont then
+            pcall(line.Text.SetFont, line.Text, font, objSize, outline)
+        end
+        if line.Text.SetShadowOffset then
+            line.Text:SetShadowOffset(0, 0)
+        end
+
+        local txt = line.Text.GetText and line.Text:GetText()
+        local isComp = false
+        if line.state and _G.ObjectiveTrackerAnimLineState and line.state == _G.ObjectiveTrackerAnimLineState.Completing then
+            isComp = true
+        elseif line.color and _G.OBJECTIVE_TRACKER_COLOR and line.color == _G.OBJECTIVE_TRACKER_COLOR["Complete"] then
+            isComp = true
+        elseif line.Icon and line.Icon.GetAtlas and line.Icon:GetAtlas() == "ui-questtracker-tracker-check" then
+            isComp = true
+        elseif txt and (txt:find("^1/1") or (txt:find("^(%d+)/(%d+)") and not txt:find("^0/"))) then
+            local cur, total = txt:match("^(%d+)/(%d+)")
+            if cur and total and tonumber(cur) >= tonumber(total) and tonumber(total) > 0 then
+                isComp = true
+            end
+        end
+
+        if line.Text.SetTextColor then
+            if isComp then
+                line.Text:SetTextColor(0.35, 0.88, 0.45, 1.0)
+            else
+                line.Text:SetTextColor(oc.r or 0.92, oc.g or 0.92, oc.b or 0.92, 1.0)
+            end
+        end
+
+        local lh = line.Text.GetStringHeight and line.Text:GetStringHeight()
+        if lh and lh > 0 then
+            line:SetHeight(lh)
+        end
+    end
+end
+
+function ObjectivesMod:IsTextOnlyWidget(wf)
+    if not wf then return false end
+    if wf.Bar or wf.StatusBar or wf.Frame or wf.CurrencyContainer or wf.Spell or wf.Item or wf.Progress or wf.CaptureBar then
+        return false
+    end
+    local wType = wf.widgetType
+    local visEnum = _G.Enum and _G.Enum.UIWidgetVisualizationType
+    if visEnum then
+        if wType == visEnum.StatusBar or wType == visEnum.CaptureBar or wType == visEnum.ScenarioHeaderCurrenciesAndBackground
+            or wType == visEnum.ScenarioHeaderDelves or wType == visEnum.ScenarioHeaderTimer or wType == visEnum.HorizontalCurrencies then
+            return false
+        end
+        if wType == visEnum.TextWithState or wType == visEnum.TextWithSubtext then
+            return true
+        end
+        if wType ~= nil then
+            return false
+        end
+    end
+    return (wf.Text ~= nil) and not wf.Bar and not wf.StatusBar and not wf.Frame and not wf.CurrencyContainer and not wf.Icon
+end
+
+function ObjectivesMod:SkinTextWidget(wf)
+    if not self:IsTextOnlyWidget(wf) then return end
+    if not self:IsAwakeningTheMachine() then return end
+    local font = self:GetFontPath()
+    local tSize = self.db.titleFontSize or 12
+    local outline = self.db.fontOutline or "OUTLINE"
+    local tc = self.db.titleColor or self.defaultSettings.titleColor
+
+    local function SkinFS(fs)
+        if fs and fs.SetFont then
+            pcall(fs.SetFont, fs, font, tSize, outline)
+            if fs.SetTextColor then
+                fs:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
+            end
+            if fs.SetShadowOffset then fs:SetShadowOffset(0, 0) end
+        end
+    end
+
+    if wf.Text then
+        SkinFS(wf.Text)
+        if wf.Text.ClearAllPoints and wf.Text.SetPoint then
+            wf.Text:ClearAllPoints()
+            wf.Text:SetPoint("TOPLEFT", wf, "TOPLEFT", 0, 0)
+        end
+        local th = wf.Text.GetStringHeight and wf.Text:GetStringHeight()
+        if th and th > 0 then
+            wf:SetHeight(th)
+        end
+    end
+    if wf.SubText then
+        SkinFS(wf.SubText)
+    end
+end
+

@@ -1047,6 +1047,12 @@ function ChatMod:SkinChatFrame(cf, idx)
         local size = self.db.fontSize or 12
         local outline = self.db.fontOutline or "OUTLINE"
         pcall(cf.SetFont, cf, font, size, outline)
+        if cf.GetID and not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+            local id = cf:GetID()
+            if id and id > 0 and _G.SetChatWindowSize then
+                pcall(_G.SetChatWindowSize, id, size)
+            end
+        end
         if cf.SetShadowOffset then
             if self.db.showFontShadow then
                 cf:SetShadowOffset(1, -1)
@@ -1296,6 +1302,35 @@ function ChatMod:SkinEditBox(eb, cf, idx)
     if eb.headerSuffix then
         pcall(eb.headerSuffix.SetFont, eb.headerSuffix, font, size, outline)
     end
+    -- Style Language Button
+    local langBtn = _G[name .. "Language"] or eb.Language
+    if langBtn then
+        local ebHeight = self.db.editBoxHeight or 24
+        local btnSize = math.max(16, ebHeight - 6)
+        langBtn:SetSize(btnSize, btnSize)
+        langBtn:ClearAllPoints()
+        langBtn:SetPoint("LEFT", eb, "RIGHT", 4, 0)
+
+        local nt = langBtn.GetNormalTexture and langBtn:GetNormalTexture()
+        if nt then
+            nt:ClearAllPoints()
+            nt:SetAllPoints(langBtn)
+            nt:SetTexCoord(0.15, 0.85, 0.15, 0.85)
+        end
+        local pt = langBtn.GetPushedTexture and langBtn:GetPushedTexture()
+        if pt then
+            pt:ClearAllPoints()
+            pt:SetAllPoints(langBtn)
+            pt:SetTexCoord(0.15, 0.85, 0.15, 0.85)
+        end
+        local ht = langBtn.GetHighlightTexture and langBtn:GetHighlightTexture()
+        if ht then
+            ht:ClearAllPoints()
+            ht:SetAllPoints(langBtn)
+            ht:SetTexCoord(0.15, 0.85, 0.15, 0.85)
+        end
+    end
+
     if idx <= 10 and not editBoxFocusHooked[eb] and hooksecurefunc then
         editBoxFocusHooked[eb] = true
         hooksecurefunc(eb, "SetFocus", function()
@@ -1890,6 +1925,17 @@ function ChatMod:UpdateButtonsDock()
                 end
             end
             prevBtn = btn
+        end
+    end
+
+    local qjBtn = _G.QuickJoinToastButton
+    if qjBtn and qjBtn.SetToastDirection then
+        local right = qjBtn.GetRight and qjBtn:GetRight()
+        local screenW = _G.GetScreenWidth and _G.GetScreenWidth()
+        if right and screenW and (right + 250 < screenW) then
+            qjBtn:SetToastDirection(true)
+        else
+            qjBtn:SetToastDirection(false)
         end
     end
 

@@ -20,6 +20,10 @@ objState.skinnedBars = setmetatable({}, { __mode = "k" })
 objState.hookedTrackers = setmetatable({}, { __mode = "k" })
 objState.headerDividers = setmetatable({}, { __mode = "k" })
 objState.titleFSCache = setmetatable({}, { __mode = "k" })
+objState.barBackdrops = setmetatable({}, { __mode = "k" })
+objState.blockBaseTitles = setmetatable({}, { __mode = "k" })
+objState.blockQuestIDs = setmetatable({}, { __mode = "k" })
+local barBackdrops = objState.barBackdrops
 
 local function ForEachTrackerBlock(tracker, callback)
     if not tracker or not callback then return end
@@ -52,6 +56,10 @@ local function ForEachTrackerBlock(tracker, callback)
 end
 objState.ForEachTrackerBlock = ForEachTrackerBlock
 ObjectivesMod.ForEachTrackerBlock = ForEachTrackerBlock
+
+function ObjectivesMod:GetBarBackdrop(bar)
+    return bar and barBackdrops[bar]
+end
 
 local SUB_TRACKERS = {
     "CampaignQuestObjectiveTracker",
@@ -123,6 +131,8 @@ function ObjectivesMod:OnEnable()
     self:RegisterEvent("SCENARIO_UPDATE", "OnScenarioUpdate")
     self:RegisterEvent("SCENARIO_CRITERIA_UPDATE", "OnScenarioUpdate")
     self:RegisterEvent("UPDATE_UI_WIDGET", "OnScenarioUpdate")
+    self:RegisterEvent("UPDATE_ALL_UI_WIDGETS", "OnScenarioUpdate")
+    self:HookBelowMinimapWidget()
     self:CheckMythicPlusVisibility()
     self:CheckAutoCollapse()
 end
@@ -133,6 +143,20 @@ function ObjectivesMod:OnScenarioUpdate()
 
     if self.AlignScenarioElements then
         self:AlignScenarioElements()
+    end
+
+    if self.db and self.db.attachedToMinimap ~= false then
+        if _G.C_Timer and _G.C_Timer.After then
+            _G.C_Timer.After(0, function()
+                if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
+                    self:ApplyPosition()
+                    self:ApplyScaleAndHeight()
+                end
+            end)
+        else
+            self:ApplyPosition()
+            self:ApplyScaleAndHeight()
+        end
     end
 end
 
@@ -201,6 +225,14 @@ function ObjectivesMod:RefreshTrackers()
             end
         end
     end
+    if self.TrimTrackerGap then
+        for _, trackerName in ipairs(SUB_TRACKERS) do
+            local tracker = _G[trackerName]
+            if tracker and tracker.IsShown and tracker:IsShown() then
+                self:TrimTrackerGap(tracker)
+            end
+        end
+    end
 end
 
 function ObjectivesMod:OnZoneChanged()
@@ -229,8 +261,9 @@ function ObjectivesMod:RestoreDefaultView()
     end
 
     for bar in pairs(skinnedBars) do
-        if bar and bar.roithiBackdrop then
-            bar.roithiBackdrop:Hide()
+        local bg = barBackdrops[bar]
+        if bg and bg.Hide then
+            bg:Hide()
         end
     end
 
@@ -315,10 +348,97 @@ function ObjectivesMod:CheckAutoCollapse()
     end
 end
 
+function ObjectivesMod:GetMinimapAnchorTarget()
+    local mmMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Minimap", true)
+    local anchorTarget = nil
+    if mmMod and mmMod.dataTextBar and mmMod.dataTextBar:IsShown() and (mmMod.db and mmMod.db.showDataTextBar and mmMod.db.dataTextPosition == "OUTSIDE") then
+        anchorTarget = mmMod.dataTextBar
+    elseif mmMod and mmMod.container and mmMod.container:IsShown() then
+        anchorTarget = mmMod.container
+    end
+    if not anchorTarget then
+        anchorTarget = _G.RoithiMinimapDataTextBar or _G.RoithiMinimapContainer or _G.Minimap
+    end
+    return anchorTarget
+end
+
+function ObjectivesMod:HookBelowMinimapWidget()
+    if self.belowMinimapHooked then return end
+    local container = _G.UIWidgetBelowMinimapContainerFrame
+    if not container then return end
+
+    if container.HookScript then
+        container:HookScript("OnShow", function()
+            if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
+                self:ApplyPosition()
+                self:ApplyScaleAndHeight()
+            end
+        end)
+        container:HookScript("OnHide", function()
+            if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
+                self:ApplyPosition()
+                self:ApplyScaleAndHeight()
+            end
+        end)
+        container:HookScript("OnSizeChanged", function()
+            if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
+                self:ApplyPosition()
+                self:ApplyScaleAndHeight()
+            end
+        end)
+    end
+
+    self.belowMinimapHooked = true
+end
+
+local function IsBelowMinimapWidgetShowing(widgetContainer)
+    if not widgetContainer or not widgetContainer.IsShown or not widgetContainer:IsShown() then
+        return false
+    end
+    if widgetContainer.HasAnyWidgetsShowing then
+        return widgetContainer:HasAnyWidgetsShowing() == true
+    end
+    if widgetContainer.GetNumWidgetsShowing then
+        return (widgetContainer:GetNumWidgetsShowing() or 0) > 0
+    end
+    if widgetContainer.widgetFrames then
+        for _, widget in pairs(widgetContainer.widgetFrames) do
+            if widget and widget.IsShown and widget:IsShown() then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function ObjectivesMod:GetBelowMinimapWidgetOffset(anchorTarget)
+    local widgetContainer = _G.UIWidgetBelowMinimapContainerFrame
+    if not IsBelowMinimapWidgetShowing(widgetContainer) then
+        return 0
+    end
+
+    if anchorTarget and anchorTarget.GetBottom and widgetContainer.GetBottom then
+        local targetBottom = anchorTarget:GetBottom()
+        local widgetBottom = widgetContainer:GetBottom()
+        if targetBottom and widgetBottom and targetBottom > widgetBottom then
+            return targetBottom - widgetBottom
+        end
+    end
+
+    local widgetHeight = (widgetContainer.GetHeight and widgetContainer:GetHeight()) or 0
+    if widgetHeight > 1 then
+        return widgetHeight
+    end
+
+    return 0
+end
+
 function ObjectivesMod:ApplyPosition()
     local otf = _G.ObjectiveTrackerFrame
     if not otf then return end
     if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+
+    self:HookBelowMinimapWidget()
 
     otf.ignoreFramePositionManager = true
 
@@ -336,10 +456,7 @@ function ObjectivesMod:ApplyPosition()
     if not self.positionHooked and hooksecurefunc then
         hooksecurefunc(otf, "SetPoint", function(_, _, relativeTo)
             if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
-                local mmMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Minimap", true)
-                local expectedTarget = (mmMod and mmMod.dataTextBar and mmMod.dataTextBar:IsShown() and mmMod.db and mmMod.db.showDataTextBar and mmMod.db.dataTextPosition == "OUTSIDE" and mmMod.dataTextBar)
-                    or (mmMod and mmMod.container)
-                    or _G.RoithiMinimapDataTextBar or _G.RoithiMinimapContainer or _G.Minimap
+                local expectedTarget = self:GetMinimapAnchorTarget()
                 if relativeTo ~= expectedTarget then
                     self:ApplyPosition()
                 end
@@ -359,30 +476,28 @@ function ObjectivesMod:ApplyPosition()
 
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.editModeEventsRegistered then
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
-            if self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
-                self:ApplyPosition()
+            if self.db and self.db.enabled ~= false then
+                if self.db.attachedToMinimap ~= false then
+                    self:ApplyPosition()
+                end
+                self:ApplyScaleAndHeight()
             end
         end, self)
         _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
-            if self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
-                self:ApplyPosition()
+            if self.db and self.db.enabled ~= false then
+                if self.db.attachedToMinimap ~= false then
+                    self:ApplyPosition()
+                end
+                self:ApplyScaleAndHeight()
             end
         end, self)
         self.editModeEventsRegistered = true
     end
 
     if self.db.attachedToMinimap ~= false then
-        if otf.SetClampedToScreen then otf:SetClampedToScreen(true) end
+        if otf.SetClampedToScreen then otf:SetClampedToScreen(false) end
         local mmMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Minimap", true)
-        local anchorTarget = nil
-        if mmMod and mmMod.dataTextBar and mmMod.dataTextBar:IsShown() and (mmMod.db and mmMod.db.showDataTextBar and mmMod.db.dataTextPosition == "OUTSIDE") then
-            anchorTarget = mmMod.dataTextBar
-        elseif mmMod and mmMod.container and mmMod.container:IsShown() then
-            anchorTarget = mmMod.container
-        end
-        if not anchorTarget then
-            anchorTarget = _G.RoithiMinimapDataTextBar or _G.RoithiMinimapContainer or _G.Minimap
-        end
+        local anchorTarget = self:GetMinimapAnchorTarget()
 
         if anchorTarget and otf.ClearAllPoints and otf.SetPoint then
             local mmWidth = (mmMod and mmMod.container and mmMod.container:GetWidth()) or anchorTarget:GetWidth() or 200
@@ -394,11 +509,12 @@ function ObjectivesMod:ApplyPosition()
                 mmWidth = mmWidth + barWidth
             end
 
+            local extraY = self:GetBelowMinimapWidgetOffset(anchorTarget)
             self.settingPosition = true
             otf:ClearAllPoints()
             local xOffset = self.db.offsetX or 0
-            local yOffset = self.db.offsetY or -2
-            otf:SetPoint("TOPRIGHT", anchorTarget, "BOTTOMRIGHT", xOffset, yOffset)
+            local yOffset = self.db.offsetY or -5
+            otf:SetPoint("TOPRIGHT", anchorTarget, "BOTTOMRIGHT", xOffset, yOffset - extraY)
             self.settingPosition = nil
 
             if mmWidth > 50 then
@@ -410,6 +526,7 @@ function ObjectivesMod:ApplyPosition()
             end
         end
     else
+        if otf.SetClampedToScreen then otf:SetClampedToScreen(true) end
         local parent = otf:GetParent() or _G.UIParent
         if parent and otf.ClearAllPoints and otf.SetPoint then
             self.settingPosition = true
@@ -437,12 +554,46 @@ function ObjectivesMod:ApplyScaleAndHeight()
     local otf = _G.ObjectiveTrackerFrame
     if not otf or not self.db or not self.db.enabled then return end
 
+    if otf.UpdateHeight and not self.updateHeightHooked and hooksecurefunc then
+        hooksecurefunc(otf, "UpdateHeight", function()
+            if not self.settingHeight and self.db and self.db.enabled ~= false then
+                self.settingHeight = true
+                self:ApplyScaleAndHeight()
+                self.settingHeight = nil
+            end
+        end)
+        self.updateHeightHooked = true
+    end
+
     local scale = self.db.scale or 1.0
     if otf.SetScale then
         otf:SetScale(scale)
     end
 
     local maxH = self.db.maxHeight or 800
+    if self.db.attachedToMinimap ~= false then
+        local anchorTarget = self:GetMinimapAnchorTarget()
+        if anchorTarget and anchorTarget.GetBottom then
+            local bottomY = anchorTarget:GetBottom()
+            if bottomY and bottomY > 50 then
+                local bottomMargin = 20
+                local extraY = self:GetBelowMinimapWidgetOffset(anchorTarget)
+                local availableH = math.floor(bottomY - extraY - bottomMargin)
+                if availableH > 100 then
+                    maxH = math.min(maxH, availableH)
+                end
+            end
+        end
+        if otf.SetClampedToScreen then
+            otf:SetClampedToScreen(false)
+        end
+    else
+        if otf.SetClampedToScreen then
+            otf:SetClampedToScreen(true)
+        end
+    end
+
+    self.lastMaxHeight = maxH
     if otf.SetHeight then
         otf:SetHeight(maxH)
     end
@@ -450,11 +601,20 @@ end
 
 function ObjectivesMod:OnPlayerEnteringWorld()
     C_Timer.After(0.3, function()
+        self:HookBelowMinimapWidget()
         self:HookAllTrackers()
         self:SkinAllExisting()
+        self:ApplyScaleAndHeight()
         self:ApplyPosition()
         self:CheckAutoCollapse()
         self:RefreshTrackers()
+    end)
+    -- Second pass: Blizzard re-lays out blocks from QUEST_LOG_UPDATE after our first pass.
+    -- This deferred refresh ensures block heights are correct without requiring a hover.
+    C_Timer.After(1.0, function()
+        if self:IsEnabled() then
+            self:RefreshTrackers()
+        end
     end)
 end
 
@@ -464,7 +624,7 @@ function ObjectivesMod:RegisterWithEditMode()
     if not otf then return end
 
     if otf.SetMovable then otf:SetMovable(true) end
-    if otf.SetClampedToScreen then otf:SetClampedToScreen(true) end
+    if otf.SetClampedToScreen then otf:SetClampedToScreen(self.db.attachedToMinimap == false) end
 
     local defaults = {
         point = "TOPRIGHT",
@@ -481,7 +641,9 @@ function ObjectivesMod:RegisterWithEditMode()
             get = function() return self.db.attachedToMinimap ~= false end,
             set = function(_, val)
                 self.db.attachedToMinimap = val
+                if otf.SetClampedToScreen then otf:SetClampedToScreen(not val) end
                 self:ApplyPosition()
+                self:ApplyScaleAndHeight()
             end,
         },
     }
@@ -489,8 +651,15 @@ function ObjectivesMod:RegisterWithEditMode()
     local buttons = {
         {
             text = L["Open Full Settings"] or "Open Full Settings",
+            click = function()
+                if RoithiUI and RoithiUI.OpenSettings then
+                    RoithiUI:OpenSettings("objectives")
+                end
+            end,
             onClick = function()
-                RoithiUI:OpenSettings("Objectives")
+                if RoithiUI and RoithiUI.OpenSettings then
+                    RoithiUI:OpenSettings("objectives")
+                end
             end,
         },
     }
@@ -549,15 +718,23 @@ function ObjectivesMod:HookTracker(tracker)
         return
     end
 
-    tracker.blockOffsetX = 4
-    tracker.leftMargin = 0
-    if self.db and self.db.hoverObjectiveText then
-        tracker.fromBlockOffsetY = -4
-    end
-
     if tracker.SetCollapsed and not self:IsHooked(tracker, "SetCollapsed") then
         self:SecureHook(tracker, "SetCollapsed", function()
             self:UpdateAllDividers()
+        end)
+    end
+
+    if tracker.EndLayout and not self:IsHooked(tracker, "EndLayout") then
+        self:SecureHook(tracker, "EndLayout", function()
+            ForEachTrackerBlock(tracker, function(block)
+                if self.UpdateBlockHoverObjectives then
+                    local isHovered = (block.IsMouseOver and block:IsMouseOver()) or (block.HeaderButton and block.HeaderButton.IsMouseOver and block.HeaderButton:IsMouseOver())
+                    self:UpdateBlockHoverObjectives(block, isHovered or false)
+                end
+            end)
+            if self.TrimTrackerGap then
+                self:TrimTrackerGap(tracker)
+            end
         end)
     end
 
@@ -571,9 +748,10 @@ function ObjectivesMod:HookTracker(tracker)
     end
 
     if tracker.GetProgressBar and not self:IsHooked(tracker, "GetProgressBar") then
-        self:SecureHook(tracker, "GetProgressBar", function(_, line, _)
-            if line and line.progressBar then
-                self:SkinProgressBar(line.progressBar)
+        self:SecureHook(tracker, "GetProgressBar", function(t, line, _)
+            local bar = (t and t.usedProgressBars and t.usedProgressBars[line]) or (line and line.progressBar)
+            if bar then
+                self:SkinProgressBar(bar)
             end
         end)
     end
@@ -592,16 +770,17 @@ function ObjectivesMod:HookTracker(tracker)
             local objSize = self.db.objectiveFontSize or 11
             local outline = self.db.fontOutline or "OUTLINE"
 
+            -- Collect the blocks to re-skin / re-update so we can defer
+            -- the height correction to the next frame. Blizzard's own
+            -- LayoutContents continues after this hook and resets block
+            -- heights; a C_Timer.After(0) deferred call wins the race.
+            local pendingBlocks = {}
             ForEachTrackerBlock(tracker, function(block)
                 if not skinnedBlocks[block] then
                     self:SkinBlock(block)
                 else
                     if self.ApplyQuestLevelToTitle then
                         self:ApplyQuestLevelToTitle(block)
-                    end
-                    if self.UpdateBlockHoverObjectives then
-                        local isHovered = block.IsMouseOver and block:IsMouseOver()
-                        self:UpdateBlockHoverObjectives(block, isHovered or false)
                     end
                     local formatLine = function(line)
                         if line then
@@ -618,8 +797,15 @@ function ObjectivesMod:HookTracker(tracker)
                     elseif block.usedLines then
                         for _, line in pairs(block.usedLines) do formatLine(line) end
                     end
+                    pendingBlocks[#pendingBlocks + 1] = block
                 end
             end)
+
+            if tracker.usedProgressBars then
+                for _, bar in pairs(tracker.usedProgressBars) do
+                    self:SkinProgressBar(bar)
+                end
+            end
             self:UpdateAllDividers()
         end)
     end

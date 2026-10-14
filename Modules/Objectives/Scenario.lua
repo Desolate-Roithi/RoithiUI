@@ -120,6 +120,7 @@ end
 
 function ObjectivesMod:AlignWidgetContainer(wc, parentBlock, topOffsetY)
     if not wc or not parentBlock then return end
+    if not self:IsAwakeningTheMachine() then return end
 
     -- Pure visual styling only: avoid ClearAllPoints or SetWidth on WidgetContainer
     -- which triggers OnSizeChanged -> MarkDirty in tainted execution context.
@@ -127,26 +128,16 @@ function ObjectivesMod:AlignWidgetContainer(wc, parentBlock, topOffsetY)
     local trackerWidth = (otf and otf.GetWidth and otf:GetWidth()) or 220
     if trackerWidth < 50 then trackerWidth = 220 end
 
-    local font = self:GetFontPath()
-    local tSize = self.db.titleFontSize or 12
-    local outline = self.db.fontOutline or "OUTLINE"
-    local tc = self.db.titleColor or self.defaultSettings.titleColor
-
-    local function SkinFS(fs)
-        if fs and fs.SetFont then
-            pcall(fs.SetFont, fs, font, tSize, outline)
-            fs:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
-            if fs.SetShadowOffset then fs:SetShadowOffset(0, 0) end
-        end
-    end
-
     local function FitWidgets()
         if not wc.widgetFrames then return end
         local maxW = trackerWidth - 4
         local prev = nil
         for _, widgetFrame in pairs(wc.widgetFrames) do
             local isComplexHeader = widgetFrame and (widgetFrame.HeaderText or widgetFrame.CurrencyContainer or widgetFrame.Frame)
-            if not isComplexHeader then
+            local isBarWidget = widgetFrame and (widgetFrame.Bar or widgetFrame.StatusBar)
+            local isTextOnly = self.IsTextOnlyWidget and self:IsTextOnlyWidget(widgetFrame)
+
+            if not isComplexHeader and not isBarWidget then
                 if widgetFrame and widgetFrame.GetWidth then
                     local w = widgetFrame:GetWidth()
                     if w and w > maxW and maxW > 50 then
@@ -167,28 +158,9 @@ function ObjectivesMod:AlignWidgetContainer(wc, parentBlock, topOffsetY)
                 end
             end
 
-            -- Skin typography and flush text alignment
-            if widgetFrame then
-                if isComplexHeader and widgetFrame.HeaderText then
-                    SkinFS(widgetFrame.HeaderText)
-                else
-                    local hasIcon = widgetFrame.Icon and widgetFrame.Icon.IsShown and widgetFrame.Icon:IsShown() and (widgetFrame.Icon:GetTexture() or widgetFrame.Icon:GetAtlas())
-                    if widgetFrame.Text then
-                        SkinFS(widgetFrame.Text)
-                        if widgetFrame.Text.ClearAllPoints and widgetFrame.Text.SetPoint then
-                            widgetFrame.Text:ClearAllPoints()
-                            if hasIcon then
-                                widgetFrame.Text:SetPoint("LEFT", widgetFrame.Icon, "RIGHT", 4, 0)
-                            else
-                                widgetFrame.Text:SetPoint("TOPLEFT", widgetFrame, "TOPLEFT", 0, 0)
-                            end
-                        end
-                        local th = widgetFrame.Text.GetStringHeight and widgetFrame.Text:GetStringHeight()
-                        if th and th > 0 then
-                            widgetFrame:SetHeight(th)
-                        end
-                    end
-                end
+            -- Apply fonts and flush text alignment ONLY to text-only widgets!
+            if isTextOnly and self.SkinTextWidget then
+                self:SkinTextWidget(widgetFrame)
             end
         end
     end
@@ -213,7 +185,7 @@ function ObjectivesMod:AlignEventTracker(tracker)
     end
 
     if tracker.Block then
-        if _G.ObjectiveTrackerUIWidgetContainer then
+        if _G.ObjectiveTrackerUIWidgetContainer and self:IsAwakeningTheMachine() then
             self:AlignWidgetContainer(_G.ObjectiveTrackerUIWidgetContainer, tracker.Block, 0)
         end
     end
@@ -225,51 +197,24 @@ function ObjectivesMod:AlignEventTracker(tracker)
     end
 end
 
-function ObjectivesMod:SkinStageBlock(stageBlock)
-    if not stageBlock then return end
-    local font = self:GetFontPath()
-    local hSize = self.db.headerFontSize or 13
-    local tSize = self.db.titleFontSize or 12
-    local outline = self.db.fontOutline or "OUTLINE"
-    local tc = self.db.titleColor or self.defaultSettings.titleColor
-
-    local hasToast = stageBlock.NormalBG and stageBlock.NormalBG:IsShown() and (stageBlock.NormalBG:GetAlpha() or 1) > 0.1
-    if stageBlock.Stage and stageBlock.Stage.SetFont then
-        pcall(stageBlock.Stage.SetFont, stageBlock.Stage, font, hSize, outline)
-        stageBlock.Stage:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
-        if stageBlock.Stage.SetShadowOffset then
-            stageBlock.Stage:SetShadowOffset(0, 0)
-        end
-        if not hasToast and stageBlock.Stage.ClearAllPoints and stageBlock.Stage.SetPoint then
-            stageBlock.Stage:ClearAllPoints()
-            stageBlock.Stage:SetPoint("TOPLEFT", stageBlock, "TOPLEFT", 0, 0)
-        end
-    end
-    if stageBlock.Name and stageBlock.Name.SetFont then
-        pcall(stageBlock.Name.SetFont, stageBlock.Name, font, tSize, outline)
-        stageBlock.Name:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
-        if stageBlock.Name.SetShadowOffset then
-            stageBlock.Name:SetShadowOffset(0, 0)
-        end
-    end
-
-    local _, hasWidget = self:GetStageBlockWidgetHeight(stageBlock)
-    if hasWidget then
-        if stageBlock.NormalBG and stageBlock.NormalBG.SetAlpha then stageBlock.NormalBG:SetAlpha(0) end
-        if stageBlock.FinalBG and stageBlock.FinalBG.SetAlpha then stageBlock.FinalBG:SetAlpha(0) end
-        if stageBlock.GlowTexture and stageBlock.GlowTexture.SetAlpha then stageBlock.GlowTexture:SetAlpha(0) end
-        if stageBlock.ThemeOverlay and stageBlock.ThemeOverlay.SetAlpha then stageBlock.ThemeOverlay:SetAlpha(0) end
-    else
-        if stageBlock.NormalBG and stageBlock.NormalBG.SetAlpha then stageBlock.NormalBG:SetAlpha(1) end
-        if stageBlock.FinalBG and stageBlock.FinalBG.SetAlpha then stageBlock.FinalBG:SetAlpha(1) end
-        if stageBlock.ThemeOverlay and stageBlock.ThemeOverlay.SetAlpha then stageBlock.ThemeOverlay:SetAlpha(1) end
-    end
-end
 
 function ObjectivesMod:TrimScenarioTrailingGap(sot, lastLine)
     if _G.InCombatLockdown and _G.InCombatLockdown() then return end
     if not sot or not sot.SetHeight or not sot.GetTop then return end
     if not (sot.IsShown and sot:IsShown()) then return end
+
+    local isDelve = false
+    if _G.C_Scenario and _G.C_Scenario.GetInfo then
+        local _, _, _, _, _, _, _, _, _, scenarioType = _G.C_Scenario.GetInfo()
+        if scenarioType == "delves-scenario" then
+            isDelve = true
+        end
+    end
+    if not isDelve and _G.C_ScenarioInfo and _G.C_ScenarioInfo.IsTieredEntranceScenario and _G.C_ScenarioInfo.IsTieredEntranceScenario() then
+        isDelve = true
+    end
+
+    if not self:IsAwakeningTheMachine() and not isDelve then return end
 
     local lowest = nil
     if lastLine and lastLine.GetBottom and (lastLine.IsShown == nil or lastLine:IsShown()) then
@@ -278,6 +223,32 @@ function ObjectivesMod:TrimScenarioTrailingGap(sot, lastLine)
         if bar and bar.IsShown and bar:IsShown() and bar.GetBottom then
             local b = bar:GetBottom()
             if b and lowest and b < lowest then lowest = b end
+        end
+    end
+
+    local ob = sot.ObjectivesBlock
+    if ob and ob.usedLines then
+        for _, line in pairs(ob.usedLines) do
+            if line and (line.IsShown == nil or line:IsShown()) and line.GetBottom then
+                local b = line:GetBottom()
+                if b and (not lowest or b < lowest) then lowest = b end
+            end
+        end
+    end
+    if ob and ob.usedProgressBars then
+        for _, bar in pairs(ob.usedProgressBars) do
+            if bar and (bar.IsShown == nil or bar:IsShown()) and bar.GetBottom then
+                local b = bar:GetBottom()
+                if b and (not lowest or b < lowest) then lowest = b end
+            end
+        end
+    end
+    if sot.usedProgressBars then
+        for _, bar in pairs(sot.usedProgressBars) do
+            if bar and (bar.IsShown == nil or bar:IsShown()) and bar.GetBottom then
+                local b = bar:GetBottom()
+                if b and (not lowest or b < lowest) then lowest = b end
+            end
         end
     end
 
@@ -291,7 +262,7 @@ function ObjectivesMod:TrimScenarioTrailingGap(sot, lastLine)
 
     local top = sot:GetTop()
     if type(top) == "number" and type(lowest) == "number" and top > lowest then
-        local bottomPad = 4
+        local bottomPad = -4
         local desired = math.floor(top - lowest + bottomPad + 0.5)
         local current = (sot.GetHeight and sot:GetHeight()) or 0
         if desired > 0 and math.abs(desired - current) > 0.5 then
@@ -320,89 +291,88 @@ function ObjectivesMod:AlignScenarioElements()
         self:SkinHeader(sot.Header)
     end
 
-    if sot.StageBlock then
-        self:SkinStageBlock(sot.StageBlock)
-        local sb = sot.StageBlock
-        local widgetH, hasWidget, widgetW, hasFrameTexture = self:GetStageBlockWidgetHeight(sb)
-        local customH = (self.db and self.db.scenarioStageHeight) or 63
-        local hasToast = sb.NormalBG and sb.NormalBG:IsShown() and (sb.NormalBG:GetAlpha() or 1) > 0.1
-        local isTextOnly = (hasWidget and not hasFrameTexture) or (not hasWidget and not hasToast)
+    local sb = sot.StageBlock
+    local widgetH, hasWidget, widgetW, hasFrameTexture = nil, false, nil, false
+    if sb and self.GetStageBlockWidgetHeight then
+        widgetH, hasWidget, widgetW, hasFrameTexture = self:GetStageBlockWidgetHeight(sb)
+    end
+    local cmBlock = sot.ChallengeModeBlock
+    local pgBlock = sot.ProvingGroundsBlock
+    local hasDungeonHeader = (cmBlock and cmBlock.IsShown and cmBlock:IsShown())
+        or (pgBlock and pgBlock.IsShown and pgBlock:IsShown())
+
+    local isDelve = false
+    if _G.C_Scenario and _G.C_Scenario.GetInfo then
+        local _, _, _, _, _, _, _, _, _, scenarioType = _G.C_Scenario.GetInfo()
+        if scenarioType == "delves-scenario" then
+            isDelve = true
+        end
+    end
+    if not isDelve and _G.C_ScenarioInfo and _G.C_ScenarioInfo.IsTieredEntranceScenario and _G.C_ScenarioInfo.IsTieredEntranceScenario() then
+        isDelve = true
+    end
+    if not isDelve and hasFrameTexture then
+        isDelve = true
+    end
+
+    local hasToast = not hasWidget and not isDelve and sb and sb.IsShown and sb:IsShown() and (
+        (sb.NormalBG and sb.NormalBG.IsShown and sb.NormalBG:IsShown() and (sb.NormalBG:GetAlpha() or 1) > 0.1)
+        or (sb.FinalBG and sb.FinalBG.IsShown and sb.FinalBG:IsShown() and (sb.FinalBG:GetAlpha() or 1) > 0.1)
+    )
+
+    local isTextOnly = (hasWidget and not hasFrameTexture and not isDelve) or (not hasWidget and not isDelve and not hasToast and not hasDungeonHeader)
+    local isDelveWidget = (isDelve or (hasWidget and hasFrameTexture)) and not hasDungeonHeader
+
+    -- Complete Non-Interference: If a standard scenario toast or dungeon header is present, NEVER touch, move, or style it!
+    if hasToast or hasDungeonHeader then
+        self.isAligningScenario = nil
+        return
+    end
+
+    if sb and sb.IsShown and sb:IsShown() and not hasDungeonHeader then
+        self:SkinStageBlock(sb)
 
         local otf = _G.ObjectiveTrackerFrame
         local trackerWidth = (otf and otf.GetWidth and otf:GetWidth()) or (self.db and self.db.detachedWidth) or 235
         if trackerWidth < 100 then trackerWidth = 235 end
 
-        local stageW = isTextOnly and trackerWidth or ((hasWidget and (widgetW or 253)) or 218)
-        local stageXOff = (self.db and self.db.scenarioStageXOffset) or 0
-        local dungeonBaseX = (not isTextOnly and not hasWidget) and -16 or 0
-        local xOffset = isTextOnly and stageXOff or (math.floor((trackerWidth - stageW) / 2) + dungeonBaseX + stageXOff)
+        local stageW = (isDelveWidget and (widgetW or 253)) or (isTextOnly and trackerWidth) or ((hasWidget and (widgetW or 253)) or 218)
+        local xOffset
+        if isDelveWidget then
+            local delveXOff = (self.db and self.db.delveWidgetXOffset) or 0
+            xOffset = math.floor((trackerWidth - stageW) / 2 + 0.5) + delveXOff
+        else
+            local stageXOff = (self.db and self.db.scenarioStageXOffset) or 0
+            local textOnlyX = 4
+            xOffset = textOnlyX + stageXOff
+        end
+        local desiredH = isTextOnly and 16 or (isDelveWidget and (widgetH or 64)) or (hasWidget and (widgetH or ((self.db and self.db.scenarioStageWidgetHeight) or 83)) or 63)
+        local yOffset = -10
 
-        local desiredH = isTextOnly and 16 or (hasWidget and (widgetH or ((self.db and self.db.scenarioStageWidgetHeight) or 83)) or customH)
-        local yOffset = -6
+        local relTo = sot.Header and sot.Header:IsShown() and sot.Header or (sot.ContentsFrame or sot)
+        local relPt = (relTo == (sot.ContentsFrame or sot)) and "TOPLEFT" or "BOTTOMLEFT"
 
-        if sb.ClearAllPoints and sb.SetPoint then
+        local isSbPositioned = false
+        if sb.GetPoint then
+            local p, rel, rp, x, y = sb:GetPoint(1)
+            if p == "TOPLEFT" and rel == relTo and rp == relPt and math.abs((x or 0) - xOffset) < 0.5 and math.abs((y or 0) - yOffset) < 0.5 then
+                isSbPositioned = true
+            end
+        end
+
+        if not isSbPositioned and sb.ClearAllPoints and sb.SetPoint then
             sb:ClearAllPoints()
-            local relTo = sot.Header and sot.Header:IsShown() and sot.Header or (sot.ContentsFrame or sot)
-            local relPt = (relTo == (sot.ContentsFrame or sot)) and "TOPLEFT" or "BOTTOMLEFT"
             sb:SetPoint("TOPLEFT", relTo, relPt, xOffset, yOffset)
         end
-        if sb.SetWidth then
+        if sb.SetWidth and math.abs(((sb.GetWidth and sb:GetWidth()) or 0) - stageW) > 0.5 then
             sb:SetWidth(stageW)
         end
-        sb:SetHeight(desiredH)
+        if sb.SetHeight and math.abs(((sb.GetHeight and sb:GetHeight()) or 0) - desiredH) > 0.5 then
+            sb:SetHeight(desiredH)
+        end
 
-        if hasWidget and sb.WidgetContainer then
+        if hasWidget and sb.WidgetContainer and self:IsAwakeningTheMachine() then
             self:AlignWidgetContainer(sb.WidgetContainer, sb, 0)
-        end
-
-        if sb.HookScript and not self.hookedStageBlockOnShow then
-            self.hookedStageBlockOnShow = true
-            sb:HookScript("OnShow", function()
-                if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
-                    self:AlignScenarioElements()
-                end
-            end)
-        end
-    end
-
-    local cmBlock = sot.ChallengeModeBlock
-    if cmBlock then
-        if cmBlock.ClearAllPoints and cmBlock.SetPoint and cmBlock.GetPoint and cmBlock:GetNumPoints() > 0 then
-            local _, relativeTo, relativePoint = cmBlock:GetPoint(1)
-            if relativeTo then
-                cmBlock:ClearAllPoints()
-                local relPt = (relativePoint == "TOP" or relativePoint == "TOPRIGHT" or relativePoint == "TOPLEFT") and "TOPRIGHT" or "BOTTOMRIGHT"
-                cmBlock:SetPoint("TOPRIGHT", relativeTo, relPt, -4, -6)
-                if cmBlock.SetWidth then cmBlock:SetWidth(251) end
-            end
-        end
-        local font = self:GetFontPath()
-        local tSize = self.db.titleFontSize or 12
-        local outline = self.db.fontOutline or "OUTLINE"
-        local tc = self.db.titleColor or self.defaultSettings.titleColor
-        local textChildren = { "Level", "TimeLeft", "TimeLost" }
-        for _, key in ipairs(textChildren) do
-            local fs = cmBlock[key]
-            if fs and fs.SetFont then
-                pcall(fs.SetFont, fs, font, tSize, outline)
-                if fs.SetTextColor then
-                    fs:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
-                end
-                if fs.SetShadowOffset then fs:SetShadowOffset(0, 0) end
-            end
-        end
-    end
-
-    local pgBlock = sot.ProvingGroundsBlock
-    if pgBlock then
-        if pgBlock.ClearAllPoints and pgBlock.SetPoint and pgBlock.GetPoint and pgBlock:GetNumPoints() > 0 then
-            local _, relativeTo, relativePoint = pgBlock:GetPoint(1)
-            if relativeTo then
-                pgBlock:ClearAllPoints()
-                local relPt = (relativePoint == "TOP" or relativePoint == "TOPRIGHT" or relativePoint == "TOPLEFT") and "TOPRIGHT" or "BOTTOMRIGHT"
-                pgBlock:SetPoint("TOPRIGHT", relativeTo, relPt, -4, -6)
-                if pgBlock.SetWidth then pgBlock:SetWidth(251) end
-            end
         end
     end
 
@@ -410,90 +380,39 @@ function ObjectivesMod:AlignScenarioElements()
     local SCENARIO_LINE_INSET = 12
     local ob = sot.ObjectivesBlock
     if ob then
-        if ob.ClearAllPoints and ob.SetPoint then
-            local relTo = (sot.StageBlock and sot.StageBlock:IsShown() and sot.StageBlock)
-                or (sot.Header and sot.Header:IsShown() and sot.Header)
-                or (sot.ContentsFrame or sot)
-            local relPt = (relTo == (sot.ContentsFrame or sot)) and "TOPLEFT" or "BOTTOMLEFT"
-            local isUnderStageBlock = (relTo == sot.StageBlock)
-            local stageBottomOffsetY = isUnderStageBlock and -16 or -4
-            ob:ClearAllPoints()
-            ob:SetPoint("RIGHT", sot.ContentsFrame or sot, "RIGHT", -4, 0)
-            ob:SetPoint("TOPLEFT", relTo, relPt, SCENARIO_LINE_INSET, stageBottomOffsetY)
+        local relTo = (sb and sb:IsShown() and sb)
+            or (sot.Header and sot.Header:IsShown() and sot.Header)
+            or (sot.ContentsFrame or sot)
+        local relPt = (relTo == (sot.ContentsFrame or sot)) and "TOPLEFT" or "BOTTOMLEFT"
+        local isUnderStageBlock = (relTo == sb)
+        local stageBottomOffsetY = isUnderStageBlock and -4 or -2
+        local parentFrame = sot.ContentsFrame or sot
+
+        local isObPositioned = false
+        if ob.GetPoint then
+            local p, rel, rp, _, y = ob:GetPoint(1)
+            if p == "TOP" and rel == relTo and rp == relPt and math.abs((y or 0) - stageBottomOffsetY) < 0.5 then
+                isObPositioned = true
+            end
         end
 
-        local font = self:GetFontPath()
-        local objSize = self.db.objectiveFontSize or 11
-        local outline = self.db.fontOutline or "OUTLINE"
-        local oc = self.db.objectiveColor or self.defaultSettings.objectiveColor
+        if not isObPositioned and ob.ClearAllPoints and ob.SetPoint then
+            ob:ClearAllPoints()
+            ob:SetPoint("RIGHT", parentFrame, "RIGHT", -4, 0)
+            ob:SetPoint("LEFT", parentFrame, "LEFT", SCENARIO_LINE_INSET, 0)
+            ob:SetPoint("TOP", relTo, relPt, 0, stageBottomOffsetY)
+        end
 
         local forEach = self.ForEachBlockLine or objState.ForEachBlockLine
-        if forEach then
+        if forEach and self:IsAwakeningTheMachine() then
             forEach(ob, function(line)
-            if line then
-                if line.Dash then
-                    if line.Dash.SetText then line.Dash:SetText("") end
-                    if line.Dash.SetAlpha then line.Dash:SetAlpha(0) end
-                    if line.Dash.Hide then line.Dash:Hide() end
+                if line and self.SkinScenarioLine then
+                    self:SkinScenarioLine(line)
                 end
-                if line.Icon then
-                    if line.Icon.SetAlpha then line.Icon:SetAlpha(0) end
-                    if line.Icon.Hide then line.Icon:Hide() end
-                end
-                if line.CheckGlow then
-                    if line.CheckGlow.SetAlpha then line.CheckGlow:SetAlpha(0) end
-                    if line.CheckGlow.Hide then line.CheckGlow:Hide() end
-                end
-                if line.Check then
-                    if line.Check.SetAlpha then line.Check:SetAlpha(0) end
-                    if line.Check.Hide then line.Check:Hide() end
-                end
-
-                if line.Text then
-                    if line.Text.ClearAllPoints and line.Text.SetPoint then
-                        line.Text:ClearAllPoints()
-                        line.Text:SetPoint("RIGHT", line, "RIGHT", 0, 0)
-                        line.Text:SetPoint("TOPLEFT", line, "TOPLEFT", 0, 0)
-                    end
-
-                    if line.Text.SetFont then
-                        pcall(line.Text.SetFont, line.Text, font, objSize, outline)
-                    end
-                    if line.Text.SetShadowOffset then
-                        line.Text:SetShadowOffset(0, 0)
-                    end
-
-                    local txt = line.Text.GetText and line.Text:GetText()
-                    local isComp = false
-                    if line.state and _G.ObjectiveTrackerAnimLineState and line.state == _G.ObjectiveTrackerAnimLineState.Completing then
-                        isComp = true
-                    elseif line.color and _G.OBJECTIVE_TRACKER_COLOR and line.color == _G.OBJECTIVE_TRACKER_COLOR["Complete"] then
-                        isComp = true
-                    elseif line.Icon and line.Icon.GetAtlas and line.Icon:GetAtlas() == "ui-questtracker-tracker-check" then
-                        isComp = true
-                    elseif txt and (txt:find("^1/1") or (txt:find("^(%d+)/(%d+)") and not txt:find("^0/"))) then
-                        local cur, total = txt:match("^(%d+)/(%d+)")
-                        if cur and total and tonumber(cur) >= tonumber(total) and tonumber(total) > 0 then
-                            isComp = true
-                        end
-                    end
-
-                    if isComp then
-                        line.Text:SetTextColor(0.35, 0.88, 0.45, 1.0)
-                    else
-                        line.Text:SetTextColor(oc.r or 0.92, oc.g or 0.92, oc.b or 0.92, 1.0)
-                    end
-
-                    local lh = line.Text.GetStringHeight and line.Text:GetStringHeight()
-                    if lh and lh > 0 then
-                        line:SetHeight(lh)
-                    end
-                end
-            end
-        end)
+            end)
         end
 
-        if ob.usedLines then
+        if self:IsAwakeningTheMachine() and ob.usedLines then
             local keys = {}
             for key, line in pairs(ob.usedLines) do
                 if type(key) == "number" and line and line.SetPoint then
@@ -517,15 +436,22 @@ function ObjectivesMod:AlignScenarioElements()
                 prev = line
             end
             lastLine = prev
+        elseif ob.usedLines then
+            local maxKey = 0
+            for key in pairs(ob.usedLines) do
+                if type(key) == "number" and key > maxKey then maxKey = key end
+            end
+            lastLine = ob.usedLines[maxKey]
         end
-        if ob.usedProgressBars then
+
+        if ob.usedProgressBars and self:IsAwakeningTheMachine() then
             for _, bar in pairs(ob.usedProgressBars) do
                 self:SkinProgressBar(bar)
             end
         end
     end
 
-    if sot.usedProgressBars then
+    if sot.usedProgressBars and self:IsAwakeningTheMachine() then
         for _, bar in pairs(sot.usedProgressBars) do
             self:SkinProgressBar(bar)
         end

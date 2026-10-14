@@ -7,6 +7,12 @@ ns.Objectives = objState
 
 local skinnedBlocks = objState.skinnedBlocks
 local titleFSCache = objState.titleFSCache
+local blockBaseTitles = objState.blockBaseTitles or setmetatable({}, { __mode = "k" })
+objState.blockBaseTitles = blockBaseTitles
+local blockQuestIDs = objState.blockQuestIDs or setmetatable({}, { __mode = "k" })
+objState.blockQuestIDs = blockQuestIDs
+local barBackdrops = objState.barBackdrops or setmetatable({}, { __mode = "k" })
+objState.barBackdrops = barBackdrops
 
 local questZoneCache = {}
 local questTitleCache = {}
@@ -457,14 +463,14 @@ local function GetCleanQuestTitle(block, questID, curText)
         local t = _G.C_QuestLog.GetTitleForQuestID(questID)
         if t and t ~= "" then
             if block then
-                block.roithiBaseTitle = t
-                block.roithiQuestID = questID
+                blockBaseTitles[block] = t
+                blockQuestIDs[block] = questID
             end
             return t
         end
     end
-    if block and block.roithiBaseTitle and block.roithiQuestID == questID then
-        return block.roithiBaseTitle
+    if block and blockBaseTitles[block] and blockQuestIDs[block] == questID then
+        return blockBaseTitles[block]
     end
     local clean = curText:gsub("^%s*|c%x%x%x%x%x%x%x%x%[[^%]]+%]%|r%s*", "")
     clean = clean:gsub("^%s*%[[^%]]+%]%s*", "")
@@ -479,8 +485,8 @@ local function GetCleanQuestTitle(block, questID, curText)
     clean = clean:gsub("%s*|c%x%x%x%x%x%x%x%x%[✓%]%|r%s*$", "")
     clean = clean:gsub("%s*%[✓%]%s*$", "")
     if block then
-        block.roithiBaseTitle = clean
-        block.roithiQuestID = questID
+        blockBaseTitles[block] = clean
+        blockQuestIDs[block] = questID
     end
     return clean
 end
@@ -597,11 +603,74 @@ local function IsLineCompleted(line, block)
     return false
 end
 
+function ObjectivesMod:IsMouseOverBlock(block)
+    if not block then return false end
+    if block.IsMouseOver and block:IsMouseOver() then return true end
+    if block.HeaderButton and block.HeaderButton.IsMouseOver and block.HeaderButton:IsMouseOver() then return true end
+    local itemBtn = block.itemButton or block.ItemButton or (block.GetItemButton and block:GetItemButton())
+    if itemBtn and itemBtn.IsMouseOver and itemBtn:IsMouseOver() then return true end
+    return false
+end
+
+function ObjectivesMod:CancelCollapseTimer()
+    self.collapseTimerToken = (self.collapseTimerToken or 0) + 1
+    self.pendingCollapseBlock = nil
+end
+
+function ObjectivesMod:HandleBlockEnter(block)
+    if not block then return end
+    if self.pendingCollapseBlock and self.pendingCollapseBlock ~= block then
+        local prevBlock = self.pendingCollapseBlock
+        self:CancelCollapseTimer()
+        self:UpdateBlockHoverObjectives(prevBlock, false)
+    else
+        self:CancelCollapseTimer()
+    end
+    self:UpdateBlockHoverObjectives(block, true)
+end
+
+function ObjectivesMod:HandleBlockLeave(block)
+    if not block then return end
+    if _G.GameTooltip and _G.GameTooltip:GetOwner() == block then
+        _G.GameTooltip:Hide()
+    end
+
+    if self:IsMouseOverBlock(block) then
+        return
+    end
+
+    if self:IsQuestPinned(block) then
+        self:UpdateBlockHoverObjectives(block, false)
+        return
+    end
+
+    local delay = (self.db and self.db.collapseDelay) or 0.25
+    if delay <= 0 or not _G.C_Timer or not _G.C_Timer.After then
+        self:UpdateBlockHoverObjectives(block, false)
+        return
+    end
+
+    self:CancelCollapseTimer()
+    self.pendingCollapseBlock = block
+    local currentToken = self.collapseTimerToken
+    _G.C_Timer.After(delay, function()
+        if self.collapseTimerToken == currentToken and self.pendingCollapseBlock == block then
+            self.pendingCollapseBlock = nil
+            if not self:IsMouseOverBlock(block) then
+                self:UpdateBlockHoverObjectives(block, false)
+            else
+                self:UpdateBlockHoverObjectives(block, true)
+            end
+        end
+    end)
+end
+
 function ObjectivesMod:UpdateBlockHoverObjectives(block, isHovered)
     if not block then return end
 
     local isPinned = self:IsQuestPinned(block)
-    local isExpanded = isHovered or isPinned
+    local isPendingCollapse = (self.pendingCollapseBlock == block)
+    local isExpanded = isHovered or isPinned or isPendingCollapse
     local hoverMode = self.db and self.db.hoverObjectiveText
     local hideCompleted = self.db and self.db.hideCompletedObjectives
 
@@ -609,8 +678,31 @@ function ObjectivesMod:UpdateBlockHoverObjectives(block, isHovered)
     local lineSpacing = (block.parentModule and block.parentModule.lineSpacing) or 2
     local fullHeight = headerHeight + 2
 
+    local function SetProgressBarState(bar, show)
+        if not bar then return end
+        local bg = barBackdrops[bar]
+        if show then
+            if bar.Show then bar:Show() end
+            if bar.SetAlpha then bar:SetAlpha(1) end
+            if bg then
+                if bg.Show then bg:Show() end
+                if bg.SetAlpha then bg:SetAlpha(1) end
+            end
+        else
+            if bar.Hide then bar:Hide() end
+            if bar.SetAlpha then bar:SetAlpha(0) end
+            if bg then
+                if bg.Hide then bg:Hide() end
+                if bg.SetAlpha then bg:SetAlpha(0) end
+            end
+        end
+    end
+
+    local isShowingObjectives = not hoverMode or isExpanded
+
     ForEachBlockLine(block, function(line)
         local isComp = IsLineCompleted(line, block)
+        local pb = line.progressBar or line.ProgressBar
         if hideCompleted and isComp then
             if line.Hide then line:Hide() end
             if line.SetAlpha then line:SetAlpha(0) end
@@ -618,27 +710,29 @@ function ObjectivesMod:UpdateBlockHoverObjectives(block, isHovered)
             if line.Dash and line.Dash.SetAlpha then line.Dash:SetAlpha(0) end
             if line.Check and line.Check.SetAlpha then line.Check:SetAlpha(0) end
             if line.Icon and line.Icon.SetAlpha then line.Icon:SetAlpha(0) end
+            SetProgressBarState(pb, false)
             if line.SetHeight then line:SetHeight(0.001) end
-        elseif not hoverMode or isExpanded then
+        elseif isShowingObjectives then
             if line.Show then line:Show() end
             if line.SetAlpha then line:SetAlpha(1) end
             if line.Text and line.Text.SetAlpha then line.Text:SetAlpha(1) end
             if line.Dash and line.Dash.SetAlpha then line.Dash:SetAlpha(1) end
             if line.Check and line.Check.SetAlpha then line.Check:SetAlpha(1) end
             if line.Icon and line.Icon.SetAlpha then line.Icon:SetAlpha(1) end
-            local lh = line.roithiOrigHeight
-            if not lh or lh <= 1 then
-                if line.Text and line.Text.GetStringHeight then
-                    lh = line.Text:GetStringHeight()
-                end
-                if not lh or lh <= 1 then
-                    lh = (line.Text and line.Text.GetHeight and line.Text:GetHeight()) or 14
-                end
+            SetProgressBarState(pb, true)
+            local textHeight = (line.Text and line.Text.GetStringHeight and line.Text:GetStringHeight()) or 0
+            if textHeight < 14 then
+                textHeight = (line.Text and line.Text.GetHeight and line.Text:GetHeight()) or 14
             end
-            if not lh or lh < 14 then lh = 14 end
-            line.roithiOrigHeight = lh
+            local lh = math.max(16, math.ceil(textHeight) + 3)
             if line.SetHeight then line:SetHeight(lh) end
             fullHeight = fullHeight + lh + lineSpacing
+            if pb and pb.GetHeight then
+                local pbH = pb:GetHeight()
+                if pbH and pbH > 0 then
+                    fullHeight = fullHeight + pbH + lineSpacing
+                end
+            end
         else
             if line.Hide then line:Hide() end
             if line.SetAlpha then line:SetAlpha(0) end
@@ -646,17 +740,28 @@ function ObjectivesMod:UpdateBlockHoverObjectives(block, isHovered)
             if line.Dash and line.Dash.SetAlpha then line.Dash:SetAlpha(0) end
             if line.Check and line.Check.SetAlpha then line.Check:SetAlpha(0) end
             if line.Icon and line.Icon.SetAlpha then line.Icon:SetAlpha(0) end
+            SetProgressBarState(pb, false)
             if line.SetHeight then line:SetHeight(0.001) end
         end
     end)
 
-    if block.SetHeight then
-        local oldHeight = block.height or GetBlockHeaderHeight(block)
-        local targetHeight = hoverMode and (isExpanded and fullHeight or headerHeight) or fullHeight
-        if math.abs(oldHeight - targetHeight) > 1 then
-            block:SetHeight(targetHeight)
-            block.height = targetHeight
+    SetProgressBarState(block.progressBar or block.ProgressBar, isShowingObjectives)
+    if block.usedProgressBars then
+        for _, pb in pairs(block.usedProgressBars) do
+            SetProgressBarState(pb, isShowingObjectives)
         end
+    end
+
+    if block.SetHeight then
+        local currentHeight = (block.GetHeight and block:GetHeight()) or 0
+        local targetHeight = hoverMode and (isExpanded and fullHeight or headerHeight) or fullHeight
+        if math.abs(currentHeight - targetHeight) > 0.5 then
+            block:SetHeight(targetHeight)
+        end
+    end
+
+    if block.parentModule and self.TrimTrackerGap then
+        self:TrimTrackerGap(block.parentModule)
     end
 
     if isHovered then
@@ -726,6 +831,79 @@ function ObjectivesMod:HideQuestTooltip(block)
     if not _G.GameTooltip then return end
     if _G.GameTooltip:GetOwner() == block then
         _G.GameTooltip:Hide()
+    end
+end
+
+function ObjectivesMod:TrimTrackerGap(tracker)
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+    if not tracker or not tracker.SetHeight then return end
+    if not (tracker.IsShown and tracker:IsShown()) then return end
+
+    if tracker.IsCollapsed and tracker:IsCollapsed() then
+        local collapsedH = (tracker.Header and tracker.Header:GetHeight()) or tracker.headerHeight or 24
+        if tracker.GetHeight and math.abs(tracker:GetHeight() - collapsedH) > 0.5 then
+            tracker:SetHeight(collapsedH)
+        end
+        return
+    end
+
+    local headerH = (tracker.Header and tracker.Header:IsShown() and tracker.Header:GetHeight()) or tracker.headerHeight or 20
+    local fromHeader = math.abs(tracker.fromHeaderOffsetY or 4)
+    local fromBlock = math.abs(tracker.fromBlockOffsetY or 2)
+    -- Compensate for Blizzard's hardcoded container moduleSpacing (10px) to tighten inter-module gaps
+    local bottomPad = -6
+
+    local mathHeight = headerH
+    local activeBlockCount = 0
+
+    local forEachBlock = objState.ForEachTrackerBlock or self.ForEachTrackerBlock
+    if forEachBlock then
+        forEachBlock(tracker, function(block)
+            if block and (block.IsShown == nil or block:IsShown()) then
+                local bh = (block.GetHeight and block:GetHeight()) or 0
+                if bh > 0 then
+                    activeBlockCount = activeBlockCount + 1
+                    if activeBlockCount == 1 then
+                        mathHeight = mathHeight + fromHeader + bh
+                    else
+                        mathHeight = mathHeight + fromBlock + bh
+                    end
+                end
+            end
+        end)
+    end
+
+    if activeBlockCount > 0 then
+        mathHeight = math.floor(mathHeight + bottomPad + 0.5)
+    end
+
+    local top = tracker.GetTop and tracker:GetTop()
+    local lowest = nil
+    if forEachBlock and type(top) == "number" then
+        forEachBlock(tracker, function(block)
+            if block and (block.IsShown == nil or block:IsShown()) and block.GetBottom then
+                local b = block:GetBottom()
+                if b and (not lowest or b < lowest) then
+                    lowest = b
+                end
+            end
+        end)
+    end
+    if not lowest and tracker.Header and tracker.Header.IsShown and tracker.Header:IsShown() and tracker.Header.GetBottom then
+        lowest = tracker.Header:GetBottom()
+    end
+
+    local desired = mathHeight
+    if type(top) == "number" and type(lowest) == "number" and top > lowest then
+        local geoDesired = math.floor(top - lowest + bottomPad + 0.5)
+        if geoDesired > 0 then
+            desired = geoDesired
+        end
+    end
+
+    local current = (tracker.GetHeight and tracker:GetHeight()) or 0
+    if desired > 0 and math.abs(desired - current) > 0.5 then
+        tracker:SetHeight(desired)
     end
 end
 

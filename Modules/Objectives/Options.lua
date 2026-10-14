@@ -329,12 +329,28 @@ function ObjectivesMod:GetOptions()
                         name = L["Scenario Stage X-Offset"] or "Scenario Stage X-Offset",
                         desc = L["Horizontal offset in pixels for fine-tuning the scenario stage block position."] or "Horizontal offset in pixels for fine-tuning the scenario stage block position.",
                         order = 18,
-                        min = -50,
-                        max = 50,
+                        min = -100,
+                        max = 100,
                         step = 1,
                         get = function() return (self.db and self.db.scenarioStageXOffset) or 0 end,
                         set = function(info, val)
                             self.db.scenarioStageXOffset = val
+                            if self.AlignScenarioElements then
+                                self:AlignScenarioElements()
+                            end
+                        end,
+                    },
+                    delveWidgetXOffset = {
+                        type = "range",
+                        name = L["Delve Widget X-Offset"] or "Delve Widget X-Offset",
+                        desc = L["Horizontal offset in pixels for fine-tuning the Delves stage block position."] or "Horizontal offset in pixels for fine-tuning the Delves stage block position.",
+                        order = 19,
+                        min = -100,
+                        max = 100,
+                        step = 1,
+                        get = function() return (self.db and self.db.delveWidgetXOffset) or 0 end,
+                        set = function(info, val)
+                            self.db.delveWidgetXOffset = val
                             if self.AlignScenarioElements then
                                 self:AlignScenarioElements()
                             end

@@ -105,6 +105,8 @@ local filterDefaults = {
         point = "BOTTOMRIGHT",
         x = -10,
         y = 10,
+        width = 380,
+        height = 420,
     },
 }
 
@@ -159,24 +161,117 @@ function BagsMod:GetOrderedCategories()
     return result
 end
 
-function BagsMod:AssignItemCategory(itemID, catID)
-    if not itemID then return end
+function BagsMod:GetItemAssignedCategory(itemData)
+    if not itemData then return nil end
+    local custom = self.db and self.db.customCategoryAssignments
+    if not custom then return nil end
+
+    if type(itemData) == "table" then
+        -- 1. Exact instance match via itemGUID
+        if itemData.itemGUID and custom[itemData.itemGUID] then
+            return custom[itemData.itemGUID]
+        end
+
+        -- 2. Exact variant match via link
+        if itemData.link and custom[itemData.link] then
+            return custom[itemData.link]
+        end
+
+        -- 3. Generic itemID match (STRICTLY BLOCKED FOR JUNK)
+        if itemData.itemID and custom[itemData.itemID] then
+            local assigned = custom[itemData.itemID]
+            if assigned ~= CATEGORY_JUNK and assigned ~= "JUNK" then
+                return assigned
+            end
+        end
+    elseif type(itemData) == "string" then
+        return custom[itemData]
+    elseif type(itemData) == "number" then
+        local assigned = custom[itemData]
+        if assigned ~= CATEGORY_JUNK and assigned ~= "JUNK" then
+            return assigned
+        end
+    end
+
+    return nil
+end
+
+function BagsMod:IsItemJunk(itemData)
+    if not itemData or not itemData.itemID then return false end
+    local assigned = self:GetItemAssignedCategory(itemData)
+    if assigned then
+        return assigned == CATEGORY_JUNK or assigned == "JUNK"
+    end
+    local favs = self.db and self.db.favorites
+    if favs and favs[itemData.itemID] then
+        return false
+    end
+    return itemData.quality == 0
+end
+
+function BagsMod:AssignItemCategory(itemDataOrID, catID)
+    if not itemDataOrID or not catID then return end
     self.db.customCategoryAssignments = self.db.customCategoryAssignments or {}
-    self.db.customCategoryAssignments[itemID] = catID
+
+    if catID == "JUNK" or catID == CATEGORY_JUNK then
+        -- For JUNK, NEVER assign by generic numeric itemID alone!
+        local key = nil
+        if type(itemDataOrID) == "table" then
+            key = itemDataOrID.itemGUID or itemDataOrID.link
+            if not key and itemDataOrID.bag and itemDataOrID.slot and _G.C_Item and _G.C_Item.GetItemGUID and _G.ItemLocation and _G.ItemLocation.CreateFromBagAndSlot then
+                local loc = _G.ItemLocation:CreateFromBagAndSlot(itemDataOrID.bag, itemDataOrID.slot)
+                if loc and _G.C_Item.DoesItemExist and _G.C_Item.DoesItemExist(loc) then
+                    key = _G.C_Item.GetItemGUID(loc)
+                end
+            end
+            if not key and itemDataOrID.link then
+                key = itemDataOrID.link
+            end
+            if not key and itemDataOrID.itemID then
+                key = "ITEM_INSTANCE:" .. tostring(itemDataOrID.itemID) .. ":" .. tostring(itemDataOrID.bag or 0) .. ":" .. tostring(itemDataOrID.slot or 0)
+            end
+        elseif type(itemDataOrID) == "string" then
+            key = itemDataOrID
+        end
+
+        if key then
+            self.db.customCategoryAssignments[key] = catID
+        end
+    else
+        -- For non-junk categories (Reagents, Consumables, Gear, etc.), allow assigning by itemID
+        local key = (type(itemDataOrID) == "table" and itemDataOrID.itemID) or itemDataOrID
+        self.db.customCategoryAssignments[key] = catID
+    end
+
     self:UpdateInventory()
 end
 
-function BagsMod:ResetItemCategory(itemID)
-    if not itemID or not self.db.customCategoryAssignments then return end
-    self.db.customCategoryAssignments[itemID] = nil
+function BagsMod:ResetItemCategory(itemDataOrID)
+    if not itemDataOrID or not self.db.customCategoryAssignments then return end
+    if type(itemDataOrID) == "table" then
+        if itemDataOrID.itemGUID then
+            self.db.customCategoryAssignments[itemDataOrID.itemGUID] = nil
+        end
+        if itemDataOrID.link then
+            self.db.customCategoryAssignments[itemDataOrID.link] = nil
+        end
+        if itemDataOrID.itemID then
+            self.db.customCategoryAssignments[itemDataOrID.itemID] = nil
+            local fallbackKey = "ITEM_INSTANCE:" .. tostring(itemDataOrID.itemID) .. ":" .. tostring(itemDataOrID.bag or 0) .. ":" .. tostring(itemDataOrID.slot or 0)
+            self.db.customCategoryAssignments[fallbackKey] = nil
+        end
+    else
+        self.db.customCategoryAssignments[itemDataOrID] = nil
+    end
     self:UpdateInventory()
 end
 
 function BagsMod:ClassifyItem(itemData)
     if not itemData or not itemData.itemID then return CATEGORY_MISC end
 
-    if self.db and self.db.customCategoryAssignments and self.db.customCategoryAssignments[itemData.itemID] then
-        return self.db.customCategoryAssignments[itemData.itemID]
+    local assigned = self:GetItemAssignedCategory(itemData)
+    if assigned then
+        return assigned
     end
 
     local favs = self.db and self.db.favorites
@@ -213,14 +308,17 @@ function BagsMod:ItemMatchesCategory(itemData, activeCategory)
         return true
     end
 
-    if self.db and self.db.customCategoryAssignments and self.db.customCategoryAssignments[itemData.itemID] then
-        local assigned = self.db.customCategoryAssignments[itemData.itemID]
+    local assigned = self:GetItemAssignedCategory(itemData)
+    if assigned then
         if assigned == CATEGORY_WEAPONS then assigned = CATEGORY_GEAR end
         local target = activeCategory
         if target == CATEGORY_WEAPONS then target = CATEGORY_GEAR end
         return assigned == target
     end
     if activeCategory == CATEGORY_NEW then
+        if self.IsItemJunk and self:IsItemJunk(itemData) then
+            return false
+        end
         return itemData.isNew == true
     end
     if activeCategory == CATEGORY_FAVORITES then
@@ -240,7 +338,7 @@ function BagsMod:ItemMatchesCategory(itemData, activeCategory)
         return itemData.isQuest == true or itemData.classID == 12
     end
     if activeCategory == CATEGORY_JUNK then
-        return itemData.quality == 0
+        return self:IsItemJunk(itemData)
     end
     if activeCategory == CATEGORY_KEYRING then
         return itemData.bag == -2 or itemData.classID == 13

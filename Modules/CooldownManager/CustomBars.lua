@@ -10,6 +10,70 @@ local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
 
 CDM.customBarFrames = CDM.customBarFrames or {}
 
+local function SafeIsGreaterThan(val, threshold)
+    if val == nil then return false end
+    if _G.issecretvalue and _G.issecretvalue(val) then return false end
+    if _G.canaccessvalue and not _G.canaccessvalue(val) then return false end
+    if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(val) then return false end
+    local ok, res = pcall(function() return val > threshold end)
+    return ok and res == true
+end
+
+local function SafeIsGreaterThanZero(val)
+    return SafeIsGreaterThan(val, 0)
+end
+
+local function SafeEquals(val, expected)
+    if val == nil then return false end
+    if _G.issecretvalue and _G.issecretvalue(val) then return false end
+    if _G.canaccessvalue and not _G.canaccessvalue(val) then return false end
+    if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(val) then return false end
+    local ok, res = pcall(function() return val == expected end)
+    return ok and res == true
+end
+
+local function SafeDurationIsZero(durObj)
+    if not durObj then return true end
+    if _G.issecretvalue and _G.issecretvalue(durObj) then return false end
+    if _G.canaccessvalue and not _G.canaccessvalue(durObj) then return false end
+    if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(durObj) then return false end
+    if durObj.IsZero then
+        local ok, isZero = pcall(durObj.IsZero, durObj)
+        if ok and isZero ~= nil then
+            if _G.issecretvalue and _G.issecretvalue(isZero) then return false end
+            if _G.canaccessvalue and not _G.canaccessvalue(isZero) then return false end
+            if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(isZero) then return false end
+            local cmpOk, res = pcall(function() return isZero == true end)
+            if cmpOk and res ~= nil then
+                return res == true
+            end
+            return false
+        end
+    end
+    if durObj.GetRemainingDuration then
+        local ok, rem = pcall(durObj.GetRemainingDuration, durObj)
+        if ok and rem ~= nil then
+            if _G.issecretvalue and _G.issecretvalue(rem) then return false end
+            if _G.canaccessvalue and not _G.canaccessvalue(rem) then return false end
+            if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(rem) then return false end
+            return not SafeIsGreaterThanZero(rem)
+        end
+    end
+    return false
+end
+
+local function SetIconVisualState(icon, isOnCD)
+    if not icon then return end
+    local isCD = (isOnCD == true)
+    if icon.SetDesaturated then
+        pcall(icon.SetDesaturated, icon, isCD)
+    end
+    if icon.SetVertexColor then
+        local v = isCD and 0.55 or 1.0
+        pcall(icon.SetVertexColor, icon, v, v, v)
+    end
+end
+
 function CDM:GetCustomBars()
     if not self.db then
         self.db = RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.CooldownManager or self.defaultSettings
@@ -245,6 +309,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
         iconBtn.itemID = nil
         iconBtn.Icon:SetTexture(nil)
         iconBtn.Icon:SetColorTexture(0.12, 0.12, 0.12, 0.5)
+        SetIconVisualState(iconBtn.Icon, false)
         if iconBtn.Cooldown and iconBtn.Cooldown.Clear then iconBtn.Cooldown:Clear() end
         if iconBtn.ChargeCount and iconBtn.ChargeCount.Current then
             local isEditMode = _G.EditModeManagerFrame and _G.EditModeManagerFrame.IsShown and _G.EditModeManagerFrame:IsShown()
@@ -262,7 +327,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
         return
     end
 
-    if spellInfo.isItem then
+    if spellInfo.isItem or (spellInfo.itemID and not spellInfo.spellID) then
         local itemID = spellInfo.itemID
         iconBtn.itemID = itemID
         iconBtn.spellID = nil
@@ -286,6 +351,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                     if cdFS.Show then cdFS:Show() end
                 end
             end
+            local isOnCD = false
             if cd.SetCooldown then
                 local start, dur, enable = 0, 0, 0
                 if _G.C_Container and _G.C_Container.GetItemCooldown then
@@ -295,14 +361,23 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                 elseif _G.GetItemCooldown then
                     start, dur, enable = _G.GetItemCooldown(itemID)
                 end
-                if enable and enable == 1 and dur and (type(dur) ~= "number" or dur > 0) then
+                local isEnabled = (enable == true or SafeEquals(enable, 1))
+                if isEnabled and SafeIsGreaterThanZero(dur) then
                     pcall(cd.SetCooldown, cd, start, dur)
+                    if SafeIsGreaterThan(dur, 1.5) then
+                        local now = (_G.GetTime and _G.GetTime()) or 0
+                        local finish = (start or 0) + dur
+                        if SafeIsGreaterThan(finish - now, 0.1) then
+                            isOnCD = true
+                        end
+                    end
                 elseif cd.Clear then
                     cd:Clear()
                 elseif cd.SetCooldown then
                     pcall(cd.SetCooldown, cd, 0, 0)
                 end
             end
+            SetIconVisualState(iconBtn.Icon, isOnCD)
         end
 
         local showStacks = (cfg.showStacks ~= false)
@@ -318,7 +393,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                 elseif _G.GetItemCount then
                     itemCount = _G.GetItemCount(itemID) or 0
                 end
-                if itemCount and itemCount > 1 then
+                if itemCount and SafeIsGreaterThan(itemCount, 1) then
                     chargeFS:SetText(tostring(itemCount))
                     chargeFS:Show()
                     if chargeFS.SetTextColor then
@@ -360,35 +435,82 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
         end
 
         local cdApplied = false
-        if cd.SetCooldownFromDurationObject and _G.C_Spell and _G.C_Spell.GetSpellCooldownDuration then
-            local durObj = _G.C_Spell.GetSpellCooldownDuration(spellID)
-            if durObj then
-                local ok = pcall(cd.SetCooldownFromDurationObject, cd, durObj)
-                if ok then cdApplied = true end
-            end
-        end
+        local isOnCD = false
+        local durObj = nil
 
-        if not cdApplied and cd.SetCooldown then
-            local cdInfo = _G.C_Spell and _G.C_Spell.GetSpellCooldown and _G.C_Spell.GetSpellCooldown(spellID)
-            if cdInfo and cdInfo.startTime and cdInfo.duration and cdInfo.isEnabled then
-                pcall(cd.SetCooldown, cd, cdInfo.startTime, cdInfo.duration, cdInfo.modRate or 1)
-                cdApplied = true
-            elseif _G.GetSpellCooldown then
-                local start, dur, enable, modRate = _G.GetSpellCooldown(spellID)
-                if start and dur and enable == 1 then
-                    pcall(cd.SetCooldown, cd, start, dur, modRate or 1)
-                    cdApplied = true
+        local cdInfo = _G.C_Spell and _G.C_Spell.GetSpellCooldown and _G.C_Spell.GetSpellCooldown(spellID)
+        if cdInfo and cdInfo.isActive ~= nil then
+            local okActive, isActive = pcall(function() return cdInfo.isActive == true end)
+            local okGCD, isOnGCD = pcall(function() return cdInfo.isOnGCD == true end)
+            if okActive and isActive then
+                if not (okGCD and isOnGCD) then
+                    isOnCD = true
                 end
             end
         end
 
-        if not cdApplied then
+        if cd.SetCooldownFromDurationObject and _G.C_Spell and _G.C_Spell.GetSpellCooldownDuration then
+            durObj = _G.C_Spell.GetSpellCooldownDuration(spellID, true)
+            if durObj then
+                local ok = pcall(cd.SetCooldownFromDurationObject, cd, durObj)
+                if ok then
+                    cdApplied = true
+                    if not isOnCD and not SafeDurationIsZero(durObj) then
+                        isOnCD = true
+                    end
+                end
+            end
+        end
+
+        if not cdApplied and cd.SetCooldown then
+            if cdInfo and cdInfo.startTime and cdInfo.duration and cdInfo.isEnabled then
+                local isEnabled = cdInfo.isEnabled == true or SafeEquals(cdInfo.isEnabled, 1)
+                if isEnabled then
+                    pcall(cd.SetCooldown, cd, cdInfo.startTime, cdInfo.duration, cdInfo.modRate or 1)
+                    cdApplied = true
+                    if _G.issecretvalue and _G.issecretvalue(cdInfo.duration) then
+                        isOnCD = true
+                    elseif SafeIsGreaterThan(cdInfo.duration, 1.5) then
+                        local now = (_G.GetTime and _G.GetTime()) or 0
+                        local finish = cdInfo.startTime + cdInfo.duration
+                        if SafeIsGreaterThan(finish - now, 0.1) then
+                            isOnCD = true
+                        end
+                    end
+                end
+            elseif _G.GetSpellCooldown then
+                local start, dur, enable, modRate = _G.GetSpellCooldown(spellID)
+                local isEnabled = enable == true or SafeEquals(enable, 1)
+                if start and dur and isEnabled then
+                    pcall(cd.SetCooldown, cd, start, dur, modRate or 1)
+                    cdApplied = true
+                    if _G.issecretvalue and _G.issecretvalue(dur) then
+                        isOnCD = true
+                    elseif SafeIsGreaterThan(dur, 1.5) then
+                        local now = (_G.GetTime and _G.GetTime()) or 0
+                        local finish = start + dur
+                        if SafeIsGreaterThan(finish - now, 0.1) then
+                            isOnCD = true
+                        end
+                    end
+                end
+            end
+        end
+
+        if not cdApplied or (durObj and SafeDurationIsZero(durObj)) or (cdInfo and cdInfo.isActive == false) then
             if cd.Clear then
                 cd:Clear()
             elseif cd.SetCooldown then
                 pcall(cd.SetCooldown, cd, 0, 0)
             end
         end
+
+        local chargeInfo = _G.C_Spell and _G.C_Spell.GetSpellCharges and _G.C_Spell.GetSpellCharges(spellID)
+        if chargeInfo and SafeIsGreaterThanZero(chargeInfo.currentCharges) then
+            isOnCD = false
+        end
+
+        SetIconVisualState(iconBtn.Icon, isOnCD)
     end
 
     -- Update Charges
@@ -881,6 +1003,7 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
 eventFrame:RegisterEvent("SPELL_UPDATE_USABLE")
+eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
 eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_ENTERING_WORLD" then
         if CDM and CDM.InitializeAllCustomBars then

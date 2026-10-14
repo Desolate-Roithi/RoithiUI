@@ -666,6 +666,86 @@ function BagsMod:GetOptions()
                             self:UpdateInventory()
                         end,
                     },
+                    junkIndicatorHeader = {
+                        type = "header",
+                        name = L["Junk Indicator"] or "Junk Indicator",
+                        order = 26,
+                    },
+                    showJunkIndicator = {
+                        type = "toggle",
+                        name = L["Show Junk Indicator"] or "Show Junk Indicator",
+                        desc = L["Display a gold coin icon on junk items in the bag."] or "Display a gold coin icon on junk items in the bag.",
+                        order = 27,
+                        get = function() return self.db.showJunkIndicator ~= false end,
+                        set = function(_, val)
+                            self.db.showJunkIndicator = val
+                            self:UpdateInventory()
+                        end,
+                    },
+                    junkIndicatorSize = {
+                        type = "range",
+                        name = L["Junk Indicator Size"] or "Junk Indicator Size",
+                        order = 28,
+                        min = 10,
+                        max = 32,
+                        step = 1,
+                        get = function() return self.db.junkIndicatorSize or 14 end,
+                        set = function(_, val)
+                            self.db.junkIndicatorSize = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    junkIndicatorAnchor = {
+                        type = "select",
+                        name = L["Junk Indicator Anchor"] or "Junk Indicator Anchor",
+                        order = 29,
+                        values = {
+                            ["TOPLEFT"] = "TOPLEFT",
+                            ["TOP"] = "TOP",
+                            ["TOPRIGHT"] = "TOPRIGHT",
+                            ["LEFT"] = "LEFT",
+                            ["CENTER"] = "CENTER",
+                            ["RIGHT"] = "RIGHT",
+                            ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                            ["BOTTOM"] = "BOTTOM",
+                            ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                        },
+                        get = function() return self.db.junkIndicatorAnchor or "BOTTOMLEFT" end,
+                        set = function(_, val)
+                            self.db.junkIndicatorAnchor = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    junkIndicatorX = {
+                        type = "range",
+                        name = L["Junk Indicator X Offset"] or "Junk Indicator X Offset",
+                        order = 30,
+                        min = -30,
+                        max = 30,
+                        step = 1,
+                        get = function() return self.db.junkIndicatorX or 1 end,
+                        set = function(_, val)
+                            self.db.junkIndicatorX = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
+                    junkIndicatorY = {
+                        type = "range",
+                        name = L["Junk Indicator Y Offset"] or "Junk Indicator Y Offset",
+                        order = 31,
+                        min = -30,
+                        max = 30,
+                        step = 1,
+                        get = function() return self.db.junkIndicatorY or 1 end,
+                        set = function(_, val)
+                            self.db.junkIndicatorY = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                    },
                 },
             },
             categories = {

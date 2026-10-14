@@ -1,10 +1,10 @@
 # RoithiUI
 
-A modular UI replacement for **World of Warcraft: Midnight (12.1)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
+A modular UI replacement for **World of Warcraft: Midnight (12.1.5)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
 **Latest Version:** v1.7.5  
-**Last Updated:** 2026-10-09  
-**Compatibility:** WoW 12.1.0 (Midnight) & WoW Forever (16001)
+**Last Updated:** 2026-10-14  
+**Compatibility:** WoW 12.1.5 (Midnight) & WoW Forever (16001)
 
 ## 🆕 Recent Updates (v1.7.5)
 
