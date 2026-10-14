@@ -425,6 +425,11 @@ function MinimapMod:OnDisable()
     if Minimap and Minimap.SetMaskTexture then
         Minimap:SetMaskTexture("Interface\\Masks\\MinimapMask")
     end
+    if Minimap then
+        if Minimap.SetQuestBlobRingAlpha then pcall(Minimap.SetQuestBlobRingAlpha, Minimap, 1) end
+        if Minimap.SetTaskBlobRingAlpha then pcall(Minimap.SetTaskBlobRingAlpha, Minimap, 1) end
+        if Minimap.SetArchBlobRingAlpha then pcall(Minimap.SetArchBlobRingAlpha, Minimap, 1) end
+    end
 
     -- Hide RoithiUI container and custom frames
     if self.container then self.container:Hide() end
@@ -814,6 +819,9 @@ end
 function MinimapMod:UpdateMinimapShape()
     if self.db.shape == "SQUARE" then
         Minimap:SetMaskTexture("Interface\\ChatFrame\\ChatFrameBackground")
+        if Minimap.SetQuestBlobRingAlpha then pcall(Minimap.SetQuestBlobRingAlpha, Minimap, 0) end
+        if Minimap.SetTaskBlobRingAlpha then pcall(Minimap.SetTaskBlobRingAlpha, Minimap, 0) end
+        if Minimap.SetArchBlobRingAlpha then pcall(Minimap.SetArchBlobRingAlpha, Minimap, 0) end
         if self.borderFrame then
             self.borderFrame:Show()
             self:UpdateMinimapBorder()
@@ -821,6 +829,9 @@ function MinimapMod:UpdateMinimapShape()
     else
         -- Restore default circular shape mask in Retail
         Minimap:SetMaskTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+        if Minimap.SetQuestBlobRingAlpha then pcall(Minimap.SetQuestBlobRingAlpha, Minimap, 1) end
+        if Minimap.SetTaskBlobRingAlpha then pcall(Minimap.SetTaskBlobRingAlpha, Minimap, 1) end
+        if Minimap.SetArchBlobRingAlpha then pcall(Minimap.SetArchBlobRingAlpha, Minimap, 1) end
         if self.borderFrame then self.borderFrame:Hide() end
     end
     self:LayoutDefaultButtons()

@@ -3507,7 +3507,14 @@ function BagsMod:OnBagCooldownUpdate()
 end
 
 function BagsMod:RefreshProfile()
-    self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Bags or self.defaultSettings
+    self.db = RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Bags or self.db or self.defaultSettings
+    local inCombat = (_G.InCombatLockdown and _G.InCombatLockdown()) or false
+    if self.bagBarFrame and not inCombat and self.bagBarFrame.ClearAllPoints and self.bagBarFrame.SetPoint then
+        local cfg = (self.db and self.db.bagBar) or (self.defaultSettings and self.defaultSettings.bagBar) or {}
+        local pt = cfg.point or "BOTTOMLEFT"
+        self.bagBarFrame:ClearAllPoints()
+        self.bagBarFrame:SetPoint(pt, UIParent, pt, cfg.x or 286, cfg.y or 235)
+    end
     if self.UpdateBagBarLayout then
         self:UpdateBagBarLayout()
     end

@@ -732,6 +732,12 @@ function BagsMod:UpdateBagBarLayout()
 
     if not self.bagBarFrame then return end
     if self.bagBarFrame.Show then self.bagBarFrame:Show() end
+    local inCombat = (_G.InCombatLockdown and _G.InCombatLockdown()) or false
+    if not inCombat and self.bagBarFrame.ClearAllPoints and self.bagBarFrame.SetPoint then
+        local pt = cfg.point or "BOTTOMLEFT"
+        self.bagBarFrame:ClearAllPoints()
+        self.bagBarFrame:SetPoint(pt, UIParent, pt, cfg.x or 286, cfg.y or 235)
+    end
     local btnSize = cfg.buttonSize or 30
     local spacing = cfg.spacing or 4
     local isExpanded = cfg.expanded == true

@@ -342,6 +342,8 @@ function ChatMod:GetOptions()
                         end,
                         set = function(_, val)
                             self.db.font = val
+                            if self.UpdateChatFonts then self:UpdateChatFonts() end
+                            if self.UpdateAllChatTabFonts then self:UpdateAllChatTabFonts() end
                             self:SkinAllChatFrames()
                         end,
                     },
@@ -355,6 +357,7 @@ function ChatMod:GetOptions()
                         get = function() return self.db.fontSize or 12 end,
                         set = function(_, val)
                             self.db.fontSize = val
+                            if self.UpdateChatFonts then self:UpdateChatFonts() end
                             self:SkinAllChatFrames()
                         end,
                     },
@@ -370,6 +373,8 @@ function ChatMod:GetOptions()
                         get = function() return self.db.fontOutline or "OUTLINE" end,
                         set = function(_, val)
                             self.db.fontOutline = val
+                            if self.UpdateChatFonts then self:UpdateChatFonts() end
+                            if self.UpdateAllChatTabFonts then self:UpdateAllChatTabFonts() end
                             self:SkinAllChatFrames()
                         end,
                     },
@@ -381,6 +386,7 @@ function ChatMod:GetOptions()
                         get = function() return self.db.showFontShadow == true end,
                         set = function(_, val)
                             self.db.showFontShadow = val
+                            if self.UpdateChatFonts then self:UpdateChatFonts() end
                             self:SkinAllChatFrames()
                         end,
                     },
@@ -478,6 +484,7 @@ function ChatMod:GetOptions()
                         get = function() return self.db.tabHeight or 22 end,
                         set = function(_, val)
                             self.db.tabHeight = val
+                            if self.UpdateAllChatTabFonts then self:UpdateAllChatTabFonts() end
                             self:SkinAllChatFrames()
                         end,
                     },
@@ -491,6 +498,7 @@ function ChatMod:GetOptions()
                         get = function() return self.db.tabFontSize or 11 end,
                         set = function(_, val)
                             self.db.tabFontSize = val
+                            if self.UpdateAllChatTabFonts then self:UpdateAllChatTabFonts() end
                             self:SkinAllChatFrames()
                         end,
                     },

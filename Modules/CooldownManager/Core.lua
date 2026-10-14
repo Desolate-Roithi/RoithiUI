@@ -1944,6 +1944,9 @@ function CDM:RefreshProfile()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.CooldownManager or self.defaultSettings
     self:RefreshAllViewerLayouts()
     self:StyleAllActiveItems()
+    if self.InitializeAllCustomBars then
+        self:InitializeAllCustomBars()
+    end
 end
 CDM.RefreshSettings = CDM.RefreshProfile
 

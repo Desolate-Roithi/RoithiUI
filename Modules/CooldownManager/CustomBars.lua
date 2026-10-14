@@ -250,6 +250,79 @@ function CDM:ResolveSpellInfo(spellIdentifier)
     return nil
 end
 
+function CDM:IsCustomBarItemAccessible(entry)
+    if not entry then return false end
+
+    -- Item branch
+    if entry.isItem or (entry.itemID and not entry.spellID) then
+        local itemID = tonumber(entry.itemID)
+        if not itemID then return false end
+
+        -- Check if it is equippable gear or trinket
+        local equipSlot = nil
+        if _G.C_Item and _G.C_Item.GetItemInventoryTypeByID then
+            local ok, slot = pcall(_G.C_Item.GetItemInventoryTypeByID, itemID)
+            if ok and slot then equipSlot = slot end
+        end
+        if not equipSlot and _G.GetItemInfoInstant then
+            local ok, _, _, slot = pcall(_G.GetItemInfoInstant, itemID)
+            if ok and slot then equipSlot = slot end
+        end
+
+        local isEquippable = false
+        if equipSlot and equipSlot ~= "" and equipSlot ~= "INVTYPE_NON_EQUIP_IGNORE" and equipSlot ~= 0 then
+            isEquippable = true
+        end
+
+        if isEquippable then
+            -- Trinkets and equipment: MUST be currently equipped!
+            if _G.C_Item and _G.C_Item.IsEquippedItem then
+                local ok, isEq = pcall(_G.C_Item.IsEquippedItem, itemID)
+                return ok and isEq == true
+            elseif _G.IsEquippedItem then
+                local ok, isEq = pcall(_G.IsEquippedItem, itemID)
+                return ok and isEq == true
+            end
+            return false
+        else
+            -- Potions and consumables: MUST be in bags (item count > 0)
+            local count = 0
+            if _G.C_Item and _G.C_Item.GetItemCount then
+                local ok, c = pcall(_G.C_Item.GetItemCount, itemID)
+                if ok and type(c) == "number" then count = c end
+            elseif _G.GetItemCount then
+                local ok, c = pcall(_G.GetItemCount, itemID)
+                if ok and type(c) == "number" then count = c end
+            end
+            return count > 0
+        end
+    end
+
+    -- Spell branch
+    local spellID = tonumber(entry.spellID)
+    if spellID then
+        if _G.IsSpellKnownOrOverridesKnown then
+            local ok, known = pcall(_G.IsSpellKnownOrOverridesKnown, spellID)
+            if ok and known == true then return true end
+        end
+        if _G.C_Spell and _G.C_Spell.IsSpellKnown then
+            local ok, known = pcall(_G.C_Spell.IsSpellKnown, spellID)
+            if ok and known == true then return true end
+        end
+        if _G.IsPlayerSpell then
+            local ok, known = pcall(_G.IsPlayerSpell, spellID)
+            if ok and known == true then return true end
+        end
+        if _G.IsSpellKnown then
+            local ok, known = pcall(_G.IsSpellKnown, spellID)
+            if ok and known == true then return true end
+        end
+        return false
+    end
+
+    return false
+end
+
 function CDM:AssignSpellToCustomBar(barIndex, slotIndex, spellIdentifier)
     local list = self:GetCustomBars()
     local cfg = list[barIndex]
@@ -303,7 +376,8 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
     local iconBtn = frame.icons[slotIndex]
     if not iconBtn then return end
 
-    local spellInfo = cfg.spells and cfg.spells[slotIndex]
+    local origIdx = (iconBtn and iconBtn.originalSlotIndex) or (frame and frame.activeOrigIndices and frame.activeOrigIndices[slotIndex]) or slotIndex
+    local spellInfo = cfg.spells and cfg.spells[origIdx]
     if not spellInfo or (not spellInfo.spellID and not spellInfo.itemID) then
         iconBtn.spellID = nil
         iconBtn.itemID = nil
@@ -548,7 +622,8 @@ end
 function CDM:UpdateAllCustomBarCooldowns()
     local list = self:GetCustomBars()
     for barIdx, cfg in ipairs(list) do
-        local count = cfg.spells and #cfg.spells or 0
+        local frame = self.customBarFrames[barIdx]
+        local count = (frame and frame.activeSpells and #frame.activeSpells) or (cfg.spells and #cfg.spells or 0)
         for slotIdx = 1, count do
             self:UpdateCustomBarSlot(barIdx, slotIdx)
         end
@@ -609,12 +684,38 @@ function CDM:InitializeCustomBar(index)
 
     local isVertical = (cfg.orientation == "VERTICAL")
     local growthDir = cfg.growthDirection
+    if growthDir == "DOWN" then growthDir = "TOP_TO_BOTTOM"
+    elseif growthDir == "UP" then growthDir = "BOTTOM_TO_TOP"
+    elseif growthDir == "LEFT" then growthDir = "RIGHT_TO_LEFT"
+    elseif growthDir == "RIGHT" then growthDir = "LEFT_TO_RIGHT"
+    elseif growthDir == "CENTER" then growthDir = "CENTER_HORIZONTAL"
+    end
+    growthDir = growthDir or (isVertical and "TOP_TO_BOTTOM" or "LEFT_TO_RIGHT")
     local isAdaptable = (cfg.adaptable ~= false)
     cfg.spells = cfg.spells or {}
-    local numSpells = #cfg.spells
 
     local isEditMode = _G.EditModeManagerFrame and _G.EditModeManagerFrame.IsShown and _G.EditModeManagerFrame:IsShown()
     local isCdmSettings = not isEditMode and (self.customSettingsPanel and self.customSettingsPanel.IsShown and self.customSettingsPanel:IsShown())
+
+    local activeSpells = {}
+    local activeOrigIndices = {}
+    if isCdmSettings or isEditMode then
+        for origIdx, entry in ipairs(cfg.spells) do
+            table.insert(activeSpells, entry)
+            table.insert(activeOrigIndices, origIdx)
+        end
+    else
+        for origIdx, entry in ipairs(cfg.spells) do
+            if self:IsCustomBarItemAccessible(entry) then
+                table.insert(activeSpells, entry)
+                table.insert(activeOrigIndices, origIdx)
+            end
+        end
+    end
+    frame.activeSpells = activeSpells
+    frame.activeOrigIndices = activeOrigIndices
+
+    local numSpells = #activeSpells
 
     local numVisible
     if isAdaptable then
@@ -636,19 +737,125 @@ function CDM:InitializeCustomBar(index)
     local totalH = isVertical and (numVisible * iconSize + math.max(0, numVisible - 1) * spacing) or iconSize
     frame:SetSize(math.max(totalW, 20), math.max(totalH, 20))
 
+    local targetPoint
+    if growthDir == "RIGHT_TO_LEFT" then
+        targetPoint = "RIGHT"
+    elseif growthDir == "LEFT_TO_RIGHT" then
+        targetPoint = "LEFT"
+    elseif growthDir == "TOP_TO_BOTTOM" then
+        targetPoint = "TOP"
+    elseif growthDir == "BOTTOM_TO_TOP" then
+        targetPoint = "BOTTOM"
+    else
+        targetPoint = "CENTER"
+    end
+
+    if cfg.point ~= targetPoint then
+        local currentPoint = cfg.point or "CENTER"
+        local curX = cfg.x or 0
+        local curY = cfg.y or 0
+        local centerX, centerY = curX, curY
+
+        if currentPoint == "LEFT" then
+            centerX = curX + (totalW / 2)
+        elseif currentPoint == "RIGHT" then
+            centerX = curX - (totalW / 2)
+        elseif currentPoint == "TOP" then
+            centerY = curY - (totalH / 2)
+        elseif currentPoint == "BOTTOM" then
+            centerY = curY + (totalH / 2)
+        end
+
+        if targetPoint == "LEFT" then
+            cfg.x = centerX - (totalW / 2)
+            cfg.y = centerY
+        elseif targetPoint == "RIGHT" then
+            cfg.x = centerX + (totalW / 2)
+            cfg.y = centerY
+        elseif targetPoint == "TOP" then
+            cfg.x = centerX
+            cfg.y = centerY + (totalH / 2)
+        elseif targetPoint == "BOTTOM" then
+            cfg.x = centerX
+            cfg.y = centerY - (totalH / 2)
+        else
+            cfg.x = centerX
+            cfg.y = centerY
+        end
+        cfg.point = targetPoint
+    end
+
     frame:ClearAllPoints()
-    frame:SetPoint(cfg.point or "CENTER", UIParent, cfg.point or "CENTER", cfg.x or 0, cfg.y or 0)
+    frame:SetPoint(targetPoint, UIParent, "CENTER", cfg.x or 0, cfg.y or 0)
     frame.editModeName = cfg.name or ("Custom Bar " .. index)
 
     -- Register with LibEditMode if available
     if LEM and LEM.AddFrame and not frame.lemRegistered then
-        local defaults = { point = cfg.point or "CENTER", x = cfg.x or 0, y = cfg.y or 0 }
-        LEM:AddFrame(frame, function(f, _, pt, x, y)
+        local defaults = { point = targetPoint, x = cfg.x or 0, y = cfg.y or 0 }
+        LEM:AddFrame(frame, function(f, unusedMode, pt, x, y)
+            local currentGrowth = cfg.growthDirection
+            if currentGrowth == "DOWN" then currentGrowth = "TOP_TO_BOTTOM"
+            elseif currentGrowth == "UP" then currentGrowth = "BOTTOM_TO_TOP"
+            elseif currentGrowth == "LEFT" then currentGrowth = "RIGHT_TO_LEFT"
+            elseif currentGrowth == "RIGHT" then currentGrowth = "LEFT_TO_RIGHT"
+            elseif currentGrowth == "CENTER" then currentGrowth = "CENTER_HORIZONTAL"
+            end
+            local isVert = (cfg.orientation == "VERTICAL")
+            currentGrowth = currentGrowth or (isVert and "TOP_TO_BOTTOM" or "LEFT_TO_RIGHT")
+
+            local anchorPt = "CENTER"
+            if currentGrowth == "RIGHT_TO_LEFT" then
+                anchorPt = "RIGHT"
+            elseif currentGrowth == "LEFT_TO_RIGHT" then
+                anchorPt = "LEFT"
+            elseif currentGrowth == "TOP_TO_BOTTOM" then
+                anchorPt = "TOP"
+            elseif currentGrowth == "BOTTOM_TO_TOP" then
+                anchorPt = "BOTTOM"
+            end
+
+            local w = f:GetWidth() or 40
+            local h = f:GetHeight() or 40
+
+            local fCenterX, fCenterY
+            if f.GetCenter and UIParent and UIParent.GetCenter then
+                local uCenterX, uCenterY = UIParent:GetCenter()
+                local fcX, fcY = f:GetCenter()
+                if uCenterX and fcX then
+                    fCenterX = fcX - uCenterX
+                    fCenterY = fcY - uCenterY
+                end
+            end
+
+            if not fCenterX then
+                fCenterX, fCenterY = x or 0, y or 0
+                if pt == "LEFT" then
+                    fCenterX = fCenterX + (w / 2)
+                elseif pt == "RIGHT" then
+                    fCenterX = fCenterX - (w / 2)
+                elseif pt == "TOP" then
+                    fCenterY = fCenterY - (h / 2)
+                elseif pt == "BOTTOM" then
+                    fCenterY = fCenterY + (h / 2)
+                end
+            end
+
+            local finalX, finalY = fCenterX, fCenterY
+            if anchorPt == "RIGHT" then
+                finalX = fCenterX + (w / 2)
+            elseif anchorPt == "LEFT" then
+                finalX = fCenterX - (w / 2)
+            elseif anchorPt == "TOP" then
+                finalY = fCenterY + (h / 2)
+            elseif anchorPt == "BOTTOM" then
+                finalY = fCenterY - (h / 2)
+            end
+
             f:ClearAllPoints()
-            f:SetPoint(pt, UIParent, pt, x, y)
-            cfg.point = pt
-            cfg.x = x
-            cfg.y = y
+            f:SetPoint(anchorPt, UIParent, "CENTER", finalX, finalY)
+            cfg.point = anchorPt
+            cfg.x = finalX
+            cfg.y = finalY
         end, defaults)
 
         if LEM.AddFrameSettings and LEM.SettingType then
@@ -893,7 +1100,8 @@ function CDM:InitializeCustomBar(index)
             iconBtn:SetScript("OnReceiveDrag", function(selfBtn)
                 local spellID = CDM:GetCursorSpellInfo()
                 if spellID then
-                    CDM:AssignSpellToCustomBar(index, selfBtn.slotIndex, spellID)
+                    local targetSlot = selfBtn.originalSlotIndex or selfBtn.slotIndex
+                    CDM:AssignSpellToCustomBar(index, targetSlot, spellID)
                     _G.ClearCursor()
                 end
             end)
@@ -901,10 +1109,12 @@ function CDM:InitializeCustomBar(index)
             iconBtn:SetScript("OnClick", function(selfBtn, button)
                 local spellID = CDM:GetCursorSpellInfo()
                 if spellID then
-                    CDM:AssignSpellToCustomBar(index, selfBtn.slotIndex, spellID)
+                    local targetSlot = selfBtn.originalSlotIndex or selfBtn.slotIndex
+                    CDM:AssignSpellToCustomBar(index, targetSlot, spellID)
                     _G.ClearCursor()
                 elseif button == "RightButton" and _G.IsShiftKeyDown() then
-                    CDM:RemoveSpellFromCustomBar(index, selfBtn.slotIndex)
+                    local targetSlot = selfBtn.originalSlotIndex or selfBtn.slotIndex
+                    CDM:RemoveSpellFromCustomBar(index, targetSlot)
                 end
             end)
 
@@ -931,6 +1141,7 @@ function CDM:InitializeCustomBar(index)
 
         iconBtn.barIndex = index
         iconBtn.slotIndex = i
+        iconBtn.originalSlotIndex = (frame.activeOrigIndices and frame.activeOrigIndices[i]) or i
         iconBtn:SetSize(iconSize, iconSize)
         iconBtn:ClearAllPoints()
         local offset = (i - 1) * (iconSize + spacing)
@@ -997,15 +1208,25 @@ function CDM:InitializeAllCustomBars()
     end
 end
 
--- Event listener for live custom cooldown updates
+-- Event listener for live custom cooldown updates and accessibility changes
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
 eventFrame:RegisterEvent("SPELL_UPDATE_USABLE")
 eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
+eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+eventFrame:RegisterEvent("SPELLS_CHANGED")
+eventFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
+eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 eventFrame:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_ENTERING_WORLD" then
+    if event == "PLAYER_ENTERING_WORLD" or
+       event == "PLAYER_EQUIPMENT_CHANGED" or
+       event == "BAG_UPDATE_DELAYED" or
+       event == "SPELLS_CHANGED" or
+       event == "TRAIT_CONFIG_UPDATED" or
+       event == "PLAYER_SPECIALIZATION_CHANGED" then
         if CDM and CDM.InitializeAllCustomBars then
             CDM:InitializeAllCustomBars()
         end

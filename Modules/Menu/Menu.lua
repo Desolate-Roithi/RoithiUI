@@ -115,10 +115,22 @@ function MenuMod:OnEnable()
 
     self:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED", "QueueLayoutMicroMenu")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "QueueLayoutMicroMenu")
+    self:RegisterEvent("UNIT_PORTRAIT_UPDATE", "UpdateCharacterPortrait")
+    self:RegisterEvent("PORTRAITS_UPDATED", "UpdateCharacterPortrait")
 
     if self.db.styleMicroMenu ~= false then
         self:SetupMicroMenu()
         self:QueueLayoutMicroMenu()
+    end
+end
+
+function MenuMod:UpdateCharacterPortrait(event, unit)
+    if event == "UNIT_PORTRAIT_UPDATE" and unit ~= "player" then return end
+    local btn = _G.CharacterMicroButton
+    if not btn then return end
+    local portrait = btn.Portrait or _G.MicroButtonPortrait
+    if portrait and _G.SetPortraitTexture then
+        _G.SetPortraitTexture(portrait, "player")
     end
 end
 
@@ -522,22 +534,33 @@ function MenuMod:StyleMicroButton(btn)
         if highlight.SetAllPoints then highlight:SetAllPoints(btn) end
         if highlight.SetAlpha then highlight:SetAlpha(0) end
     end
-    if btn.Portrait then
-        btn.Portrait:ClearAllPoints()
-        btn.Portrait:SetPoint("TOPLEFT", btn, "TOPLEFT", 3, -3)
-        btn.Portrait:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
-        if btn.Portrait.SetTexCoord then
-            btn.Portrait:SetTexCoord(0.18, 0.82, 0.18, 0.82)
+    local portrait = btn.Portrait or _G.MicroButtonPortrait
+    if portrait then
+        portrait:ClearAllPoints()
+        portrait:SetPoint("TOPLEFT", btn, "TOPLEFT", 3, -3)
+        portrait:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
+        if portrait.SetTexCoord then
+            portrait:SetTexCoord(0.18, 0.82, 0.18, 0.82)
         end
-        if btn.Portrait.SetAlpha then btn.Portrait:SetAlpha(1) end
-        if btn.Portrait.SetDesaturated then btn.Portrait:SetDesaturated(false) end
-        if btn.Portrait.SetVertexColor then btn.Portrait:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, 1) end
-        if btn.Portrait.Show then btn.Portrait:Show() end
+        if portrait.SetAlpha then portrait:SetAlpha(1) end
+        if portrait.SetDesaturated then portrait:SetDesaturated(false) end
+        if portrait.SetVertexColor then portrait:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, 1) end
+        if portrait.Show then portrait:Show() end
+        if _G.SetPortraitTexture then
+            _G.SetPortraitTexture(portrait, "player")
+        end
     end
 
-    -- Remove portrait mask circle if present so portrait is clean
-    if btn.PortraitMask and btn.PortraitMask.Hide then
-        btn.PortraitMask:Hide()
+    -- Shape PortraitMask to solid white rectangle matching button bounds (never Hide, which masks out to 0 alpha!)
+    if btn.PortraitMask then
+        btn.PortraitMask:ClearAllPoints()
+        btn.PortraitMask:SetPoint("TOPLEFT", btn, "TOPLEFT", 3, -3)
+        btn.PortraitMask:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
+        if btn.PortraitMask.SetTexture then
+            btn.PortraitMask:SetTexture("Interface\\Buttons\\WHITE8x8")
+        end
+        if btn.PortraitMask.Show then btn.PortraitMask:Show() end
+        if btn.PortraitMask.SetAlpha then btn.PortraitMask:SetAlpha(1) end
     end
 
     -- Guild Emblem & Tabard handling:
@@ -731,6 +754,48 @@ function MenuMod:StyleMicroButton(btn)
                         end
                     end
                     if n.SetAlpha then n:SetAlpha(1) end
+                end
+            end)
+        end
+        if btn.SetNormal and (btn.Portrait or (btn == _G.CharacterMicroButton) or (btn.GetName and btn:GetName() == "CharacterMicroButton")) then
+            hooksecurefunc(btn, "SetNormal", function(b)
+                local p = b.Portrait or _G.MicroButtonPortrait
+                if p then
+                    p:ClearAllPoints()
+                    p:SetPoint("TOPLEFT", b, "TOPLEFT", 3, -3)
+                    p:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -3, 3)
+                    if p.Show then p:Show() end
+                end
+                if b.PortraitMask then
+                    b.PortraitMask:ClearAllPoints()
+                    b.PortraitMask:SetPoint("TOPLEFT", b, "TOPLEFT", 3, -3)
+                    b.PortraitMask:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -3, 3)
+                    if b.PortraitMask.SetTexture then
+                        b.PortraitMask:SetTexture("Interface\\Buttons\\WHITE8x8")
+                    end
+                    if b.PortraitMask.Show then b.PortraitMask:Show() end
+                    if b.PortraitMask.SetAlpha then b.PortraitMask:SetAlpha(1) end
+                end
+            end)
+        end
+        if btn.SetPushed and (btn.Portrait or (btn == _G.CharacterMicroButton) or (btn.GetName and btn:GetName() == "CharacterMicroButton")) then
+            hooksecurefunc(btn, "SetPushed", function(b)
+                local p = b.Portrait or _G.MicroButtonPortrait
+                if p then
+                    p:ClearAllPoints()
+                    p:SetPoint("TOPLEFT", b, "TOPLEFT", 4, -4)
+                    p:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 2)
+                    if p.Show then p:Show() end
+                end
+                if b.PortraitMask then
+                    b.PortraitMask:ClearAllPoints()
+                    b.PortraitMask:SetPoint("TOPLEFT", b, "TOPLEFT", 4, -4)
+                    b.PortraitMask:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 2)
+                    if b.PortraitMask.SetTexture then
+                        b.PortraitMask:SetTexture("Interface\\Buttons\\WHITE8x8")
+                    end
+                    if b.PortraitMask.Show then b.PortraitMask:Show() end
+                    if b.PortraitMask.SetAlpha then b.PortraitMask:SetAlpha(1) end
                 end
             end)
         end

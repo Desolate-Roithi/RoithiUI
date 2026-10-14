@@ -822,10 +822,72 @@ function ChatMod:UpdateEditModeSelection(cf)
 end
 
 -------------------------------------------------------------------------------
--- Frame Skinning
+-- Frame Skinning & Typography Synchronization
 -------------------------------------------------------------------------------
+function ChatMod:UpdateChatFonts()
+    if self.db.enabled == false then return end
+
+    local font = self:GetFontPath()
+    local size = self.db.fontSize or 12
+    local outline = self.db.fontOutline or "OUTLINE"
+    local showShadow = (self.db.showFontShadow == true)
+    local inCombat = _G.InCombatLockdown and _G.InCombatLockdown()
+
+    -- 1. Synchronize Blizzard Global Font Objects
+    if _G.ChatFontNormal and _G.ChatFontNormal.SetFont then
+        pcall(_G.ChatFontNormal.SetFont, _G.ChatFontNormal, font, size, outline)
+    end
+    if _G.ChatFontSmall and _G.ChatFontSmall.SetFont then
+        pcall(_G.ChatFontSmall.SetFont, _G.ChatFontSmall, font, math.max(8, size - 2), outline)
+    end
+
+    -- 2. Synchronize all Chat Frames & EditBoxes
+    for i = 1, 20 do
+        local cf = _G["ChatFrame" .. i]
+        if cf then
+            if cf.SetFont then
+                pcall(cf.SetFont, cf, font, size, outline)
+            end
+            if not inCombat and cf.GetID then
+                local id = cf:GetID()
+                if id and id > 0 then
+                    if _G.FCF_SetChatWindowFontSize then
+                        pcall(_G.FCF_SetChatWindowFontSize, nil, cf, size)
+                    elseif _G.SetChatWindowSize then
+                        pcall(_G.SetChatWindowSize, id, size)
+                    end
+                end
+            end
+            if cf.SetShadowOffset then
+                if showShadow then
+                    cf:SetShadowOffset(1, -1)
+                    if cf.SetShadowColor then cf:SetShadowColor(0, 0, 0, 1) end
+                else
+                    cf:SetShadowOffset(0, 0)
+                    if cf.SetShadowColor then cf:SetShadowColor(0, 0, 0, 0) end
+                end
+            end
+        end
+
+        local eb = _G["ChatFrame" .. i .. "EditBox"]
+        if eb then
+            if eb.SetFont then
+                pcall(eb.SetFont, eb, font, size, outline)
+            end
+            if eb.header and eb.header.SetFont then
+                pcall(eb.header.SetFont, eb.header, font, size, outline)
+            end
+            if eb.headerSuffix and eb.headerSuffix.SetFont then
+                pcall(eb.headerSuffix.SetFont, eb.headerSuffix, font, size, outline)
+            end
+        end
+    end
+end
+
 function ChatMod:SkinAllChatFrames()
     if self.db.enabled == false then return end
+
+    self:UpdateChatFonts()
 
     for i = 1, 20 do
         local cf = _G["ChatFrame" .. i]
@@ -833,6 +895,8 @@ function ChatMod:SkinAllChatFrames()
             self:SkinChatFrame(cf, i)
         end
     end
+
+    self:UpdateAllChatTabFonts()
 
     if not self.fcfColorsHooked and hooksecurefunc then
         hooksecurefunc("FCFTab_UpdateColors", function(selectedTab, selected)
@@ -1049,8 +1113,12 @@ function ChatMod:SkinChatFrame(cf, idx)
         pcall(cf.SetFont, cf, font, size, outline)
         if cf.GetID and not (_G.InCombatLockdown and _G.InCombatLockdown()) then
             local id = cf:GetID()
-            if id and id > 0 and _G.SetChatWindowSize then
-                pcall(_G.SetChatWindowSize, id, size)
+            if id and id > 0 then
+                if _G.FCF_SetChatWindowFontSize then
+                    pcall(_G.FCF_SetChatWindowFontSize, nil, cf, size)
+                elseif _G.SetChatWindowSize then
+                    pcall(_G.SetChatWindowSize, id, size)
+                end
             end
         end
         if cf.SetShadowOffset then
@@ -1401,8 +1469,51 @@ function ChatMod:UpdateTabVisuals(tab, isSelected)
     end
 end
 
+function ChatMod:UpdateTabFont(tab)
+    if not tab then return end
+
+    local tabName = tab.GetName and tab:GetName()
+    local tabText = tab.Text or (tabName and _G[tabName .. "Text"])
+    if tabText and tabText.SetFont then
+        local font = self:GetFontPath()
+        local size = self.db.tabFontSize or 11
+        local outline = self.db.fontOutline or "OUTLINE"
+        pcall(tabText.SetFont, tabText, font, size, outline)
+        -- Center tabText inside tab away from the bottom edge so it doesn't collide with chat text
+        if tabText.ClearAllPoints and tabText.SetPoint then
+            tabText:ClearAllPoints()
+            tabText:SetPoint("CENTER", tab, "CENTER", 0, 1)
+        end
+    end
+
+    local tabHeight = self.db.tabHeight or 22
+    if tab.SetHeight then
+        tab:SetHeight(tabHeight)
+    end
+end
+
+function ChatMod:UpdateAllChatTabFonts()
+    if self.db.enabled == false or self.db.styleTabs == false then return end
+
+    for i = 1, 20 do
+        local tab = _G["ChatFrame" .. i .. "Tab"]
+        if tab then
+            self:UpdateTabFont(tab)
+        end
+    end
+
+    if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
+        self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
+    end
+end
+
 function ChatMod:SkinTab(tab, cf, idx)
-    if not tab or skinnedTabs[tab] then return end
+    if not tab then return end
+
+    if skinnedTabs[tab] then
+        self:UpdateTabFont(tab)
+        return
+    end
     skinnedTabs[tab] = true
 
     -- Strip default tab textures
@@ -1415,19 +1526,8 @@ function ChatMod:SkinTab(tab, cf, idx)
         end
     end
 
-    local tabText = tab.Text or _G[tab:GetName() .. "Text"]
-    if tabText then
-        local font = self:GetFontPath()
-        local size = self.db.tabFontSize or 11
-        local outline = self.db.fontOutline or "OUTLINE"
-        pcall(tabText.SetFont, tabText, font, size, outline)
-        -- Center tabText inside tab away from the bottom edge so it doesn't collide with chat text
-        tabText:ClearAllPoints()
-        tabText:SetPoint("CENTER", tab, "CENTER", 0, 1)
-    end
-
-    local tabHeight = self.db.tabHeight or 22
-    tab:SetHeight(tabHeight)
+    local tabName = tab.GetName and tab:GetName()
+    local tabText = tab.Text or (tabName and _G[tabName .. "Text"])
 
     -- Tab background and border textures
     if not tabTextures[tab] and tab.CreateTexture then
@@ -1458,15 +1558,20 @@ function ChatMod:SkinTab(tab, cf, idx)
         tabTextures[tab] = { bg = bg, top = top, bottom = bottom, left = left, right = right, text = tabText, cf = cf }
     end
 
+    -- Apply font and tab height
+    self:UpdateTabFont(tab)
+
     -- Tab hover hooks
-    tab:HookScript("OnEnter", function()
-        self:UpdateTabVisuals(tab, true)
-    end)
-    tab:HookScript("OnLeave", function()
-        local cfTarget = cf or _G[tab:GetName():gsub("Tab$", "")]
-        local isSel = (_G.SELECTED_CHAT_FRAME == cfTarget) or (cfTarget and cfTarget:IsShown())
-        self:UpdateTabVisuals(tab, isSel)
-    end)
+    if tab.HookScript then
+        tab:HookScript("OnEnter", function()
+            self:UpdateTabVisuals(tab, true)
+        end)
+        tab:HookScript("OnLeave", function()
+            local cfTarget = cf or (tabName and _G[tabName:gsub("Tab$", "")])
+            local isSel = (_G.SELECTED_CHAT_FRAME == cfTarget) or (cfTarget and cfTarget:IsShown())
+            self:UpdateTabVisuals(tab, isSel)
+        end)
+    end
 
     local isInitSel = (_G.SELECTED_CHAT_FRAME == cf) or (cf and cf:IsShown())
     self:UpdateTabVisuals(tab, isInitSel)
@@ -2144,6 +2249,8 @@ end
 ChatMod.RefreshProfile = ChatMod.RefreshSettings
 
 function ChatMod:UpdateFonts()
+    self:UpdateChatFonts()
+    self:UpdateAllChatTabFonts()
     self:SkinAllChatFrames()
 end
 

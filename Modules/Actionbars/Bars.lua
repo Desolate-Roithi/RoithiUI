@@ -479,6 +479,13 @@ function AB:SetupBars()
                     or 1
                 self.bars[barKey]:SetAttribute("actionpage", page)
             end
+            local inCombat = (_G.InCombatLockdown and _G.InCombatLockdown()) or false
+            if not inCombat then
+                local db = (self.db and self.db[barKey]) or (self.defaultSettings and self.defaultSettings[barKey]) or {}
+                local pt = db.point or "BOTTOM"
+                if self.bars[barKey].ClearAllPoints then self.bars[barKey]:ClearAllPoints() end
+                if self.bars[barKey].SetPoint then self.bars[barKey]:SetPoint(pt, UIParent, pt, db.x or 0, db.y or 0) end
+            end
         end
 
         local db = (self.db and self.db[barKey]) or (self.defaultSettings and self.defaultSettings[barKey]) or {}
@@ -1561,6 +1568,12 @@ function AB:LayoutBarInternal(barKey)
     local totalW = (numCols * btnSize) + math.max(0, (numCols - 1) * spacing)
     local totalH = (numRows * btnSize) + math.max(0, (numRows - 1) * spacing)
     if container.SetSize then container:SetSize(totalW, totalH) end
+    local inCombat = (_G.InCombatLockdown and _G.InCombatLockdown()) or false
+    if not inCombat and container.ClearAllPoints and container.SetPoint then
+        local pt = db.point or "BOTTOM"
+        container:ClearAllPoints()
+        container:SetPoint(pt, UIParent, pt, db.x or 0, db.y or 0)
+    end
 
     if #buttons == 0 then return end
 

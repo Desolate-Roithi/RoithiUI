@@ -168,7 +168,8 @@ function UF:UpdateFrameFromSettings(unit)
     frame:SetScale(scale)
 
     -- Update position (SKIP for boss 2-5, managed by Boss.lua)
-    if not string.match(unit, "^boss[2-5]$") then
+    local inCombat = (_G.InCombatLockdown and _G.InCombatLockdown()) or false
+    if not inCombat and not string.match(unit, "^boss[2-5]$") then
         local point = (db and db.point) or (string.match(unit, "boss") and "RIGHT" or "CENTER")
         local x = (db and db.x) or (string.match(unit, "boss") and -250 or 0)
         local y = (db and db.y) or 0
