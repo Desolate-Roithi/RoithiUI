@@ -144,59 +144,15 @@ local function GetOrCreateAuraMover(container, unit, containerSuffix)
                           or (suf == "Debuffs" and uDB.debuffGrowDirection)
                           or uDB.auraGrowDirection or "RIGHT_DOWN"
 
-                local isCenterH = (gDir:find("CENTER_HORIZONTAL") or gDir == "CENTER_HORIZ")
-                local isCenterV = (gDir:find("CENTER_VERTICAL") or gDir == "CENTER_VERT")
-
-                local targetAnchor = "TOPLEFT"
-                if gDir == "RIGHT_UP" or gDir == "UP" or gDir == "UP_RIGHT" or gDir == "BOTTOM_TO_TOP" then
-                    targetAnchor = "BOTTOMLEFT"
-                elseif gDir == "LEFT_DOWN" or gDir == "DOWN_LEFT" or gDir == "LEFT" then
-                    targetAnchor = "TOPRIGHT"
-                elseif gDir == "LEFT_UP" or gDir == "UP_LEFT" then
-                    targetAnchor = "BOTTOMRIGHT"
-                elseif gDir == "CENTER_HORIZONTAL_UP" then
-                    targetAnchor = "BOTTOM"
-                elseif gDir == "CENTER_HORIZONTAL_DOWN" or isCenterH then
-                    targetAnchor = "TOP"
-                elseif gDir == "CENTER_VERTICAL_LEFT" then
-                    targetAnchor = "RIGHT"
-                elseif gDir == "CENTER_VERTICAL_RIGHT" or isCenterV then
-                    targetAnchor = "LEFT"
-                end
+                local targetAnchor = (ns.Utils and ns.Utils.GetGrowthAnchor) and ns.Utils.GetGrowthAnchor(gDir, false) or "TOPLEFT"
 
                 local ptStr = targetAnchor
-                local cleanX = tonumber(tostring(x or 0)) or 0
-                local cleanY = tonumber(tostring(y or 0)) or 0
-
-                if movedFrame.GetLeft and UIParent.GetLeft then
-                    local uW, uH = UIParent:GetWidth(), UIParent:GetHeight()
-                    if uW and uH and uW > 0 and uH > 0 then
-                        if targetAnchor == "TOPLEFT" then
-                            cleanX = movedFrame:GetLeft()
-                            cleanY = movedFrame:GetTop() - uH
-                        elseif targetAnchor == "BOTTOMLEFT" then
-                            cleanX = movedFrame:GetLeft()
-                            cleanY = movedFrame:GetBottom()
-                        elseif targetAnchor == "TOPRIGHT" then
-                            cleanX = movedFrame:GetRight() - uW
-                            cleanY = movedFrame:GetTop() - uH
-                        elseif targetAnchor == "BOTTOMRIGHT" then
-                            cleanX = movedFrame:GetRight() - uW
-                            cleanY = movedFrame:GetBottom()
-                        elseif targetAnchor == "TOP" then
-                            cleanX = movedFrame:GetLeft() + movedFrame:GetWidth()/2 - uW/2
-                            cleanY = movedFrame:GetTop() - uH
-                        elseif targetAnchor == "BOTTOM" then
-                            cleanX = movedFrame:GetLeft() + movedFrame:GetWidth()/2 - uW/2
-                            cleanY = movedFrame:GetBottom()
-                        elseif targetAnchor == "LEFT" then
-                            cleanX = movedFrame:GetLeft()
-                            cleanY = movedFrame:GetBottom() + movedFrame:GetHeight()/2 - uH/2
-                        elseif targetAnchor == "RIGHT" then
-                            cleanX = movedFrame:GetRight() - uW
-                            cleanY = movedFrame:GetBottom() + movedFrame:GetHeight()/2 - uH/2
-                        end
-                    end
+                local cleanX, cleanY
+                if ns.Utils and ns.Utils.GetFrameScreenCoordinates and movedFrame.GetLeft and UIParent.GetLeft then
+                    cleanX, cleanY = ns.Utils.GetFrameScreenCoordinates(movedFrame, UIParent, targetAnchor)
+                else
+                    cleanX = tonumber(tostring(x or 0)) or 0
+                    cleanY = tonumber(tostring(y or 0)) or 0
                 end
 
                 cleanX = math.floor(cleanX * 10 + 0.5) / 10

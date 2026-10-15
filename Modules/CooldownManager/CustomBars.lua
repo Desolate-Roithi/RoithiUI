@@ -99,6 +99,7 @@ function CDM:CreateCustomBar(name)
         growthDirection = "LEFT_TO_RIGHT",
         adaptable = true,
         maxIcons = 8,
+        buttonsPerRow = 8,
         point = "CENTER",
         x = 0,
         y = -100 - (index * 48),
@@ -733,54 +734,23 @@ function CDM:InitializeCustomBar(index)
         return
     end
 
-    local totalW = isVertical and iconSize or (numVisible * iconSize + math.max(0, numVisible - 1) * spacing)
-    local totalH = isVertical and (numVisible * iconSize + math.max(0, numVisible - 1) * spacing) or iconSize
+    local perLine = cfg.buttonsPerRow or 8
+    local totalW, totalH
+    if ns.Utils and ns.Utils.GetGridDimensions then
+        local _, _, gridW, gridH = ns.Utils.GetGridDimensions(numVisible, perLine, iconSize, iconSize, spacing, spacing, isVertical)
+        totalW, totalH = gridW, gridH
+    else
+        totalW = isVertical and iconSize or (numVisible * iconSize + math.max(0, numVisible - 1) * spacing)
+        totalH = isVertical and (numVisible * iconSize + math.max(0, numVisible - 1) * spacing) or iconSize
+    end
     frame:SetSize(math.max(totalW, 20), math.max(totalH, 20))
 
-    local targetPoint
-    if growthDir == "RIGHT_TO_LEFT" then
-        targetPoint = "RIGHT"
-    elseif growthDir == "LEFT_TO_RIGHT" then
-        targetPoint = "LEFT"
-    elseif growthDir == "TOP_TO_BOTTOM" then
-        targetPoint = "TOP"
-    elseif growthDir == "BOTTOM_TO_TOP" then
-        targetPoint = "BOTTOM"
-    else
-        targetPoint = "CENTER"
-    end
+    local is1D = (numVisible <= perLine and not isVertical) or (numVisible <= perLine and isVertical)
+    local targetPoint = (ns.Utils and ns.Utils.GetGrowthAnchor) and ns.Utils.GetGrowthAnchor(growthDir, is1D) or "CENTER"
 
     if cfg.point ~= targetPoint then
-        local currentPoint = cfg.point or "CENTER"
-        local curX = cfg.x or 0
-        local curY = cfg.y or 0
-        local centerX, centerY = curX, curY
-
-        if currentPoint == "LEFT" then
-            centerX = curX + (totalW / 2)
-        elseif currentPoint == "RIGHT" then
-            centerX = curX - (totalW / 2)
-        elseif currentPoint == "TOP" then
-            centerY = curY - (totalH / 2)
-        elseif currentPoint == "BOTTOM" then
-            centerY = curY + (totalH / 2)
-        end
-
-        if targetPoint == "LEFT" then
-            cfg.x = centerX - (totalW / 2)
-            cfg.y = centerY
-        elseif targetPoint == "RIGHT" then
-            cfg.x = centerX + (totalW / 2)
-            cfg.y = centerY
-        elseif targetPoint == "TOP" then
-            cfg.x = centerX
-            cfg.y = centerY + (totalH / 2)
-        elseif targetPoint == "BOTTOM" then
-            cfg.x = centerX
-            cfg.y = centerY - (totalH / 2)
-        else
-            cfg.x = centerX
-            cfg.y = centerY
+        if ns.Utils and ns.Utils.MigratePointCoordinates then
+            cfg.x, cfg.y = ns.Utils.MigratePointCoordinates(cfg.point or "CENTER", targetPoint, cfg.x or 0, cfg.y or 0, totalW, totalH)
         end
         cfg.point = targetPoint
     end
@@ -803,16 +773,7 @@ function CDM:InitializeCustomBar(index)
             local isVert = (cfg.orientation == "VERTICAL")
             currentGrowth = currentGrowth or (isVert and "TOP_TO_BOTTOM" or "LEFT_TO_RIGHT")
 
-            local anchorPt = "CENTER"
-            if currentGrowth == "RIGHT_TO_LEFT" then
-                anchorPt = "RIGHT"
-            elseif currentGrowth == "LEFT_TO_RIGHT" then
-                anchorPt = "LEFT"
-            elseif currentGrowth == "TOP_TO_BOTTOM" then
-                anchorPt = "TOP"
-            elseif currentGrowth == "BOTTOM_TO_TOP" then
-                anchorPt = "BOTTOM"
-            end
+            local anchorPt = (ns.Utils and ns.Utils.GetGrowthAnchor) and ns.Utils.GetGrowthAnchor(currentGrowth) or "CENTER"
 
             local w = f:GetWidth() or 40
             local h = f:GetHeight() or 40
@@ -828,27 +789,18 @@ function CDM:InitializeCustomBar(index)
             end
 
             if not fCenterX then
-                fCenterX, fCenterY = x or 0, y or 0
-                if pt == "LEFT" then
-                    fCenterX = fCenterX + (w / 2)
-                elseif pt == "RIGHT" then
-                    fCenterX = fCenterX - (w / 2)
-                elseif pt == "TOP" then
-                    fCenterY = fCenterY - (h / 2)
-                elseif pt == "BOTTOM" then
-                    fCenterY = fCenterY + (h / 2)
+                if ns.Utils and ns.Utils.PointToCenter then
+                    fCenterX, fCenterY = ns.Utils.PointToCenter(pt, x or 0, y or 0, w, h)
+                else
+                    fCenterX, fCenterY = x or 0, y or 0
                 end
             end
 
-            local finalX, finalY = fCenterX, fCenterY
-            if anchorPt == "RIGHT" then
-                finalX = fCenterX + (w / 2)
-            elseif anchorPt == "LEFT" then
-                finalX = fCenterX - (w / 2)
-            elseif anchorPt == "TOP" then
-                finalY = fCenterY + (h / 2)
-            elseif anchorPt == "BOTTOM" then
-                finalY = fCenterY - (h / 2)
+            local finalX, finalY
+            if ns.Utils and ns.Utils.CenterToPoint then
+                finalX, finalY = ns.Utils.CenterToPoint(anchorPt, fCenterX, fCenterY, w, h)
+            else
+                finalX, finalY = fCenterX, fCenterY
             end
 
             f:ClearAllPoints()
@@ -897,6 +849,20 @@ function CDM:InitializeCustomBar(index)
                         cfg.adaptable = val
                         CDM:InitializeCustomBar(index)
                     end,
+                },
+                {
+                    name = L["Icons Per Row"] or "Icons Per Row",
+                    kind = LEM.SettingType.Slider,
+                    default = 8,
+                    minValue = 1,
+                    maxValue = 24,
+                    valueStep = 1,
+                    get = function() return cfg.buttonsPerRow or 8 end,
+                    set = function(_, val)
+                        cfg.buttonsPerRow = val
+                        CDM:InitializeCustomBar(index)
+                    end,
+                    formatter = function(v) return string.format("%.0f", v) end,
                 },
                 {
                     name = L["Orientation"] or "Orientation",
@@ -1144,24 +1110,17 @@ function CDM:InitializeCustomBar(index)
         iconBtn.originalSlotIndex = (frame.activeOrigIndices and frame.activeOrigIndices[i]) or i
         iconBtn:SetSize(iconSize, iconSize)
         iconBtn:ClearAllPoints()
-        local offset = (i - 1) * (iconSize + spacing)
-        if growthDir == "CENTER_HORIZONTAL" or growthDir == "CENTER" then
-            local startX = -((numVisible - 1) * (iconSize + spacing)) / 2
-            local xOffset = startX + (i - 1) * (iconSize + spacing)
-            iconBtn:SetPoint("CENTER", frame, "CENTER", xOffset, 0)
-        elseif growthDir == "CENTER_VERTICAL" then
-            local startY = ((numVisible - 1) * (iconSize + spacing)) / 2
-            local yOffset = startY - (i - 1) * (iconSize + spacing)
-            iconBtn:SetPoint("CENTER", frame, "CENTER", 0, yOffset)
-        elseif growthDir == "RIGHT_TO_LEFT" then
-            iconBtn:SetPoint("RIGHT", frame, "RIGHT", -offset, 0)
-        elseif growthDir == "BOTTOM_TO_TOP" then
-            iconBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, offset)
-        elseif growthDir == "TOP_TO_BOTTOM" then
-            iconBtn:SetPoint("TOP", frame, "TOP", 0, -offset)
-        else -- LEFT_TO_RIGHT
-            iconBtn:SetPoint("LEFT", frame, "LEFT", offset, 0)
+        local itemOx, itemOy, iconAnchor
+        local barPerLine = cfg.buttonsPerRow or 8
+        if ns.Utils and ns.Utils.GetGridItemOffset then
+            itemOx, itemOy, iconAnchor = ns.Utils.GetGridItemOffset(growthDir, i, numVisible, barPerLine, iconSize, iconSize, spacing, spacing, isVertical)
+        elseif ns.Utils and ns.Utils.GetLinearItemOffset then
+            itemOx, itemOy, iconAnchor = ns.Utils.GetLinearItemOffset(growthDir, i, numVisible, iconSize, spacing)
+        else
+            local offset = (i - 1) * (iconSize + spacing)
+            itemOx, itemOy, iconAnchor = offset, 0, "LEFT"
         end
+        iconBtn:SetPoint(iconAnchor, frame, iconAnchor, itemOx, itemOy)
 
         if iconBtn.ChargeCount and iconBtn.ChargeCount.Current then
             local chargeFS = iconBtn.ChargeCount.Current

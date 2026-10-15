@@ -64,6 +64,24 @@ function ChatMod:GetOptions()
                             self:ApplyTimestampFormat()
                         end,
                     },
+                    whisperMode = {
+                        type = "select",
+                        name = L["Whisper Mode"] or "Whisper Mode",
+                        desc = L["Controls whether whispers appear in the main chat frame or open into new dedicated tabs."] or "Controls whether whispers appear in the main chat frame or open into new dedicated tabs.",
+                        order = 3.5,
+                        values = {
+                            ["inline"] = L["Standard (In-Line)"] or "Standard (In-Line)",
+                            ["popout"] = L["New Dedicated Tab"] or "New Dedicated Tab",
+                            ["popout_and_inline"] = L["Both (New Tab & In-Line)"] or "Both (New Tab & In-Line)",
+                        },
+                        get = function() return self.db.whisperMode or "inline" end,
+                        set = function(_, val)
+                            self.db.whisperMode = val
+                            if self.ApplyWhisperMode then
+                                self:ApplyWhisperMode()
+                            end
+                        end,
+                    },
                     buttonDockPosition = {
                         type = "select",
                         name = L["Action Buttons Dock"] or "Action Buttons Dock",
@@ -133,6 +151,14 @@ function ChatMod:GetOptions()
                         get = function() return self.db.chatIconSize or 14 end,
                         set = function(_, val)
                             self.db.chatIconSize = val
+                            local cf = _G.SELECTED_CHAT_FRAME or _G.ChatFrame1
+                            if cf and cf.AddMessage then
+                                local rAtlas = "raceicon-orc-male"
+                                local cAtlas = "classicon-warrior"
+                                cf:AddMessage(string.format("|cff00ccff[RoithiUI]|r %s: %dpx |A:%s:%d:%d|a |A:%s:%d:%d|a",
+                                    L["Chat Icon Size"] or "Chat Icon Size",
+                                    val, rAtlas, val, val, cAtlas, val, val))
+                            end
                         end,
                         disabled = function() return not (self.db.showClassIcons or self.db.showRaceIcons) end,
                     },
@@ -438,6 +464,12 @@ function ChatMod:GetOptions()
                         end,
                         set = function(_, r, g, b, a)
                             self.db.editBoxBgColor = { r = r, g = g, b = b, a = a }
+                            for i = 1, 20 do
+                                local eb = _G["ChatFrame" .. i .. "EditBox"]
+                                if eb and self.UpdateEditBoxStyle then
+                                    self:UpdateEditBoxStyle(eb)
+                                end
+                            end
                             self:SkinAllChatFrames()
                         end,
                     },
@@ -452,6 +484,12 @@ function ChatMod:GetOptions()
                         end,
                         set = function(_, r, g, b, a)
                             self.db.editBoxBorderColor = { r = r, g = g, b = b, a = a }
+                            for i = 1, 20 do
+                                local eb = _G["ChatFrame" .. i .. "EditBox"]
+                                if eb and self.UpdateEditBoxStyle then
+                                    self:UpdateEditBoxStyle(eb)
+                                end
+                            end
                             self:SkinAllChatFrames()
                         end,
                     },
@@ -471,6 +509,9 @@ function ChatMod:GetOptions()
                         get = function() return self.db.styleTabs ~= false end,
                         set = function(_, val)
                             self.db.styleTabs = val
+                            if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
+                                self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
+                            end
                             self:SkinAllChatFrames()
                         end,
                     },
@@ -485,6 +526,7 @@ function ChatMod:GetOptions()
                         set = function(_, val)
                             self.db.tabHeight = val
                             if self.UpdateAllChatTabFonts then self:UpdateAllChatTabFonts() end
+                            if self.UpdateBackgroundPosition then self:UpdateBackgroundPosition() end
                             self:SkinAllChatFrames()
                         end,
                     },
@@ -513,8 +555,23 @@ function ChatMod:GetOptions()
                         get = function() return self.db.tabAlphaInactive or 0.5 end,
                         set = function(_, val)
                             self.db.tabAlphaInactive = val
+                            if self.UpdateAllTabVisuals then self:UpdateAllTabVisuals() end
                             self:SkinAllChatFrames()
                         end,
+                    },
+                    showNewTabButton = {
+                        type = "toggle",
+                        name = L["Show Add Tab (+) Button"] or "Show Add Tab (+) Button",
+                        desc = L["Displays a plus (+) button next to chat tabs to quickly create a new chat window."] or "Displays a plus (+) button next to chat tabs to quickly create a new chat window.",
+                        order = 5,
+                        get = function() return self.db.showNewTabButton ~= false end,
+                        set = function(_, val)
+                            self.db.showNewTabButton = val
+                            if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
+                                self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
+                            end
+                        end,
+                        disabled = function() return not self.db.styleTabs end,
                     },
                 },
             },

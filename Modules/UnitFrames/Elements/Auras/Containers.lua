@@ -107,6 +107,8 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
 
     local isVerticalLayout = (growDir == "DOWN" or growDir == "UP" or growDir == "DOWN_RIGHT" or growDir == "DOWN_LEFT" or growDir == "UP_RIGHT" or growDir == "UP_LEFT" or growDir == "CENTER_VERTICAL" or growDir == "CENTER_VERT" or growDir == "VERTICAL" or growDir == "TOP_TO_BOTTOM" or growDir == "BOTTOM_TO_TOP")
     local axisVal = isVerticalLayout and 1 or 0
+    local isCenterHoriz = (growDir:find("CENTER_HORIZONTAL") or growDir == "CENTER_HORIZ")
+    local isCenterVert = (growDir:find("CENTER_VERTICAL") or growDir == "CENTER_VERT")
     local lineSizeVal = (perRow * size) + ((perRow - 1) * spacing)
 
     RADLog("Configuring Container [%s]: Size=%d, Spacing=%d, MaxCount=%d, PerRow=%d, GrowDir=%s", container.containerKey, size, spacing, maxCount, perRow, growDir)
@@ -141,38 +143,16 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
     end
 
     -- Determine FlowLayout Anchor & Alignment parameters based on growDir option
-    local layoutAnchor = "TOPLEFT"
-    local isCenterHoriz = (growDir:find("CENTER_HORIZONTAL") or growDir == "CENTER_HORIZ")
-    local isCenterVert = (growDir:find("CENTER_VERTICAL") or growDir == "CENTER_VERT")
-
-    if growDir == "RIGHT_DOWN" or growDir == "DOWN" or growDir == "DOWN_RIGHT" or growDir == "TOP_TO_BOTTOM" or growDir == "RIGHT" then
-        layoutAnchor = "TOPLEFT"
-    elseif growDir == "RIGHT_UP" or growDir == "UP" or growDir == "UP_RIGHT" or growDir == "BOTTOM_TO_TOP" then
-        layoutAnchor = "BOTTOMLEFT"
-    elseif growDir == "LEFT_DOWN" or growDir == "DOWN_LEFT" or growDir == "LEFT" then
-        layoutAnchor = "TOPRIGHT"
-    elseif growDir == "LEFT_UP" or growDir == "UP_LEFT" then
-        layoutAnchor = "BOTTOMRIGHT"
-    elseif growDir == "CENTER_HORIZONTAL_UP" then
-        layoutAnchor = "BOTTOMLEFT"
-    elseif growDir == "CENTER_HORIZONTAL_DOWN" or isCenterHoriz then
-        layoutAnchor = "TOPLEFT"
-    elseif growDir == "CENTER_VERTICAL_LEFT" then
-        layoutAnchor = "TOPRIGHT"
-    elseif growDir == "CENTER_VERTICAL_RIGHT" or isCenterVert then
-        layoutAnchor = "TOPLEFT"
-    end
+    local layoutAnchor, flowAxis, horizDir, vertDir = ns.Utils.GetAuraFlowLayoutParameters(growDir)
 
     -- Apply Container-Level FlowLayout Settings natively to C-Engine
     if container.SetFlowLayoutAxis then
-        container:SetFlowLayoutAxis(axisVal)
+        container:SetFlowLayoutAxis(flowAxis)
     end
     if container.SetFlowLayoutAnchorPoint then
         container:SetFlowLayoutAnchorPoint(layoutAnchor)
     end
     if container.SetFlowLayoutGrowthDirection then
-        local horizDir = (growDir:find("LEFT") and not growDir:find("RIGHT") and not (growDir == "CENTER_HORIZONTAL_DOWN" or growDir == "CENTER_HORIZONTAL_UP" or growDir == "CENTER_VERTICAL_RIGHT")) and -1 or 1
-        local vertDir = (growDir == "RIGHT_UP" or growDir == "LEFT_UP" or growDir == "UP_RIGHT" or growDir == "UP_LEFT" or growDir == "CENTER_HORIZONTAL_UP" or growDir == "BOTTOM_TO_TOP" or layoutAnchor:find("BOTTOM")) and 1 or -1
         container:SetFlowLayoutGrowthDirection(horizDir, vertDir)
     end
     if container.SetFlowLayoutMaximumLineSize then

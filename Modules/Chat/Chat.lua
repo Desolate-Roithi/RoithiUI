@@ -21,6 +21,7 @@ local tabTextures = setmetatable({}, { __mode = "k" })
 local editBoxBackdrops = setmetatable({}, { __mode = "k" })
 local editBoxShowHooked = setmetatable({}, { __mode = "k" })
 local editBoxFocusHooked = setmetatable({}, { __mode = "k" })
+local wheelHookedFrames = setmetatable({}, { __mode = "k" })
 
 function ChatMod:GetFontPath()
     local f = (self.db and self.db.font)
@@ -33,6 +34,13 @@ function ChatMod:GetFontPath()
         return LSM:Fetch("font", "Expressway")
     end
     return f
+end
+
+local function NormalizeFontFlags(outline)
+    if not outline or outline == "NONE" or outline == "" then
+        return ""
+    end
+    return outline
 end
 
 local function GetHiddenParent()
@@ -440,6 +448,7 @@ function ChatMod:OnEnable()
     if self.db.enabled == false then return end
 
     self:CreateChatBackground()
+    self:ApplyChatPosition()
     self:SkinAllChatFrames()
     self:ApplyTimestampFormat()
     self:UpdateButtonsDock()
@@ -457,6 +466,7 @@ function ChatMod:OnEnable()
         end)
         _G.EditModeManagerFrame:HookScript("OnHide", function()
             self:ApplyScreenClamping()
+            self:ApplyChatPosition()
             self:UpdateBackgroundPosition()
         end)
     end
@@ -475,6 +485,9 @@ function ChatMod:OnEnable()
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
     -- Re-apply timestamp CVar after Blizzard has fully initialized all CVars
     self:RegisterEvent("PLAYER_LOGIN", "OnPlayerLogin")
+    self:RegisterEvent("UPDATE_CHAT_WINDOWS")
+    self:RegisterEvent("UPDATE_FLOATING_CHAT_WINDOWS", "UPDATE_CHAT_WINDOWS")
+    self:ApplyWhisperMode()
 
     if _G.FCF_OpenNewWindow and not self:IsHooked("FCF_OpenNewWindow") then
         self:SecureHook("FCF_OpenNewWindow", function()
@@ -500,6 +513,27 @@ function ChatMod:OnEnable()
             end
             if self.UpdateButtonsDock then
                 self:UpdateButtonsDock()
+            end
+        end)
+    end
+    if _G.FCFDock_ScrollToSelectedTab and not self:IsHooked("FCFDock_ScrollToSelectedTab") then
+        self:RawHook("FCFDock_ScrollToSelectedTab", function(dock)
+            if self.ScrollToSelectedTab then
+                return self:ScrollToSelectedTab(dock)
+            end
+        end, true)
+    end
+    if _G.FCF_OpenNewWindow and not self:IsHooked("FCF_OpenNewWindow") then
+        self:SecureHook("FCF_OpenNewWindow", function()
+            if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
+                self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
+            end
+        end)
+    end
+    if _G.FCF_OpenTemporaryWindow and not self:IsHooked("FCF_OpenTemporaryWindow") then
+        self:SecureHook("FCF_OpenTemporaryWindow", function()
+            if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
+                self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
             end
         end)
     end
@@ -559,12 +593,26 @@ function ChatMod:OnDisable()
     if self.copyWindow then
         self.copyWindow:Hide()
     end
+    if self.newTabBtn then
+        self.newTabBtn:Hide()
+    end
     self:UnregisterAllEvents()
     self:UnhookAll()
 end
 
+function ChatMod:UPDATE_CHAT_WINDOWS()
+    if not self.db or self.db.enabled ~= false then
+        self:UpdateChatFonts()
+        self:UpdateAllChatTabFonts()
+    end
+end
+ChatMod.UPDATE_FLOATING_CHAT_WINDOWS = ChatMod.UPDATE_CHAT_WINDOWS
+
 function ChatMod:OnPlayerEnteringWorld()
     C_Timer.After(0.2, function()
+        if self.ApplyChatPosition then
+            self:ApplyChatPosition()
+        end
         if self.SkinAllChatFrames then
             self:SkinAllChatFrames()
         end
@@ -704,7 +752,13 @@ end
 function ChatMod:ApplyChatPosition()
     local cf1 = _G.ChatFrame1
     if not cf1 then return end
-    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        if not self.positionCombatPending then
+            self.positionCombatPending = true
+            self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnPlayerRegenEnabledPosition")
+        end
+        return
+    end
 
     local pt = self.db.point or "BOTTOMLEFT"
     local x = self.db.x or 0
@@ -712,16 +766,65 @@ function ChatMod:ApplyChatPosition()
     local w = self.db.width or 460
     local h = self.db.height or 200
 
+    -- Unlock size constraints
+    if cf1.SetResizeBounds then
+        cf1:SetResizeBounds(100, 50, 2500, 2500)
+    elseif cf1.SetMinResize and cf1.SetMaxResize then
+        cf1:SetMinResize(100, 50)
+        cf1:SetMaxResize(2500, 2500)
+    end
+    if cf1.SetClampRectInsets then
+        cf1:SetClampRectInsets(0, 0, 0, 0)
+    end
+
     cf1:ClearAllPoints()
     cf1:SetPoint(pt, UIParent, pt, x, y)
     if cf1.SetSize then
         cf1:SetSize(w, h)
+    end
+    if cf1.SetWidth then cf1:SetWidth(w) end
+    if cf1.SetHeight then cf1:SetHeight(h) end
+
+    -- Mark frame as user placed to prevent UIParent layout reset
+    if cf1.SetUserPlaced then
+        cf1:SetUserPlaced(true)
+    end
+
+    -- Sync with Blizzard C-engine chat window persistence
+    local chatID = cf1.GetID and cf1:GetID() or 1
+    if _G.SetChatWindowSavedDimensions then
+        _G.SetChatWindowSavedDimensions(chatID, w, h)
+    end
+    if _G.SetChatWindowSavedPosition then
+        _G.SetChatWindowSavedPosition(chatID, pt, x, y)
+    end
+
+    -- Update Blizzard EditMode systemInfo if present
+    if cf1.systemInfo and cf1.systemInfo.anchorInfo then
+        cf1.systemInfo.anchorInfo.point = pt
+        cf1.systemInfo.anchorInfo.relativeTo = "UIParent"
+        cf1.systemInfo.anchorInfo.relativePoint = pt
+        cf1.systemInfo.anchorInfo.offsetX = x
+        cf1.systemInfo.anchorInfo.offsetY = y
+    end
+
+    -- Force re-anchoring of docked frames
+    if _G.FCFDock_ForceReanchoring and _G.GENERAL_CHAT_DOCK then
+        _G.FCFDock_ForceReanchoring(_G.GENERAL_CHAT_DOCK)
     end
 
     self:UpdateBackgroundPosition()
     if self.UpdateButtonsDock then
         self:UpdateButtonsDock()
     end
+end
+
+function ChatMod:OnPlayerRegenEnabledPosition()
+    self.positionCombatPending = nil
+    if self.UnregisterEvent then
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    end
+    self:ApplyChatPosition()
 end
 
 function ChatMod:RegisterWithEditMode()
@@ -739,12 +842,7 @@ function ChatMod:RegisterWithEditMode()
         self.db.point = point
         self.db.x = x
         self.db.y = y
-        f:ClearAllPoints()
-        f:SetPoint(point, UIParent, point, x, y)
-        self:UpdateBackgroundPosition()
-        if self.UpdateButtonsDock then
-            self:UpdateButtonsDock()
-        end
+        self:ApplyChatPosition()
     end
 
     if _G.Enum and _G.Enum.EditModeSystem and _G.Enum.EditModeSystem.ChatFrame and LEM.AddSystemSettings and self.GetLEMFrameSettings then
@@ -829,7 +927,7 @@ function ChatMod:UpdateChatFonts()
 
     local font = self:GetFontPath()
     local size = self.db.fontSize or 12
-    local outline = self.db.fontOutline or "OUTLINE"
+    local outline = NormalizeFontFlags(self.db.fontOutline)
     local showShadow = (self.db.showFontShadow == true)
     local inCombat = _G.InCombatLockdown and _G.InCombatLockdown()
 
@@ -900,8 +998,9 @@ function ChatMod:SkinAllChatFrames()
 
     if not self.fcfColorsHooked and hooksecurefunc then
         hooksecurefunc("FCFTab_UpdateColors", function(selectedTab, selected)
-            if self:IsEnabled() and self.UpdateTabVisuals then
-                self:UpdateTabVisuals(selectedTab, selected)
+            local enabled = (ChatMod.IsEnabled and ChatMod:IsEnabled()) or (ChatMod.db and ChatMod.db.enabled ~= false)
+            if enabled and ChatMod.UpdateTabVisuals then
+                ChatMod:UpdateTabVisuals(selectedTab, selected)
             end
         end)
         self.fcfColorsHooked = true
@@ -909,15 +1008,50 @@ function ChatMod:SkinAllChatFrames()
 
     if not self.fcfSelectDockHooked and hooksecurefunc then
         hooksecurefunc("FCF_SelectDockFrame", function(dock, selectedChatFrame)
-            if not self:IsEnabled() or not dock or not dock.DOCKED_CHAT_FRAMES then return end
+            local enabled = (ChatMod.IsEnabled and ChatMod:IsEnabled()) or (ChatMod.db and ChatMod.db.enabled ~= false)
+            if not enabled or not dock or not dock.DOCKED_CHAT_FRAMES then return end
             for _, dockedFrame in ipairs(dock.DOCKED_CHAT_FRAMES) do
                 local t = _G[dockedFrame:GetName() .. "Tab"]
-                if t and self.UpdateTabVisuals then
-                    self:UpdateTabVisuals(t, dockedFrame == selectedChatFrame)
+                if t and ChatMod.UpdateTabVisuals then
+                    ChatMod:UpdateTabVisuals(t, dockedFrame == selectedChatFrame)
                 end
             end
         end)
         self.fcfSelectDockHooked = true
+    end
+
+    if not self.fcfAlphaHooked and hooksecurefunc then
+        hooksecurefunc("FCFTab_UpdateAlpha", function(chatFrame)
+            local enabled = (ChatMod.IsEnabled and ChatMod:IsEnabled()) or (ChatMod.db and ChatMod.db.enabled ~= false)
+            if not enabled or ChatMod.db.styleTabs == false then return end
+            local chatTab = chatFrame and _G[chatFrame:GetName() .. "Tab"]
+            if chatTab then
+                local isSel = not chatFrame.isDocked or (chatFrame == (_G.FCFDock_GetSelectedWindow and _G.FCFDock_GetSelectedWindow(_G.GENERAL_CHAT_DOCK)))
+                local alpha = isSel and (ChatMod.db.tabAlphaActive or 1.0) or (ChatMod.db.tabAlphaInactive or 0.5)
+                chatTab:SetAlpha(alpha)
+            end
+        end)
+        self.fcfAlphaHooked = true
+    end
+
+    local dock = _G.GENERAL_CHAT_DOCK
+    if dock and not wheelHookedFrames[dock] then
+        wheelHookedFrames[dock] = true
+        if dock.EnableMouseWheel then dock:EnableMouseWheel(true) end
+        if dock.SetScript then
+            dock:SetScript("OnMouseWheel", function(_, delta)
+                self:OnTabMouseWheel(delta)
+            end)
+        end
+    end
+    if dock and dock.scrollFrame and not wheelHookedFrames[dock.scrollFrame] then
+        wheelHookedFrames[dock.scrollFrame] = true
+        if dock.scrollFrame.EnableMouseWheel then dock.scrollFrame:EnableMouseWheel(true) end
+        if dock.scrollFrame.SetScript then
+            dock.scrollFrame:SetScript("OnMouseWheel", function(_, delta)
+                self:OnTabMouseWheel(delta)
+            end)
+        end
     end
 
     if self.db.hideBlizzardChrome then
@@ -1302,8 +1436,38 @@ function ChatMod:RepositionEditBox(eb, cf)
     eb:SetHeight(ebHeight)
 end
 
+function ChatMod:UpdateEditBoxStyle(eb)
+    if not eb then return end
+    local bg = editBoxBackdrops[eb] or eb.roithiBackdrop
+    local cfgBg = self.db.editBoxBgColor or self.defaultSettings.editBoxBgColor
+    local cfgBorder = self.db.editBoxBorderColor or self.defaultSettings.editBoxBorderColor
+    if bg then
+        bg:SetBackdropColor(cfgBg.r or 0.05, cfgBg.g or 0.065, cfgBg.b or 0.08, cfgBg.a or 0.9)
+        bg:SetBackdropBorderColor(cfgBorder.r or 0.2, cfgBorder.g or 0.2, cfgBorder.b or 0.2, cfgBorder.a or 1.0)
+    end
+    local ebHeight = self.db.editBoxHeight or 24
+    if eb.SetHeight then
+        eb:SetHeight(ebHeight)
+    end
+    local font = self:GetFontPath()
+    local size = self.db.fontSize or 12
+    local outline = NormalizeFontFlags(self.db.fontOutline)
+    pcall(eb.SetFont, eb, font, size, outline)
+    if eb.header then
+        pcall(eb.header.SetFont, eb.header, font, size, outline)
+    end
+    if eb.headerSuffix then
+        pcall(eb.headerSuffix.SetFont, eb.headerSuffix, font, size, outline)
+    end
+end
+
 function ChatMod:SkinEditBox(eb, cf, idx)
-    if not eb or skinnedEditBoxes[eb] then return end
+    if not eb then return end
+    if skinnedEditBoxes[eb] then
+        self:RepositionEditBox(eb, cf)
+        self:UpdateEditBoxStyle(eb)
+        return
+    end
     skinnedEditBoxes[eb] = true
 
     local name = cf:GetName()
@@ -1354,7 +1518,7 @@ function ChatMod:SkinEditBox(eb, cf, idx)
     -- Font & insets
     local font = self:GetFontPath()
     local size = self.db.fontSize or 12
-    local outline = self.db.fontOutline or "OUTLINE"
+    local outline = NormalizeFontFlags(self.db.fontOutline)
     pcall(eb.SetFont, eb, font, size, outline)
     eb:SetTextInsets(6, 6, 0, 0)
 
@@ -1477,7 +1641,7 @@ function ChatMod:UpdateTabFont(tab)
     if tabText and tabText.SetFont then
         local font = self:GetFontPath()
         local size = self.db.tabFontSize or 11
-        local outline = self.db.fontOutline or "OUTLINE"
+        local outline = NormalizeFontFlags(self.db.fontOutline)
         pcall(tabText.SetFont, tabText, font, size, outline)
         -- Center tabText inside tab away from the bottom edge so it doesn't collide with chat text
         if tabText.ClearAllPoints and tabText.SetPoint then
@@ -1512,6 +1676,8 @@ function ChatMod:SkinTab(tab, cf, idx)
 
     if skinnedTabs[tab] then
         self:UpdateTabFont(tab)
+        local isSel = (_G.SELECTED_CHAT_FRAME == cf) or (cf and cf:IsShown())
+        self:UpdateTabVisuals(tab, isSel)
         return
     end
     skinnedTabs[tab] = true
@@ -1532,27 +1698,27 @@ function ChatMod:SkinTab(tab, cf, idx)
     -- Tab background and border textures
     if not tabTextures[tab] and tab.CreateTexture then
         local bg = tab:CreateTexture(nil, "BACKGROUND", nil, -8)
-        bg:SetPoint("TOPLEFT", tab, "TOPLEFT", 1, -1)
-        bg:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
+        bg:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, 0)
+        bg:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, 0)
 
         local top = tab:CreateTexture(nil, "BACKGROUND", nil, -7)
-        top:SetPoint("TOPLEFT", tab, "TOPLEFT", 1, -1)
-        top:SetPoint("TOPRIGHT", tab, "TOPRIGHT", -1, -1)
+        top:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, 0)
+        top:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 0, 0)
         top:SetHeight(1)
 
         local bottom = tab:CreateTexture(nil, "BACKGROUND", nil, -7)
-        bottom:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 1, 1)
-        bottom:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
+        bottom:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 0, 0)
+        bottom:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, 0)
         bottom:SetHeight(1)
 
         local left = tab:CreateTexture(nil, "BACKGROUND", nil, -7)
-        left:SetPoint("TOPLEFT", tab, "TOPLEFT", 1, -1)
-        left:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 1, 1)
+        left:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, 0)
+        left:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 0, 0)
         left:SetWidth(1)
 
         local right = tab:CreateTexture(nil, "BACKGROUND", nil, -7)
-        right:SetPoint("TOPRIGHT", tab, "TOPRIGHT", -1, -1)
-        right:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
+        right:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 0, 0)
+        right:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, 0)
         right:SetWidth(1)
 
         tabTextures[tab] = { bg = bg, top = top, bottom = bottom, left = left, right = right, text = tabText, cf = cf }
@@ -1573,6 +1739,16 @@ function ChatMod:SkinTab(tab, cf, idx)
         end)
     end
 
+    -- Enable mousewheel on every tab button for ubiquitous tab cycling across all heights
+    if tab.EnableMouseWheel then
+        tab:EnableMouseWheel(true)
+    end
+    if tab.SetScript then
+        tab:SetScript("OnMouseWheel", function(_, delta)
+            self:OnTabMouseWheel(delta)
+        end)
+    end
+
     local isInitSel = (_G.SELECTED_CHAT_FRAME == cf) or (cf and cf:IsShown())
     self:UpdateTabVisuals(tab, isInitSel)
 
@@ -1581,15 +1757,239 @@ function ChatMod:SkinTab(tab, cf, idx)
     end
 end
 
+function ChatMod:UpdateAllTabVisuals()
+    if self.db.enabled == false or self.db.styleTabs == false then return end
+    local dock = _G.GENERAL_CHAT_DOCK
+    local selFrame = dock and _G.FCFDock_GetSelectedWindow and _G.FCFDock_GetSelectedWindow(dock)
+
+    for i = 1, 20 do
+        local cf = _G["ChatFrame" .. i]
+        local tab = _G["ChatFrame" .. i .. "Tab"]
+        if tab and cf then
+            local isSel = (not cf.isDocked) or (selFrame and cf == selFrame) or (cf == _G.SELECTED_CHAT_FRAME) or (cf.IsShown and cf:IsShown())
+            self:UpdateTabVisuals(tab, isSel)
+        end
+    end
+end
+
+function ChatMod:OnTabMouseWheel(delta)
+    if self.db.enabled == false or self.db.styleTabs == false then return end
+    local dock = _G.GENERAL_CHAT_DOCK
+    if not dock or not dock.scrollFrame then return end
+
+    local scrollFrame = dock.scrollFrame
+    local scrollChild = scrollFrame.GetScrollChild and scrollFrame:GetScrollChild()
+    if not scrollChild then return end
+
+    local visibleWidth = (scrollFrame.GetWidth and scrollFrame:GetWidth()) or 0
+    local totalWidth = (scrollChild.GetWidth and scrollChild:GetWidth()) or 0
+    local maxScroll = math.max(0, totalWidth - visibleWidth)
+    if maxScroll <= 0 then return end
+
+    local curScroll = (scrollFrame.GetHorizontalScroll and scrollFrame:GetHorizontalScroll()) or 0
+    local step = 35
+
+    local newScroll
+    if delta > 0 then
+        newScroll = math.max(0, curScroll - step)
+    else
+        newScroll = math.min(maxScroll, curScroll + step)
+    end
+
+    if scrollFrame.SetHorizontalScroll then
+        scrollFrame:SetHorizontalScroll(newScroll)
+    end
+end
+
+function ChatMod:ScrollToSelectedTab(dock)
+    if self.db.enabled == false or self.db.styleTabs == false then return end
+    dock = dock or _G.GENERAL_CHAT_DOCK
+    if not dock or not dock.scrollFrame then return end
+
+    local scrollFrame = dock.scrollFrame
+    local scrollChild = scrollFrame.GetScrollChild and scrollFrame:GetScrollChild()
+    if not scrollChild then return end
+
+    local selFrame = (_G.FCFDock_GetSelectedWindow and _G.FCFDock_GetSelectedWindow(dock)) or dock.selected
+    if not selFrame then return end
+
+    local cfName = selFrame.GetName and selFrame:GetName()
+    local selTab = cfName and _G[cfName .. "Tab"]
+    if not selTab or not selTab:IsShown() then return end
+
+    local tabLeft = selTab.GetLeft and selTab:GetLeft()
+    local tabRight = selTab.GetRight and selTab:GetRight()
+    local frameLeft = scrollFrame.GetLeft and scrollFrame:GetLeft()
+    local frameRight = scrollFrame.GetRight and scrollFrame:GetRight()
+
+    if tabLeft and frameLeft and tabRight and frameRight then
+        local curScroll = (scrollFrame.GetHorizontalScroll and scrollFrame:GetHorizontalScroll()) or 0
+        if tabLeft < frameLeft then
+            local diff = frameLeft - tabLeft
+            scrollFrame:SetHorizontalScroll(math.max(0, curScroll - diff))
+        elseif tabRight > frameRight then
+            local diff = tabRight - frameRight
+            local maxScroll = math.max(0, ((scrollChild.GetWidth and scrollChild:GetWidth()) or 0) - ((scrollFrame.GetWidth and scrollFrame:GetWidth()) or 0))
+            scrollFrame:SetHorizontalScroll(math.min(maxScroll, curScroll + diff))
+        end
+    end
+end
+
+function ChatMod:UpdateNewTabButton(dock, lastTab)
+    dock = dock or _G.GENERAL_CHAT_DOCK
+    if not dock then return end
+
+    if self.db.showNewTabButton == false or self.db.styleTabs == false or not self.db.enabled then
+        if self.newTabBtn then
+            self.newTabBtn:Hide()
+        end
+        return
+    end
+
+    local tabHeight = self.db.tabHeight or 22
+    local btnWidth = 18
+    local bgColor = self.db.backgroundColor or self.defaultSettings.backgroundColor
+    local borderColor = self.db.borderColor or self.defaultSettings.borderColor
+
+    if not self.newTabBtn then
+        local btn = CreateFrame("Button", "RoithiChatNewTabButton", dock)
+        btn:SetSize(btnWidth, tabHeight)
+        if btn.EnableMouseWheel then btn:EnableMouseWheel(true) end
+        if btn.SetScript then
+            btn:SetScript("OnMouseWheel", function(_, delta)
+                self:OnTabMouseWheel(delta)
+            end)
+        end
+
+        local bg = btn:CreateTexture(nil, "BACKGROUND", nil, -8)
+        bg:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+        bg:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
+        bg:SetColorTexture(bgColor.r or 0.03, bgColor.g or 0.045, bgColor.b or 0.05, 0.35)
+        btn.roithiBg = bg
+
+        local top = btn:CreateTexture(nil, "BACKGROUND", nil, -7)
+        top:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+        top:SetPoint("TOPRIGHT", btn, "TOPRIGHT", 0, 0)
+        top:SetHeight(1)
+        top:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, 0.4)
+        btn.roithiTop = top
+
+        local bottom = btn:CreateTexture(nil, "BACKGROUND", nil, -7)
+        bottom:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
+        bottom:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
+        bottom:SetHeight(1)
+        bottom:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, 0.4)
+        btn.roithiBottom = bottom
+
+        local left = btn:CreateTexture(nil, "BACKGROUND", nil, -7)
+        left:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+        left:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
+        left:SetWidth(1)
+        left:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, 0.3)
+        btn.roithiLeft = left
+
+        local right = btn:CreateTexture(nil, "BACKGROUND", nil, -7)
+        right:SetPoint("TOPRIGHT", btn, "TOPRIGHT", 0, 0)
+        right:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
+        right:SetWidth(1)
+        right:SetColorTexture(borderColor.r or 0.15, borderColor.g or 0.15, borderColor.b or 0.15, 0.3)
+        btn.roithiRight = right
+
+        -- Razor-sharp geometric vector crossbars
+        local hBar = btn:CreateTexture(nil, "ARTWORK")
+        hBar:SetSize(8, 2)
+        hBar:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        hBar:SetColorTexture(0.65, 0.65, 0.65, 0.8)
+        btn.roithiHBar = hBar
+
+        local vBar = btn:CreateTexture(nil, "ARTWORK")
+        vBar:SetSize(2, 8)
+        vBar:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        vBar:SetColorTexture(0.65, 0.65, 0.65, 0.8)
+        btn.roithiVBar = vBar
+
+        btn:SetScript("OnEnter", function(b)
+            if b.roithiBg then b.roithiBg:SetColorTexture(0.08, 0.11, 0.14, 0.85) end
+            if b.roithiTop then b.roithiTop:SetColorTexture(1.0, 0.82, 0.0, 1.0) b.roithiTop:SetHeight(2) end
+            if b.roithiHBar then b.roithiHBar:SetColorTexture(1.0, 0.85, 0.35, 1.0) end
+            if b.roithiVBar then b.roithiVBar:SetColorTexture(1.0, 0.85, 0.35, 1.0) end
+            if _G.GameTooltip then
+                _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
+                _G.GameTooltip:SetText(L["Create New Chat Tab"] or "Create New Chat Tab", 1, 1, 1)
+                _G.GameTooltip:AddLine(L["Click to create and name a new chat window."] or "Click to create and name a new chat window.", 0.8, 0.8, 0.8)
+                _G.GameTooltip:Show()
+            end
+        end)
+        btn:SetScript("OnLeave", function(b)
+            local curBg = ChatMod.db.backgroundColor or ChatMod.defaultSettings.backgroundColor
+            local curBorder = ChatMod.db.borderColor or ChatMod.defaultSettings.borderColor
+            if b.roithiBg then b.roithiBg:SetColorTexture(curBg.r or 0.03, curBg.g or 0.045, curBg.b or 0.05, 0.35) end
+            if b.roithiTop then b.roithiTop:SetColorTexture(curBorder.r or 0.15, curBorder.g or 0.15, curBorder.b or 0.15, 0.4) b.roithiTop:SetHeight(1) end
+            if b.roithiHBar then b.roithiHBar:SetColorTexture(0.65, 0.65, 0.65, 0.8) end
+            if b.roithiVBar then b.roithiVBar:SetColorTexture(0.65, 0.65, 0.65, 0.8) end
+            if _G.GameTooltip and _G.GameTooltip.Hide then _G.GameTooltip:Hide() end
+        end)
+        btn:SetScript("OnClick", function()
+            if _G.FCF_NewChatWindow then
+                _G.FCF_NewChatWindow()
+            elseif _G.StaticPopup_Show then
+                _G.StaticPopup_Show("NAME_CHAT")
+            end
+        end)
+
+        self.newTabBtn = btn
+    end
+
+    local scrollChild = dock.scrollFrame and dock.scrollFrame.GetScrollChild and dock.scrollFrame:GetScrollChild()
+    local btn = self.newTabBtn
+    if scrollChild then
+        btn:SetParent(scrollChild)
+    else
+        btn:SetParent(dock)
+    end
+    btn:SetSize(btnWidth, tabHeight)
+    btn:Show()
+    btn:ClearAllPoints()
+    if lastTab then
+        btn:SetPoint("TOPLEFT", lastTab, "TOPRIGHT", 0, 0)
+        btn:SetPoint("BOTTOMLEFT", lastTab, "BOTTOMRIGHT", 0, 0)
+    elseif scrollChild then
+        btn:SetPoint("TOPLEFT", scrollChild, "BOTTOMLEFT", 0, tabHeight)
+        btn:SetPoint("BOTTOMLEFT", scrollChild, "BOTTOMLEFT", 0, 0)
+    else
+        btn:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", 0, 0)
+    end
+end
+
 function ChatMod:AutoFitChatTabs(dock)
     if self.db.enabled == false or self.db.styleTabs == false then return end
     dock = dock or _G.GENERAL_CHAT_DOCK
     if not dock or not dock.DOCKED_CHAT_FRAMES then return end
 
-    local lastTab = nil
-    for _, chatFrame in ipairs(dock.DOCKED_CHAT_FRAMES) do
+    local tabHeight = self.db.tabHeight or 22
+    if dock.SetHeight then
+        dock:SetHeight(tabHeight + 4)
+    end
+
+    local scrollFrame = dock.scrollFrame
+    local scrollChild = scrollFrame and scrollFrame.GetScrollChild and scrollFrame:GetScrollChild()
+
+    local lastStaticTab = nil
+    local lastDynamicTab = nil
+    local totalDynamicWidth = 0
+
+    for idx, chatFrame in ipairs(dock.DOCKED_CHAT_FRAMES) do
         local cfName = chatFrame.GetName and chatFrame:GetName()
         local chatTab = cfName and _G[cfName .. "Tab"]
+
+        -- On-demand skinning for newly created or unskinned tabs/frames
+        if chatTab and not skinnedTabs[chatTab] then
+            self:SkinTab(chatTab, chatFrame, idx)
+        end
+        if chatFrame and not skinnedFrames[chatFrame] then
+            self:SkinChatFrame(chatFrame, idx)
+        end
+
         if chatTab then
             local tabText = chatTab.Text or (cfName and _G[cfName .. "TabText"])
             if tabText then
@@ -1597,20 +1997,106 @@ function ChatMod:AutoFitChatTabs(dock)
                     tabText:SetWidth(0)
                 end
                 local strWidth = (tabText.GetStringWidth and tabText:GetStringWidth()) or 0
-                local fullWidth = math.max(60, math.ceil(strWidth) + 16)
+                local fullWidth = math.max(36, math.ceil(strWidth) + 12)
                 if chatTab.SetWidth then
                     chatTab:SetWidth(fullWidth)
                 end
                 if tabText.SetWidth then
                     tabText:SetWidth(strWidth + 2)
                 end
+                if tabText.ClearAllPoints and tabText.SetPoint then
+                    tabText:ClearAllPoints()
+                    tabText:SetPoint("CENTER", chatTab, "CENTER", 0, 1)
+                end
             end
-            if lastTab and chatTab.ClearAllPoints and chatTab.SetPoint then
-                chatTab:ClearAllPoints()
-                chatTab:SetPoint("LEFT", lastTab, "RIGHT", 2, 0)
+            if chatTab.SetHeight then
+                chatTab:SetHeight(tabHeight)
             end
-            lastTab = chatTab
+
+            chatTab:ClearAllPoints()
+            if chatFrame.isStaticDocked then
+                -- Static tab parented to dock
+                chatTab:SetParent(dock)
+                if lastStaticTab then
+                    chatTab:SetPoint("TOPLEFT", lastStaticTab, "TOPRIGHT", 0, 0)
+                    chatTab:SetPoint("BOTTOMLEFT", lastStaticTab, "BOTTOMRIGHT", 0, 0)
+                else
+                    chatTab:SetPoint("TOPLEFT", dock, "BOTTOMLEFT", 0, tabHeight)
+                    chatTab:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", 0, 0)
+                end
+                lastStaticTab = chatTab
+            else
+                -- Dynamic tab parented to scrollChild
+                if scrollChild then
+                    chatTab:SetParent(scrollChild)
+                end
+                if lastDynamicTab then
+                    chatTab:SetPoint("TOPLEFT", lastDynamicTab, "TOPRIGHT", 0, 0)
+                    chatTab:SetPoint("BOTTOMLEFT", lastDynamicTab, "BOTTOMRIGHT", 0, 0)
+                elseif scrollChild then
+                    chatTab:SetPoint("TOPLEFT", scrollChild, "BOTTOMLEFT", 0, tabHeight)
+                    chatTab:SetPoint("BOTTOMLEFT", scrollChild, "BOTTOMLEFT", 0, 0)
+                else
+                    chatTab:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", 0, 0)
+                end
+                lastDynamicTab = chatTab
+                totalDynamicWidth = totalDynamicWidth + (chatTab.GetWidth and chatTab:GetWidth() or 36)
+            end
         end
+    end
+
+    -- Anchor dock.scrollFrame to right edge of lastStaticTab (or dock left if no static tabs)
+    if scrollFrame and scrollFrame.ClearAllPoints and scrollFrame.SetPoint then
+        scrollFrame:ClearAllPoints()
+
+        local pos = self.db.buttonDockPosition or "INSIDE_TOP_RIGHT"
+        local dockW = (self.buttonDock and self.buttonDock.GetWidth and self.buttonDock:GetWidth()) or 0
+        if pos == "INSIDE_TOP_RIGHT" and self.buttonDock and self.buttonDock:IsShown() and dockW > 0 then
+            scrollFrame:SetPoint("RIGHT", self.buttonDock, "LEFT", -4, 0)
+        else
+            scrollFrame:SetPoint("RIGHT", dock, "RIGHT", 0, 0)
+        end
+
+        if lastStaticTab then
+            scrollFrame:SetPoint("TOPLEFT", lastStaticTab, "TOPRIGHT", 0, 0)
+            scrollFrame:SetPoint("BOTTOMLEFT", lastStaticTab, "BOTTOMRIGHT", 0, 0)
+        else
+            scrollFrame:SetPoint("TOPLEFT", dock, "BOTTOMLEFT", 0, tabHeight)
+            scrollFrame:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", 0, 0)
+        end
+        if scrollFrame.SetHeight then
+            scrollFrame:SetHeight(tabHeight)
+        end
+    end
+
+    if scrollChild and scrollChild.SetHeight then
+        scrollChild:SetHeight(tabHeight)
+    end
+
+    -- Update New Tab (+) button immediately after last dynamic tab (or at scrollChild origin)
+    self:UpdateNewTabButton(dock, lastDynamicTab)
+    if self.newTabBtn and self.newTabBtn.IsShown and self.newTabBtn:IsShown() then
+        totalDynamicWidth = totalDynamicWidth + (self.newTabBtn.GetWidth and self.newTabBtn:GetWidth() or 18)
+    end
+
+    if scrollChild and scrollChild.SetWidth then
+        scrollChild:SetWidth(math.max(1, totalDynamicWidth + 10))
+    end
+
+    -- Hide Blizzard native overflowButton if present
+    if dock.overflowButton and dock.overflowButton.Hide then
+        dock.overflowButton:Hide()
+    end
+end
+
+function ChatMod:ApplyWhisperMode()
+    local mode = self.db.whisperMode or "inline"
+    local setCVar = _G.SetCVar or (_G.C_CVar and _G.C_CVar.SetCVar)
+    if setCVar then
+        pcall(setCVar, "whisperMode", mode)
+    end
+    if _G.Settings and _G.Settings.SetValue then
+        pcall(_G.Settings.SetValue, "whisperMode", mode)
     end
 end
 
@@ -1657,48 +2143,6 @@ function ChatMod:UpdateButtonsDock()
     end
 
     local dock = self.buttonDock
-    dock:SetFrameStrata("HIGH")
-    dock:SetFrameLevel(300)
-    dock:Show()
-    dock:ClearAllPoints()
-
-    local isOutside = (pos == "OUTSIDE_LEFT")
-    local isTopLeft = (pos == "INSIDE_TOP_LEFT")
-    local isAbove = (pos == "ABOVE_CHAT")
-
-    if isOutside then
-        dock:SetPoint("TOPRIGHT", cf1, "TOPLEFT", -4, 0)
-        dock:SetSize(22, 132)
-    elseif isTopLeft then
-        dock:SetPoint("TOPLEFT", cf1, "TOPLEFT", 4, -2)
-        dock:SetSize(132, 22)
-    elseif isAbove then
-        local fps = _G.ForeverPlus and _G.ForeverPlusChatSearch
-        if fps and fps:IsShown() then
-            dock:SetPoint("BOTTOMRIGHT", fps, "TOPRIGHT", 0, 4)
-        elseif self.bgPanel and self.bgPanel:IsShown() then
-            dock:SetPoint("BOTTOMRIGHT", self.bgPanel, "TOPRIGHT", 0, 4)
-        else
-            dock:SetPoint("BOTTOMRIGHT", cf1, "TOPRIGHT", -2, 4)
-        end
-        dock:SetSize(140, 22)
-    else -- "INSIDE_TOP_RIGHT" (Default)
-        local fps = _G.ForeverPlus and _G.ForeverPlusChatSearch
-        if fps and fps:IsShown() then
-            dock:SetPoint("BOTTOMRIGHT", fps, "TOPRIGHT", 0, 4)
-        else
-            local padX = (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 4
-            local padY = (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 4
-
-            if self.bgPanel and self.bgPanel:IsShown() then
-                dock:SetPoint("TOPRIGHT", self.bgPanel, "TOPRIGHT", -padX, -padY)
-            else
-                dock:SetPoint("TOPRIGHT", cf1, "TOPRIGHT", -2, -2)
-            end
-        end
-        local tabH = (self.db.styleTabs ~= false) and (self.db.tabHeight or 22) or 22
-        dock:SetSize(140, tabH)
-    end
 
     if not self.copyBtn then
         local copyBtn = CreateFrame("Button", "RoithiChatCopyButton", dock)
@@ -1748,20 +2192,21 @@ function ChatMod:UpdateButtonsDock()
         voiceLoggedIn = ok and (loggedIn == true)
     end
 
-    local buttons = {
-        _G.ChatFrameChannelButton,
-        _G.ChatFrameMenuButton,
-        self.copyBtn,
-        _G.QuickJoinToastButton,
-    }
+    local activeButtons = {}
+    local function AddActiveButton(btn)
+        if btn then
+            table.insert(activeButtons, btn)
+        end
+    end
+
+    AddActiveButton(_G.ChatFrameChannelButton)
+    AddActiveButton(_G.ChatFrameMenuButton)
+    AddActiveButton(self.copyBtn)
+    AddActiveButton(_G.QuickJoinToastButton)
 
     if voiceLoggedIn then
-        if _G.ChatFrameToggleVoiceDeafenButton then
-            table.insert(buttons, _G.ChatFrameToggleVoiceDeafenButton)
-        end
-        if _G.ChatFrameToggleVoiceMuteButton then
-            table.insert(buttons, _G.ChatFrameToggleVoiceMuteButton)
-        end
+        AddActiveButton(_G.ChatFrameToggleVoiceDeafenButton)
+        AddActiveButton(_G.ChatFrameToggleVoiceMuteButton)
     else
         if _G.ChatFrameToggleVoiceDeafenButton and _G.ChatFrameToggleVoiceDeafenButton.Hide then
             _G.ChatFrameToggleVoiceDeafenButton:Hide()
@@ -1769,6 +2214,60 @@ function ChatMod:UpdateButtonsDock()
         if _G.ChatFrameToggleVoiceMuteButton and _G.ChatFrameToggleVoiceMuteButton.Hide then
             _G.ChatFrameToggleVoiceMuteButton:Hide()
         end
+    end
+
+    local numBtns = #activeButtons
+    local totalDockWidth = (numBtns > 0) and (numBtns * 20 + (numBtns - 1) * 2) or 0
+    local tabH = (self.db.styleTabs ~= false) and (self.db.tabHeight or 22) or 22
+
+    if numBtns == 0 then
+        dock:Hide()
+        if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
+            self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
+        end
+        return
+    end
+
+    dock:SetFrameStrata("HIGH")
+    dock:SetFrameLevel(300)
+    dock:Show()
+    dock:ClearAllPoints()
+
+    local isOutside = (pos == "OUTSIDE_LEFT")
+    local isTopLeft = (pos == "INSIDE_TOP_LEFT")
+    local isAbove = (pos == "ABOVE_CHAT")
+
+    if isOutside then
+        dock:SetPoint("TOPRIGHT", cf1, "TOPLEFT", -4, 0)
+        dock:SetSize(22, math.max(1, totalDockWidth))
+    elseif isTopLeft then
+        dock:SetPoint("TOPLEFT", cf1, "TOPLEFT", 4, -2)
+        dock:SetSize(math.max(1, totalDockWidth), tabH)
+    elseif isAbove then
+        local fps = _G.ForeverPlus and _G.ForeverPlusChatSearch
+        if fps and fps:IsShown() then
+            dock:SetPoint("BOTTOMRIGHT", fps, "TOPRIGHT", 0, 4)
+        elseif self.bgPanel and self.bgPanel:IsShown() then
+            dock:SetPoint("BOTTOMRIGHT", self.bgPanel, "TOPRIGHT", 0, 4)
+        else
+            dock:SetPoint("BOTTOMRIGHT", cf1, "TOPRIGHT", -2, 4)
+        end
+        dock:SetSize(math.max(1, totalDockWidth), tabH)
+    else -- "INSIDE_TOP_RIGHT" (Default)
+        local fps = _G.ForeverPlus and _G.ForeverPlusChatSearch
+        if fps and fps:IsShown() then
+            dock:SetPoint("BOTTOMRIGHT", fps, "TOPRIGHT", 0, 4)
+        else
+            local padX = (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 4
+            local padY = (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 4
+
+            if self.bgPanel and self.bgPanel:IsShown() then
+                dock:SetPoint("TOPRIGHT", self.bgPanel, "TOPRIGHT", -padX, -padY)
+            else
+                dock:SetPoint("TOPRIGHT", cf1, "TOPRIGHT", -2, -2)
+            end
+        end
+        dock:SetSize(math.max(1, totalDockWidth), tabH)
     end
 
     -- Ensure fallback atlases if channel or voice buttons exist
@@ -2005,32 +2504,30 @@ function ChatMod:UpdateButtonsDock()
     end
 
     local prevBtn = nil
-    for _, btn in ipairs(buttons) do
-        if btn then
-            StripChatButtonBorder(btn)
-            btn:SetParent(dock)
-            btn:SetFrameStrata("HIGH")
-            btn:SetFrameLevel(310)
-            btn:Show()
-            btn:ClearAllPoints()
-            btn:SetSize(20, 20)
-            if not prevBtn then
-                if isTopLeft then
-                    btn:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, 0)
-                else
-                    btn:SetPoint("TOPRIGHT", dock, "TOPRIGHT", 0, 0)
-                end
+    for _, btn in ipairs(activeButtons) do
+        StripChatButtonBorder(btn)
+        btn:SetParent(dock)
+        btn:SetFrameStrata("HIGH")
+        btn:SetFrameLevel(310)
+        btn:Show()
+        btn:ClearAllPoints()
+        btn:SetSize(20, 20)
+        if not prevBtn then
+            if isTopLeft then
+                btn:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, 0)
             else
-                if isOutside then
-                    btn:SetPoint("TOP", prevBtn, "BOTTOM", 0, -2)
-                elseif isTopLeft then
-                    btn:SetPoint("LEFT", prevBtn, "RIGHT", 2, 0)
-                else
-                    btn:SetPoint("RIGHT", prevBtn, "LEFT", -2, 0)
-                end
+                btn:SetPoint("TOPRIGHT", dock, "TOPRIGHT", 0, 0)
             end
-            prevBtn = btn
+        else
+            if isOutside then
+                btn:SetPoint("TOP", prevBtn, "BOTTOM", 0, -2)
+            elseif isTopLeft then
+                btn:SetPoint("LEFT", prevBtn, "RIGHT", 2, 0)
+            else
+                btn:SetPoint("RIGHT", prevBtn, "LEFT", -2, 0)
+            end
         end
+        prevBtn = btn
     end
 
     local qjBtn = _G.QuickJoinToastButton
@@ -2046,6 +2543,10 @@ function ChatMod:UpdateButtonsDock()
 
     if self.scrollBtn and self.scrollBtn.Hide then
         self.scrollBtn:Hide()
+    end
+
+    if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
+        self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
     end
 end
 

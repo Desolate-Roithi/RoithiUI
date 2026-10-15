@@ -91,6 +91,43 @@ local skinnedBlocks = objState.skinnedBlocks
 local skinnedBars = objState.skinnedBars
 local titleFSCache = objState.titleFSCache
 
+local function NormalizeFontFlags(flags)
+    if ns.Utils and ns.Utils.NormalizeFontFlags then
+        return ns.Utils.NormalizeFontFlags(flags)
+    end
+    if not flags or flags == "" or flags == "NONE" or flags == "None" or flags == "none" then
+        return ""
+    end
+    return flags
+end
+
+local function ApplyFontStringShadow(fontString, showShadow)
+    if not fontString or not fontString.SetShadowOffset then return end
+    if showShadow then
+        fontString:SetShadowOffset(1, -1)
+        if fontString.SetShadowColor then
+            fontString:SetShadowColor(0, 0, 0, 0.8)
+        end
+    else
+        fontString:SetShadowOffset(0, 0)
+    end
+end
+
+function ObjectivesMod:GetFontOutline(tierKey)
+    local val = (tierKey and self.db and self.db[tierKey])
+    if not val or val == "" then
+        val = (self.db and self.db.fontOutline) or "OUTLINE"
+    end
+    return NormalizeFontFlags(val)
+end
+
+function ObjectivesMod:GetFontShadow(tierKey)
+    if tierKey and self.db and self.db[tierKey] ~= nil then
+        return self.db[tierKey] == true
+    end
+    return (self.db and self.db.showFontShadow) == true
+end
+
 function ObjectivesMod:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Objectives or self.defaultSettings
     if self.db and self.defaultSettings then
@@ -205,14 +242,19 @@ function ObjectivesMod:OnQuestLogUpdate()
 end
 
 function ObjectivesMod:RefreshTrackers()
+    local offsetX = (self.db and self.db.blockOffsetX) or 4
     for block in pairs(skinnedBlocks) do
         if type(block) == "table" then
+            if block.SetPoint then
+                block:SetPoint("LEFT", offsetX, 0)
+            end
             if self.ApplyQuestLevelToTitle then
                 self:ApplyQuestLevelToTitle(block)
             end
             local titleFS = self.GetBlockTitleFS and self:GetBlockTitleFS(block)
             if titleFS and titleFS.SetFont then
-                pcall(titleFS.SetFont, titleFS, self:GetFontPath(), self.db.titleFontSize or 12, self.db.fontOutline or "OUTLINE")
+                pcall(titleFS.SetFont, titleFS, self:GetFontPath("titleFont"), self.db.titleFontSize or 12, self:GetFontOutline("titleFontOutline"))
+                ApplyFontStringShadow(titleFS, self:GetFontShadow("titleFontShadow"))
             end
             if self.ForEachBlockLine then
                 self.ForEachBlockLine(block, function(line)
@@ -747,6 +789,16 @@ function ObjectivesMod:HookTracker(tracker)
         end
     end
 
+    if tracker.AnchorBlock and not self:IsHooked(tracker, "AnchorBlock") then
+        self:SecureHook(tracker, "AnchorBlock", function(t, block)
+            if block and block.SetPoint then
+                local offsetX = (self.db and self.db.blockOffsetX) or 4
+                local parent = (block.GetParent and block:GetParent()) or t
+                block:SetPoint("LEFT", parent, "LEFT", offsetX, 0)
+            end
+        end)
+    end
+
     if tracker.GetProgressBar and not self:IsHooked(tracker, "GetProgressBar") then
         self:SecureHook(tracker, "GetProgressBar", function(t, line, _)
             local bar = (t and t.usedProgressBars and t.usedProgressBars[line]) or (line and line.progressBar)
@@ -766,9 +818,10 @@ function ObjectivesMod:HookTracker(tracker)
 
     if tracker.LayoutContents and not self:IsHooked(tracker, "LayoutContents") then
         self:SecureHook(tracker, "LayoutContents", function()
-            local font = self:GetFontPath()
+            local font = self:GetFontPath("objectiveFont")
             local objSize = self.db.objectiveFontSize or 11
-            local outline = self.db.fontOutline or "OUTLINE"
+            local outline = self:GetFontOutline("objectiveFontOutline")
+            local useShadow = self:GetFontShadow("objectiveFontShadow")
 
             -- Collect the blocks to re-skin / re-update so we can defer
             -- the height correction to the next frame. Blizzard's own
@@ -786,9 +839,11 @@ function ObjectivesMod:HookTracker(tracker)
                         if line then
                             if line.Dash and line.Dash.SetFont then
                                 pcall(line.Dash.SetFont, line.Dash, font, objSize, outline)
+                                ApplyFontStringShadow(line.Dash, useShadow)
                             end
                             if line.Text and line.Text.SetFont then
                                 pcall(line.Text.SetFont, line.Text, font, objSize, outline)
+                                ApplyFontStringShadow(line.Text, useShadow)
                             end
                         end
                     end

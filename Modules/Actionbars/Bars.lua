@@ -1554,19 +1554,16 @@ function AB:LayoutBarInternal(barKey)
     if perLine < 1 then perLine = 1 end
 
     local layoutCount = math.max(1, displayCount)
-    local numCols, numRows
-    if isVertical then
-        numRows = math.min(layoutCount, perLine)
-        numCols = math.ceil(layoutCount / perLine)
+    local totalW, totalH
+    if ns.Utils and ns.Utils.GetGridDimensions then
+        local _, _, gridW, gridH = ns.Utils.GetGridDimensions(layoutCount, perLine, btnSize, btnSize, spacing, spacing, isVertical)
+        totalW, totalH = gridW, gridH
     else
-        numCols = math.min(layoutCount, perLine)
-        numRows = math.ceil(layoutCount / perLine)
+        local numCols = isVertical and math.ceil(layoutCount / perLine) or math.min(layoutCount, perLine)
+        local numRows = isVertical and math.min(layoutCount, perLine) or math.ceil(layoutCount / perLine)
+        totalW = (numCols * btnSize) + math.max(0, (numCols - 1) * spacing)
+        totalH = (numRows * btnSize) + math.max(0, (numRows - 1) * spacing)
     end
-    if numCols < 1 then numCols = 1 end
-    if numRows < 1 then numRows = 1 end
-
-    local totalW = (numCols * btnSize) + math.max(0, (numCols - 1) * spacing)
-    local totalH = (numRows * btnSize) + math.max(0, (numRows - 1) * spacing)
     if container.SetSize then container:SetSize(totalW, totalH) end
     local inCombat = (_G.InCombatLockdown and _G.InCombatLockdown()) or false
     if not inCombat and container.ClearAllPoints and container.SetPoint then
@@ -1614,16 +1611,15 @@ function AB:LayoutBarInternal(barKey)
             if btn.Show then btn:Show() end
             if btn.ClearAllPoints then btn:ClearAllPoints() end
 
-            local col, row
-            if isVertical then
-                row = (i - 1) % perLine
-                col = math.floor((i - 1) / perLine)
+            local x, y
+            if ns.Utils and ns.Utils.GetGridItemOffset then
+                x, y = ns.Utils.GetGridItemOffset("LEFT_TO_RIGHT", i, displayCount, perLine, btnSize, btnSize, spacing, spacing, isVertical)
             else
-                col = (i - 1) % perLine
-                row = math.floor((i - 1) / perLine)
+                local col = isVertical and math.floor((i - 1) / perLine) or ((i - 1) % perLine)
+                local row = isVertical and ((i - 1) % perLine) or math.floor((i - 1) / perLine)
+                x = col * (btnSize + spacing)
+                y = -row * (btnSize + spacing)
             end
-            local x = col * (btnSize + spacing)
-            local y = -row * (btnSize + spacing)
 
             if btn.SetSize then btn:SetSize(btnSize, btnSize) end
             if btn.SetPoint then btn:SetPoint("TOPLEFT", container, "TOPLEFT", x, y) end

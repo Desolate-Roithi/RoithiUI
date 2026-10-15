@@ -18,17 +18,62 @@ objState.hoverHookedBlocks = hoverHookedBlocks
 local barBackdrops = objState.barBackdrops or setmetatable({}, { __mode = "k" })
 objState.barBackdrops = barBackdrops
 
-function ObjectivesMod:GetFontPath()
-    local f = (self.db and self.db.font)
+local function NormalizeFontFlags(outline)
+    if not outline or outline == "NONE" or outline == "" then
+        return ""
+    end
+    return outline
+end
+
+local function ApplyFontStringShadow(fs, showShadow)
+    if not fs then return end
+    if fs.SetShadowOffset then
+        if showShadow then
+            fs:SetShadowOffset(1, -1)
+        else
+            fs:SetShadowOffset(0, 0)
+        end
+    end
+    if fs.SetShadowColor then
+        if showShadow then
+            fs:SetShadowColor(0, 0, 0, 1)
+        else
+            fs:SetShadowColor(0, 0, 0, 0)
+        end
+    end
+end
+
+function ObjectivesMod:GetFontPath(fontKey)
+    LSM = LSM or (LibStub and LibStub("LibSharedMedia-3.0", true))
+    local f = (fontKey and self.db and self.db[fontKey])
+        or (self.db and self.db.font)
         or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
         or "Expressway"
-    if LSM and LSM:Fetch("font", f, true) then
+    if LSM and LSM.Fetch and LSM:Fetch("font", f, true) then
         return LSM:Fetch("font", f)
     end
-    if LSM and LSM:Fetch("font", "Expressway", true) then
+    if LSM and LSM.Fetch and LSM:Fetch("font", "Expressway", true) then
         return LSM:Fetch("font", "Expressway")
     end
+    if f and f ~= "Expressway" and not f:find("\\") then
+        return f
+    end
     return "Interface\\AddOns\\RoithiUI\\Media\\Fonts\\Expressway.ttf"
+end
+
+function ObjectivesMod:GetFontOutline(tierKey)
+    local val = (tierKey and self.db and self.db[tierKey])
+    if not val or val == "" then
+        val = (self.db and self.db.fontOutline) or "OUTLINE"
+    end
+    return NormalizeFontFlags(val)
+end
+
+function ObjectivesMod:GetFontShadow(tierKey)
+    if tierKey and self.db and self.db[tierKey] ~= nil then
+        return self.db[tierKey] == true
+    end
+    return (self.db and self.db.showFontShadow) == true
 end
 
 function ObjectivesMod:SkinHeader(header)
@@ -137,13 +182,14 @@ function ObjectivesMod:SkinHeader(header)
         end
     end
     if text then
-        local font = self:GetFontPath()
+        local font = self:GetFontPath("headerFont")
         local size = self.db.headerFontSize or 13
-        local outline = self.db.fontOutline or "OUTLINE"
+        local outline = self:GetFontOutline("headerFontOutline")
         pcall(text.SetFont, text, font, size, outline)
 
         local hc = self.db.headerColor or self.defaultSettings.headerColor
         text:SetTextColor(hc.r or 0.05, hc.g or 0.82, hc.b or 0.61, 1.0)
+        ApplyFontStringShadow(text, self:GetFontShadow("headerFontShadow"))
 
         text:ClearAllPoints()
         text:SetPoint("LEFT", header, "LEFT", 4, 0)
@@ -306,10 +352,11 @@ function ObjectivesMod:SkinBlock(block)
     if skinnedBlocks[block] then return end
     skinnedBlocks[block] = true
 
-    local font = self:GetFontPath()
+    local font = self:GetFontPath("titleFont")
     local tSize = self.db.titleFontSize or 12
-    local outline = self.db.fontOutline or "OUTLINE"
+    local outline = self:GetFontOutline("titleFontOutline")
     local tc = self.db.titleColor or self.defaultSettings.titleColor
+    local titleShadow = self:GetFontShadow("titleFontShadow")
 
     local titleFS = self.GetBlockTitleFS and self:GetBlockTitleFS(block)
     if titleFS then
@@ -320,11 +367,19 @@ function ObjectivesMod:SkinBlock(block)
         if titleFS.SetTextColor then
             titleFS:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
         end
-        if titleFS.SetShadowOffset then
-            titleFS:SetShadowOffset(0, 0)
-        end
+        ApplyFontStringShadow(titleFS, titleShadow)
         if self.ApplyQuestLevelToTitle then
             self:ApplyQuestLevelToTitle(block)
+        end
+    end
+
+    local offsetX = (self.db and self.db.blockOffsetX) or 4
+    if block.SetPoint then
+        local parent = (block.GetParent and block:GetParent())
+        if parent then
+            block:SetPoint("LEFT", parent, "LEFT", offsetX, 0)
+        else
+            block:SetPoint("LEFT", offsetX, 0)
         end
     end
 
@@ -351,6 +406,23 @@ function ObjectivesMod:SkinBlock(block)
             local bar = b and b.lastRegion
             if bar then
                 self:SkinProgressBar(bar)
+            end
+        end)
+    end
+
+    if block.UpdateHighlight and not self:IsHooked(block, "UpdateHighlight") then
+        self:SecureHook(block, "UpdateHighlight", function(b)
+            local oc = self.db.objectiveColor or (self.defaultSettings and self.defaultSettings.objectiveColor) or { r = 1, g = 1, b = 1 }
+            local lines = b.usedLines or b.lines
+            if lines then
+                for _, line in pairs(lines) do
+                    if line.Text and line.Text.SetTextColor then
+                        line.Text:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
+                    end
+                    if line.Dash and line.Dash.SetTextColor then
+                        line.Dash:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
+                    end
+                end
             end
         end)
     end
@@ -445,25 +517,22 @@ end
 
 function ObjectivesMod:StyleObjectiveLine(line)
     if not line then return end
-    local font = self:GetFontPath()
+    local font = self:GetFontPath("objectiveFont")
     local objSize = self.db.objectiveFontSize or 11
-    local outline = self.db.fontOutline or "OUTLINE"
+    local outline = self:GetFontOutline("objectiveFontOutline")
     local oc = self.db.objectiveColor or self.defaultSettings.objectiveColor
+    local useShadow = self:GetFontShadow("objectiveFontShadow")
 
     if line.Dash and line.Dash.SetFont then
         pcall(line.Dash.SetFont, line.Dash, font, objSize, outline)
-        line.Dash:SetTextColor(oc.r or 0.92, oc.g or 0.92, oc.b or 0.92, 1.0)
-        if line.Dash.SetShadowOffset then
-            line.Dash:SetShadowOffset(0, 0)
-        end
+        line.Dash:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
+        ApplyFontStringShadow(line.Dash, useShadow)
     end
 
     if line.Text and line.Text.SetFont then
         pcall(line.Text.SetFont, line.Text, font, objSize, outline)
-        line.Text:SetTextColor(oc.r or 0.92, oc.g or 0.92, oc.b or 0.92, 1.0)
-        if line.Text.SetShadowOffset then
-            line.Text:SetShadowOffset(0, 0)
-        end
+        line.Text:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
+        ApplyFontStringShadow(line.Text, useShadow)
     end
 
     if line.progressBar then
@@ -536,10 +605,9 @@ function ObjectivesMod:SkinProgressBar(bar)
 
     local label = (sb and sb.Label) or bar.Label
     if label and label.SetFont then
-        pcall(label.SetFont, label, self:GetFontPath(), self.db.objectiveFontSize or 10, self.db.fontOutline or "OUTLINE")
-        if label.SetShadowOffset then
-            label:SetShadowOffset(0, 0)
-        end
+        local outline = self:GetFontOutline("objectiveFontOutline")
+        pcall(label.SetFont, label, self:GetFontPath("objectiveFont"), self.db.objectiveFontSize or 10, outline)
+        ApplyFontStringShadow(label, self:GetFontShadow("objectiveFontShadow"))
         if label.SetDrawLayer then
             label:SetDrawLayer("OVERLAY", 7)
         end
@@ -615,36 +683,52 @@ function ObjectivesMod:SkinAllExisting()
         end
     end
 
-    local font = self:GetFontPath()
+    local titleFont = self:GetFontPath("titleFont")
+    local objFont = self:GetFontPath("objectiveFont")
     local titleSize = self.db.titleFontSize or 12
     local objSize = self.db.objectiveFontSize or 11
-    local outline = self.db.fontOutline or "OUTLINE"
+    local titleOutline = self:GetFontOutline("titleFontOutline")
+    local objOutline = self:GetFontOutline("objectiveFontOutline")
     local tc = self.db.titleColor or (self.defaultSettings and self.defaultSettings.titleColor) or { r = 1, g = 0.85, b = 0.35 }
-    local oc = self.db.objectiveColor or (self.defaultSettings and self.defaultSettings.objectiveColor) or { r = 0.8, g = 0.8, b = 0.8 }
+    local oc = self.db.objectiveColor or (self.defaultSettings and self.defaultSettings.objectiveColor) or { r = 1, g = 1, b = 1 }
+    local titleShadow = self:GetFontShadow("titleFontShadow")
+    local objShadow = self:GetFontShadow("objectiveFontShadow")
+    local offsetX = (self.db and self.db.blockOffsetX) or 4
 
     for block in pairs(skinnedBlocks) do
         if type(block) == "table" then
+            if block.SetPoint then
+                local parent = (block.GetParent and block:GetParent())
+                if parent then
+                    block:SetPoint("LEFT", parent, "LEFT", offsetX, 0)
+                else
+                    block:SetPoint("LEFT", offsetX, 0)
+                end
+            end
             local titleFS = (self.GetBlockTitleFS and self:GetBlockTitleFS(block)) or titleFSCache[block]
             if titleFS and titleFS.SetFont then
-                pcall(titleFS.SetFont, titleFS, font, titleSize, outline)
+                pcall(titleFS.SetFont, titleFS, titleFont, titleSize, titleOutline)
                 if titleFS.SetTextColor then
                     titleFS:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
                 end
+                ApplyFontStringShadow(titleFS, titleShadow)
             end
 
             if self.ForEachBlockLine then
                 self:ForEachBlockLine(block, function(line)
                     if line.Text and line.Text.SetFont then
-                        pcall(line.Text.SetFont, line.Text, font, objSize, outline)
+                        pcall(line.Text.SetFont, line.Text, objFont, objSize, objOutline)
                         if line.Text.SetTextColor then
                             line.Text:SetTextColor(oc.r or 0.8, oc.g or 0.8, oc.b or 0.8, 1.0)
                         end
+                        ApplyFontStringShadow(line.Text, objShadow)
                     end
                     if line.Dash and line.Dash.SetFont then
-                        pcall(line.Dash.SetFont, line.Dash, font, objSize, outline)
+                        pcall(line.Dash.SetFont, line.Dash, objFont, objSize, objOutline)
                         if line.Dash.SetTextColor then
                             line.Dash:SetTextColor(oc.r or 0.8, oc.g or 0.8, oc.b or 0.8, 1.0)
                         end
+                        ApplyFontStringShadow(line.Dash, objShadow)
                     end
                 end)
             end
@@ -665,41 +749,70 @@ end
 
 function ObjectivesMod:UpdateFonts()
     if not self.db or not self.db.enabled then return end
-    local font = self:GetFontPath()
+    local hFont = self:GetFontPath("headerFont")
+    local tFont = self:GetFontPath("titleFont")
+    local oFont = self:GetFontPath("objectiveFont")
     local hSize = self.db.headerFontSize or 13
     local tSize = self.db.titleFontSize or 12
     local objSize = self.db.objectiveFontSize or 11
-    local outline = self.db.fontOutline or "OUTLINE"
+    local hOutline = self:GetFontOutline("headerFontOutline")
+    local tOutline = self:GetFontOutline("titleFontOutline")
+    local oOutline = self:GetFontOutline("objectiveFontOutline")
+    local hShadow = self:GetFontShadow("headerFontShadow")
+    local tShadow = self:GetFontShadow("titleFontShadow")
+    local oShadow = self:GetFontShadow("objectiveFontShadow")
+
+    if _G.ObjectiveTrackerHeaderFont and _G.ObjectiveTrackerHeaderFont.SetFont then
+        pcall(_G.ObjectiveTrackerHeaderFont.SetFont, _G.ObjectiveTrackerHeaderFont, hFont, hSize, hOutline)
+        ApplyFontStringShadow(_G.ObjectiveTrackerHeaderFont, hShadow)
+    end
+    if _G.ObjectiveTrackerLineFont and _G.ObjectiveTrackerLineFont.SetFont then
+        pcall(_G.ObjectiveTrackerLineFont.SetFont, _G.ObjectiveTrackerLineFont, oFont, objSize, oOutline)
+        ApplyFontStringShadow(_G.ObjectiveTrackerLineFont, oShadow)
+    end
 
     local otf = _G.ObjectiveTrackerFrame
     if otf then
         local mh = otf.Header or otf.HeaderMenu
         if mh and mh.Text and mh.Text.SetFont then
-            pcall(mh.Text.SetFont, mh.Text, font, hSize, outline)
+            pcall(mh.Text.SetFont, mh.Text, hFont, hSize, hOutline)
+            ApplyFontStringShadow(mh.Text, hShadow)
         end
     end
 
     for _, trackerName in ipairs(SUB_TRACKERS) do
         local tracker = _G[trackerName]
         if tracker and tracker.Header and tracker.Header.Text and tracker.Header.Text.SetFont then
-            pcall(tracker.Header.Text.SetFont, tracker.Header.Text, font, hSize, outline)
+            pcall(tracker.Header.Text.SetFont, tracker.Header.Text, hFont, hSize, hOutline)
+            ApplyFontStringShadow(tracker.Header.Text, hShadow)
         end
     end
 
     local sot = _G.ScenarioObjectiveTracker
     if sot then
         if sot.Header and sot.Header.Text and sot.Header.Text.SetFont then
-            pcall(sot.Header.Text.SetFont, sot.Header.Text, font, hSize, outline)
+            pcall(sot.Header.Text.SetFont, sot.Header.Text, hFont, hSize, hOutline)
+            ApplyFontStringShadow(sot.Header.Text, hShadow)
         end
         if sot.StageBlock and self.SkinStageBlock then
             self:SkinStageBlock(sot.StageBlock)
         end
     end
 
+    local offsetX = (self.db and self.db.blockOffsetX) or 4
     for block in pairs(skinnedBlocks) do
+        if block.SetPoint then
+            local parent = (block.GetParent and block:GetParent())
+            if parent then
+                block:SetPoint("LEFT", parent, "LEFT", offsetX, 0)
+            else
+                block:SetPoint("LEFT", offsetX, 0)
+            end
+        end
         local titleFS = titleFSCache[block] or (self.GetBlockTitleFS and self:GetBlockTitleFS(block))
         if titleFS and titleFS.SetFont then
-            pcall(titleFS.SetFont, titleFS, font, tSize, outline)
+            pcall(titleFS.SetFont, titleFS, tFont, tSize, tOutline)
+            ApplyFontStringShadow(titleFS, tShadow)
             if self.ApplyQuestLevelToTitle then
                 self:ApplyQuestLevelToTitle(block)
             end
@@ -708,16 +821,18 @@ function ObjectivesMod:UpdateFonts()
         local formatLine = function(line)
             if line then
                 if line.Dash and line.Dash.SetFont then
-                    pcall(line.Dash.SetFont, line.Dash, font, objSize, outline)
+                    pcall(line.Dash.SetFont, line.Dash, oFont, objSize, oOutline)
+                    ApplyFontStringShadow(line.Dash, oShadow)
                 end
                 if line.Text and line.Text.SetFont then
-                    pcall(line.Text.SetFont, line.Text, font, objSize, outline)
+                    pcall(line.Text.SetFont, line.Text, oFont, objSize, oOutline)
+                    ApplyFontStringShadow(line.Text, oShadow)
                 end
             end
         end
 
         if self.ForEachBlockLine then
-            self.ForEachBlockLine(block, formatLine)
+            self:ForEachBlockLine(block, formatLine)
         elseif block.usedLines then
             for _, line in pairs(block.usedLines) do formatLine(line) end
         end
@@ -762,28 +877,28 @@ function ObjectivesMod:SkinStageBlock(stageBlock)
         return
     end
 
-    local font = self:GetFontPath()
+    local hFont = self:GetFontPath("headerFont")
+    local tFont = self:GetFontPath("titleFont")
     local hSize = self.db.headerFontSize or 13
     local tSize = self.db.titleFontSize or 12
-    local outline = self.db.fontOutline or "OUTLINE"
+    local hOutline = self:GetFontOutline("headerFontOutline")
+    local tOutline = self:GetFontOutline("titleFontOutline")
     local tc = self.db.titleColor or self.defaultSettings.titleColor
+    local hShadow = self:GetFontShadow("headerFontShadow")
+    local tShadow = self:GetFontShadow("titleFontShadow")
     if stageBlock.Stage and stageBlock.Stage.SetFont then
-        pcall(stageBlock.Stage.SetFont, stageBlock.Stage, font, hSize, outline)
+        pcall(stageBlock.Stage.SetFont, stageBlock.Stage, hFont, hSize, hOutline)
         stageBlock.Stage:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
-        if stageBlock.Stage.SetShadowOffset then
-            stageBlock.Stage:SetShadowOffset(0, 0)
-        end
+        ApplyFontStringShadow(stageBlock.Stage, hShadow)
         if not hasToast and stageBlock.Stage.ClearAllPoints and stageBlock.Stage.SetPoint then
             stageBlock.Stage:ClearAllPoints()
             stageBlock.Stage:SetPoint("TOPLEFT", stageBlock, "TOPLEFT", 0, 0)
         end
     end
     if stageBlock.Name and stageBlock.Name.SetFont then
-        pcall(stageBlock.Name.SetFont, stageBlock.Name, font, tSize, outline)
+        pcall(stageBlock.Name.SetFont, stageBlock.Name, tFont, tSize, tOutline)
         stageBlock.Name:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
-        if stageBlock.Name.SetShadowOffset then
-            stageBlock.Name:SetShadowOffset(0, 0)
-        end
+        ApplyFontStringShadow(stageBlock.Name, tShadow)
     end
 
     if not hasWidget and self.GetStageBlockWidgetHeight then
@@ -804,10 +919,11 @@ end
 
 function ObjectivesMod:SkinChallengeModeBlock(cmBlock)
     if not cmBlock then return end
-    local font = self:GetFontPath()
+    local font = self:GetFontPath("titleFont")
     local tSize = self.db.titleFontSize or 12
-    local outline = self.db.fontOutline or "OUTLINE"
+    local outline = self:GetFontOutline("titleFontOutline")
     local tc = self.db.titleColor or self.defaultSettings.titleColor
+    local useShadow = self:GetFontShadow("titleFontShadow")
     local textChildren = { "Level", "TimeLeft", "TimeLost" }
     for _, key in ipairs(textChildren) do
         local fs = cmBlock[key]
@@ -816,7 +932,7 @@ function ObjectivesMod:SkinChallengeModeBlock(cmBlock)
             if fs.SetTextColor then
                 fs:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
             end
-            if fs.SetShadowOffset then fs:SetShadowOffset(0, 0) end
+            ApplyFontStringShadow(fs, useShadow)
         end
     end
 end
@@ -849,17 +965,16 @@ function ObjectivesMod:SkinScenarioLine(line)
             line.Text:SetPoint("TOPLEFT", line, "TOPLEFT", 0, 0)
         end
 
-        local font = self:GetFontPath()
+        local font = self:GetFontPath("objectiveFont")
         local objSize = self.db.objectiveFontSize or 11
-        local outline = self.db.fontOutline or "OUTLINE"
+        local outline = self:GetFontOutline("objectiveFontOutline")
         local oc = self.db.objectiveColor or self.defaultSettings.objectiveColor
+        local useShadow = self:GetFontShadow("objectiveFontShadow")
 
         if line.Text.SetFont then
             pcall(line.Text.SetFont, line.Text, font, objSize, outline)
         end
-        if line.Text.SetShadowOffset then
-            line.Text:SetShadowOffset(0, 0)
-        end
+        ApplyFontStringShadow(line.Text, useShadow)
 
         local txt = line.Text.GetText and line.Text:GetText()
         local isComp = false
@@ -916,10 +1031,11 @@ end
 function ObjectivesMod:SkinTextWidget(wf)
     if not self:IsTextOnlyWidget(wf) then return end
     if not self:IsAwakeningTheMachine() then return end
-    local font = self:GetFontPath()
+    local font = self:GetFontPath("titleFont")
     local tSize = self.db.titleFontSize or 12
-    local outline = self.db.fontOutline or "OUTLINE"
+    local outline = self:GetFontOutline("titleFontOutline")
     local tc = self.db.titleColor or self.defaultSettings.titleColor
+    local useShadow = self:GetFontShadow("titleFontShadow")
 
     local function SkinFS(fs)
         if fs and fs.SetFont then
@@ -927,7 +1043,7 @@ function ObjectivesMod:SkinTextWidget(wf)
             if fs.SetTextColor then
                 fs:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
             end
-            if fs.SetShadowOffset then fs:SetShadowOffset(0, 0) end
+            ApplyFontStringShadow(fs, useShadow)
         end
     end
 

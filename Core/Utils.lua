@@ -40,6 +40,13 @@ function ns.Utils.MergeTable(target, source)
     return target
 end
 
+function ns.Utils.NormalizeFontFlags(outline)
+    if not outline or outline == "NONE" or outline == "" then
+        return ""
+    end
+    return outline
+end
+
 -- -------------------------------------------------------------------------
 -- Serialization (Export)
 -- -------------------------------------------------------------------------
@@ -346,6 +353,291 @@ function ns.Utils.GetAnchorLEMValues()
         })
     end
     return values
+end
+
+-------------------------------------------------------------------------
+-- Growth Direction & Coordinate Math Helpers
+-------------------------------------------------------------------------
+function ns.Utils.GetGrowthAnchor(growthDir, is1D)
+    if not growthDir then return "CENTER" end
+    if growthDir == "RIGHT_TO_LEFT" or growthDir == "LEFT" then
+        return "RIGHT"
+    elseif growthDir == "LEFT_TO_RIGHT" or growthDir == "RIGHT" then
+        return "LEFT"
+    elseif growthDir == "TOP_TO_BOTTOM" or growthDir == "DOWN" then
+        return "TOP"
+    elseif growthDir == "BOTTOM_TO_TOP" or growthDir == "UP" then
+        return "BOTTOM"
+    elseif growthDir == "CENTER_HORIZONTAL_UP" then
+        return "BOTTOM"
+    elseif growthDir == "CENTER_HORIZONTAL_DOWN" then
+        return "TOP"
+    elseif growthDir == "CENTER_HORIZONTAL" or growthDir == "CENTER_HORIZ" then
+        return (is1D ~= false) and "CENTER" or "TOP"
+    elseif growthDir == "CENTER_VERTICAL_LEFT" then
+        return "RIGHT"
+    elseif growthDir == "CENTER_VERTICAL_RIGHT" then
+        return "LEFT"
+    elseif growthDir == "CENTER_VERTICAL" or growthDir == "CENTER_VERT" then
+        return (is1D ~= false) and "CENTER" or "LEFT"
+    elseif growthDir == "LEFT_DOWN" or growthDir == "DOWN_LEFT" then
+        return "TOPRIGHT"
+    elseif growthDir == "RIGHT_UP" or growthDir == "UP_RIGHT" then
+        return "BOTTOMLEFT"
+    elseif growthDir == "LEFT_UP" or growthDir == "UP_LEFT" then
+        return "BOTTOMRIGHT"
+    elseif growthDir == "RIGHT_DOWN" or growthDir == "DOWN_RIGHT" then
+        return "TOPLEFT"
+    end
+    return "CENTER"
+end
+
+function ns.Utils.PointToCenter(point, x, y, width, height)
+    point = point or "CENTER"
+    x = tonumber(x) or 0
+    y = tonumber(y) or 0
+    local w = tonumber(width) or 0
+    local h = tonumber(height) or 0
+    local cx, cy = x, y
+
+    if point:find("LEFT") then
+        cx = x + (w / 2)
+    elseif point:find("RIGHT") then
+        cx = x - (w / 2)
+    end
+
+    if point:find("BOTTOM") then
+        cy = y + (h / 2)
+    elseif point:find("TOP") then
+        cy = y - (h / 2)
+    end
+
+    return cx, cy
+end
+
+function ns.Utils.CenterToPoint(targetPoint, cx, cy, width, height)
+    targetPoint = targetPoint or "CENTER"
+    cx = tonumber(cx) or 0
+    cy = tonumber(cy) or 0
+    local w = tonumber(width) or 0
+    local h = tonumber(height) or 0
+    local px, py = cx, cy
+
+    if targetPoint:find("LEFT") then
+        px = cx - (w / 2)
+    elseif targetPoint:find("RIGHT") then
+        px = cx + (w / 2)
+    end
+
+    if targetPoint:find("BOTTOM") then
+        py = cy - (h / 2)
+    elseif targetPoint:find("TOP") then
+        py = cy + (h / 2)
+    end
+
+    return px, py
+end
+
+function ns.Utils.MigratePointCoordinates(curPoint, targetPoint, curX, curY, width, height)
+    if curPoint == targetPoint then
+        return curX or 0, curY or 0
+    end
+    local cx, cy = ns.Utils.PointToCenter(curPoint, curX, curY, width, height)
+    return ns.Utils.CenterToPoint(targetPoint, cx, cy, width, height)
+end
+
+function ns.Utils.GetGridDimensions(totalCount, perLine, itemWidth, itemHeight, spacingX, spacingY, isVertical)
+    local count = math.max(1, tonumber(totalCount) or 1)
+    local limit = tonumber(perLine)
+    if not limit or limit < 1 then limit = count end
+    local w = tonumber(itemWidth) or 40
+    local h = tonumber(itemHeight) or w
+    local sx = tonumber(spacingX) or 0
+    local sy = tonumber(spacingY) or sx
+
+    local primaryCount = math.min(count, limit)
+    local secondaryCount = math.ceil(count / limit)
+
+    local cols = isVertical and secondaryCount or primaryCount
+    local rows = isVertical and primaryCount or secondaryCount
+    if cols < 1 then cols = 1 end
+    if rows < 1 then rows = 1 end
+
+    local totalW = (cols * w) + math.max(0, cols - 1) * sx
+    local totalH = (rows * h) + math.max(0, rows - 1) * sy
+    return cols, rows, totalW, totalH, limit
+end
+
+function ns.Utils.GetGridItemOffset(growthDir, index, totalCount, perLine, itemWidth, itemHeight, spacingX, spacingY, isVertical, centerIncompleteLines)
+    local cols, rows, _, _, effectivePerLine = ns.Utils.GetGridDimensions(totalCount, perLine, itemWidth, itemHeight, spacingX, spacingY, isVertical)
+    local idx = math.max(1, tonumber(index) or 1)
+    local w = tonumber(itemWidth) or 40
+    local h = tonumber(itemHeight) or w
+    local sx = tonumber(spacingX) or 0
+    local sy = tonumber(spacingY) or sx
+    local pitchX = w + sx
+    local pitchY = h + sy
+
+    local primaryIdx = (idx - 1) % effectivePerLine
+    local secondaryIdx = math.floor((idx - 1) / effectivePerLine)
+    local col = isVertical and secondaryIdx or primaryIdx
+    local row = isVertical and primaryIdx or secondaryIdx
+
+    local gDir = growthDir or "LEFT_TO_RIGHT"
+    local is1D = (rows == 1 and not isVertical) or (cols == 1 and isVertical)
+
+    -- Symmetrical horizontal centering
+    if gDir == "CENTER_HORIZONTAL" or gDir == "CENTER" then
+        if is1D then
+            local totalSpan = (totalCount - 1) * pitchX
+            local ox = -totalSpan / 2 + (idx - 1) * pitchX
+            return ox, 0, "CENTER"
+        else
+            local itemsInRow = math.min(totalCount - row * effectivePerLine, effectivePerLine)
+            if itemsInRow < 1 then itemsInRow = 1 end
+            local rowW = (itemsInRow * w) + math.max(0, itemsInRow - 1) * sx
+            local ox = -rowW / 2 + w / 2 + primaryIdx * pitchX
+            local oy = -row * pitchY - h / 2
+            return ox, oy, "TOP"
+        end
+    elseif gDir == "CENTER_HORIZONTAL_UP" then
+        local itemsInRow = math.min(totalCount - row * effectivePerLine, effectivePerLine)
+        if itemsInRow < 1 then itemsInRow = 1 end
+        local rowW = (itemsInRow * w) + math.max(0, itemsInRow - 1) * sx
+        local ox = -rowW / 2 + w / 2 + primaryIdx * pitchX
+        local oy = row * pitchY + h / 2
+        return ox, oy, "BOTTOM"
+    elseif gDir == "CENTER_VERTICAL" then
+        if is1D then
+            local totalSpan = (totalCount - 1) * pitchY
+            local oy = totalSpan / 2 - (idx - 1) * pitchY
+            return 0, oy, "CENTER"
+        else
+            local itemsInCol = math.min(totalCount - col * effectivePerLine, effectivePerLine)
+            if itemsInCol < 1 then itemsInCol = 1 end
+            local colH = (itemsInCol * h) + math.max(0, itemsInCol - 1) * sy
+            local ox = col * pitchX + w / 2
+            local oy = colH / 2 - h / 2 - primaryIdx * pitchY
+            return ox, oy, "LEFT"
+        end
+    elseif gDir == "CENTER_VERTICAL_LEFT" then
+        local itemsInCol = math.min(totalCount - col * effectivePerLine, effectivePerLine)
+        if itemsInCol < 1 then itemsInCol = 1 end
+        local colH = (itemsInCol * h) + math.max(0, itemsInCol - 1) * sy
+        local ox = -col * pitchX - w / 2
+        local oy = colH / 2 - h / 2 - primaryIdx * pitchY
+        return ox, oy, "RIGHT"
+    end
+
+    local gAnchor = ns.Utils.GetGrowthAnchor(gDir, is1D)
+
+    if gAnchor == "RIGHT" or gAnchor == "TOPRIGHT" then
+        local ox = -col * pitchX
+        local oy = -row * pitchY
+        return ox, oy, is1D and "RIGHT" or "TOPRIGHT"
+    elseif gAnchor == "BOTTOMRIGHT" then
+        local ox = -col * pitchX
+        local oy = row * pitchY
+        return ox, oy, "BOTTOMRIGHT"
+    elseif gAnchor == "BOTTOMLEFT" or gAnchor == "BOTTOM" then
+        local ox = col * pitchX
+        local oy = row * pitchY
+        return ox, oy, (is1D or gAnchor == "BOTTOM") and "BOTTOM" or "BOTTOMLEFT"
+    elseif gAnchor == "TOP" then
+        local ox = col * pitchX
+        local oy = -row * pitchY
+        return ox, oy, "TOP"
+    else -- LEFT / TOPLEFT
+        local ox = col * pitchX
+        local oy = -row * pitchY
+        return ox, oy, is1D and "LEFT" or "TOPLEFT"
+    end
+end
+
+-- Backward compatibility wrapper for pure 1D calls
+function ns.Utils.GetLinearItemOffset(growthDir, index, totalCount, itemSize, spacing)
+    local isVertical = (growthDir == "TOP_TO_BOTTOM" or growthDir == "BOTTOM_TO_TOP" or growthDir == "CENTER_VERTICAL" or growthDir == "CENTER_VERTICAL_LEFT" or growthDir == "CENTER_VERTICAL_RIGHT")
+    local ox, oy, anchor = ns.Utils.GetGridItemOffset(growthDir, index, totalCount, totalCount, itemSize, itemSize, spacing, spacing, isVertical)
+    return ox, oy, anchor
+end
+
+function ns.Utils.GetFrameScreenCoordinates(frame, parent, anchorPoint)
+    parent = parent or _G.UIParent
+    anchorPoint = anchorPoint or "CENTER"
+    if not frame or not frame.GetLeft or not parent or not parent.GetWidth then
+        return 0, 0
+    end
+    local fL, fR, fB, fT = frame:GetLeft(), frame:GetRight(), frame:GetBottom(), frame:GetTop()
+    if not fL or not fR or not fB or not fT then return 0, 0 end
+    local pW, pH = parent:GetWidth() or 0, parent:GetHeight() or 0
+    local fW, fH = fR - fL, fT - fB
+
+    local x, y
+    if anchorPoint == "TOPLEFT" then
+        x = fL
+        y = fT - pH
+    elseif anchorPoint == "BOTTOMLEFT" then
+        x = fL
+        y = fB
+    elseif anchorPoint == "TOPRIGHT" then
+        x = fR - pW
+        y = fT - pH
+    elseif anchorPoint == "BOTTOMRIGHT" then
+        x = fR - pW
+        y = fB
+    elseif anchorPoint == "TOP" then
+        x = fL + (fW / 2) - (pW / 2)
+        y = fT - pH
+    elseif anchorPoint == "BOTTOM" then
+        x = fL + (fW / 2) - (pW / 2)
+        y = fB
+    elseif anchorPoint == "LEFT" then
+        x = fL
+        y = fB + (fH / 2) - (pH / 2)
+    elseif anchorPoint == "RIGHT" then
+        x = fR - pW
+        y = fB + (fH / 2) - (pH / 2)
+    else -- CENTER
+        x = fL + (fW / 2) - (pW / 2)
+        y = fB + (fH / 2) - (pH / 2)
+    end
+
+    return x, y
+end
+
+function ns.Utils.GetAuraFlowLayoutParameters(growthDir)
+    local gDir = growthDir or "RIGHT_DOWN"
+    local isCenterHoriz = (gDir:find("CENTER_HORIZONTAL") or gDir == "CENTER_HORIZ")
+    local isCenterVert = (gDir:find("CENTER_VERTICAL") or gDir == "CENTER_VERT")
+    local isVerticalLayout = (gDir == "DOWN_RIGHT" or gDir == "DOWN_LEFT" or gDir == "UP_RIGHT" or gDir == "UP_LEFT"
+        or isCenterVert or gDir == "DOWN" or gDir == "UP")
+
+    local layoutAnchor = "TOPLEFT"
+    if gDir == "RIGHT_DOWN" or gDir == "DOWN" or gDir == "DOWN_RIGHT" or gDir == "TOP_TO_BOTTOM" or gDir == "RIGHT" then
+        layoutAnchor = "TOPLEFT"
+    elseif gDir == "RIGHT_UP" or gDir == "UP" or gDir == "UP_RIGHT" or gDir == "BOTTOM_TO_TOP" then
+        layoutAnchor = "BOTTOMLEFT"
+    elseif gDir == "LEFT_DOWN" or gDir == "DOWN_LEFT" or gDir == "LEFT" then
+        layoutAnchor = "TOPRIGHT"
+    elseif gDir == "LEFT_UP" or gDir == "UP_LEFT" then
+        layoutAnchor = "BOTTOMRIGHT"
+    elseif gDir == "CENTER_HORIZONTAL_UP" then
+        layoutAnchor = "BOTTOMLEFT"
+    elseif gDir == "CENTER_HORIZONTAL_DOWN" or isCenterHoriz then
+        layoutAnchor = "TOPLEFT"
+    elseif gDir == "CENTER_VERTICAL_LEFT" then
+        layoutAnchor = "TOPRIGHT"
+    elseif gDir == "CENTER_VERTICAL_RIGHT" or isCenterVert then
+        layoutAnchor = "TOPLEFT"
+    end
+
+    local axisVal = isVerticalLayout and 1 or 0
+    local horizDir = (gDir:find("LEFT") and not gDir:find("RIGHT")
+        and not (gDir == "CENTER_HORIZONTAL_DOWN" or gDir == "CENTER_HORIZONTAL_UP" or gDir == "CENTER_VERTICAL_RIGHT")) and -1 or 1
+    local vertDir = (gDir == "RIGHT_UP" or gDir == "LEFT_UP" or gDir == "UP_RIGHT" or gDir == "UP_LEFT"
+        or gDir == "CENTER_HORIZONTAL_UP" or gDir == "BOTTOM_TO_TOP" or layoutAnchor:find("BOTTOM")) and 1 or -1
+
+    return layoutAnchor, axisVal, horizDir, vertDir
 end
 
 local RoithiUI = _G.RoithiUI

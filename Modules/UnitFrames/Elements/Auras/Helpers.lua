@@ -345,23 +345,17 @@ end
 -------------------------------------------------------------------------------
 local function GetTargetAnchorFromGrowDir(growDir, isCenterHoriz, isCenterVert)
     growDir = growDir or "RIGHT_DOWN"
-    local targetAnchor = "TOPLEFT"
-    if growDir == "LEFT_DOWN" or growDir == "DOWN_LEFT" then
-        targetAnchor = "TOPRIGHT"
-    elseif growDir == "RIGHT_UP" or growDir == "UP_RIGHT" then
-        targetAnchor = "BOTTOMLEFT"
-    elseif growDir == "LEFT_UP" or growDir == "UP_LEFT" then
-        targetAnchor = "BOTTOMRIGHT"
-    elseif growDir == "CENTER_HORIZONTAL_UP" then
-        targetAnchor = "BOTTOM"
-    elseif growDir == "CENTER_HORIZONTAL_DOWN" or isCenterHoriz then
-        targetAnchor = "TOP"
-    elseif growDir == "CENTER_VERTICAL_LEFT" then
-        targetAnchor = "RIGHT"
-    elseif growDir == "CENTER_VERTICAL_RIGHT" or isCenterVert then
-        targetAnchor = "LEFT"
+    if ns.Utils and ns.Utils.GetGrowthAnchor then
+        return ns.Utils.GetGrowthAnchor(growDir, false)
     end
-    return targetAnchor
+    if isCenterHoriz or (growDir:find("CENTER_HORIZONTAL") or growDir == "CENTER_HORIZ") then
+        if growDir == "CENTER_HORIZONTAL_UP" then return "BOTTOM" end
+        return "TOP"
+    elseif isCenterVert or (growDir:find("CENTER_VERTICAL") or growDir == "CENTER_VERT") then
+        if growDir == "CENTER_VERTICAL_LEFT" then return "RIGHT" end
+        return "LEFT"
+    end
+    return "TOPLEFT"
 end
 
 -------------------------------------------------------------------------------

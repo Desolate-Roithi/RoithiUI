@@ -908,9 +908,17 @@ function MenuMod:LayoutMicroMenu()
     local btnH = self.db.buttonHeight or 32
     local spacing = self.db.spacing or 2
     local isHoriz = (self.db.orientation or "HORIZONTAL") == "HORIZONTAL"
+    local isVertical = not isHoriz
+    local count = #activeButtons
 
-    local totalW = isHoriz and (#activeButtons * btnW + (#activeButtons - 1) * spacing) or btnW
-    local totalH = isHoriz and btnH or (#activeButtons * btnH + (#activeButtons - 1) * spacing)
+    local totalW, totalH
+    if ns.Utils and ns.Utils.GetGridDimensions then
+        local _, _, gridW, gridH = ns.Utils.GetGridDimensions(count, count, btnW, btnH, spacing, spacing, isVertical)
+        totalW, totalH = gridW, gridH
+    else
+        totalW = isHoriz and (count * btnW + (count - 1) * spacing) or btnW
+        totalH = isHoriz and btnH or (count * btnH + (count - 1) * spacing)
+    end
     if self.container.SetSize then
         self.container:SetSize(totalW, totalH)
     end
@@ -923,13 +931,14 @@ function MenuMod:LayoutMicroMenu()
         if btn.SetSize then btn:SetSize(btnW, btnH) end
 
         if btn.SetPoint then
-            if isHoriz then
-                local x = (i - 1) * (btnW + spacing)
-                btn:SetPoint("TOPLEFT", self.container, "TOPLEFT", x, 0)
+            local x, y
+            if ns.Utils and ns.Utils.GetGridItemOffset then
+                x, y = ns.Utils.GetGridItemOffset("LEFT_TO_RIGHT", i, count, count, btnW, btnH, spacing, spacing, isVertical)
             else
-                local y = -((i - 1) * (btnH + spacing))
-                btn:SetPoint("TOPLEFT", self.container, "TOPLEFT", 0, y)
+                x = isHoriz and ((i - 1) * (btnW + spacing)) or 0
+                y = isHoriz and 0 or (-((i - 1) * (btnH + spacing)))
             end
+            btn:SetPoint("TOPLEFT", self.container, "TOPLEFT", x, y)
         end
 
         self.btnPointHooked = self.btnPointHooked or {}

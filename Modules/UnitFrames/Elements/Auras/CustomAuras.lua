@@ -125,30 +125,13 @@ function UF:UpdateCustomAura(id)
     end
 
     local growDir = db.auraGrowDirection or "RIGHT_DOWN"
-    local layoutAnchor = "TOPLEFT"
+    local isVerticalLayout = (growDir == "DOWN_RIGHT" or growDir == "DOWN_LEFT" or growDir == "UP_RIGHT" or growDir == "UP_LEFT" or growDir:find("CENTER_VERTICAL") or growDir == "CENTER_VERT" or growDir == "DOWN" or growDir == "UP")
+    local axisVal = isVerticalLayout and 1 or 0
     local isCenterHoriz = (growDir:find("CENTER_HORIZONTAL") or growDir == "CENTER_HORIZ")
     local isCenterVert = (growDir:find("CENTER_VERTICAL") or growDir == "CENTER_VERT")
 
-    if growDir == "RIGHT_DOWN" or growDir == "DOWN" or growDir == "DOWN_RIGHT" or growDir == "TOP_TO_BOTTOM" or growDir == "RIGHT" then
-        layoutAnchor = "TOPLEFT"
-    elseif growDir == "RIGHT_UP" or growDir == "UP" or growDir == "UP_RIGHT" or growDir == "BOTTOM_TO_TOP" then
-        layoutAnchor = "BOTTOMLEFT"
-    elseif growDir == "LEFT_DOWN" or growDir == "DOWN_LEFT" or growDir == "LEFT" then
-        layoutAnchor = "TOPRIGHT"
-    elseif growDir == "LEFT_UP" or growDir == "UP_LEFT" then
-        layoutAnchor = "BOTTOMRIGHT"
-    elseif growDir == "CENTER_HORIZONTAL_UP" then
-        layoutAnchor = "BOTTOMLEFT"
-    elseif growDir == "CENTER_HORIZONTAL_DOWN" or isCenterHoriz then
-        layoutAnchor = "TOPLEFT"
-    elseif growDir == "CENTER_VERTICAL_LEFT" then
-        layoutAnchor = "TOPRIGHT"
-    elseif growDir == "CENTER_VERTICAL_RIGHT" or isCenterVert then
-        layoutAnchor = "TOPLEFT"
-    end
+    local layoutAnchor, flowAxis, horizDir, vertDir = ns.Utils.GetAuraFlowLayoutParameters(growDir)
 
-    local isVerticalLayout = (growDir == "DOWN_RIGHT" or growDir == "DOWN_LEFT" or growDir == "UP_RIGHT" or growDir == "UP_LEFT" or growDir:find("CENTER_VERTICAL") or growDir == "CENTER_VERT" or growDir == "DOWN" or growDir == "UP")
-    local axisVal = isVerticalLayout and 1 or 0
     local size = tonumber(db.auraSize) or 30
     local spacing = tonumber(db.auraSpacing) or 4
     local maxCount = tonumber(db.maxAuras) or 4
@@ -157,11 +140,9 @@ function UF:UpdateCustomAura(id)
     if maxCount and maxCount > 0 and perRow > maxCount then perRow = maxCount end
     local lineSizeVal = perRow * size + math.max(0, perRow - 1) * spacing
 
-    if container.SetFlowLayoutAxis then container:SetFlowLayoutAxis(axisVal) end
+    if container.SetFlowLayoutAxis then container:SetFlowLayoutAxis(flowAxis) end
     if container.SetFlowLayoutAnchorPoint then container:SetFlowLayoutAnchorPoint(layoutAnchor) end
     if container.SetFlowLayoutGrowthDirection then
-        local horizDir = (growDir:find("LEFT") and not growDir:find("RIGHT") and not (growDir == "CENTER_HORIZONTAL_DOWN" or growDir == "CENTER_HORIZONTAL_UP" or growDir == "CENTER_VERTICAL_RIGHT")) and -1 or 1
-        local vertDir = (growDir == "RIGHT_UP" or growDir == "LEFT_UP" or growDir == "UP_RIGHT" or growDir == "UP_LEFT" or growDir == "CENTER_HORIZONTAL_UP" or growDir == "BOTTOM_TO_TOP" or layoutAnchor:find("BOTTOM")) and 1 or -1
         container:SetFlowLayoutGrowthDirection(horizDir, vertDir)
     end
     -- Global sort method & direction lookups
