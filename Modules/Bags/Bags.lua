@@ -2693,6 +2693,8 @@ function BagsMod:AcquireItemSlot(index)
                     fromSlotKey = slotKey,
                     time = now,
                     isNew = wasNew and true or false,
+                    hoveredTime = self.hoveredNewSlots and self.hoveredNewSlots[slotKey],
+                    wasDismissed = (self.dismissedNewHighlights and self.dismissedNewHighlights[slotKey] == true) or false,
                 }
             end
             self:ClearNewSlot(s.bag, s.slot)
@@ -2849,6 +2851,18 @@ function BagsMod:UpdateInventory()
             prevNewSlots[k] = v
         end
     end
+    local prevHoveredNewSlots = {}
+    if self.hoveredNewSlots then
+        for k, v in pairs(self.hoveredNewSlots) do
+            prevHoveredNewSlots[k] = v
+        end
+    end
+    local prevDismissedNewHighlights = {}
+    if self.dismissedNewHighlights then
+        for k, v in pairs(self.dismissedNewHighlights) do
+            prevDismissedNewHighlights[k] = v
+        end
+    end
     for k, itemID in pairs(prevKnownSlots) do
         local count = prevKnownCounts[k] or 1
         prevItemCounts[itemID] = (prevItemCounts[itemID] or 0) + count
@@ -2881,7 +2895,10 @@ function BagsMod:UpdateInventory()
             end
             table.insert(vacatedSlotsByItemID[oldID], {
                 slotKey = sKey,
-                wasNew = (prevNewSlots[sKey] == true),
+                wasNew = (prevNewSlots[sKey] == true)
+                    or (prevHoveredNewSlots[sKey] and now < prevHoveredNewSlots[sKey]),
+                hoveredTime = prevHoveredNewSlots[sKey],
+                wasDismissed = (prevDismissedNewHighlights[sKey] == true),
                 count = prevKnownCounts[sKey] or 1,
             })
         end
@@ -2928,10 +2945,25 @@ function BagsMod:UpdateInventory()
                 local isSlotChanged = (prevID ~= itemInfo.itemID)
                 local isFromDrag = false
                 local draggedItemWasNew = false
-                if isSlotChanged and self.draggedItemInfo and (now - self.draggedItemInfo.time) <= 3.0 and self.draggedItemInfo.itemID == itemInfo.itemID then
+                local transferredHoveredTime = nil
+                local transferredWasDismissed = false
+                if self.draggedItemInfo and (now - self.draggedItemInfo.time) <= 3.0 and self.draggedItemInfo.itemID == itemInfo.itemID then
                     if self.draggedItemInfo.fromSlotKey ~= slotKey then
-                        isFromDrag = true
-                        draggedItemWasNew = (self.draggedItemInfo.isNew == true)
+                        if isSlotChanged then
+                            isFromDrag = true
+                            draggedItemWasNew = (self.draggedItemInfo.isNew == true)
+                            transferredHoveredTime = self.draggedItemInfo.hoveredTime
+                            transferredWasDismissed = (self.draggedItemInfo.wasDismissed == true)
+                            self.draggedItemInfo = nil
+                        end
+                    else
+                        -- Dropped back into the same slot
+                        if self.draggedItemInfo.isNew then
+                            isFromDrag = true
+                            draggedItemWasNew = true
+                            transferredHoveredTime = self.draggedItemInfo.hoveredTime
+                            transferredWasDismissed = (self.draggedItemInfo.wasDismissed == true)
+                        end
                         self.draggedItemInfo = nil
                     end
                 end
@@ -2939,7 +2971,7 @@ function BagsMod:UpdateInventory()
                 -- Check if this item was moved/swapped/split from another slot in inventory
                 local isMovedItem = false
                 local movedWasNew = false
-                if isSlotChanged then
+                if isSlotChanged and not isFromDrag then
                     local vacatedList = vacatedSlotsByItemID[itemInfo.itemID]
                     if vacatedList and #vacatedList > 0 then
                         local vac = table.remove(vacatedList, 1)
@@ -2947,6 +2979,8 @@ function BagsMod:UpdateInventory()
                         if vac.wasNew then
                             movedWasNew = true
                         end
+                        transferredHoveredTime = vac.hoveredTime
+                        transferredWasDismissed = vac.wasDismissed
                     end
                 end
 
@@ -3006,6 +3040,14 @@ function BagsMod:UpdateInventory()
                     if self.tradeTimerCache then
                         self.tradeTimerCache[slotKey] = nil
                     end
+                end
+                if transferredHoveredTime and now < transferredHoveredTime then
+                    self.hoveredNewSlots = self.hoveredNewSlots or {}
+                    self.hoveredNewSlots[slotKey] = transferredHoveredTime
+                end
+                if transferredWasDismissed then
+                    self.dismissedNewHighlights = self.dismissedNewHighlights or {}
+                    self.dismissedNewHighlights[slotKey] = true
                 end
                 self.knownSlots[slotKey] = itemInfo.itemID
                 self.knownSlotCounts = self.knownSlotCounts or {}
