@@ -338,3 +338,12 @@ if AceGUI then
     end
     AceGUI:RegisterWidgetType(Type, Constructor, Version)
 end
+
+if RoithiUI and RoithiUI.RegisterChatCommand then
+    RoithiUI:RegisterChatCommand("roithibuttons", function()
+        MinimapMod:OpenButtonConfigurator()
+    end)
+    RoithiUI:RegisterChatCommand("rbuttons", function()
+        MinimapMod:OpenButtonConfigurator()
+    end)
+end

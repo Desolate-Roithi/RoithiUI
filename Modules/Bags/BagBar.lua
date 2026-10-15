@@ -383,27 +383,6 @@ function BagsMod:CreateBagBarExpander()
     self.expanderButton = expander
 end
 
-function BagsMod:StyleExpandToggle(toggleBtn)
-    if not toggleBtn then return end
-    if not toggleBtn.roithiBackdrop then
-        local bg = CreateFrame("Frame", nil, toggleBtn, "BackdropTemplate")
-        if bg.SetAllPoints then bg:SetAllPoints(toggleBtn) end
-        if bg.SetFrameLevel and toggleBtn.GetFrameLevel then
-            bg:SetFrameLevel(math.max(0, toggleBtn:GetFrameLevel() - 1))
-        end
-        if bg.SetBackdrop then
-            bg:SetBackdrop({
-                bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-                edgeFile = "Interface\\Buttons\\WHITE8x8",
-                edgeSize = 1,
-            })
-            bg:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
-            bg:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
-        end
-        toggleBtn.roithiBackdrop = bg
-    end
-end
-
 function BagsMod:UpdateBagButtonVisual(btn)
     if not btn then return end
     local icon = btn.icon or btn.Icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "IconTexture")]

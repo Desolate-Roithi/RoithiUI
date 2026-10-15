@@ -185,28 +185,6 @@ function Totems:CycleSpell(direction)
     self:UpdateCurrentActionButton()
 end
 
-function Totems:CastSlot(catKey)
-    local btn = self.buttons[catKey]
-    if btn and btn.Click then
-        btn:Click()
-    end
-end
-
-function Totems:DestroyTotemSlot(blizzSlot)
-    if DestroyTotem then
-        DestroyTotem(blizzSlot)
-    end
-end
-
-function Totems:UnsummonAll()
-    if self.recallButton and self.recallButton.Click then
-        self.recallButton:Click()
-    else
-        for slot = 1, 4 do
-            self:DestroyTotemSlot(slot)
-        end
-    end
-end
 
 local function FormatHotkey(text)
     if ns.Utils and ns.Utils.FormatHotkey then

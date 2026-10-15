@@ -16,6 +16,8 @@ local MiniMapTracking = _G.MiniMapTracking
 
 local UpdateDataText
 local date = _G.date or os.date
+local hookedButtons = setmetatable({}, { __mode = "k" })
+local buttonAnchors = setmetatable({}, { __mode = "k" })
 
 MinimapMod.displayName = L["Minimap"]
 MinimapMod.description = L["Enables the custom RoithiUI Minimap and Addon Button Bar module."]
@@ -117,6 +119,7 @@ function MinimapMod:UpdateAnchorsMouseState(enable)
         self.trackingAnchor,
         self.lfgAnchor,
         self.landingAnchor,
+        self.folioAnchor,
         self.zoomInAnchor,
         self.zoomOutAnchor,
         self.calendarAnchor,
@@ -160,6 +163,7 @@ function MinimapMod:PrepareFramesForEditMode()
         { key = "trackingAnchor", frame = self.trackingAnchor },
         { key = "lfgAnchor", frame = self.lfgAnchor },
         { key = "landingAnchor", frame = self.landingAnchor },
+        { key = "folioAnchor", frame = self.folioAnchor },
         { key = "zoomInAnchor", frame = self.zoomInAnchor },
         { key = "zoomOutAnchor", frame = self.zoomOutAnchor },
         { key = "calendarAnchor", frame = self.calendarAnchor },
@@ -198,6 +202,7 @@ function MinimapMod:ReparentFramesAfterEditMode()
         { key = "trackingAnchor", frame = self.trackingAnchor, default = { point = "TOPLEFT", x = 0, y = -38 } },
         { key = "lfgAnchor", frame = self.lfgAnchor, default = { point = "BOTTOMLEFT", x = 0, y = 0 } },
         { key = "landingAnchor", frame = self.landingAnchor, default = { point = "BOTTOMLEFT", x = 0, y = 32 } },
+        { key = "folioAnchor", frame = self.folioAnchor, default = { point = "BOTTOMLEFT", x = 0, y = 68 } },
         { key = "zoomInAnchor", frame = self.zoomInAnchor, default = { point = "TOPRIGHT", x = 0, y = -34 } },
         { key = "zoomOutAnchor", frame = self.zoomOutAnchor, default = { point = "TOPRIGHT", x = 0, y = -68 } },
         { key = "calendarAnchor", frame = self.calendarAnchor, default = { point = "TOPLEFT", x = 0, y = 0 } },
@@ -310,22 +315,32 @@ function MinimapMod:OnEnable()
         objMod:ApplyPosition()
     end
 
+    if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.landingOverlayCallbackRegistered then
+        _G.EventRegistry:RegisterCallback("ExpansionLandingPage.OverlayChanged", function()
+            self:UpdateLandingVisibility()
+            self:UpdateFolioVisibility()
+        end)
+        self.landingOverlayCallbackRegistered = true
+    end
+
     -- Setup LFG hook ticker to handle late-created LFG buttons safely
     if not self.lfgHookTicker and C_Timer.NewTicker then
         self.lfgHookTicker = C_Timer.NewTicker(1, function()
             local qsb = _G.QueueStatusButton
-            local elp = _G.ExpansionLandingPageMinimapButton or _G.GarrisonLandingPageMinimapButton
-            
+            local elp = _G.ExpansionLandingPageMinimapButton or _G.PlumberLandingPageMinimapButton or _G.GarrisonLandingPageMinimapButton
+
             -- If we can find the buttons, try to lay them out (which hooks them)
             if qsb or elp then
                 self:LayoutDefaultButtons()
+                self:UpdateLandingVisibility()
+                self:UpdateFolioVisibility()
             end
-            
+
             -- We only cancel the ticker if all buttons that exist in this expansion are hooked.
             local landingSupported = C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist("Blizzard_ExpansionLandingPage")
-            local qsbHooked = not not (qsb and qsb.isRoithiHooked)
-            local elpHooked = not landingSupported or not not (elp and elp.isRoithiHooked)
-            
+            local qsbHooked = not not (qsb and (hookedButtons[qsb] or qsb.isRoithiHooked))
+            local elpHooked = not landingSupported or not not (elp and (hookedButtons[elp] or elp.isRoithiHooked))
+
             if qsbHooked and elpHooked and self.lfgHookTicker then
                 self.lfgHookTicker:Cancel()
                 self.lfgHookTicker = nil
@@ -347,10 +362,9 @@ function MinimapMod:OnEnable()
                 self.mailWasShown = mail:IsShown()
                 mail:Show()
             end
-            local landing = _G.GarrisonLandingPageMinimapButton or _G.ExpansionLandingPageMinimapButton
+            local landing = _G.ExpansionLandingPageMinimapButton or _G.PlumberLandingPageMinimapButton or _G.GarrisonLandingPageMinimapButton
             if landing then
-                self.landingWasShown = landing:IsShown()
-                landing:Show()
+                if landing.Show then landing:Show() end
             end
 
             -- Temporarily show all anchors so they are visible/movable in Edit Mode
@@ -360,6 +374,7 @@ function MinimapMod:OnEnable()
                 self.trackingAnchor,
                 self.lfgAnchor,
                 self.landingAnchor,
+                self.folioAnchor,
                 self.zoomInAnchor,
                 self.zoomOutAnchor,
                 self.calendarAnchor,
@@ -398,10 +413,8 @@ function MinimapMod:OnEnable()
             if mail then
                 mail:SetShown(self.mailWasShown)
             end
-            local landing = _G.GarrisonLandingPageMinimapButton or _G.ExpansionLandingPageMinimapButton
-            if landing then
-                landing:SetShown(self.landingWasShown)
-            end
+            self:UpdateLandingVisibility()
+            self:UpdateFolioVisibility()
 
 
 
@@ -584,6 +597,15 @@ function MinimapMod:StyleMinimap()
                 set = function(_, val)
                     self.db.showCalendar = val
                     self:UpdateCalendarVisibility()
+                end,
+            },
+            {
+                name = L["Show Omnium Folio"],
+                kind = LEM.SettingType.Checkbox,
+                get = function() return self.db.showFolio == true end,
+                set = function(_, val)
+                    self.db.showFolio = val
+                    self:UpdateFolioVisibility()
                 end,
             },
             {
@@ -981,6 +1003,7 @@ function MinimapMod:RegisterAnchorSettings(f, key)
         trackingAnchor = { toggle = "showTracking", default = { point = "TOPLEFT", x = 0, y = -38 }, updateVis = "UpdateTrackingVisibility" },
         lfgAnchor = { toggle = "showLFG", default = { point = "BOTTOMLEFT", x = 0, y = 0 }, updateVis = "UpdateLFGVisibility" },
         landingAnchor = { toggle = "showLanding", default = { point = "BOTTOMLEFT", x = 0, y = 32 }, updateVis = "UpdateLandingVisibility" },
+        folioAnchor = { toggle = "showFolio", default = { point = "BOTTOMLEFT", x = 0, y = 68 }, updateVis = "UpdateFolioVisibility" },
         zoomInAnchor = { toggle = "showZoomIn", default = { point = "TOPRIGHT", x = 0, y = -34 }, updateVis = "UpdateZoomVisibility" },
         zoomOutAnchor = { toggle = "showZoomOut", default = { point = "TOPRIGHT", x = 0, y = -68 }, updateVis = "UpdateZoomVisibility" },
         calendarAnchor = { toggle = "showCalendar", default = { point = "TOPLEFT", x = 0, y = 0 }, updateVis = "UpdateCalendarVisibility" },
@@ -1029,7 +1052,11 @@ function MinimapMod:RegisterAnchorSettings(f, key)
             name = L["Show"],
             kind = LEM.SettingType.Checkbox,
             get = function()
-                return self.db[toggle] ~= false
+                if toggle == "showCalendar" or toggle == "showFolio" or toggle == "showZoom" then
+                    return self.db[toggle] == true
+                else
+                    return self.db[toggle] ~= false
+                end
             end,
             set = function(_, val)
                 self.db[toggle] = val
@@ -1187,7 +1214,7 @@ local function CreateAnchorFrame(mod, key, name, editModeName, w, h, defaultPos)
             end
         end
 
-        LEM:AddFrame(f, OnPositionChanged, defaultPos)
+        LEM:AddFrame(f, OnPositionChanged, defaultPos, editModeName)
         local selection = LEM.frameSelections and LEM.frameSelections[f]
         if selection then
             local oldOnDragStart = selection:GetScript("OnDragStart")
@@ -1211,27 +1238,48 @@ function MinimapMod:LayoutDefaultButtons()
     if not LEM then return end
 
     local function HookBlizzardButton(btn, anchor)
-        if not btn or btn.isRoithiHooked then return end
+        if not btn then return end
+        buttonAnchors[btn] = anchor
+
+        if hookedButtons[btn] then
+            if btn.SetParent and anchor then
+                pcall(btn.SetParent, btn, anchor)
+            end
+            if btn.SetFrameStrata and anchor.GetFrameStrata then
+                pcall(btn.SetFrameStrata, btn, anchor:GetFrameStrata())
+            end
+            if btn.SetFrameLevel and anchor.GetFrameLevel then
+                pcall(btn.SetFrameLevel, btn, anchor:GetFrameLevel() + 5)
+            end
+            if btn.ClearAllPoints then pcall(btn.ClearAllPoints, btn) end
+            if btn.SetPoint then pcall(btn.SetPoint, btn, "CENTER", anchor, "CENTER", 0, 0) end
+            return
+        end
+        hookedButtons[btn] = true
         btn.isRoithiHooked = true
 
         local originalSetParent = btn.SetParent
         btn.SetParent = function(frame, parent)
-            originalSetParent(frame, anchor)
+            local targetAnchor = buttonAnchors[frame] or anchor
+            originalSetParent(frame, targetAnchor)
         end
 
         local originalSetPoint = btn.SetPoint
         btn.SetPoint = function(frame, point, relF, relP, x, y)
-            originalSetPoint(frame, "CENTER", anchor, "CENTER", 0, 0)
+            local targetAnchor = buttonAnchors[frame] or anchor
+            originalSetPoint(frame, "CENTER", targetAnchor, "CENTER", 0, 0)
         end
 
         btn.SetAllPoints = function(frame, relF)
-            originalSetPoint(frame, "CENTER", anchor, "CENTER", 0, 0)
+            local targetAnchor = buttonAnchors[frame] or anchor
+            originalSetPoint(frame, "CENTER", targetAnchor, "CENTER", 0, 0)
         end
 
         local originalClearAllPoints = btn.ClearAllPoints
         btn.ClearAllPoints = function(frame)
             originalClearAllPoints(frame)
-            originalSetPoint(frame, "CENTER", anchor, "CENTER", 0, 0)
+            local targetAnchor = buttonAnchors[frame] or anchor
+            originalSetPoint(frame, "CENTER", targetAnchor, "CENTER", 0, 0)
         end
 
         originalSetParent(btn, anchor)
@@ -1409,25 +1457,27 @@ function MinimapMod:LayoutDefaultButtons()
         end
     end
 
-    -- Setup Landing Anchor
+    -- Setup Landing Anchor (Expansion Summary / Garrison)
     local landingAnchor = CreateAnchorFrame(self, "landingAnchor", "RoithiLandingAnchor", L["Minimap Landing Button"], 36, 36, defPos.landingAnchor)
     local landings = {}
-    if _G.GarrisonLandingPageMinimapButton then table.insert(landings, _G.GarrisonLandingPageMinimapButton) end
-    if _G.ExpansionLandingPageMinimapButton then table.insert(landings, _G.ExpansionLandingPageMinimapButton) end
+    if _G.PlumberLandingPageMinimapButton then
+        table.insert(landings, _G.PlumberLandingPageMinimapButton)
+    elseif _G.ExpansionLandingPageMinimapButton then
+        table.insert(landings, _G.ExpansionLandingPageMinimapButton)
+    end
+    if _G.GarrisonLandingPageMinimapButton then
+        table.insert(landings, _G.GarrisonLandingPageMinimapButton)
+    end
     for _, landing in ipairs(landings) do
         if landing then
             HookBlizzardButton(landing, landingAnchor)
-
-            -- Prevent Blizzard's mixin from offsetting the button relative to landingAnchor
-            landing.SetLandingPageIconOffset = function(frame, customOffset)
-                frame:ClearAllPoints()
-                frame:SetPoint("CENTER", landingAnchor, "CENTER", 0, 0)
-            end
-            landing.ResetLandingPageIconOffset = function(frame)
-                frame:ClearAllPoints()
-                frame:SetPoint("CENTER", landingAnchor, "CENTER", 0, 0)
-            end
         end
+    end
+
+    -- Setup Omnium Folio Anchor
+    local folioAnchor = CreateAnchorFrame(self, "folioAnchor", "RoithiFolioAnchor", L["Omnium Folio"], 36, 36, defPos.folioAnchor)
+    if _G.ExpansionLandingPageMinimapButton and _G.PlumberLandingPageMinimapButton then
+        HookBlizzardButton(_G.ExpansionLandingPageMinimapButton, folioAnchor)
     end
 
     -- Setup Zoom In Anchor
@@ -1592,6 +1642,69 @@ function MinimapMod:UpdateLandingVisibility()
     local show = (self.db.showLanding ~= false)
     if self.landingAnchor then
         self.landingAnchor:SetShown(show)
+    end
+    local landings = {}
+    if _G.PlumberLandingPageMinimapButton then
+        table.insert(landings, _G.PlumberLandingPageMinimapButton)
+    elseif _G.ExpansionLandingPageMinimapButton then
+        table.insert(landings, _G.ExpansionLandingPageMinimapButton)
+    end
+    if _G.GarrisonLandingPageMinimapButton then
+        table.insert(landings, _G.GarrisonLandingPageMinimapButton)
+    end
+    for _, landing in ipairs(landings) do
+        if landing then
+            if show then
+                if landing.RefreshButton then
+                    pcall(landing.RefreshButton, landing, true)
+                end
+                if landing.Show then
+                    pcall(landing.Show, landing)
+                end
+                if self.landingAnchor then
+                    if landing.SetFrameStrata and self.landingAnchor.GetFrameStrata then
+                        pcall(landing.SetFrameStrata, landing, self.landingAnchor:GetFrameStrata())
+                    end
+                    if landing.SetFrameLevel and self.landingAnchor.GetFrameLevel then
+                        pcall(landing.SetFrameLevel, landing, self.landingAnchor:GetFrameLevel() + 5)
+                    end
+                end
+            else
+                if landing.Hide then
+                    pcall(landing.Hide, landing)
+                end
+            end
+        end
+    end
+end
+
+function MinimapMod:UpdateFolioVisibility()
+    local show = (self.db.showFolio == true)
+    if self.folioAnchor then
+        self.folioAnchor:SetShown(show)
+    end
+    local folio = _G.ExpansionLandingPageMinimapButton
+    if folio and _G.PlumberLandingPageMinimapButton then
+        if show then
+            if folio.RefreshButton then
+                pcall(folio.RefreshButton, folio, true)
+            end
+            if folio.Show then
+                pcall(folio.Show, folio)
+            end
+            if self.folioAnchor then
+                if folio.SetFrameStrata and self.folioAnchor.GetFrameStrata then
+                    pcall(folio.SetFrameStrata, folio, self.folioAnchor:GetFrameStrata())
+                end
+                if folio.SetFrameLevel and self.folioAnchor.GetFrameLevel then
+                    pcall(folio.SetFrameLevel, folio, self.folioAnchor:GetFrameLevel() + 5)
+                end
+            end
+        else
+            if folio.Hide then
+                pcall(folio.Hide, folio)
+            end
+        end
     end
 end
 
@@ -1975,35 +2088,63 @@ function MinimapMod:SetupCoordsWidget(anchor)
         self:SharePlayerCoordinates()
     end)
 
-    if not self.coordsTicker and _G.C_Timer and _G.C_Timer.NewTicker then
-        self.coordsTicker = _G.C_Timer.NewTicker(0.2, function()
-            if not self.db or self.db.showCoords == false then
+    self:StartCoordsTicker()
+end
+
+function MinimapMod:StartCoordsTicker()
+    if self.coordsTicker or not self.coordsText or not _G.C_Timer or not _G.C_Timer.NewTicker then return end
+    if not self.db or self.db.showCoords == false then return end
+
+    local text = self.coordsText
+    local lastX, lastY
+    self.coordsTicker = _G.C_Timer.NewTicker(0.2, function()
+        if not self.db or self.db.showCoords == false then
+            if lastX ~= nil then
+                lastX, lastY = nil, nil
                 text:SetText("")
-                return
             end
-            local ok, mapID = pcall(function()
-                return _G.C_Map and _G.C_Map.GetBestMapForUnit and _G.C_Map.GetBestMapForUnit("player")
-            end)
-            if ok and mapID then
-                local okPos, pos = pcall(function()
-                    return _G.C_Map.GetPlayerMapPosition(mapID, "player")
-                end)
-                if okPos and pos and pos.GetXY then
-                    local okXY, x, y = pcall(function() return pos:GetXY() end)
-                    if okXY and x and y and x > 0 and y > 0 then
-                        text:SetFormattedText("%.1f, %.1f", x * 100, y * 100)
-                        return
+            if self.coordsTicker then
+                self.coordsTicker:Cancel()
+                self.coordsTicker = nil
+            end
+            return
+        end
+        local cMap = _G.C_Map
+        local mapID = cMap and cMap.GetBestMapForUnit and cMap.GetBestMapForUnit("player")
+        if mapID then
+            local pos = cMap.GetPlayerMapPosition and cMap.GetPlayerMapPosition(mapID, "player")
+            if pos and pos.GetXY then
+                local x, y = pos:GetXY()
+                if x and y and x > 0 and y > 0 then
+                    local roundX = math.floor(x * 1000 + 0.5) / 10
+                    local roundY = math.floor(y * 1000 + 0.5) / 10
+                    if roundX ~= lastX or roundY ~= lastY then
+                        lastX, lastY = roundX, roundY
+                        text:SetFormattedText("%.1f, %.1f", roundX, roundY)
                     end
+                    return
                 end
             end
+        end
+        if lastX ~= nil then
+            lastX, lastY = nil, nil
             text:SetText("")
-        end)
-    end
+        end
+    end)
 end
 
 function MinimapMod:UpdateCoordsVisibility()
     if self.coordsAnchor then
         self.coordsAnchor:SetShown(self.db.showCoords ~= false)
+    end
+    if self.db and self.db.showCoords ~= false then
+        if not self.coordsTicker and self.coordsText then
+            self:StartCoordsTicker()
+        end
+    elseif self.coordsTicker then
+        self.coordsTicker:Cancel()
+        self.coordsTicker = nil
+        if self.coordsText then self.coordsText:SetText("") end
     end
 end
 

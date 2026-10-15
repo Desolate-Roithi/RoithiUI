@@ -103,13 +103,18 @@ function UF:CreateIndicators(frame)
     else
         pvpTimer:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
     end
-    pvpTimer:SetPoint("LEFT", pvp, "RIGHT", 2, 0)
+    if frame.unit == "player" then
+        pvpTimer:SetPoint("RIGHT", pvp, "LEFT", -2, 0)
+    else
+        pvpTimer:SetPoint("LEFT", pvp, "RIGHT", 2, 0)
+    end
     pvpTimer:Hide()
     frame.PvPTimerText = pvpTimer
 
-    if not frame.pvpTicker then
+    if frame.unit == "player" and not frame.pvpTicker then
         local ticker = CreateFrame("Frame", nil, frame)
         ticker.elapsed = 0
+        ticker:Hide()
         ticker:SetScript("OnUpdate", function(tickerFrame, elapsed)
             tickerFrame.elapsed = (tickerFrame.elapsed or 0) + elapsed
             if tickerFrame.elapsed >= 0.5 then
@@ -125,9 +130,11 @@ function UF:CreateIndicators(frame)
                         if not timerText:IsShown() then timerText:Show() end
                     else
                         timerText:Hide()
+                        tickerFrame:Hide()
                     end
                 else
                     if timerText and timerText:IsShown() then timerText:Hide() end
+                    tickerFrame:Hide()
                 end
             end
         end)
@@ -213,8 +220,9 @@ function UF:CreateIndicators(frame)
             local pvpTexture = frame.PvPIndicator
             local s = (db and db.pvp) or {}
             local pt = s.point or pvpDefPoint
+            local rel = s.relativePoint or s.point or pvpDefRel
             timer:ClearAllPoints()
-            if pt and pt:find("RIGHT") then
+            if (rel and rel:find("RIGHT")) or (pt and pt:find("RIGHT")) or (frame.unit == "player") then
                 timer:SetPoint("RIGHT", pvpTexture, "LEFT", -2, 0)
             else
                 timer:SetPoint("LEFT", pvpTexture, "RIGHT", 2, 0)
@@ -382,11 +390,14 @@ function UF:CreateIndicators(frame)
                     local s = totalSec % 60
                     pvpTimerFS:SetText(string.format("%d:%02d", m, s))
                     pvpTimerFS:Show()
+                    if frame.pvpTicker then frame.pvpTicker:Show() end
                 else
                     pvpTimerFS:Hide()
+                    if frame.pvpTicker then frame.pvpTicker:Hide() end
                 end
             else
                 pvpTimerFS:Hide()
+                if frame.pvpTicker then frame.pvpTicker:Hide() end
             end
         end
 

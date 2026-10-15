@@ -144,17 +144,20 @@ local BLIZZ_CAST_EVENTS = {
     "UNIT_SPELLCAST_INTERRUPTIBLE", "UNIT_SPELLCAST_NOT_INTERRUPTIBLE",
 }
 
+local regenVisibilityFrame = nil
 function ns.UpdateBlizzardVisibility()
     if InCombatLockdown and InCombatLockdown() then
         if not ns.pendingBlizzVisibilityUpdate then
             ns.pendingBlizzVisibilityUpdate = true
-            local regenFrame = CreateFrame("Frame")
-            regenFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-            regenFrame:SetScript("OnEvent", function(self)
-                self:UnregisterAllEvents()
-                ns.pendingBlizzVisibilityUpdate = false
-                ns.UpdateBlizzardVisibility()
-            end)
+            if not regenVisibilityFrame then
+                regenVisibilityFrame = CreateFrame("Frame")
+                regenVisibilityFrame:SetScript("OnEvent", function(self)
+                    self:UnregisterAllEvents()
+                    ns.pendingBlizzVisibilityUpdate = false
+                    ns.UpdateBlizzardVisibility()
+                end)
+            end
+            regenVisibilityFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
         end
         return
     end

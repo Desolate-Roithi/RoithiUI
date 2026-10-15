@@ -178,10 +178,6 @@ function CDM:HookItemMixins()
     self.itemMixinsHooked = true
 end
 
-function CDM:OnResetItemFrame(viewerKey, itemFrame)
-    if not itemFrame or not self:IsEnabled() or (self.db and self.db.enabled == false) then return end
-    self:StyleItemFrame(viewerKey, itemFrame)
-end
 
 function CDM:PopulateSettingsPanel(panel)
     if self.selectedOptionsBar then
@@ -1869,15 +1865,6 @@ function CDM:AlignViewerItems(viewerKey, viewer)
 end
 CDM.CenterIncompleteRows = CDM.AlignViewerItems
 
-function CDM:OnViewerLayoutRefreshed(viewerKey, viewer)
-    if not viewer or not viewer.itemFramePool then return end
-    if viewer.itemFramePool.EnumerateActive then
-        for itemFrame in viewer.itemFramePool:EnumerateActive() do
-            self:StyleItemFrame(viewerKey, itemFrame)
-        end
-    end
-    self:CenterIncompleteRows(viewerKey, viewer)
-end
 
 function CDM:ApplyViewerConfig(viewerKey)
     if InCombatLockdown() then return end

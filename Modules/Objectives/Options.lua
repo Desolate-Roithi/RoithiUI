@@ -795,18 +795,4 @@ function ObjectivesMod:GetLEMFrameSettings()
     return settings
 end
 
-function ObjectivesMod:GetLEMFrameButtons()
-    return {
-        {
-            text = L["Open Full Settings"] or "Open Full Settings",
-            click = function()
-                if RoithiUI and RoithiUI.OpenSettings then
-                    RoithiUI:OpenSettings("objectives")
-                elseif LibStub("AceConfigDialog-3.0") then
-                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "interface_group", "objectives")
-                    LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
-                end
-            end,
-        }
-    }
-end
+

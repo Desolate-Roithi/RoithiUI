@@ -917,26 +917,6 @@ function ObjectivesMod:SkinStageBlock(stageBlock)
     end
 end
 
-function ObjectivesMod:SkinChallengeModeBlock(cmBlock)
-    if not cmBlock then return end
-    local font = self:GetFontPath("titleFont")
-    local tSize = self.db.titleFontSize or 12
-    local outline = self:GetFontOutline("titleFontOutline")
-    local tc = self.db.titleColor or self.defaultSettings.titleColor
-    local useShadow = self:GetFontShadow("titleFontShadow")
-    local textChildren = { "Level", "TimeLeft", "TimeLost" }
-    for _, key in ipairs(textChildren) do
-        local fs = cmBlock[key]
-        if fs and fs.SetFont then
-            pcall(fs.SetFont, fs, font, tSize, outline)
-            if fs.SetTextColor then
-                fs:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
-            end
-            ApplyFontStringShadow(fs, useShadow)
-        end
-    end
-end
-
 function ObjectivesMod:SkinScenarioLine(line)
     if not line or line.progressBar then return end
     if not self:IsAwakeningTheMachine() then return end

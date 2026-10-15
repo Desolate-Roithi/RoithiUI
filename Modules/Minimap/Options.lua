@@ -136,6 +136,17 @@ function MinimapMod:GetOptions()
                             self:UpdateCalendarVisibility()
                         end,
                     },
+                    showFolio = {
+                        type = "toggle",
+                        name = L["Show Omnium Folio"],
+                        desc = L["Toggle display of the Omnium Folio button on the minimap."],
+                        order = 2.5,
+                        get = function() return self.db.showFolio == true end,
+                        set = function(_, val)
+                            self.db.showFolio = val
+                            self:UpdateFolioVisibility()
+                        end,
+                    },
                     showZoom = {
                         type = "toggle",
                         name = L["Show Zoom Buttons"],

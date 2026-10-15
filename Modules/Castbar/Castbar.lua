@@ -376,6 +376,10 @@ local function OnCastbarUpdate(self, elapsed)
         end
     end
 
+    if self.isEmpower and ns.OnEmpowerUpdate then
+        ns.OnEmpowerUpdate(self)
+    end
+
     if self.TimeFS then
         self.timeThrottle = (self.timeThrottle or 0) + (elapsed or 0.016)
         if self.timeThrottle >= 0.05 then
@@ -416,13 +420,23 @@ function ns.UpdateCast(bar, unitOverride)
         texture = chTexture
         notInterruptible = chNotInt
         isChannel = true
-        state = (isEmpowered or (numEmpowerStages and numEmpowerStages > 0)) and "empowered" or "channel"
-        if isEmpowered or (numEmpowerStages and numEmpowerStages > 0) then
+        local isEmp = (isEmpowered or (numEmpowerStages and numEmpowerStages > 0))
+        state = isEmp and "empowered" or "channel"
+        if isEmp then
             durationObj = UnitEmpoweredChannelDuration and UnitEmpoweredChannelDuration(unit, true)
+            if ns.SetupEmpower then
+                ns.SetupEmpower(bar)
+            end
         else
+            if bar.isEmpower and ns.StopEmpower then
+                ns.StopEmpower(bar)
+            end
             durationObj = UnitChannelDuration and UnitChannelDuration(unit)
         end
     else
+        if bar.isEmpower and ns.StopEmpower then
+            ns.StopEmpower(bar)
+        end
         local cName, cText, cTexture, _, _, _, cID, cNotInt = UnitCastingInfo(unit)
         if cName then
             name = cName

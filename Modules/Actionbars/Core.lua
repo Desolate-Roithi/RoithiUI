@@ -347,13 +347,6 @@ function AB:OnEnteringWorld()
     end
 end
 
-function AB:SafeLayout(callback)
-    if _G.InCombatLockdown and _G.InCombatLockdown() then
-        self.queuedLayout = true
-        return
-    end
-    if callback then callback() end
-end
 
 function AB:OnUpdateState()
     if self.UpdateAllEmptyButtons then

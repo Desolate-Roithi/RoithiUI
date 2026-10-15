@@ -40,6 +40,7 @@ local IgnoredFrames = {
     ["MiniMapRecordingButton"] = true,
     ["MiniMapLFGFrame"] = true,
     ["RecycleBinFrame"] = true,
+    ["PlumberLandingPageMinimapButton"] = true,
 }
 
 local function NormalizeAddonKey(name)
@@ -56,6 +57,8 @@ end
 
 local function IsSafeFrame(frame)
     if not frame then return false end
+    if _G.issecretvalue and _G.issecretvalue(frame) then return false end
+    if _G.canaccessvalue and not _G.canaccessvalue(frame) then return false end
     if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(frame) then
         return false
     end
@@ -100,6 +103,19 @@ local function IsIgnoredButton(child)
         or name:find("ZoneText") or name:find("Tracking") or name:find("TimeManager")
         or name:find("Recording") or name:find("Selection") or name:find("Backdrop")
         or name:find("Border") or name:find("DragProxy") then
+        return true
+    end
+
+    -- Ignore map pins, POIs, waypoints, nodes, and map marker widgets
+    local lowerName = name:lower()
+    if lowerName:find("pin") or lowerName:find("poi") or lowerName:find("waypoint")
+        or lowerName:find("node") or lowerName:find("corpse") or lowerName:find("blob")
+        or lowerName:find("herebedragons") or lowerName:find("hbd") or lowerName:find("astrolabe") then
+        return true
+    end
+
+    -- Ignore frames carrying map pin attributes or data provider templates
+    if child.pinTemplate or child.dataProvider or child.uiMapID or child.normalizedX or child.coord then
         return true
     end
 
@@ -1028,7 +1044,23 @@ function MinimapMod:ScanAddonButtons()
     -- Clean up any invalid, non-button, or ignored frames from earlier scans
     for sName, sBtn in pairs(self.scannedButtons) do
         if IsIgnoredButton(sBtn) then
+            if sBtn and UnprotectButton then
+                UnprotectButton(sBtn)
+                local origParent = sBtn.originalParent or Minimap
+                if sBtn.SetParent then pcall(sBtn.SetParent, sBtn, origParent) end
+                if sBtn.originalPoints and #sBtn.originalPoints > 0 and sBtn.ClearAllPoints and sBtn.SetPoint then
+                    pcall(sBtn.ClearAllPoints, sBtn)
+                    for _, pt in ipairs(sBtn.originalPoints) do
+                        pcall(sBtn.SetPoint, sBtn, unpack(pt))
+                    end
+                end
+                if sBtn.SetAlpha then pcall(sBtn.SetAlpha, sBtn, 1) end
+                if sBtn.Show then pcall(sBtn.Show, sBtn) end
+            end
             self.scannedButtons[sName] = nil
+            if self.db and self.db.addonBarButtons then
+                self.db.addonBarButtons[sName] = nil
+            end
             if self.customButtons and self.customButtons[sName] then
                 self.customButtons[sName]:Hide()
                 self.customButtons[sName] = nil
@@ -1134,7 +1166,6 @@ function MinimapMod:ScanAddonButtons()
 
     -- 3. Scan known standalone global addon minimap buttons
     local standaloneButtons = {
-        "PlumberLandingPageMinimapButton",
         "WIM3MinimapButton",
         "TomTomMinimapButton",
         "VuhDoMinimapButton",
@@ -1159,29 +1190,6 @@ function MinimapMod:ScanAddonButtons()
         local btn = _G[btnName]
         if btn and IsSafeFrame(btn) then
             TryAddButton(btn)
-        end
-    end
-
-    -- 4. Scan UIParent children for minimap-anchored addon buttons
-    if UIParent and UIParent.GetChildren then
-        local okKids, kids = pcall(function() return { UIParent:GetChildren() } end)
-        if okKids and kids then
-            for _, child in ipairs(kids) do
-                if child and IsSafeFrame(child) and not IsIgnoredButton(child) and SafeIsObjectType(child, "Button") then
-                    local okSize, w, h = pcall(child.GetSize, child)
-                    if okSize and w and h and w >= 16 and w <= 80 and h >= 16 and h <= 80 then
-                        local okPts, numPoints = pcall(child.GetNumPoints, child)
-                        numPoints = (okPts and numPoints) or 0
-                        for i = 1, numPoints do
-                            local okPt, _, relTo = pcall(child.GetPoint, child, i)
-                            if okPt and (relTo == Minimap or relTo == MinimapCluster or relTo == _G.MinimapBackdrop) then
-                                TryAddButton(child)
-                                break
-                            end
-                        end
-                    end
-                end
-            end
         end
     end
 

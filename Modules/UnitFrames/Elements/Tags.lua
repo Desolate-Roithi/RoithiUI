@@ -18,6 +18,7 @@ local GetSpecialization = _G.GetSpecialization
 
 -- 12.0.1 Secret APIs (Localized if present)
 local issecretvalue = _G.issecretvalue
+local canaccessvalue = _G.canaccessvalue
 local C_UnitHealth = _G.C_UnitHealth
 ---@diagnostic disable-next-line: undefined-field
 local C_UnitPower = _G.C_UnitPower
@@ -48,6 +49,15 @@ UF.TagManager = TM
 -- Helper: Shorten Number (12.0.1 Style K/M/B)
 local function AbbreviateNumber(value)
     if value == nil then return "" end
+
+    local isSecret = (issecretvalue and issecretvalue(value)) or (canaccessvalue and not canaccessvalue(value))
+    if isSecret then
+        if AbbreviateLargeNumbers then
+            local success, result = pcall(AbbreviateLargeNumbers, value)
+            if success and result then return result end
+        end
+        return value
+    end
 
     if AbbreviateLargeNumbers then
         local success, result = pcall(AbbreviateLargeNumbers, value)
@@ -653,16 +663,23 @@ function UF:UpdateTagFrame(tagFrame)
     end
 
     local segments = TM:GetSegments(tagFrame.formatString, unit)
+    local count = #segments
+    if count == 0 then
+        if tagFrame.SegmentPool.ReleaseAll then
+            tagFrame.SegmentPool:ReleaseAll()
+        end
+        return
+    end
+
+    -- Acquire fontstrings from pool
     tagFrame.SegmentPool:ReleaseAll()
 
-    local count = #segments
-    if count == 0 then return end
-
     local fontStrings = {}
+    local fontName = tagFrame.font or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Roithi Thick"
+    local fontOutline = tagFrame.fontOutline or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE"
+
     for i, segment in ipairs(segments) do
         local fs = tagFrame.SegmentPool:Acquire()
-        local fontName = tagFrame.font or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Roithi Thick"
-        local fontOutline = tagFrame.fontOutline or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE"
         LibRoithi.mixins:SetFont(fs, fontName, tagFrame.fontSize or 12, fontOutline)
         if fs.SetDrawLayer then fs:SetDrawLayer("OVERLAY", 7) end
         if fs.SetShadowOffset then
@@ -673,18 +690,18 @@ function UF:UpdateTagFrame(tagFrame)
             end
         end
 
-        -- Special: If the return is a table/mixed, it might be an error from GetSegments
+        -- Direct pass-through: set text natively without comparison
         fs:SetText(segment.text)
-
         fs:ClearAllPoints()
-        
+
         -- 12.0.1 Secret Zero-Hiding for specific tags
+        local isSecret = (issecretvalue and issecretvalue(segment.text)) or (canaccessvalue and not canaccessvalue(segment.text))
         if segment.isTag and (segment.tag == "absorb" or segment.tag == "healabsorb") then
-            if issecretvalue and issecretvalue(segment.text) then
-                if SetShownFromSecret then 
-                    SetShownFromSecret(fs, segment.text) 
+            if isSecret then
+                if SetShownFromSecret then
+                    SetShownFromSecret(fs, segment.text)
                 else
-                    fs:Show() -- Fallback if SetShownFromSecret is unhooked.
+                    fs:Show()
                 end
             elseif segment.text == 0 or segment.text == "0" or segment.text == "" then
                 fs:Hide()
@@ -694,7 +711,7 @@ function UF:UpdateTagFrame(tagFrame)
         else
             fs:Show()
         end
-        
+
         fontStrings[i] = fs
     end
 
