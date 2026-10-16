@@ -2780,6 +2780,12 @@ function BagsMod:AcquireItemSlot(index)
     return slot
 end
 
+local function ClearBlizzardNewItem(bag, slot)
+    if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
+        pcall(_G.C_NewItems.RemoveNewItem, bag, slot)
+    end
+end
+
 function BagsMod:UpdateInventory()
     if not self.mainFrame or not self.mainFrame:IsShown() then return end
 
@@ -2863,9 +2869,13 @@ function BagsMod:UpdateInventory()
             prevDismissedNewHighlights[k] = v
         end
     end
+    local prevNewItemIDs = {}
     for k, itemID in pairs(prevKnownSlots) do
         local count = prevKnownCounts[k] or 1
         prevItemCounts[itemID] = (prevItemCounts[itemID] or 0) + count
+        if prevNewSlots[k] or (prevHoveredNewSlots[k] and now < prevHoveredNewSlots[k]) then
+            prevNewItemIDs[itemID] = true
+        end
     end
 
     -- Pre-pass: scan current contents of all scannable bags to detect vacated slots and current item counts
@@ -2993,14 +3003,25 @@ function BagsMod:UpdateInventory()
                 elseif isFromDrag then
                     if draggedItemWasNew then
                         isNewSlot = true
+                    else
+                        ClearBlizzardNewItem(bag, slot)
                     end
                 elseif isMovedItem then
                     -- Moved items inherit new status if and only if they were already new
                     if movedWasNew then
                         isNewSlot = true
+                    else
+                        ClearBlizzardNewItem(bag, slot)
                     end
                 elseif _G.C_NewItems and _G.C_NewItems.IsNewItem and _G.C_NewItems.IsNewItem(bag, slot) then
-                    isNewSlot = true
+                    local prevTotal = prevItemCounts[itemInfo.itemID] or 0
+                    local currentTotal = currentItemCounts[itemInfo.itemID] or (itemInfo.count or 1)
+                    local wasExistingNonNew = (prevTotal > 0 and currentTotal <= prevTotal and not prevNewItemIDs[itemInfo.itemID])
+                    if not wasExistingNonNew then
+                        isNewSlot = true
+                    else
+                        ClearBlizzardNewItem(bag, slot)
+                    end
                 elseif self.initialInventoryScanned and not isSorting and not isTeleporting and isSlotChanged then
                     -- Fallback for newly acquired items (boss drop, vendor buy, quest reward):
                     -- Must NOT be an already-known item whose total count in inventory did not increase!

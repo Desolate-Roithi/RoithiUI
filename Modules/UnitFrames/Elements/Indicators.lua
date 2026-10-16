@@ -430,10 +430,6 @@ function UF:CreateIndicators(frame)
     frame.UpdateIndicators = UpdateIndicators
 
     -- Event Hooks
-    frame:HookScript("OnEvent", function(f, event)
-        -- All registered events here should trigger an indicator refresh
-        UpdateIndicators()
-    end)
     frame:HookScript("OnShow", UpdateIndicators)
 
     -- Register Events
