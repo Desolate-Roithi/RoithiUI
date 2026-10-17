@@ -76,6 +76,7 @@ local CHAT_FRAME_TEXTURES = {
 -- Channel abbreviation filter
 local CHAT_FILTER_EVENTS = {
     "CHAT_MSG_CHANNEL",
+    "CHAT_MSG_COMMUNITIES_CHANNEL",
     "CHAT_MSG_GUILD",
     "CHAT_MSG_OFFICER",
     "CHAT_MSG_PARTY",
@@ -92,6 +93,7 @@ local CHAT_FILTER_EVENTS = {
     "CHAT_MSG_BN_WHISPER",
     "CHAT_MSG_BN_WHISPER_INFORM",
 }
+ChatMod.CHAT_FILTER_EVENTS = CHAT_FILTER_EVENTS
 
 
 local RACE_ATLAS_OVERRIDES = {
@@ -106,15 +108,15 @@ local RACE_ATLAS_OVERRIDES = {
 }
 
 local GROUP_CHANNELS = {
-    { format = "CHAT_PARTY_LEADER_GET", default = "Party Leader", short = "PL", token = "PARTY" },
-    { format = "CHAT_PARTY_GET", default = "Party", short = "P", token = "PARTY" },
-    { format = "CHAT_RAID_LEADER_GET", default = "Raid Leader", short = "RL", token = "RAID" },
-    { format = "CHAT_RAID_WARNING_GET", default = "Raid Warning", short = "RW", token = "RAID_WARNING" },
-    { format = "CHAT_RAID_GET", default = "Raid", short = "R", token = "RAID" },
-    { format = "CHAT_INSTANCE_CHAT_LEADER_GET", default = "Instance Leader", short = "IL", token = "INSTANCE_CHAT" },
-    { format = "CHAT_INSTANCE_CHAT_GET", default = "Instance", short = "I", token = "INSTANCE_CHAT" },
-    { format = "CHAT_GUILD_GET", default = "Guild", short = "G", token = "GUILD" },
-    { format = "CHAT_OFFICER_GET", default = "Officer", short = "O", token = "OFFICER" },
+    { format = "CHAT_PARTY_LEADER_GET", default = "Party Leader", short = "PL", token = "PARTY", aliases = { "Gruppenanführer", "Party Leader" } },
+    { format = "CHAT_PARTY_GET", default = "Party", short = "P", token = "PARTY", aliases = { "Gruppe", "Party" } },
+    { format = "CHAT_RAID_LEADER_GET", default = "Raid Leader", short = "RL", token = "RAID", aliases = { "Schlachtzugleiter", "Raid Leader" } },
+    { format = "CHAT_RAID_WARNING_GET", default = "Raid Warning", short = "RW", token = "RAID_WARNING", aliases = { "Schlachtzugswarnung", "Raid Warning" } },
+    { format = "CHAT_RAID_GET", default = "Raid", short = "R", token = "RAID", aliases = { "Schlachtzug", "Raid" } },
+    { format = "CHAT_INSTANCE_CHAT_LEADER_GET", default = "Instance Leader", short = "IL", token = "INSTANCE_CHAT", aliases = { "Instanzgruppenanführer", "Instance Leader" } },
+    { format = "CHAT_INSTANCE_CHAT_GET", default = "Instance", short = "I", token = "INSTANCE_CHAT", aliases = { "Instanz", "Instance" } },
+    { format = "CHAT_GUILD_GET", default = "Guild", short = "G", token = "GUILD", aliases = { "Gilde", "Guild" } },
+    { format = "CHAT_OFFICER_GET", default = "Officer", short = "O", token = "OFFICER", aliases = { "Offizier", "Officer" } },
 }
 
 local atlasCache = {}
@@ -302,27 +304,36 @@ function ChatMod:FormatChatMessageText(text, eventArgs)
             return linkOpen .. "[" .. formattedLabel .. "]" .. linkClose
         end)
     elseif self.db and self.db.shortenChannels ~= false then
-        out = out:gsub("(|Hchannel:[^|]*(%d+)|h)%[(.-)%](|h)", "%1[%2]%4")
-
+        -- 1. Shorten group and community channels first to [G], [O], [P], [R], [I], etc.
         for _, grp in ipairs(GROUP_CHANNELS) do
+            local tagsToMatch = {}
             local label = GetFormatBracketText(grp.format, grp.default)
-            if label and label ~= "" then
-                local escaped = label:gsub("(%W)", "%%%1")
+            if label and label ~= "" then table.insert(tagsToMatch, label) end
+            if grp.default and grp.default ~= label then table.insert(tagsToMatch, grp.default) end
+            if grp.aliases then
+                for _, alias in ipairs(grp.aliases) do
+                    table.insert(tagsToMatch, alias)
+                end
+            end
+
+            for _, tag in ipairs(tagsToMatch) do
+                local escaped = tag:gsub("(%W)", "%%%1")
                 if grp.token then
                     out = out:gsub("(|Hchannel:" .. grp.token .. "|h)%[" .. escaped .. "%](|h)", "%1[" .. grp.short .. "]%2")
                 end
                 out = out:gsub("(|Hchannel:[^|]+|h)%[" .. escaped .. "%](|h)", "%1[" .. grp.short .. "]%2")
                 out = out:gsub("^%[" .. escaped .. "%]", "[" .. grp.short .. "]")
-            end
-            if grp.default and grp.default ~= label then
-                local defEscaped = grp.default:gsub("(%W)", "%%%1")
-                if grp.token then
-                    out = out:gsub("(|Hchannel:" .. grp.token .. "|h)%[" .. defEscaped .. "%](|h)", "%1[" .. grp.short .. "]%2")
-                end
-                out = out:gsub("(|Hchannel:[^|]+|h)%[" .. defEscaped .. "%](|h)", "%1[" .. grp.short .. "]%2")
-                out = out:gsub("^%[" .. defEscaped .. "%]", "[" .. grp.short .. "]")
+                out = out:gsub("(%s+)%[" .. escaped .. "%]", "%1[" .. grp.short .. "]")
             end
         end
+
+        -- 2. Shorten numbered default channels (e.g. [1. General] -> [1], [2. Trade] -> [2])
+        -- Explicitly match ONLY standard numbered channels (channel:%d+ or channel:channel:%d+),
+        -- NEVER community streams (community:%d+:%d+) which have already been handled or are custom!
+        out = out:gsub("(|Hchannel:channel:(%d+)|h)%[(.-)%](|h)", "%1[%2]%4")
+        out = out:gsub("(|Hchannel:(%d+)|h)%[(.-)%](|h)", "%1[%2]%4")
+        out = out:gsub("^%[(%d+)%.%s*[^%]]-%]", "[%1]")
+        out = out:gsub("(%s+)%[(%d+)%.%s*[^%]]-%]", "%1[%2]")
     end
 
     -- 2. Race and Class Icons
@@ -2679,6 +2690,26 @@ function ChatMod:GetOrCreateChatCopyWindow()
     return win
 end
 
+function ChatMod:SanitizeChatTextForCopy(text)
+    if not text then return "" end
+    local clean = tostring(text)
+    -- 1. Unwrap hyperlinks to display text
+    clean = clean:gsub("|H.-|h(.-)|h", "%1")
+    -- 2. Strip textures, atlases, keybinds, and widgets
+    clean = clean:gsub("|T.-|t", ""):gsub("|A.-|a", ""):gsub("|K.-|k", ""):gsub("|W.-|w", "")
+    -- 3. Resolve pluralization: "30 |4day:days;" -> "30 days"
+    clean = clean:gsub("(%d+)%s*|4(.-):(.-);", function(cnt, sing, plur)
+        return cnt .. " " .. ((tonumber(cnt) == 1) and sing or plur)
+    end)
+    clean = clean:gsub("|4(.-):(.-);", "%2")
+    -- 4. Strip all color escapes (hex, named colors like |cnIQ4:, uppercase, lowercase) and resets
+    clean = clean:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|C%x%x%x%x%x%x%x%x", "")
+    clean = clean:gsub("|cn[%w_]+:", ""):gsub("|Cn[%w_]+:", "")
+    clean = clean:gsub("|c%x+", ""):gsub("|C%x+", "")
+    clean = clean:gsub("|r", ""):gsub("|R", "")
+    return clean
+end
+
 function ChatMod:OpenChatCopyWindow(cf)
     cf = cf or _G.SELECTED_CHAT_FRAME or _G.ChatFrame1
     if not cf then return end
@@ -2698,15 +2729,7 @@ function ChatMod:OpenChatCopyWindow(cf)
         for i = 1, num do
             local text = cf:GetMessageInfo(i)
             if text and text ~= "" then
-
-                local clean = tostring(text)
-                clean = clean:gsub("|c%x%x%x%x%x%x%x%x", "")
-                clean = clean:gsub("|r", "")
-                clean = clean:gsub("|T.-|t", "")
-                clean = clean:gsub("|A.-|a", "")
-                clean = clean:gsub("|K.-|k", "")
-                clean = clean:gsub("|H.-|h(.-)|h", "%1")
-                table.insert(lines, clean)
+                table.insert(lines, self:SanitizeChatTextForCopy(text))
             end
         end
     end

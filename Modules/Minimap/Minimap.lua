@@ -1233,6 +1233,24 @@ local function CreateAnchorFrame(mod, key, name, editModeName, w, h, defaultPos)
     return mod[key]
 end
 
+function MinimapMod:UpdateZoneTextFont(fontString)
+    local targetFS = fontString or self.zoneTextFS or _G.MinimapZoneText
+    if not targetFS then
+        local zBtn = (MinimapCluster and (MinimapCluster.ZoneTextButton or MinimapCluster.ZoneTextFrame)) or _G.MinimapZoneTextButton
+        if zBtn and zBtn.GetFontString then targetFS = zBtn:GetFontString() end
+    end
+    if not targetFS then return end
+
+    local fontName = (self.db and self.db.zoneTextFont) or "Expressway"
+    local fontSize = (self.db and self.db.zoneTextFontSize) or 12
+    local fontOutline = (self.db and self.db.zoneTextFontOutline) or "OUTLINE"
+    local fontShadow = self.db and self.db.zoneTextFontShadow == true
+
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(targetFS, fontName, fontSize, fontOutline, fontShadow, "Expressway")
+    end
+end
+
 -- Align default buttons to custom Edit Mode anchors
 function MinimapMod:LayoutDefaultButtons()
     if not LEM then return end
@@ -1394,6 +1412,10 @@ function MinimapMod:LayoutDefaultButtons()
             targetFS:SetPoint("CENTER", targetAnchor, "CENTER", 0, 0)
         end
 
+        if self.UpdateZoneTextFont then
+            self:UpdateZoneTextFont(targetFS)
+        end
+
         self.isReanchoringZoneText = false
     end
     self.ReanchorZoneText = function() ReanchorZoneText() end
@@ -1472,6 +1494,26 @@ function MinimapMod:LayoutDefaultButtons()
         if landing then
             HookBlizzardButton(landing, landingAnchor)
         end
+    end
+
+    -- Vaccinate ExpansionLandingPageMinimapButton against Blizzard FrameXML nil title hover crash
+    local elp = _G.ExpansionLandingPageMinimapButton
+    if elp and not elp.roithiTooltipVaccinated then
+        local function EnsureTitle(btn)
+            if btn and (not btn.title or btn.title == "") then
+                btn.title = _G.GARRISON_LANDING_PAGE_TITLE or _G.EXPANSION_LANDING_PAGE_TITLE or "Landing Page"
+            end
+        end
+        EnsureTitle(elp)
+        if hooksecurefunc then
+            if elp.UpdateIcon then
+                hooksecurefunc(elp, "UpdateIcon", EnsureTitle)
+            end
+            if elp.UpdateIconForGarrison then
+                hooksecurefunc(elp, "UpdateIconForGarrison", EnsureTitle)
+            end
+        end
+        elp.roithiTooltipVaccinated = true
     end
 
     -- Setup Omnium Folio Anchor
@@ -1766,17 +1808,13 @@ end
 function MinimapMod:UpdateDifficultyFont()
     local textFS = self.difficultyTextFS
     if not textFS then return end
+    local fontName = (self.db and self.db.difficultyFont) or "Expressway"
     local fontSize = (self.db and self.db.difficultyFontSize) or 12
     local fontOutline = (self.db and self.db.difficultyFontOutline) or "OUTLINE"
-    local fontPath = nil
-    if RoithiUI and RoithiUI.FontEngine and RoithiUI.GetFontInfo then
-        fontPath = select(1, RoithiUI:GetFontInfo("Minimap", "difficulty", fontSize, fontOutline))
-    end
-    if not fontPath then fontPath = "Fonts\\FRIZQT__.TTF" end
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(textFS, fontPath, fontSize, fontOutline)
-    elseif textFS.SetFont then
-        textFS:SetFont(fontPath, fontSize, fontOutline)
+    local fontShadow = self.db and self.db.difficultyFontShadow == true
+
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(textFS, fontName, fontSize, fontOutline, fontShadow, "Expressway")
     end
 end
 
@@ -2477,21 +2515,29 @@ function MinimapMod:UpdateDataTextBarLayout()
     local font = (self.db and self.db.dataTextFont)
         or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
         or "Roithi Thick"
+    local dtOutline = (self.db and self.db.dataTextFontOutline) or "OUTLINE"
+    local dtShadow = self.db and self.db.dataTextFontShadow == true
 
     -- Left Section
     bar.textLeft:ClearAllPoints()
     bar.textLeft:SetPoint("LEFT", bar, "LEFT", self.db.dataTextLeftX or 4, self.db.dataTextLeftY or 0)
-    LibRoithi.mixins:SetFont(bar.textLeft, font, self.db.dataTextLeftFontSize or 12, "OUTLINE")
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(bar.textLeft, font, self.db.dataTextLeftFontSize or 12, dtOutline, dtShadow, "Roithi Thick")
+    end
 
     -- Middle Section
     bar.textMiddle:ClearAllPoints()
     bar.textMiddle:SetPoint("CENTER", bar, "CENTER", self.db.dataTextMiddleX or 0, self.db.dataTextMiddleY or 0)
-    LibRoithi.mixins:SetFont(bar.textMiddle, font, self.db.dataTextMiddleFontSize or 12, "OUTLINE")
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(bar.textMiddle, font, self.db.dataTextMiddleFontSize or 12, dtOutline, dtShadow, "Roithi Thick")
+    end
 
     -- Right Section
     bar.textRight:ClearAllPoints()
     bar.textRight:SetPoint("RIGHT", bar, "RIGHT", self.db.dataTextRightX or -4, self.db.dataTextRightY or 0)
-    LibRoithi.mixins:SetFont(bar.textRight, font, self.db.dataTextRightFontSize or 12, "OUTLINE")
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(bar.textRight, font, self.db.dataTextRightFontSize or 12, dtOutline, dtShadow, "Roithi Thick")
+    end
 
     -- Section Buttons for precise hover & click
     local secW = width / 3
@@ -2695,7 +2741,9 @@ end
 MinimapMod.RefreshSettings = MinimapMod.RefreshProfile
 
 function MinimapMod:UpdateFonts()
+    if self.UpdateZoneTextFont then self:UpdateZoneTextFont() end
     if self.UpdateDifficultyFont then self:UpdateDifficultyFont() end
     if self.UpdateAllBuffButtons then self:UpdateAllBuffButtons() end
     if self.UpdateDataTexts then self:UpdateDataTexts() end
+    if self.UpdateDataTextBarLayout then self:UpdateDataTextBarLayout() end
 end

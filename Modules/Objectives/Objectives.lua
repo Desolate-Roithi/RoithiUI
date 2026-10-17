@@ -205,15 +205,6 @@ function ObjectivesMod:OnRegenEnabled()
             otf:Update()
         end
     end
-    if self.pendingMPlusHide then
-        self.pendingMPlusHide = nil
-        local otf = _G.ObjectiveTrackerFrame
-        if otf then otf:Hide() end
-    elseif self.pendingMPlusShow then
-        self.pendingMPlusShow = nil
-        local otf = _G.ObjectiveTrackerFrame
-        if otf then otf:Show() end
-    end
     self:CheckMythicPlusVisibility()
     self:CheckAutoCollapse()
     if self.pendingSuperTrackQuestID then
@@ -340,17 +331,9 @@ function ObjectivesMod:CheckMythicPlusVisibility()
     local isMPlusActive = _G.C_ChallengeMode and _G.C_ChallengeMode.IsChallengeModeActive and _G.C_ChallengeMode.IsChallengeModeActive()
     if self.db.hideInMythicPlus then
         if isMPlusActive then
-            if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
-                otf:Hide()
-            else
-                self.pendingMPlusHide = true
-            end
+            if otf.SetAlpha then otf:SetAlpha(0) end
         else
-            if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
-                otf:Show()
-            else
-                self.pendingMPlusShow = true
-            end
+            if otf.SetAlpha then otf:SetAlpha(1) end
         end
     end
 end
@@ -374,15 +357,6 @@ function ObjectivesMod:CheckAutoCollapse()
 
     if shouldCollapse and not (otf.IsCollapsed and otf:IsCollapsed()) then
         if inCombat then
-            otf.isCollapsed = true
-            if otf.Header and otf.Header.SetCollapsed then
-                otf.Header:SetCollapsed(true)
-            end
-            if otf.modules then
-                for _, mod in ipairs(otf.modules) do
-                    if mod and mod.SetShown then mod:SetShown(false) end
-                end
-            end
             self.pendingCombatUpdate = true
         elseif otf.SetCollapsed then
             otf:SetCollapsed(true)
@@ -481,19 +455,6 @@ function ObjectivesMod:ApplyPosition()
     if _G.InCombatLockdown and _G.InCombatLockdown() then return end
 
     self:HookBelowMinimapWidget()
-
-    otf.ignoreFramePositionManager = true
-
-    if not self.managedHooked and hooksecurefunc then
-        if _G.UIParent_ManageFramePositions then
-            hooksecurefunc("UIParent_ManageFramePositions", function()
-                if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
-                    self:ApplyPosition()
-                end
-            end)
-        end
-        self.managedHooked = true
-    end
 
     if not self.positionHooked and hooksecurefunc then
         hooksecurefunc(otf, "SetPoint", function(_, _, relativeTo)

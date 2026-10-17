@@ -272,6 +272,31 @@ function BagsMod:HookBlizzardBagFunctions()
     if _G.ToggleBag then hooksecurefunc("ToggleBag", SmartToggleBags) end
     if _G.OpenAllBags then hooksecurefunc("OpenAllBags", SmartOpenBags) end
     if _G.CloseAllBags then hooksecurefunc("CloseAllBags", SmartCloseBags) end
+
+    if _G.C_CurrencyInfo and not self.currencyWatchHooked then
+        if _G.C_CurrencyInfo.SetCurrencyBackpack then
+            hooksecurefunc(_G.C_CurrencyInfo, "SetCurrencyBackpack", function()
+                if self.UpdateBackpackCurrencies then
+                    self:UpdateBackpackCurrencies()
+                end
+            end)
+        end
+        if _G.C_CurrencyInfo.SetCurrencyBackpackByID then
+            hooksecurefunc(_G.C_CurrencyInfo, "SetCurrencyBackpackByID", function()
+                if self.UpdateBackpackCurrencies then
+                    self:UpdateBackpackCurrencies()
+                end
+            end)
+        end
+        if _G.BackpackTokenFrame and _G.BackpackTokenFrame.Update then
+            hooksecurefunc(_G.BackpackTokenFrame, "Update", function()
+                if self.UpdateBackpackCurrencies then
+                    self:UpdateBackpackCurrencies()
+                end
+            end)
+        end
+        self.currencyWatchHooked = true
+    end
 end
 
 function BagsMod:OpenCategory(catID)

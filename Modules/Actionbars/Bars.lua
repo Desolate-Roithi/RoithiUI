@@ -1132,6 +1132,7 @@ function AB:StyleButton(button, explicitBarKey)
                 hotkey:SetShadowOffset(0, 0)
             else
                 hotkey:SetShadowOffset(1, -1)
+                if hotkey.SetShadowColor then hotkey:SetShadowColor(0, 0, 0, 1) end
             end
         end
         if not hotkey.roithiHooked and hooksecurefunc then
@@ -1217,6 +1218,7 @@ function AB:StyleButton(button, explicitBarKey)
                 name:SetShadowOffset(0, 0)
             else
                 name:SetShadowOffset(1, -1)
+                if name.SetShadowColor then name:SetShadowColor(0, 0, 0, 1) end
             end
         end
         -- Lock colour to white; Blizzard may reset via SetFontObject
@@ -1287,6 +1289,7 @@ function AB:StyleButton(button, explicitBarKey)
                 count:SetShadowOffset(0, 0)
             else
                 count:SetShadowOffset(1, -1)
+                if count.SetShadowColor then count:SetShadowColor(0, 0, 0, 1) end
             end
         end
     end

@@ -126,6 +126,64 @@ function MinimapMod:GetOptions()
                             self:UpdateZoneTextVisibility()
                         end,
                     },
+                    zoneTextFont = {
+                        type = "select",
+                        dialogControl = "LSM30_Font",
+                        name = L["Zone Text Font"] or "Zone Text Font",
+                        order = 1.1,
+                        values = function()
+                            local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+                            return (LSM and LSM:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                        end,
+                        get = function() return self.db.zoneTextFont or "Expressway" end,
+                        set = function(_, val)
+                            self.db.zoneTextFont = val
+                            if self.UpdateZoneTextFont then self:UpdateZoneTextFont() end
+                        end,
+                        disabled = function() return self.db.showZoneText == false end,
+                    },
+                    zoneTextFontSize = {
+                        type = "range",
+                        name = L["Zone Text Font Size"] or "Zone Text Font Size",
+                        order = 1.2,
+                        min = 8,
+                        max = 32,
+                        step = 1,
+                        get = function() return self.db.zoneTextFontSize or 12 end,
+                        set = function(_, val)
+                            self.db.zoneTextFontSize = val
+                            if self.UpdateZoneTextFont then self:UpdateZoneTextFont() end
+                        end,
+                        disabled = function() return self.db.showZoneText == false end,
+                    },
+                    zoneTextFontOutline = {
+                        type = "select",
+                        name = L["Zone Text Font Outline"] or "Zone Text Font Outline",
+                        order = 1.3,
+                        values = {
+                            ["NONE"] = L["None"] or "None",
+                            ["OUTLINE"] = L["Outline"] or "Outline",
+                            ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
+                            ["MONOCHROME"] = L["Monochrome"] or "Monochrome",
+                        },
+                        get = function() return self.db.zoneTextFontOutline or "OUTLINE" end,
+                        set = function(_, val)
+                            self.db.zoneTextFontOutline = val
+                            if self.UpdateZoneTextFont then self:UpdateZoneTextFont() end
+                        end,
+                        disabled = function() return self.db.showZoneText == false end,
+                    },
+                    zoneTextFontShadow = {
+                        type = "toggle",
+                        name = L["Zone Text Font Shadow"] or "Zone Text Font Shadow",
+                        order = 1.4,
+                        get = function() return self.db.zoneTextFontShadow == true end,
+                        set = function(_, val)
+                            self.db.zoneTextFontShadow = val
+                            if self.UpdateZoneTextFont then self:UpdateZoneTextFont() end
+                        end,
+                        disabled = function() return self.db.showZoneText == false end,
+                    },
                     showCalendar = {
                         type = "toggle",
                         name = L["Show Calendar"],
@@ -178,6 +236,22 @@ function MinimapMod:GetOptions()
                             self:UpdateDifficultyVisibility()
                         end,
                     },
+                    difficultyFont = {
+                        type = "select",
+                        dialogControl = "LSM30_Font",
+                        name = L["Difficulty Font"] or "Difficulty Font",
+                        order = 5.5,
+                        values = function()
+                            local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+                            return (LSM and LSM:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                        end,
+                        get = function() return self.db.difficultyFont or "Friz Quadrata TT" end,
+                        set = function(_, val)
+                            self.db.difficultyFont = val
+                            self:UpdateDifficultyFont()
+                        end,
+                        disabled = function() return self.db.showDifficulty == false end,
+                    },
                     difficultyFontSize = {
                         type = "range",
                         name = L["Difficulty Font Size"] or "Difficulty Font Size",
@@ -205,6 +279,17 @@ function MinimapMod:GetOptions()
                         get = function() return self.db.difficultyFontOutline or "OUTLINE" end,
                         set = function(_, val)
                             self.db.difficultyFontOutline = val
+                            self:UpdateDifficultyFont()
+                        end,
+                        disabled = function() return self.db.showDifficulty == false end,
+                    },
+                    difficultyFontShadow = {
+                        type = "toggle",
+                        name = L["Difficulty Font Shadow"] or "Difficulty Font Shadow",
+                        order = 7.5,
+                        get = function() return self.db.difficultyFontShadow == true end,
+                        set = function(_, val)
+                            self.db.difficultyFontShadow = val
                             self:UpdateDifficultyFont()
                         end,
                         disabled = function() return self.db.showDifficulty == false end,
@@ -283,6 +368,50 @@ function MinimapMod:GetOptions()
                         end,
                         set = function(_, r, g, b, a)
                             self.db.dataTextBgColor = { r = r, g = g, b = b, a = a }
+                            self:UpdateDataTextBarVisibility()
+                        end,
+                        disabled = function() return not self.db.showDataTextBar end,
+                    },
+                    dataTextFont = {
+                        type = "select",
+                        dialogControl = "LSM30_Font",
+                        name = L["Data Text Font"] or "Data Text Font",
+                        order = 3.1,
+                        values = function()
+                            local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+                            return (LSM and LSM:HashTable("font")) or (_G.AceGUIWidgetLSMlists and _G.AceGUIWidgetLSMlists.font) or {}
+                        end,
+                        get = function() return self.db.dataTextFont or "Roithi Thick" end,
+                        set = function(_, val)
+                            self.db.dataTextFont = val
+                            self:UpdateDataTextBarVisibility()
+                        end,
+                        disabled = function() return not self.db.showDataTextBar end,
+                    },
+                    dataTextFontOutline = {
+                        type = "select",
+                        name = L["Data Text Outline"] or "Data Text Outline",
+                        order = 3.2,
+                        values = {
+                            ["NONE"] = L["None"] or "None",
+                            ["OUTLINE"] = L["Outline"] or "Outline",
+                            ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
+                            ["MONOCHROME"] = L["Monochrome"] or "Monochrome",
+                        },
+                        get = function() return self.db.dataTextFontOutline or "OUTLINE" end,
+                        set = function(_, val)
+                            self.db.dataTextFontOutline = val
+                            self:UpdateDataTextBarVisibility()
+                        end,
+                        disabled = function() return not self.db.showDataTextBar end,
+                    },
+                    dataTextFontShadow = {
+                        type = "toggle",
+                        name = L["Data Text Shadow"] or "Data Text Shadow",
+                        order = 3.3,
+                        get = function() return self.db.dataTextFontShadow == true end,
+                        set = function(_, val)
+                            self.db.dataTextFontShadow = val
                             self:UpdateDataTextBarVisibility()
                         end,
                         disabled = function() return not self.db.showDataTextBar end,

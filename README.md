@@ -2,11 +2,32 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1.5)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v2.0.1-Beta  
-**Last Updated:** 2026-10-16  
+**Latest Version:** v2.0.2-Beta  
+**Last Updated:** 2026-10-17  
 **Compatibility:** WoW 12.1.5 (Midnight) & WoW Forever (16001)
 
-## 🆕 Recent Updates (v2.0.1-Beta)
+## 🆕 Recent Updates (v2.0.2-Beta)
+
+### 1. Buff & Debuff Frame Displacement & Alignment
+* **Dynamic Row Displacement**: Replaced static `-120px` placement with dynamic row-count calculations (`GetNumVisibleBuffRows()`), cleanly displacing debuffs to `-140px` when 3 or more rows of buffs are active to permanently prevent buff/debuff overlap.
+* **Column Alignment**: Corrected horizontal anchoring to compensate for the Collapse & Expand button width, ensuring debuff icons align flush with the buff columns directly above them.
+* **Zero FPS Impact**: Event-driven execution only during aura updates with state-transition caching to eliminate redundant `SetPoint` invocations.
+
+### 2. Centralized Typography Standard (`ApplyTypography`)
+* **Unified Application Engine**: Implemented `ns.Utils.ApplyTypography` to enforce consistent typography across all modules with automated LSM resolution, C-engine flag normalization (`"NONE"` $\to$ `""`), and glyph re-rasterization.
+* **Strict Shadow Decoupling**: Fixed outline `"NONE"` across Minimap Zone Text, Difficulty Text, and DataText by eliminating forced drop shadows when shadows are disabled.
+* **Architecture Compliance Mandate**: Documented the Typography Application Mandate across agent rules to prevent future typography regressions.
+
+### 3. Bags & Currencies
+* **Instant Backpack Token Sync**: Securely hooked `C_CurrencyInfo.SetCurrencyBackpack`, `SetCurrencyBackpackByID`, and `BackpackTokenFrame:Update` to immediately refresh open bag windows when toggling "Show on Backpack" from the Currency tab.
+
+### 4. Chat & UI Polishing
+* **Group Channel Aliases**: Localized group channel names into standard short abbreviations (`[G]`, `[O]`, `[P]`, `[R]`, `[I]`) without clobbering community channel numbering.
+* **Copy Chat Tag Sanitization**: Sanitized chat text copies by unwrapping item links and stripping unclosed coloring escape sequences.
+* **Menubar Guild Tabard Hover**: Fixed yellow hover outline on the Menubar Guild button with tabard vertex color protection.
+* **Blizzard FrameXML Safeguard**: Vaccinated `ExpansionLandingPageMinimapButton.title` to prevent native Blizzard `SetTooltip()` nil-argument errors on hover.
+
+## 📦 Previous Updates (v2.0.1-Beta)
 
 ### Core & Release Fixes
 * **Bindings.xml Manifest Resolution**: Removed redundant `Bindings.xml` reference from `RoithiUI.toc`, eliminating Blizzard C-engine `Unrecognized XML: Binding` warnings in the release build while preserving automatic keybinding registration.

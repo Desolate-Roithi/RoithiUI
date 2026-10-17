@@ -62,6 +62,39 @@ local function SafeDurationIsZero(durObj)
     return false
 end
 
+local function SafeDurationIsActive(durObj)
+    if not durObj then return false end
+    if _G.issecretvalue and _G.issecretvalue(durObj) then return false end
+    if _G.canaccessvalue and not _G.canaccessvalue(durObj) then return false end
+    if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(durObj) then return false end
+    if durObj.IsZero then
+        local ok, isZero = pcall(durObj.IsZero, durObj)
+        if ok and isZero ~= nil then
+            if _G.issecretvalue and _G.issecretvalue(isZero) then return false end
+            if _G.canaccessvalue and not _G.canaccessvalue(isZero) then return false end
+            if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(isZero) then return false end
+            local cmpOk, res = pcall(function() return isZero == false end)
+            if cmpOk and res == true then
+                return true
+            end
+            if isZero == true then
+                return false
+            end
+        end
+    end
+    if durObj.GetRemainingDuration then
+        local ok, rem = pcall(durObj.GetRemainingDuration, durObj)
+        if ok and rem ~= nil then
+            if _G.issecretvalue and _G.issecretvalue(rem) then return false end
+            if _G.canaccessvalue and not _G.canaccessvalue(rem) then return false end
+            if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(rem) then return false end
+            return SafeIsGreaterThan(rem, 0.1)
+        end
+    end
+    return false
+end
+
+
 local function SetIconVisualState(icon, isOnCD)
     if not icon then return end
     local isCD = (isOnCD == true)
@@ -530,7 +563,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                 local ok = pcall(cd.SetCooldownFromDurationObject, cd, durObj)
                 if ok then
                     cdApplied = true
-                    if not isOnCD and not SafeDurationIsZero(durObj) then
+                    if not isOnCD and (cdInfo == nil or cdInfo.isActive == nil) and SafeDurationIsActive(durObj) then
                         isOnCD = true
                     end
                 end
@@ -543,9 +576,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                 if isEnabled then
                     pcall(cd.SetCooldown, cd, cdInfo.startTime, cdInfo.duration, cdInfo.modRate or 1)
                     cdApplied = true
-                    if _G.issecretvalue and _G.issecretvalue(cdInfo.duration) then
-                        isOnCD = true
-                    elseif SafeIsGreaterThan(cdInfo.duration, 1.5) then
+                    if not isOnCD and SafeIsGreaterThan(cdInfo.duration, 1.5) then
                         local now = (_G.GetTime and _G.GetTime()) or 0
                         local finish = cdInfo.startTime + cdInfo.duration
                         if SafeIsGreaterThan(finish - now, 0.1) then
@@ -559,9 +590,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                 if start and dur and isEnabled then
                     pcall(cd.SetCooldown, cd, start, dur, modRate or 1)
                     cdApplied = true
-                    if _G.issecretvalue and _G.issecretvalue(dur) then
-                        isOnCD = true
-                    elseif SafeIsGreaterThan(dur, 1.5) then
+                    if not isOnCD and SafeIsGreaterThan(dur, 1.5) then
                         local now = (_G.GetTime and _G.GetTime()) or 0
                         local finish = start + dur
                         if SafeIsGreaterThan(finish - now, 0.1) then
@@ -1038,6 +1067,11 @@ function CDM:InitializeCustomBar(index)
             iconBtn.Icon:SetAllPoints(iconBtn)
             iconBtn.Cooldown = CreateFrame("Cooldown", "$parent_Cooldown", iconBtn, "CooldownFrameTemplate")
             iconBtn.Cooldown:SetAllPoints(iconBtn)
+            if iconBtn.Cooldown.SetScript then
+                iconBtn.Cooldown:SetScript("OnCooldownDone", function()
+                    SetIconVisualState(iconBtn.Icon, false)
+                end)
+            end
 
             local chargeFrame = CreateFrame("Frame", nil, iconBtn)
             chargeFrame:SetAllPoints(iconBtn)

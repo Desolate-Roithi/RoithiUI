@@ -88,7 +88,8 @@ function ObjectivesMod:SkinHeader(header)
     if targetWidth and targetWidth > 50 then
         if header.SetWidth then header:SetWidth(targetWidth) end
         local parentFrame = header:GetParent()
-        if parentFrame and parentFrame ~= otf and parentFrame.SetWidth then
+        local isShared = parentFrame and ((objState.SharesWidgetPool and objState.SharesWidgetPool(parentFrame)) or parentFrame == _G.ScenarioObjectiveTracker or parentFrame == _G.UIWidgetObjectiveTracker)
+        if parentFrame and parentFrame ~= otf and not isShared and parentFrame.SetWidth then
             if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
                 parentFrame:SetWidth(targetWidth)
             end

@@ -41,10 +41,52 @@ function ns.Utils.MergeTable(target, source)
 end
 
 function ns.Utils.NormalizeFontFlags(outline)
-    if not outline or outline == "NONE" or outline == "" then
+    if not outline or outline == "NONE" or outline == "None" or outline == "none" or outline == "" then
         return ""
     end
     return outline
+end
+
+function ns.Utils.ResolveFontPath(fontName, defaultFallback)
+    if fontName and (fontName:find("\\") or fontName:find("/")) then
+        return fontName
+    end
+    local lsm = _G.LibStub and _G.LibStub("LibSharedMedia-3.0", true)
+    if lsm and fontName then
+        local fetched = lsm:Fetch("font", fontName)
+        if fetched then return fetched end
+    end
+    if lsm and defaultFallback then
+        local fetched = lsm:Fetch("font", defaultFallback)
+        if fetched then return fetched end
+    end
+    if lsm then
+        local exp = lsm:Fetch("font", "Expressway") or lsm:Fetch("font", "Roithi Thick")
+        if exp then return exp end
+    end
+    return "Fonts\\FRIZQT__.TTF"
+end
+
+function ns.Utils.ApplyTypography(fontString, fontName, fontSize, fontOutline, fontShadow, fallbackFont)
+    if not fontString or not fontString.SetFont then return end
+
+    local fontPath = ns.Utils.ResolveFontPath(fontName, fallbackFont or "Expressway")
+    local flags = ns.Utils.NormalizeFontFlags(fontOutline)
+    fontString:SetFont(fontPath, fontSize or 12, flags)
+
+    if fontString.SetShadowOffset then
+        if fontShadow == true then
+            fontString:SetShadowOffset(1, -1)
+            if fontString.SetShadowColor then fontString:SetShadowColor(0, 0, 0, 1) end
+        else
+            fontString:SetShadowOffset(0, 0)
+        end
+    end
+
+    if fontString.GetText and fontString.SetText then
+        local txt = fontString:GetText()
+        if txt and txt ~= "" then fontString:SetText(txt) end
+    end
 end
 
 -- -------------------------------------------------------------------------

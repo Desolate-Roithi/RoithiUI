@@ -66,13 +66,15 @@ end
 function RoithiUI:ApplyFont(fontString, moduleKey, textKey, defaultSize, defaultOutline)
     if not fontString or not fontString.SetFont then return end
     local fontPath, size, outline = self:GetFontInfo(moduleKey, textKey, defaultSize, defaultOutline)
-    fontString:SetFont(fontPath, size, outline)
+    local flags = (ns.Utils and ns.Utils.NormalizeFontFlags and ns.Utils.NormalizeFontFlags(outline)) or outline
+    if flags == "NONE" or flags == "None" or flags == "none" then flags = "" end
+    fontString:SetFont(fontPath, size, flags)
     if fontString.SetShadowOffset then
-        if outline ~= "NONE" and outline ~= "" then
-            fontString:SetShadowOffset(0, 0)
-        else
-            fontString:SetShadowOffset(1, -1)
-        end
+        fontString:SetShadowOffset(0, 0)
+    end
+    if fontString.GetText and fontString.SetText then
+        local txt = fontString:GetText()
+        if txt and txt ~= "" then fontString:SetText(txt) end
     end
 end
 

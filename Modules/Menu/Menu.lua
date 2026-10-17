@@ -460,6 +460,26 @@ function MenuMod:SetupMicroMenu()
     self:LayoutMicroMenu()
 end
 
+function MenuMod:IsGuildTabard(btn)
+    if not btn then return false end
+    local isGuildBtn = (btn == _G.GuildMicroButton) or (btn.GetName and btn:GetName() == "GuildMicroButton")
+    if not isGuildBtn then return false end
+
+    if btn.Emblem and btn.Emblem.IsShown and btn.Emblem:IsShown() then
+        return true
+    end
+    if btn.textureName and type(btn.textureName) == "string" and btn.textureName:find("GuildColor") then
+        return true
+    end
+    if _G.C_GuildInfo and _G.C_GuildInfo.GetGuildTabardInfo then
+        local tabardInfo = _G.C_GuildInfo.GetGuildTabardInfo("player")
+        if tabardInfo ~= nil then
+            return true
+        end
+    end
+    return false
+end
+
 function MenuMod:StyleMicroButton(btn)
     if not btn then return end
 
@@ -474,11 +494,7 @@ function MenuMod:StyleMicroButton(btn)
         btn.QuickKeybindHighlightTexture:SetAlpha(0)
     end
 
-    local isGuildBtn = (btn == _G.GuildMicroButton) or (btn.GetName and btn:GetName() == "GuildMicroButton")
-    local isGuildTabard = isGuildBtn and (
-        (btn.Emblem and btn.Emblem.IsShown and btn.Emblem:IsShown()) or
-        (btn.textureName and type(btn.textureName) == "string" and btn.textureName:find("GuildColor"))
-    )
+    local isGuildTabard = self:IsGuildTabard(btn)
 
     -- Ensure normal texture and portrait are visible, fitted to button, and at full alpha & brightness
     local norm = btn.GetNormalTexture and btn:GetNormalTexture()
@@ -608,18 +624,24 @@ function MenuMod:StyleMicroButton(btn)
             if btn.HighlightEmblem and btn.HighlightEmblem.SetSize then
                 btn.HighlightEmblem:SetSize(eW, eH)
             end
+            local b = self:GetBackdrop(btn)
+            if b then
+                if b.ClearAllPoints then b:ClearAllPoints() end
+                if b.SetAllPoints then b:SetAllPoints(btn) end
+            end
             self.isUpdatingTabard = false
         end)
     end
 
     -- 1px Custom dark backdrop behind button (parented to container, never mutating btn)
     self.backdrops = self.backdrops or {}
-    local bg = self.backdrops[btn] or btn.roithiBackdrop
+    local bg = self:GetBackdrop(btn)
     if not bg then
         local parentFrame = self.container or (btn.GetParent and btn:GetParent()) or UIParent
         bg = CreateFrame("Frame", nil, parentFrame, "BackdropTemplate")
         if bg.SetFrameStrata then bg:SetFrameStrata("BACKGROUND") end
         if bg.EnableMouse then bg:EnableMouse(false) end
+        if bg.ClearAllPoints then bg:ClearAllPoints() end
         if bg.SetAllPoints then bg:SetAllPoints(btn) end
         if bg.SetFrameLevel and btn.GetFrameLevel then
             bg:SetFrameLevel(math.max(0, btn:GetFrameLevel() - 1))
@@ -637,6 +659,7 @@ function MenuMod:StyleMicroButton(btn)
         self.backdrops[btn] = bg
     else
         if bg.SetFrameStrata then bg:SetFrameStrata("BACKGROUND") end
+        if bg.ClearAllPoints then bg:ClearAllPoints() end
         if bg.SetAllPoints then bg:SetAllPoints(btn) end
     end
     if self.db and self.db.showBackground and (btn.IsShown == nil or btn:IsShown()) then
@@ -650,14 +673,16 @@ function MenuMod:StyleMicroButton(btn)
     if not self.hookedButtons[btn] and btn.HookScript then
         btn:HookScript("OnEnter", function()
             self:OnContainerEnter()
-            local b = self.backdrops and self.backdrops[btn]
+            local b = self:GetBackdrop(btn)
             if b and self.db and self.db.showBackground and b.SetBackdropBorderColor then
                 b:SetBackdropBorderColor(1.0, 0.82, 0.0, 1.0)
             end
             local n = btn.GetNormalTexture and btn:GetNormalTexture()
             if n then
                 if n.SetAlpha then n:SetAlpha(1) end
-                if n.SetVertexColor then n:SetVertexColor(HOVER_ICON_COLOR, HOVER_ICON_COLOR, HOVER_ICON_COLOR, 1) end
+                if not self:IsGuildTabard(btn) and n.SetVertexColor then
+                    n:SetVertexColor(HOVER_ICON_COLOR, HOVER_ICON_COLOR, HOVER_ICON_COLOR, 1)
+                end
             end
             if btn.Portrait and btn.Portrait.SetVertexColor then
                 btn.Portrait:SetVertexColor(HOVER_ICON_COLOR, HOVER_ICON_COLOR, HOVER_ICON_COLOR, 1)
@@ -667,14 +692,14 @@ function MenuMod:StyleMicroButton(btn)
         end)
         btn:HookScript("OnLeave", function()
             self:OnContainerLeave()
-            local b = self.backdrops and self.backdrops[btn]
+            local b = self:GetBackdrop(btn)
             if b and self.db and self.db.showBackground and b.SetBackdropBorderColor then
                 b:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
             end
             local n = btn.GetNormalTexture and btn:GetNormalTexture()
             if n then
                 if n.SetAlpha then n:SetAlpha(1) end
-                if not isGuildTabard and n.SetVertexColor then
+                if not self:IsGuildTabard(btn) and n.SetVertexColor then
                     n:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, 1)
                 end
             end
@@ -828,10 +853,7 @@ function MenuMod:StyleMicroButton(btn)
         end
         if norm.SetVertexColor then
             hooksecurefunc(norm, "SetVertexColor", function(t, r, g, b, a)
-                local isTabard = (btn == _G.GuildMicroButton or (btn.GetName and btn:GetName() == "GuildMicroButton")) and (
-                    (btn.Emblem and btn.Emblem.IsShown and btn.Emblem:IsShown()) or
-                    (btn.textureName and type(btn.textureName) == "string" and btn.textureName:find("GuildColor"))
-                )
+                local isTabard = self:IsGuildTabard(btn)
                 if not isTabard and (r < (NORMAL_ICON_COLOR - 0.1) or g < (NORMAL_ICON_COLOR - 0.1) or b < (NORMAL_ICON_COLOR - 0.1)) and not self.settingColor[t] then
                     self.settingColor[t] = true
                     t:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, a or 1)
@@ -986,7 +1008,7 @@ end
 function MenuMod:RestoreMicroButtons()
     local buttons = self:GetMicroButtons()
     for _, btn in ipairs(buttons) do
-        local bg = (self.backdrops and self.backdrops[btn]) or btn.roithiBackdrop
+        local bg = self:GetBackdrop(btn)
         if bg and bg.Hide then
             bg:Hide()
         end

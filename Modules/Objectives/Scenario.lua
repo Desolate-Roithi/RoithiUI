@@ -273,6 +273,7 @@ end
 
 function ObjectivesMod:AlignScenarioElements()
     if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+    if _G.C_ChallengeMode and _G.C_ChallengeMode.IsChallengeModeActive and _G.C_ChallengeMode.IsChallengeModeActive() then return end
     local sot = _G.ScenarioObjectiveTracker
     if not sot or not self.db or not self.db.enabled then return end
     if self.isAligningScenario then return end

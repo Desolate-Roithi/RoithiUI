@@ -110,6 +110,17 @@ function MinimapMod:HookBuffFrameStyling()
                     StyleAuraButton(auraFrame)
                 end
             end
+            if MinimapMod.UpdateBuffFrameDisplacement then
+                MinimapMod:UpdateBuffFrameDisplacement()
+            end
+        end)
+    end
+
+    if _G.BuffFrame and _G.BuffFrame.UpdateGridLayout then
+        hooksecurefunc(_G.BuffFrame, "UpdateGridLayout", function()
+            if MinimapMod.UpdateBuffFrameDisplacement then
+                MinimapMod:UpdateBuffFrameDisplacement()
+            end
         end)
     end
 
@@ -128,7 +139,7 @@ function MinimapMod:HookBuffFrameStyling()
         if not btn.roithiHooked and btn.HookScript then
             btn:HookScript("OnClick", function()
                 if MinimapMod.UpdateBuffFrameDisplacement then
-                    MinimapMod:UpdateBuffFrameDisplacement()
+                    MinimapMod:UpdateBuffFrameDisplacement(true)
                 end
             end)
             btn.roithiHooked = true
@@ -136,7 +147,36 @@ function MinimapMod:HookBuffFrameStyling()
     end
 end
 
-function MinimapMod:UpdateBuffFrameDisplacement()
+local lastNumRows = nil
+local lastFinalX = nil
+local lastCollapseWidth = nil
+
+local function GetNumVisibleBuffRows()
+    local buffFrame = _G.BuffFrame
+    if not buffFrame or not buffFrame:IsShown() then return 0 end
+    if buffFrame.isExpanded == false then return 1 end
+
+    local count = 0
+    if buffFrame.auraFrames then
+        for _, btn in ipairs(buffFrame.auraFrames) do
+            if btn:IsShown() then
+                count = count + 1
+            end
+        end
+    end
+    if buffFrame.ConsolidatedBuffs and buffFrame.ConsolidatedBuffs:IsShown() then
+        count = count + 1
+    end
+    if count == 0 then return 0 end
+
+    local stride = 10
+    if buffFrame.AuraContainer and buffFrame.AuraContainer.iconStride and buffFrame.AuraContainer.iconStride > 0 then
+        stride = buffFrame.AuraContainer.iconStride
+    end
+    return math.ceil(count / stride)
+end
+
+function MinimapMod:UpdateBuffFrameDisplacement(force)
     local anchorTarget = self.container or _G.Minimap
     if not anchorTarget then return end
 
@@ -162,8 +202,36 @@ function MinimapMod:UpdateBuffFrameDisplacement()
     end
 
     local debuffFrame = _G.DebuffFrame
-    if debuffFrame and debuffFrame.ClearAllPoints and debuffFrame.SetPoint then
-        debuffFrame:ClearAllPoints()
-        debuffFrame:SetPoint("TOPRIGHT", anchorTarget, "TOPLEFT", finalX, -120)
+    if not debuffFrame or not debuffFrame.ClearAllPoints or not debuffFrame.SetPoint then return end
+
+    local numRows = GetNumVisibleBuffRows()
+    local collapseWidth = 0
+    if buffFrame and buffFrame.CollapseAndExpandButton and buffFrame.CollapseAndExpandButton:IsShown() then
+        collapseWidth = (buffFrame.CollapseAndExpandButton:GetWidth() or 15) * (buffFrame.CollapseAndExpandButton:GetScale() or 1)
     end
+
+    if not force and numRows == lastNumRows and finalX == lastFinalX and collapseWidth == lastCollapseWidth then
+        return
+    end
+
+    lastNumRows = numRows
+    lastFinalX = finalX
+    lastCollapseWidth = collapseWidth
+
+    -- Dynamic row height: icon + duration + padding
+    local rowHeight = 45
+    if buffFrame and buffFrame.auraFrames and buffFrame.auraFrames[1] then
+        local h = buffFrame.auraFrames[1]:GetHeight()
+        local pad = (buffFrame.AuraContainer and buffFrame.AuraContainer.iconPadding) or 5
+        local scale = (buffFrame.AuraContainer and buffFrame.AuraContainer.iconScale) or 1
+        if h and h > 0 then
+            rowHeight = (h + pad) * scale
+        end
+    end
+
+    local debuffY = (numRows == 0) and 0 or -(numRows * rowHeight + 5)
+    local debuffX = finalX - collapseWidth
+
+    debuffFrame:ClearAllPoints()
+    debuffFrame:SetPoint("TOPRIGHT", anchorTarget, "TOPLEFT", debuffX, debuffY)
 end
