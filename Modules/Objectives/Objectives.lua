@@ -468,14 +468,6 @@ function ObjectivesMod:ApplyPosition()
         self.positionHooked = true
     end
 
-    if otf.ApplySystemAnchor and not self.applyAnchorHooked and hooksecurefunc then
-        hooksecurefunc(otf, "ApplySystemAnchor", function()
-            if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
-                self:ApplyPosition()
-            end
-        end)
-        self.applyAnchorHooked = true
-    end
 
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.editModeEventsRegistered then
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()

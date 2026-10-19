@@ -91,10 +91,6 @@ local function CopyValues(dest, src)
     end
 end
 
-function ProfileSharing:OnInitialize()
-    -- Initialize module settings if needed
-end
-
 function ProfileSharing:ExportProfile()
     local profileData = RoithiUI.db and RoithiUI.db.profile
     if not profileData then return "" end

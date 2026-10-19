@@ -5,8 +5,6 @@ local ObjectivesMod = RoithiUI:GetModule("Objectives")
 local objState = ns.Objectives or {}
 ns.Objectives = objState
 
-local SCENARIO_LINE_SPACING = 10 -- Comfortable breathing room between boss criteria lines
-
 local function SharesWidgetPool(tracker)
     if not tracker then return true end
     if tracker == _G.ScenarioObjectiveTracker or tracker == _G.UIWidgetObjectiveTracker then
@@ -122,50 +120,12 @@ function ObjectivesMod:AlignWidgetContainer(wc, parentBlock, topOffsetY)
     if not wc or not parentBlock then return end
     if not self:IsAwakeningTheMachine() then return end
 
-    -- Pure visual styling only: avoid ClearAllPoints or SetWidth on WidgetContainer
-    -- which triggers OnSizeChanged -> MarkDirty in tainted execution context.
-    local otf = _G.ObjectiveTrackerFrame
-    local trackerWidth = (otf and otf.GetWidth and otf:GetWidth()) or 220
-    if trackerWidth < 50 then trackerWidth = 220 end
-
-    local function FitWidgets()
-        if not wc.widgetFrames then return end
-        local maxW = trackerWidth - 4
-        local prev = nil
-        for _, widgetFrame in pairs(wc.widgetFrames) do
-            local isComplexHeader = widgetFrame and (widgetFrame.HeaderText or widgetFrame.CurrencyContainer or widgetFrame.Frame)
-            local isBarWidget = widgetFrame and (widgetFrame.Bar or widgetFrame.StatusBar)
-            local isTextOnly = self.IsTextOnlyWidget and self:IsTextOnlyWidget(widgetFrame)
-
-            if not isComplexHeader and not isBarWidget then
-                if widgetFrame and widgetFrame.GetWidth then
-                    local w = widgetFrame:GetWidth()
-                    if w and w > maxW and maxW > 50 then
-                        local scale = math.min(1, maxW / w)
-                        widgetFrame:SetScale(scale)
-                    else
-                        widgetFrame:SetScale(1)
-                    end
-                end
-                if widgetFrame and widgetFrame.ClearAllPoints and widgetFrame.SetPoint then
-                    widgetFrame:ClearAllPoints()
-                    if not prev then
-                        widgetFrame:SetPoint("TOPLEFT", wc, "TOPLEFT", 0, 0)
-                    else
-                        widgetFrame:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -4)
-                    end
-                    prev = widgetFrame
-                end
-            end
-
-            -- Apply fonts and flush text alignment ONLY to text-only widgets!
-            if isTextOnly and self.SkinTextWidget then
-                self:SkinTextWidget(widgetFrame)
-            end
-        end
+    -- Pure centering only: center the widget container itself on its parent.
+    -- Never mutate, scale, set height, or re-anchor individual pooled widget frames inside!
+    if wc.ClearAllPoints and wc.SetPoint then
+        wc:ClearAllPoints()
+        wc:SetPoint("TOP", parentBlock, "TOP", 0, topOffsetY or 0)
     end
-
-    FitWidgets()
 end
 
 function ObjectivesMod:AlignEventTracker(tracker)
@@ -194,80 +154,6 @@ function ObjectivesMod:AlignEventTracker(tracker)
         tracker.Header:ClearAllPoints()
         tracker.Header:SetPoint("TOPLEFT", tracker, "TOPLEFT", 0, 0)
         self.settingHeaderPoint = nil
-    end
-end
-
-
-function ObjectivesMod:TrimScenarioTrailingGap(sot, lastLine)
-    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
-    if not sot or not sot.SetHeight or not sot.GetTop then return end
-    if not (sot.IsShown and sot:IsShown()) then return end
-
-    local isDelve = false
-    if _G.C_Scenario and _G.C_Scenario.GetInfo then
-        local _, _, _, _, _, _, _, _, _, scenarioType = _G.C_Scenario.GetInfo()
-        if scenarioType == "delves-scenario" then
-            isDelve = true
-        end
-    end
-    if not isDelve and _G.C_ScenarioInfo and _G.C_ScenarioInfo.IsTieredEntranceScenario and _G.C_ScenarioInfo.IsTieredEntranceScenario() then
-        isDelve = true
-    end
-
-    if not self:IsAwakeningTheMachine() and not isDelve then return end
-
-    local lowest = nil
-    if lastLine and lastLine.GetBottom and (lastLine.IsShown == nil or lastLine:IsShown()) then
-        lowest = lastLine:GetBottom()
-        local bar = lastLine.progressBar
-        if bar and bar.IsShown and bar:IsShown() and bar.GetBottom then
-            local b = bar:GetBottom()
-            if b and lowest and b < lowest then lowest = b end
-        end
-    end
-
-    local ob = sot.ObjectivesBlock
-    if ob and ob.usedLines then
-        for _, line in pairs(ob.usedLines) do
-            if line and (line.IsShown == nil or line:IsShown()) and line.GetBottom then
-                local b = line:GetBottom()
-                if b and (not lowest or b < lowest) then lowest = b end
-            end
-        end
-    end
-    if ob and ob.usedProgressBars then
-        for _, bar in pairs(ob.usedProgressBars) do
-            if bar and (bar.IsShown == nil or bar:IsShown()) and bar.GetBottom then
-                local b = bar:GetBottom()
-                if b and (not lowest or b < lowest) then lowest = b end
-            end
-        end
-    end
-    if sot.usedProgressBars then
-        for _, bar in pairs(sot.usedProgressBars) do
-            if bar and (bar.IsShown == nil or bar:IsShown()) and bar.GetBottom then
-                local b = bar:GetBottom()
-                if b and (not lowest or b < lowest) then lowest = b end
-            end
-        end
-    end
-
-    if not lowest and sot.StageBlock and sot.StageBlock.IsShown and sot.StageBlock:IsShown() and sot.StageBlock.GetBottom then
-        lowest = sot.StageBlock:GetBottom()
-    end
-
-    if not lowest and sot.Header and sot.Header.IsShown and sot.Header:IsShown() and sot.Header.GetBottom then
-        lowest = sot.Header:GetBottom()
-    end
-
-    local top = sot:GetTop()
-    if type(top) == "number" and type(lowest) == "number" and top > lowest then
-        local bottomPad = -4
-        local desired = math.floor(top - lowest + bottomPad + 0.5)
-        local current = (sot.GetHeight and sot:GetHeight()) or 0
-        if desired > 0 and math.abs(desired - current) > 0.5 then
-            sot:SetHeight(desired)
-        end
     end
 end
 
@@ -377,7 +263,6 @@ function ObjectivesMod:AlignScenarioElements()
         end
     end
 
-    local lastLine = nil
     local SCENARIO_LINE_INSET = 12
     local ob = sot.ObjectivesBlock
     if ob then
@@ -413,38 +298,6 @@ function ObjectivesMod:AlignScenarioElements()
             end)
         end
 
-        if self:IsAwakeningTheMachine() and ob.usedLines then
-            local keys = {}
-            for key, line in pairs(ob.usedLines) do
-                if type(key) == "number" and line and line.SetPoint then
-                    keys[#keys + 1] = key
-                end
-            end
-            table.sort(keys)
-            local prev
-            for _, key in ipairs(keys) do
-                local line = ob.usedLines[key]
-                line:ClearAllPoints()
-                line:SetPoint("RIGHT", ob, "RIGHT", 0, 0)
-                if prev then
-                    local anchor = prev
-                    local bar = prev.progressBar
-                    if bar and bar.IsShown and bar:IsShown() then anchor = bar end
-                    line:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -SCENARIO_LINE_SPACING)
-                else
-                    line:SetPoint("TOPLEFT", ob, "TOPLEFT", 0, 0)
-                end
-                prev = line
-            end
-            lastLine = prev
-        elseif ob.usedLines then
-            local maxKey = 0
-            for key in pairs(ob.usedLines) do
-                if type(key) == "number" and key > maxKey then maxKey = key end
-            end
-            lastLine = ob.usedLines[maxKey]
-        end
-
         if ob.usedProgressBars and self:IsAwakeningTheMachine() then
             for _, bar in pairs(ob.usedProgressBars) do
                 self:SkinProgressBar(bar)
@@ -458,6 +311,5 @@ function ObjectivesMod:AlignScenarioElements()
         end
     end
 
-    self:TrimScenarioTrailingGap(sot, lastLine)
     self.isAligningScenario = nil
 end

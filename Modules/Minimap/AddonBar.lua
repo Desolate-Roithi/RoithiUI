@@ -43,6 +43,8 @@ local IgnoredFrames = {
     ["PlumberLandingPageMinimapButton"] = true,
 }
 
+local hookedButtons = setmetatable({}, { __mode = "k" })
+
 local function NormalizeAddonKey(name)
     if not name then return "" end
     local key = name
@@ -278,7 +280,14 @@ function MinimapMod:SnapAddonBarToEdge()
 end
 
 local function ProtectButton(button)
-    if button.isProtected then return end
+    if not button or not IsSafeFrame(button) or button.isProtected then return end
+    local name = SafeGetName(button)
+    if name and (name:find("Pin") or name:find("POI") or name:find("Expansion") or name:find("Garrison") or name:find("MapLink") or name:find("^Blizzard_")) then
+        return
+    end
+    if button.pinTemplate or button.dataProvider or button.uiMapID then
+        return
+    end
 
     button.originalParent = button:GetParent()
     button.originalPoints = {}
@@ -1082,16 +1091,15 @@ function MinimapMod:ScanAddonButtons()
         if norm ~= "" then knownKeys[norm] = true end
         self.scannedButtons[rawName] = btn
 
-        if btn.HookScript and btn.HasScript then
+        if btn.HookScript and btn.HasScript and not hookedButtons[btn] then
+            hookedButtons[btn] = true
             local okEnter, hasEnter = pcall(btn.HasScript, btn, "OnEnter")
-            if okEnter and hasEnter and not btn.roithiEnterHooked then
+            if okEnter and hasEnter then
                 pcall(btn.HookScript, btn, "OnEnter", function() self:OnBarEnter() end)
-                btn.roithiEnterHooked = true
             end
             local okLeave, hasLeave = pcall(btn.HasScript, btn, "OnLeave")
-            if okLeave and hasLeave and not btn.roithiLeaveHooked then
+            if okLeave and hasLeave then
                 pcall(btn.HookScript, btn, "OnLeave", function() self:OnBarLeave() end)
-                btn.roithiLeaveHooked = true
             end
         end
     end

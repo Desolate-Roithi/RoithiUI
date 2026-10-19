@@ -784,8 +784,8 @@ function MinimapMod:StyleMinimap()
     if Minimap.EnableMouseWheel then
         Minimap:EnableMouseWheel(true)
     end
-    if Minimap.SetScript then
-        Minimap:SetScript("OnMouseWheel", function(_, delta)
+    if Minimap.HookScript then
+        Minimap:HookScript("OnMouseWheel", function(_, delta)
             if delta > 0 then
                 if Minimap_ZoomIn then Minimap_ZoomIn() end
             else
@@ -795,22 +795,20 @@ function MinimapMod:StyleMinimap()
     end
 
     -- 5. Right Click for Tracking Menu
-    Minimap:SetScript("OnMouseUp", function(s, button)
-        if button == "RightButton" then
-            local trackingBtn = MinimapCluster.Tracking and MinimapCluster.Tracking.Button
-            if trackingBtn then
-                if trackingBtn.ToggleMenu then
-                    trackingBtn:ToggleMenu()
-                elseif trackingBtn.Click then
-                    trackingBtn:Click()
+    if Minimap.HookScript then
+        Minimap:HookScript("OnMouseUp", function(_, button)
+            if button == "RightButton" then
+                local trackingBtn = MinimapCluster and MinimapCluster.Tracking and MinimapCluster.Tracking.Button
+                if trackingBtn then
+                    if trackingBtn.ToggleMenu then
+                        trackingBtn:ToggleMenu()
+                    elseif trackingBtn.Click then
+                        trackingBtn:Click()
+                    end
                 end
             end
-        else
-            if s.OnClick then
-                s:OnClick()
-            end
-        end
-    end)
+        end)
+    end
 
     -- 6. Apply configured shape, size, scale
     self:UpdateMinimapShape()

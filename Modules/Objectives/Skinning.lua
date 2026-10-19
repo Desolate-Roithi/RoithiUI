@@ -282,11 +282,8 @@ end
 
 local function HookOrSetScript(frame, script, handler)
     if not frame then return end
-    if frame.HasScript and not frame:HasScript(script) then return end
-    if frame.GetScript and frame:GetScript(script) then
+    if frame.HookScript then
         pcall(frame.HookScript, frame, script, handler)
-    elseif frame.SetScript then
-        pcall(frame.SetScript, frame, script, handler)
     end
 end
 
@@ -315,27 +312,6 @@ local function HandleBlockClick(block, mouseButton)
     end
 end
 
-local function OnHeaderButtonClicked(btn, mouseButton, down)
-    local block = btn:GetParent()
-    if not block then return end
-
-    local isCtrl = _G.IsControlKeyDown and _G.IsControlKeyDown()
-    local isAlt = _G.IsAltKeyDown and _G.IsAltKeyDown()
-
-    if isCtrl or isAlt or mouseButton == "MiddleButton" then
-        HandleBlockClick(block, mouseButton)
-        return
-    end
-
-    local orig = origHeaderClick[btn]
-    if orig then
-        orig(btn, mouseButton, down)
-    elseif _G.ObjectiveTrackerBlockHeaderMixin and _G.ObjectiveTrackerBlockHeaderMixin.OnClick then
-        _G.ObjectiveTrackerBlockHeaderMixin.OnClick(btn, mouseButton, down)
-    elseif block.OnHeaderClick then
-        block:OnHeaderClick(mouseButton)
-    end
-end
 
 function ObjectivesMod:ApplyQuestIconVisibility(block)
     if not block then return end
@@ -470,19 +446,22 @@ function ObjectivesMod:SkinBlock(block)
                 end)
             end
             if not origHeaderClick[block.HeaderButton] then
-                local orig = block.HeaderButton.GetScript and block.HeaderButton:GetScript("OnClick")
-                if orig and orig ~= OnHeaderButtonClicked then
-                    origHeaderClick[block.HeaderButton] = orig
+                origHeaderClick[block.HeaderButton] = true
+                if block.HeaderButton.HookScript then
+                    block.HeaderButton:HookScript("OnClick", function(_, btn)
+                        local isCtrl = _G.IsControlKeyDown and _G.IsControlKeyDown()
+                        local isAlt = _G.IsAltKeyDown and _G.IsAltKeyDown()
+                        if isCtrl or isAlt or btn == "MiddleButton" then
+                            HandleBlockClick(block, btn)
+                        end
+                    end)
+                    block.HeaderButton:HookScript("OnMouseDown", function(_, btn)
+                        if btn == "MiddleButton" then
+                            HandleBlockClick(block, btn)
+                        end
+                    end)
                 end
             end
-            if block.HeaderButton.SetScript then
-                block.HeaderButton:SetScript("OnClick", OnHeaderButtonClicked)
-            end
-            HookOrSetScript(block.HeaderButton, "OnMouseDown", function(_, btn)
-                if btn == "MiddleButton" then
-                    HandleBlockClick(block, btn)
-                end
-            end)
         end
     end
 
@@ -980,67 +959,6 @@ function ObjectivesMod:SkinScenarioLine(line)
             end
         end
 
-        local lh = line.Text.GetStringHeight and line.Text:GetStringHeight()
-        if lh and lh > 0 then
-            line:SetHeight(lh)
-        end
-    end
-end
-
-function ObjectivesMod:IsTextOnlyWidget(wf)
-    if not wf then return false end
-    if wf.Bar or wf.StatusBar or wf.Frame or wf.CurrencyContainer or wf.Spell or wf.Item or wf.Progress or wf.CaptureBar then
-        return false
-    end
-    local wType = wf.widgetType
-    local visEnum = _G.Enum and _G.Enum.UIWidgetVisualizationType
-    if visEnum then
-        if wType == visEnum.StatusBar or wType == visEnum.CaptureBar or wType == visEnum.ScenarioHeaderCurrenciesAndBackground
-            or wType == visEnum.ScenarioHeaderDelves or wType == visEnum.ScenarioHeaderTimer or wType == visEnum.HorizontalCurrencies then
-            return false
-        end
-        if wType == visEnum.TextWithState or wType == visEnum.TextWithSubtext then
-            return true
-        end
-        if wType ~= nil then
-            return false
-        end
-    end
-    return (wf.Text ~= nil) and not wf.Bar and not wf.StatusBar and not wf.Frame and not wf.CurrencyContainer and not wf.Icon
-end
-
-function ObjectivesMod:SkinTextWidget(wf)
-    if not self:IsTextOnlyWidget(wf) then return end
-    if not self:IsAwakeningTheMachine() then return end
-    local font = self:GetFontPath("titleFont")
-    local tSize = self.db.titleFontSize or 12
-    local outline = self:GetFontOutline("titleFontOutline")
-    local tc = self.db.titleColor or self.defaultSettings.titleColor
-    local useShadow = self:GetFontShadow("titleFontShadow")
-
-    local function SkinFS(fs)
-        if fs and fs.SetFont then
-            pcall(fs.SetFont, fs, font, tSize, outline)
-            if fs.SetTextColor then
-                fs:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
-            end
-            ApplyFontStringShadow(fs, useShadow)
-        end
-    end
-
-    if wf.Text then
-        SkinFS(wf.Text)
-        if wf.Text.ClearAllPoints and wf.Text.SetPoint then
-            wf.Text:ClearAllPoints()
-            wf.Text:SetPoint("TOPLEFT", wf, "TOPLEFT", 0, 0)
-        end
-        local th = wf.Text.GetStringHeight and wf.Text:GetStringHeight()
-        if th and th > 0 then
-            wf:SetHeight(th)
-        end
-    end
-    if wf.SubText then
-        SkinFS(wf.SubText)
     end
 end
 
