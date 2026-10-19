@@ -14,7 +14,7 @@ local defaultSettings = {
     editBoxBgColor = { r = 0.05, g = 0.065, b = 0.08, a = 0.9 },
     editBoxBorderColor = { r = 0.2, g = 0.2, b = 0.2, a = 1 },
     editBoxHeight = 24,
-    editBoxPosition = "BOTTOM",
+    editBoxPosition = "INSIDE",
     enabled = true,
     font = "Expressway",
     fontOutline = "OUTLINE",
@@ -40,7 +40,7 @@ local defaultSettings = {
     whisperMode = "inline",
     width = 460,
     x = 0,
-    y = 30,
+    y = 0,
 }
 
 local mod = RoithiUI and RoithiUI:GetModule("Chat", true)

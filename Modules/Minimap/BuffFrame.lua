@@ -51,35 +51,22 @@ local function StyleAuraButton(button)
     local outline = (db and db.buffFrameFontOutline) or "OUTLINE"
     local showShadow = db and db.buffFrameShowShadow == true
 
+    local utils = (AT and AT.Utils) or (_G.RoithiUI and _G.RoithiUI.Utils)
     if duration then
-        if LibRoithi and LibRoithi.mixins then
-            local size = (db and db.buffFrameDurationSize) or 10
+        local size = (db and db.buffFrameDurationSize) or 10
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(duration, font, size, outline, showShadow, "Friz Quadrata TT")
+        elseif LibRoithi and LibRoithi.mixins then
             LibRoithi.mixins:SetFont(duration, font, size, outline)
-        end
-        if duration.SetShadowOffset then
-            if showShadow then
-                duration:SetShadowOffset(1, -1)
-                duration:SetShadowColor(0, 0, 0, 1)
-            else
-                duration:SetShadowOffset(0, 0)
-                duration:SetShadowColor(0, 0, 0, 0)
-            end
         end
     end
 
     if count then
-        if LibRoithi and LibRoithi.mixins then
-            local size = (db and db.buffFrameCountSize) or 10
+        local size = (db and db.buffFrameCountSize) or 10
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(count, font, size, outline, showShadow, "Friz Quadrata TT")
+        elseif LibRoithi and LibRoithi.mixins then
             LibRoithi.mixins:SetFont(count, font, size, outline)
-        end
-        if count.SetShadowOffset then
-            if showShadow then
-                count:SetShadowOffset(1, -1)
-                count:SetShadowColor(0, 0, 0, 1)
-            else
-                count:SetShadowOffset(0, 0)
-                count:SetShadowColor(0, 0, 0, 0)
-            end
         end
     end
 

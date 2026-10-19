@@ -104,13 +104,10 @@ function UF:CreateClassPower(frame)
         -- Timer Text (For Runes)
         point.Timer = point:CreateFontString(nil, "OVERLAY")
         if point.Timer.SetDrawLayer then point.Timer:SetDrawLayer("OVERLAY", 7) end
-        LibRoithi.mixins:SetFont(point.Timer, fontName, 14, fontOutline)
-        if point.Timer.SetShadowOffset then
-            if fontOutline ~= "NONE" and fontOutline ~= "" then
-                point.Timer:SetShadowOffset(0, 0)
-            else
-                point.Timer:SetShadowOffset(1, -1)
-            end
+        if ns.Utils and ns.Utils.ApplyTypography then
+            ns.Utils.ApplyTypography(point.Timer, fontName, 14, fontOutline, false, "Expressway")
+        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+            LibRoithi.mixins:SetFont(point.Timer, fontName, 14, fontOutline)
         end
         point.Timer:SetPoint("CENTER", point, "CENTER", 0, 0)
         point.Timer:SetText("")
@@ -182,15 +179,12 @@ function UF:CreateClassPower(frame)
                 point:SetPoint("LEFT", element.points[i - 1], "RIGHT", spacing, 0)
             end
 
-            if point.Timer and LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+            if point.Timer then
                 if point.Timer.SetDrawLayer then point.Timer:SetDrawLayer("OVERLAY", 7) end
-                LibRoithi.mixins:SetFont(point.Timer, currentFont, timerFontSize, currentOutline)
-                if point.Timer.SetShadowOffset then
-                    if currentOutline ~= "NONE" and currentOutline ~= "" then
-                        point.Timer:SetShadowOffset(0, 0)
-                    else
-                        point.Timer:SetShadowOffset(1, -1)
-                    end
+                if ns.Utils and ns.Utils.ApplyTypography then
+                    ns.Utils.ApplyTypography(point.Timer, currentFont, timerFontSize, currentOutline, false, "Expressway")
+                elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+                    LibRoithi.mixins:SetFont(point.Timer, currentFont, timerFontSize, currentOutline)
                 end
                 point.Timer:SetPoint("CENTER", point, "CENTER", 0, 0)
             end

@@ -931,20 +931,23 @@ function BagsMod:ApplyFont(fontString, defaultSize, customSizeKey, defaultOutlin
     local fontFace = (self.db and customFontKey and self.db[customFontKey]) or (self.db and self.db.font) or "Friz Quadrata TT"
     local outline = (self.db and customOutlineKey and self.db[customOutlineKey]) or (self.db and self.db.fontOutline) or defaultOutline or "OUTLINE"
     local size = (self.db and customSizeKey and self.db[customSizeKey]) or defaultSize or 12
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+    local showShadow = self.db and self.db.showFontShadow == true
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(fontString, fontFace, size, outline, showShadow, "Friz Quadrata TT")
+    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(fontString, fontFace, size, outline)
-    else
-        fontString:SetFont("Fonts\\FRIZQT__.TTF", size, outline)
-    end
-    if fontString.SetShadowOffset then
-        if outline == "OUTLINE" or outline == "THICKOUTLINE" then
-            fontString:SetShadowOffset(0, 0)
-        else
-            fontString:SetShadowOffset(1, -1)
-            if fontString.SetShadowColor then
-                fontString:SetShadowColor(0, 0, 0, 1)
+        if fontString.SetShadowOffset then
+            if outline == "OUTLINE" or outline == "THICKOUTLINE" then
+                fontString:SetShadowOffset(0, 0)
+            else
+                fontString:SetShadowOffset(1, -1)
+                if fontString.SetShadowColor then
+                    fontString:SetShadowColor(0, 0, 0, 1)
+                end
             end
         end
+    else
+        fontString:SetFont("Fonts\\FRIZQT__.TTF", size, outline)
     end
     if fontString.IsObjectType and fontString:IsObjectType("FontString") and fontString.SetDrawLayer then
         fontString:SetDrawLayer("OVERLAY", 7)
@@ -1131,7 +1134,9 @@ function BagsMod:CreateHeaderBar()
         saveFilterBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1.0)
     end
     local plusText = saveFilterBtn:CreateFontString(nil, "OVERLAY")
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(plusText, "Friz Quadrata TT", 12, "OUTLINE", false, "Friz Quadrata TT")
+    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(plusText, "Friz Quadrata TT", 12, "OUTLINE")
     else
         plusText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
@@ -1173,7 +1178,9 @@ function BagsMod:CreateHeaderBar()
         infoBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1.0)
     end
     local infoText = infoBtn:CreateFontString(nil, "OVERLAY")
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(infoText, "Friz Quadrata TT", 11, "OUTLINE", false, "Friz Quadrata TT")
+    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(infoText, "Friz Quadrata TT", 11, "OUTLINE")
     else
         infoText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
@@ -2046,6 +2053,101 @@ function BagsMod:OnMerchantShow()
             end)
         else
             self:SellAllJunk()
+        end
+    end
+    if self.db.autoRepair then
+        if _G.C_Timer and _G.C_Timer.After then
+            _G.C_Timer.After(0.15, function()
+                if _G.MerchantFrame and _G.MerchantFrame:IsShown() then
+                    self:AutoRepair()
+                end
+            end)
+        else
+            self:AutoRepair()
+        end
+    end
+end
+
+function BagsMod:AutoRepair()
+    if not self.db or not self.db.autoRepair then return end
+    if not _G.CanMerchantRepair or not _G.CanMerchantRepair() then return end
+    if not _G.GetRepairAllCost then return end
+
+    local repairCost, canRepair = _G.GetRepairAllCost()
+    if not canRepair or not repairCost or repairCost <= 0 then return end
+
+    local thresholdGold = (self.db.autoRepairCostThreshold or 2000)
+    local thresholdCopper = thresholdGold * 10000
+
+    local function FormatCost(copper)
+        if _G.GetCoinTextureString then
+            return _G.GetCoinTextureString(copper)
+        end
+        local gold = math.floor(copper / 10000)
+        local silver = math.floor((copper % 10000) / 100)
+        local cop = copper % 100
+        return string.format("%dg %ds %dc", gold, silver, cop)
+    end
+
+    if repairCost > thresholdCopper then
+        local costFormatted = FormatCost(repairCost)
+        local thresholdFormatted = FormatCost(thresholdCopper)
+        local warnMsg = string.format(
+            L["Auto-repair skipped: Total cost (%s) exceeds your warning threshold (%s)."]
+            or "Auto-repair skipped: Total cost (%s) exceeds your warning threshold (%s).",
+            costFormatted, thresholdFormatted
+        )
+        print("|cff00ccff[RoithiUI]|r |cffff5555" .. warnMsg .. "|r")
+        return
+    end
+
+    local useGuild = false
+    local source = self.db.autoRepairSource or "PLAYER"
+    local guildFallbackReason = nil
+
+    if source == "GUILD" then
+        local inGuild = _G.IsInGuild and _G.IsInGuild()
+        local canGuildRepair = _G.CanGuildBankRepair and _G.CanGuildBankRepair()
+        local withdrawLimit = (_G.GetGuildBankWithdrawMoney and _G.GetGuildBankWithdrawMoney()) or 0
+
+        if inGuild and canGuildRepair and (withdrawLimit == -1 or withdrawLimit >= repairCost) then
+            useGuild = true
+        else
+            if not inGuild or not canGuildRepair then
+                guildFallbackReason = L["Guild repair unavailable; charged personal gold instead."]
+                    or "Guild repair unavailable; charged personal gold instead."
+            elseif withdrawLimit ~= -1 and withdrawLimit < repairCost then
+                guildFallbackReason = L["Guild bank limit reached; charged personal gold instead."]
+                    or "Guild bank limit reached; charged personal gold instead."
+            end
+        end
+    end
+
+    local playerMoney = (_G.GetMoney and _G.GetMoney()) or 0
+    if not useGuild and playerMoney < repairCost then
+        local costFormatted = FormatCost(repairCost)
+        local moneyFormatted = FormatCost(playerMoney)
+        local errMsg = string.format(
+            L["Auto-repair failed: Not enough gold (Cost: %s, Available: %s)."]
+            or "Auto-repair failed: Not enough gold (Cost: %s, Available: %s).",
+            costFormatted, moneyFormatted
+        )
+        print("|cff00ccff[RoithiUI]|r |cffff5555" .. errMsg .. "|r")
+        return
+    end
+
+    if _G.RepairAllItems then
+        _G.RepairAllItems(useGuild)
+        local costFormatted = FormatCost(repairCost)
+        local sourceText = useGuild and (L["Guild Bank"] or "Guild Bank") or (L["Player Funds"] or "Player Funds")
+        local successMsg = string.format(
+            L["Repaired all items for %s (%s)."] or "Repaired all items for %s (%s).",
+            costFormatted, sourceText
+        )
+        if guildFallbackReason then
+            print("|cff00ccff[RoithiUI]|r " .. successMsg .. " - |cffffcc00" .. guildFallbackReason .. "|r")
+        else
+            print("|cff00ccff[RoithiUI]|r " .. successMsg)
         end
     end
 end

@@ -130,7 +130,9 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                 local timerX = isDebuff and (db.debuffTimerX or db.timerX) or (db.buffTimerX or db.timerX) or 0
                 local timerY = isDebuff and (db.debuffTimerY or db.timerY) or (db.buffTimerY or db.timerY) or 0
 
-                if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+                if ns.Utils and ns.Utils.ApplyTypography then
+                    ns.Utils.ApplyTypography(durationText, fontName, timerFontSize, "OUTLINE", false, "Expressway")
+                elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
                     LibRoithi.mixins:SetFont(durationText, fontName, timerFontSize, "OUTLINE")
                 end
                 if durationText.ClearAllPoints then durationText:ClearAllPoints() end
@@ -174,7 +176,9 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                 local stackX = isDebuff and (db.debuffStackX or db.stackX) or (db.buffStackX or db.stackX) or 2
                 local stackY = isDebuff and (db.debuffStackY or db.stackY) or (db.buffStackY or db.stackY) or -2
 
-                if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+                if ns.Utils and ns.Utils.ApplyTypography then
+                    ns.Utils.ApplyTypography(countText, fontName, stackFontSize, "OUTLINE", false, "Expressway")
+                elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
                     LibRoithi.mixins:SetFont(countText, fontName, stackFontSize, "OUTLINE")
                 end
                 if countText.ClearAllPoints then countText:ClearAllPoints() end

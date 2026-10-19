@@ -52,15 +52,15 @@ function ns.Utils.ResolveFontPath(fontName, defaultFallback)
         return fontName
     end
     local lsm = _G.LibStub and _G.LibStub("LibSharedMedia-3.0", true)
-    if lsm and fontName then
+    if lsm and lsm.Fetch and fontName then
         local fetched = lsm:Fetch("font", fontName)
         if fetched then return fetched end
     end
-    if lsm and defaultFallback then
+    if lsm and lsm.Fetch and defaultFallback then
         local fetched = lsm:Fetch("font", defaultFallback)
         if fetched then return fetched end
     end
-    if lsm then
+    if lsm and lsm.Fetch then
         local exp = lsm:Fetch("font", "Expressway") or lsm:Fetch("font", "Roithi Thick")
         if exp then return exp end
     end
@@ -84,8 +84,9 @@ function ns.Utils.ApplyTypography(fontString, fontName, fontSize, fontOutline, f
     end
 
     if fontString.GetText and fontString.SetText then
-        local txt = fontString:GetText()
-        if txt and txt ~= "" then fontString:SetText(txt) end
+        pcall(function()
+            fontString:SetText(fontString:GetText())
+        end)
     end
 end
 

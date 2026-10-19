@@ -255,7 +255,9 @@ local function ApplyBarToDB()
     if LSM then
         bar:SetStatusBarTexture(LSM:Fetch("statusbar", db.texture or "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
     end
-    if LibRoithi and LibRoithi.mixins then
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(bar.Text, "Friz Quadrata TT", db.fontSize or 12, "OUTLINE", false, "Friz Quadrata TT")
+    elseif LibRoithi and LibRoithi.mixins then
         LibRoithi.mixins:SetFont(bar.Text, "Friz Quadrata TT", db.fontSize or 12, "OUTLINE")
     end
     bar:ClearAllPoints()

@@ -22,6 +22,16 @@ local editBoxBackdrops = setmetatable({}, { __mode = "k" })
 local editBoxShowHooked = setmetatable({}, { __mode = "k" })
 local editBoxFocusHooked = setmetatable({}, { __mode = "k" })
 local wheelHookedFrames = setmetatable({}, { __mode = "k" })
+local frameBaseY = setmetatable({}, { __mode = "k" })
+local frameBaseHeight = setmetatable({}, { __mode = "k" })
+local frameBasePoint = setmetatable({}, { __mode = "k" })
+local editModeSelectionHooked = setmetatable({}, { __mode = "k" })
+local editModeRegistered = setmetatable({}, { __mode = "k" })
+local editModePositionHooked = setmetatable({}, { __mode = "k" })
+local clampHookedFrames = setmetatable({}, { __mode = "k" })
+local sizeHookedFrames = setmetatable({}, { __mode = "k" })
+local addMessageHooked = setmetatable({}, { __mode = "k" })
+local isDisplacing = false
 
 function ChatMod:GetFontPath()
     local f = (self.db and self.db.font)
@@ -413,6 +423,12 @@ function ChatMod:OnInitialize()
                 self.db[k] = v
             end
         end
+        -- Sanitize corrupted TOPLEFT profile settings from previous bug
+        if self.db.point == "TOPLEFT" then
+            self.db.point = "BOTTOMLEFT"
+            self.db.x = self.defaultSettings.x or 0
+            self.db.y = self.defaultSettings.y or 0
+        end
     end
 
     if _G.StaticPopupDialogs and not _G.StaticPopupDialogs["ROITHI_CHAT_COPY_URL"] then
@@ -477,6 +493,7 @@ function ChatMod:OnEnable()
         end)
         _G.EditModeManagerFrame:HookScript("OnHide", function()
             self:ApplyScreenClamping()
+            self:SyncChatPositionFromFrame()
             self:ApplyChatPosition()
             self:UpdateBackgroundPosition()
         end)
@@ -724,6 +741,52 @@ function ChatMod:UpdateBackgroundStyle()
     end
 end
 
+function ChatMod:SetChatEditBoxDisplacement(cf, isShown)
+    if not cf then return end
+    if self.IsEnabled and not self:IsEnabled() then return end
+    if self.db and self.db.enabled == false then return end
+    cf = cf or _G.ChatFrame1
+    if not cf then return end
+
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        return
+    end
+
+    local isInside = (self.db.editBoxPosition == "INSIDE" or self.db.editBoxPosition == nil)
+    if not isInside then
+        return
+    end
+
+    local ebHeight = self.db.editBoxHeight or 24
+    local displaceY = ebHeight + 4
+
+    local baseX = (cf == _G.ChatFrame1 and (self.baseX or self.db.x or 0)) or select(4, cf:GetPoint(1)) or 0
+    local baseY = (cf == _G.ChatFrame1 and (self.baseY or self.db.y or 0)) or frameBaseY[cf] or select(5, cf:GetPoint(1)) or 0
+    local baseW = (cf == _G.ChatFrame1 and (self.db.width or 460)) or (cf.GetWidth and cf:GetWidth()) or 460
+    local baseH = (cf == _G.ChatFrame1 and (self.db.height or 200)) or frameBaseHeight[cf] or (cf.GetHeight and cf:GetHeight()) or 200
+
+    isDisplacing = true
+    if isShown then
+        frameBaseY[cf] = baseY
+        frameBaseHeight[cf] = baseH
+        local newH = math.max(60, baseH - displaceY)
+        if cf.SetSize then cf:SetSize(baseW, newH) end
+        if cf.SetHeight then cf:SetHeight(newH) end
+        cf:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", baseX, baseY + displaceY)
+        if cf.ScrollToBottom then pcall(cf.ScrollToBottom, cf) end
+    else
+        if frameBaseY[cf] or frameBaseHeight[cf] then
+            frameBaseY[cf] = nil
+            frameBaseHeight[cf] = nil
+            if cf.SetSize then cf:SetSize(baseW, baseH) end
+            if cf.SetHeight then cf:SetHeight(baseH) end
+            cf:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", baseX, baseY)
+            if cf.ScrollToBottom then pcall(cf.ScrollToBottom, cf) end
+        end
+    end
+    isDisplacing = false
+end
+
 function ChatMod:UpdateBackgroundPosition()
     if not self.bgPanel then return end
     local cf1 = _G.ChatFrame1
@@ -731,21 +794,23 @@ function ChatMod:UpdateBackgroundPosition()
 
     local ebHeight = self.db.editBoxHeight or 24
     local isTop = (self.db.editBoxPosition == "TOP")
+    local isBottom = (self.db.editBoxPosition == "BOTTOM")
     local padX = (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 4
     local padY = (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 4
-    local includeEb = (self.db.includeEditBoxInBackground == true)
     local tabH = (self.db.styleTabs ~= false) and (self.db.tabHeight or 22) or 0
-    local topExtra = tabH + (isTop and (includeEb and (ebHeight + 4) or 0) or 0)
+    local topExtra = tabH + (isTop and (ebHeight + 4) or 0) + 2
+    local bottomExtra = (isBottom and (ebHeight + 4) or 0)
 
+    local baseX = self.baseX or (self.db and self.db.x) or 0
+    local baseY = self.baseY or (self.db and self.db.y) or 0
+    local baseW = (self.db and self.db.width) or 460
+    local baseH = (self.db and self.db.height) or 200
+
+    -- Outer chat box (self.bgPanel) is anchored permanently to UIParent using base coordinates:
+    -- Covers tabs at top, edit box at bottom, and messages with 100% stationary zero movement
     self.bgPanel:ClearAllPoints()
-    if isTop then
-        self.bgPanel:SetPoint("TOPLEFT", cf1, "TOPLEFT", -padX, topExtra + padY)
-        self.bgPanel:SetPoint("BOTTOMRIGHT", cf1, "BOTTOMRIGHT", padX, -padY)
-    else
-        local botOffset = -padY - (includeEb and (ebHeight + 4) or 0)
-        self.bgPanel:SetPoint("TOPLEFT", cf1, "TOPLEFT", -padX, topExtra + padY)
-        self.bgPanel:SetPoint("BOTTOMRIGHT", cf1, "BOTTOMRIGHT", padX, botOffset)
-    end
+    self.bgPanel:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", baseX - padX, baseY - (bottomExtra + padY))
+    self.bgPanel:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", baseX + baseW + padX, (baseY + baseH) + topExtra + padY)
 
     if _G.ChatFrame1EditBox and self.RepositionEditBox then
         self:RepositionEditBox(_G.ChatFrame1EditBox, cf1)
@@ -755,8 +820,35 @@ function ChatMod:UpdateBackgroundPosition()
         self:UpdateButtonsDock()
     end
 
-    if self.UpdateEditModeSelection then
-        self:UpdateEditModeSelection(cf1)
+    if self.UpdateChatSelectionBounds then
+        self:UpdateChatSelectionBounds(cf1)
+    end
+end
+
+function ChatMod:UpdateChatSelectionBounds(cf)
+    cf = cf or _G.ChatFrame1
+    if not cf or not cf.Selection or cf.isDragging then return end
+
+    local padX = (self.db and self.db.showBackground and self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or (self.db and self.db.showBackground and 4 or 0)
+    local padY = (self.db and self.db.showBackground and self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or (self.db and self.db.showBackground and 4 or 0)
+    local tabH = (self.db and self.db.styleTabs ~= false) and (self.db.tabHeight or 22) or 0
+    local isTop = (self.db and self.db.editBoxPosition == "TOP")
+    local isBottom = (self.db and self.db.editBoxPosition == "BOTTOM")
+    local ebHeight = self.db and self.db.editBoxHeight or 24
+    local topExtra = tabH + (isTop and (ebHeight + 4) or 0) + 2
+    local bottomExtra = (isBottom and (ebHeight + 4) or 0)
+
+    local leftOffset = -padX
+    local rightOffset = padX
+    local topOffset = topExtra + padY
+    local bottomOffset = -(bottomExtra + padY)
+
+    cf.Selection:ClearAllPoints()
+    cf.Selection:SetPoint("TOPLEFT", cf, "TOPLEFT", leftOffset, topOffset)
+    cf.Selection:SetPoint("BOTTOMRIGHT", cf, "BOTTOMRIGHT", rightOffset, bottomOffset)
+
+    if cf.UpdateClampOffsets and cf.GetLeft and cf:GetLeft() and cf.Selection.GetLeft and cf.Selection:GetLeft() then
+        cf:UpdateClampOffsets()
     end
 end
 
@@ -771,9 +863,23 @@ function ChatMod:ApplyChatPosition()
         return
     end
 
+    -- Do not override position while Blizzard Edit Mode is actively shown
+    if _G.EditModeManagerFrame and _G.EditModeManagerFrame:IsShown() then
+        return
+    end
+
     local pt = self.db.point or "BOTTOMLEFT"
+    if pt == "TOPLEFT" then
+        pt = "BOTTOMLEFT"
+        self.db.point = "BOTTOMLEFT"
+    end
     local x = self.db.x or 0
-    local y = self.db.y or 30
+    local y = self.db.y or 0
+    self.baseX = x
+    self.baseY = y
+    frameBaseY[cf1] = nil
+    frameBaseHeight[cf1] = nil
+    frameBasePoint[cf1] = nil
     local w = self.db.width or 460
     local h = self.db.height or 200
 
@@ -796,6 +902,11 @@ function ChatMod:ApplyChatPosition()
     if cf1.SetWidth then cf1:SetWidth(w) end
     if cf1.SetHeight then cf1:SetHeight(h) end
 
+    local eb = _G.ChatFrame1EditBox
+    if eb and eb.IsShown and eb:IsShown() and eb.HasFocus and eb:HasFocus() and self.SetChatEditBoxDisplacement then
+        self:SetChatEditBoxDisplacement(cf1, true)
+    end
+
     -- Mark frame as user placed to prevent UIParent layout reset
     if cf1.SetUserPlaced then
         cf1:SetUserPlaced(true)
@@ -810,15 +921,6 @@ function ChatMod:ApplyChatPosition()
         _G.SetChatWindowSavedPosition(chatID, pt, x, y)
     end
 
-    -- Update Blizzard EditMode systemInfo if present
-    if cf1.systemInfo and cf1.systemInfo.anchorInfo then
-        cf1.systemInfo.anchorInfo.point = pt
-        cf1.systemInfo.anchorInfo.relativeTo = "UIParent"
-        cf1.systemInfo.anchorInfo.relativePoint = pt
-        cf1.systemInfo.anchorInfo.offsetX = x
-        cf1.systemInfo.anchorInfo.offsetY = y
-    end
-
     -- Force re-anchoring of docked frames
     if _G.FCFDock_ForceReanchoring and _G.GENERAL_CHAT_DOCK then
         _G.FCFDock_ForceReanchoring(_G.GENERAL_CHAT_DOCK)
@@ -827,6 +929,53 @@ function ChatMod:ApplyChatPosition()
     self:UpdateBackgroundPosition()
     if self.UpdateButtonsDock then
         self:UpdateButtonsDock()
+    end
+end
+
+function ChatMod:SyncChatPositionFromFrame()
+    if isDisplacing then return end
+    local cf1 = _G.ChatFrame1
+    if not cf1 then return end
+
+    local left = cf1.GetLeft and cf1:GetLeft()
+    local bottom = cf1.GetBottom and cf1:GetBottom()
+
+    local trueX, rawY
+    if left and bottom then
+        local cfScale = (cf1.GetEffectiveScale and cf1:GetEffectiveScale()) or 1
+        local uiScale = (_G.UIParent and _G.UIParent.GetEffectiveScale and _G.UIParent:GetEffectiveScale()) or 1
+        local scaleRatio = (uiScale > 0) and (cfScale / uiScale) or 1
+        trueX = math.floor(left * scaleRatio + 0.5)
+        rawY = math.floor(bottom * scaleRatio + 0.5)
+    else
+        local point, _, _, x, y = cf1:GetPoint(1)
+        if point and x and y then
+            trueX = math.floor(x + 0.5)
+            rawY = math.floor(y + 0.5)
+        end
+    end
+
+    if trueX and rawY then
+        local isDisplaced = (frameBaseY[cf1] ~= nil)
+        local ebHeight = self.db.editBoxHeight or 24
+        local displaceY = isDisplaced and (ebHeight + 4) or 0
+        local trueY = rawY - displaceY
+
+        self.db.point = "BOTTOMLEFT"
+        self.db.x = trueX
+        self.db.y = trueY
+        self.baseX = trueX
+        self.baseY = trueY
+
+        local w = cf1:GetWidth()
+        local h = cf1:GetHeight()
+        if w and w > 0 then
+            self.db.width = math.floor(w + 0.5)
+        end
+        if h and h > 0 then
+            local trueH = h + displaceY
+            self.db.height = math.floor(trueH + 0.5)
+        end
     end
 end
 
@@ -840,20 +989,58 @@ end
 
 function ChatMod:RegisterWithEditMode()
     local cf1 = _G.ChatFrame1
-    if not cf1 or not LEM or cf1.roithiEditModeRegistered then return end
-    cf1.roithiEditModeRegistered = true
+    if not cf1 or not LEM or editModeRegistered[cf1] then return end
+    editModeRegistered[cf1] = true
 
     if cf1.SetMovable then cf1:SetMovable(true) end
     if cf1.SetClampedToScreen then cf1:SetClampedToScreen(self.db.clampToScreen == true) end
 
     cf1.editModeName = L["Chat"] or "Chat"
-    local defaults = { point = "BOTTOMLEFT", x = 0, y = 30 }
+    local defaults = { point = "BOTTOMLEFT", x = 0, y = 0 }
 
-    local function OnPositionChanged(f, _, point, x, y)
-        self.db.point = point
-        self.db.x = x
-        self.db.y = y
-        self:ApplyChatPosition()
+    local function OnPositionChanged()
+        self:SyncChatPositionFromFrame()
+        self:UpdateBackgroundPosition()
+    end
+
+    -- Hook Blizzard AnchorSelectionFrame to ensure Selection tightly hugs RoithiUI chat bounds
+    if cf1.AnchorSelectionFrame and hooksecurefunc and not editModeSelectionHooked[cf1] then
+        editModeSelectionHooked[cf1] = true
+        hooksecurefunc(cf1, "AnchorSelectionFrame", function(frame)
+            self:UpdateChatSelectionBounds(frame)
+        end)
+    end
+    self:UpdateChatSelectionBounds(cf1)
+
+    -- Synchronize Blizzard native Edit Mode movements
+    if not editModePositionHooked[cf1] then
+        editModePositionHooked[cf1] = true
+        if cf1.HookScript then
+            cf1:HookScript("OnDragStop", function()
+                self:SyncChatPositionFromFrame()
+                self:UpdateBackgroundPosition()
+            end)
+        end
+        if cf1.OnSystemPositionChange and hooksecurefunc then
+            hooksecurefunc(cf1, "OnSystemPositionChange", function()
+                self:SyncChatPositionFromFrame()
+                self:UpdateBackgroundPosition()
+            end)
+        end
+        if _G.EditModeManagerFrame and hooksecurefunc then
+            hooksecurefunc(_G.EditModeManagerFrame, "OnSystemPositionChange", function(_, systemFrame)
+                if systemFrame == cf1 then
+                    self:SyncChatPositionFromFrame()
+                    self:UpdateBackgroundPosition()
+                end
+            end)
+        end
+        if _G.EventRegistry and _G.EventRegistry.RegisterCallback then
+            _G.EventRegistry:RegisterCallback("EditMode.SavedLayouts", function()
+                self:SyncChatPositionFromFrame()
+                self:UpdateBackgroundPosition()
+            end, self)
+        end
     end
 
     if _G.Enum and _G.Enum.EditModeSystem and _G.Enum.EditModeSystem.ChatFrame and LEM.AddSystemSettings and self.GetLEMFrameSettings then
@@ -896,37 +1083,6 @@ function ChatMod:RegisterWithEditMode()
                 },
             })
         end
-    end
-end
-
-function ChatMod:UpdateEditModeSelection(cf)
-    cf = cf or _G.ChatFrame1
-    if not cf or not cf.Selection then return end
-    local anchorFrame = (cf == _G.ChatFrame1 and self.bgPanel and self.db.showBackground) and self.bgPanel or cf
-    local name = cf.GetName and cf:GetName()
-    local tab = name and _G[name .. "Tab"] or cf.Tab
-    local eb = name and _G[name .. "EditBox"] or _G.ChatFrame1EditBox
-    local isTop = (self.db.editBoxPosition == "TOP")
-
-    cf.Selection:ClearAllPoints()
-    cf.Selection:SetPoint("LEFT", anchorFrame, "LEFT", -2, 0)
-    cf.Selection:SetPoint("RIGHT", anchorFrame, "RIGHT", 2, 0)
-
-    -- Top boundary: encompass chat tabs and/or top-positioned editbox unconditionally
-    if isTop and eb then
-        cf.Selection:SetPoint("TOP", eb, "TOP", 0, 2)
-    elseif tab and (tab.IsShown == nil or tab:IsShown()) then
-        cf.Selection:SetPoint("TOP", tab, "TOP", 0, 2)
-    else
-        local tabH = (self.db.styleTabs ~= false) and (self.db.tabHeight or 22) or 0
-        cf.Selection:SetPoint("TOP", anchorFrame, "TOP", 0, tabH + 2)
-    end
-
-    -- Bottom boundary: encompass bottom-positioned editbox unconditionally to prevent screen clipping
-    if (not isTop) and eb then
-        cf.Selection:SetPoint("BOTTOM", eb, "BOTTOM", 0, -2)
-    else
-        cf.Selection:SetPoint("BOTTOM", anchorFrame, "BOTTOM", 0, -2)
     end
 end
 
@@ -1297,31 +1453,6 @@ function ChatMod:SkinChatFrame(cf, idx)
         resizeBtn:SetFrameLevel(cf:GetFrameLevel() + 10)
     end
 
-    -- Re-anchor Blizzard EditMode Selection frame flush with styled chat panel
-    if cf.Selection then
-        if not cf.roithiSelectionHooked then
-            cf.roithiSelectionHooked = true
-            if cf.Selection.HookScript then
-                cf.Selection:HookScript("OnShow", function()
-                    self:UpdateEditModeSelection(cf)
-                end)
-            elseif hooksecurefunc then
-                hooksecurefunc(cf.Selection, "Show", function()
-                    self:UpdateEditModeSelection(cf)
-                end)
-            end
-        end
-        self:UpdateEditModeSelection(cf)
-    end
-    if cf == _G.ChatFrame1 and not self.cf1SelectionHooked then
-        self.cf1SelectionHooked = true
-        if cf.OnEditModeEnter and hooksecurefunc then
-            hooksecurefunc(cf, "OnEditModeEnter", function()
-                self:UpdateEditModeSelection(cf)
-            end)
-        end
-    end
-
     -- Scroll chat to bottom so messages sit flush against the bottom
     if cf.ScrollToBottom then
         pcall(cf.ScrollToBottom, cf)
@@ -1336,10 +1467,10 @@ function ChatMod:SkinChatFrame(cf, idx)
         cf:SetClampRectInsets(0, 0, 0, 0)
     end
 
-    if cf.UpdateClampOffsets and not cf.roithiClampHooked and hooksecurefunc then
-        cf.roithiClampHooked = true
+    if cf.UpdateClampOffsets and not clampHookedFrames[cf] and hooksecurefunc then
+        clampHookedFrames[cf] = true
         hooksecurefunc(cf, "UpdateClampOffsets", function(s)
-            if self:IsEnabled() then
+            if not self.IsEnabled or self:IsEnabled() then
                 if self.db.clampToScreen == false and s.SetClampedToScreen then
                     s:SetClampedToScreen(false)
                 end
@@ -1350,9 +1481,17 @@ function ChatMod:SkinChatFrame(cf, idx)
         end)
     end
 
-    if cf.HookScript and not cf.roithiSizeHooked then
+    if cf == _G.ChatFrame1 and cf.AnchorSelectionFrame and hooksecurefunc and not editModeSelectionHooked[cf] then
+        editModeSelectionHooked[cf] = true
+        hooksecurefunc(cf, "AnchorSelectionFrame", function(frame)
+            self:UpdateChatSelectionBounds(frame)
+        end)
+    end
+
+    if cf.HookScript and not sizeHookedFrames[cf] then
+        sizeHookedFrames[cf] = true
         cf:HookScript("OnSizeChanged", function()
-            if self:IsEnabled() then
+            if not self.IsEnabled or self:IsEnabled() then
                 if self.UpdateBackgroundPosition then
                     self:UpdateBackgroundPosition()
                 end
@@ -1362,11 +1501,10 @@ function ChatMod:SkinChatFrame(cf, idx)
                 end
             end
         end)
-        cf.roithiSizeHooked = true
     end
 
-    if not cf.roithiAddMessageHooked and hooksecurefunc then
-        cf.roithiAddMessageHooked = true
+    if not addMessageHooked[cf] and hooksecurefunc then
+        addMessageHooked[cf] = true
         hooksecurefunc(cf, "AddMessage", function(frame, text, ...)
             local argCount = select("#", ...)
             local eventArgs = nil
@@ -1406,39 +1544,43 @@ end
 -------------------------------------------------------------------------------
 -- EditBox Skinning
 -------------------------------------------------------------------------------
+function ChatMod:GetEditBoxBackdrop(eb)
+    return eb and editBoxBackdrops[eb]
+end
+
 function ChatMod:RepositionEditBox(eb, cf)
     if not eb or not cf then return end
 
     local ebHeight = self.db.editBoxHeight or 24
     local isTop = (self.db.editBoxPosition == "TOP")
+    local isInside = (self.db.editBoxPosition == "INSIDE" or self.db.editBoxPosition == nil)
     local padX = (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 4
-    local includeEb = (self.db.includeEditBoxInBackground == true)
+    local padY = (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 4
 
     local anchorFrame = (cf == _G.ChatFrame1 and self.bgPanel and self.db.showBackground) and self.bgPanel or cf
 
     eb:ClearAllPoints()
-    if anchorFrame == self.bgPanel then
-        if includeEb then
-            if isTop then
-                eb:SetPoint("TOPLEFT", anchorFrame, "TOPLEFT", 4, -4)
-                eb:SetPoint("TOPRIGHT", anchorFrame, "TOPRIGHT", -4, -4)
-            else
-                eb:SetPoint("BOTTOMLEFT", anchorFrame, "BOTTOMLEFT", 4, 4)
-                eb:SetPoint("BOTTOMRIGHT", anchorFrame, "BOTTOMRIGHT", -4, 4)
-            end
+    if isTop then
+        if anchorFrame == self.bgPanel then
+            eb:SetPoint("TOPLEFT", anchorFrame, "TOPLEFT", padX, -padY)
+            eb:SetPoint("TOPRIGHT", anchorFrame, "TOPRIGHT", -padX, -padY)
         else
-            if isTop then
-                eb:SetPoint("BOTTOMLEFT", anchorFrame, "TOPLEFT", 0, 4)
-                eb:SetPoint("BOTTOMRIGHT", anchorFrame, "TOPRIGHT", 0, 4)
-            else
-                eb:SetPoint("TOPLEFT", anchorFrame, "BOTTOMLEFT", 0, -4)
-                eb:SetPoint("TOPRIGHT", anchorFrame, "BOTTOMRIGHT", 0, -4)
-            end
-        end
-    else
-        if isTop then
             eb:SetPoint("BOTTOMLEFT", cf, "TOPLEFT", -padX, 28)
             eb:SetPoint("BOTTOMRIGHT", cf, "TOPRIGHT", padX, 28)
+        end
+    elseif isInside then
+        if anchorFrame == self.bgPanel then
+            eb:SetPoint("BOTTOMLEFT", anchorFrame, "BOTTOMLEFT", padX, padY)
+            eb:SetPoint("BOTTOMRIGHT", anchorFrame, "BOTTOMRIGHT", -padX, padY)
+        else
+            eb:SetPoint("BOTTOMLEFT", cf, "BOTTOMLEFT", 0, 0)
+            eb:SetPoint("BOTTOMRIGHT", cf, "BOTTOMRIGHT", 0, 0)
+        end
+    else
+        -- Classic BOTTOM mode
+        if anchorFrame == self.bgPanel then
+            eb:SetPoint("BOTTOMLEFT", anchorFrame, "BOTTOMLEFT", padX, padY)
+            eb:SetPoint("BOTTOMRIGHT", anchorFrame, "BOTTOMRIGHT", -padX, padY)
         else
             eb:SetPoint("TOPLEFT", cf, "BOTTOMLEFT", -padX, -6)
             eb:SetPoint("TOPRIGHT", cf, "BOTTOMRIGHT", padX, -6)
@@ -1449,7 +1591,7 @@ end
 
 function ChatMod:UpdateEditBoxStyle(eb)
     if not eb then return end
-    local bg = editBoxBackdrops[eb] or eb.roithiBackdrop
+    local bg = editBoxBackdrops[eb]
     local cfgBg = self.db.editBoxBgColor or self.defaultSettings.editBoxBgColor
     local cfgBorder = self.db.editBoxBorderColor or self.defaultSettings.editBoxBorderColor
     if bg then
@@ -1477,6 +1619,12 @@ function ChatMod:SkinEditBox(eb, cf, idx)
     if skinnedEditBoxes[eb] then
         self:RepositionEditBox(eb, cf)
         self:UpdateEditBoxStyle(eb)
+        local isInside = (self.db.editBoxPosition == "INSIDE" or self.db.editBoxPosition == nil)
+        if isInside and not (eb.HasFocus and eb:HasFocus()) then
+            local bg = editBoxBackdrops[eb]
+            if bg then bg:Hide() end
+            eb:SetAlpha(0)
+        end
         return
     end
     skinnedEditBoxes[eb] = true
@@ -1500,16 +1648,7 @@ function ChatMod:SkinEditBox(eb, cf, idx)
     -- Reposition EditBox
     self:RepositionEditBox(eb, cf)
 
-    if not editBoxShowHooked[eb] and hooksecurefunc then
-        editBoxShowHooked[eb] = true
-        hooksecurefunc(eb, "Show", function(editBox)
-            if self:IsEnabled() and self.RepositionEditBox then
-                self:RepositionEditBox(editBox, cf)
-            end
-        end)
-    end
-
-    -- Create backdrop frame behind editbox (stored in weak table)
+    -- Create backdrop frame behind editbox (stored in module-scoped weak table)
     local bg = editBoxBackdrops[eb]
     if not bg then
         bg = CreateFrame("Frame", nil, eb, "BackdropTemplate")
@@ -1523,7 +1662,57 @@ function ChatMod:SkinEditBox(eb, cf, idx)
         bg:SetBackdropColor(cfgBg.r or 0.05, cfgBg.g or 0.065, cfgBg.b or 0.08, cfgBg.a or 0.9)
         bg:SetBackdropBorderColor(cfgBorder.r or 0.2, cfgBorder.g or 0.2, cfgBorder.b or 0.2, cfgBorder.a or 1.0)
         editBoxBackdrops[eb] = bg
-        eb.roithiBackdrop = bg
+    end
+
+    -- Hook focus gained/lost for retail IM & classic focus lifecycles
+    if not editBoxFocusHooked[eb] and eb.HookScript then
+        editBoxFocusHooked[eb] = true
+        eb:HookScript("OnEditFocusGained", function(editBox)
+            if not self.IsEnabled or self:IsEnabled() then
+                local b = editBoxBackdrops[editBox]
+                if b then b:Show() end
+                editBox:SetAlpha(1.0)
+                if self.RepositionEditBox then
+                    self:RepositionEditBox(editBox, cf)
+                end
+                self:SetChatEditBoxDisplacement(cf, true)
+            end
+        end)
+        eb:HookScript("OnEditFocusLost", function(editBox)
+            if not self.IsEnabled or self:IsEnabled() then
+                local isInside = (self.db.editBoxPosition == "INSIDE" or self.db.editBoxPosition == nil)
+                if isInside then
+                    local b = editBoxBackdrops[editBox]
+                    if b then b:Hide() end
+                    editBox:SetAlpha(0)
+                end
+                self:SetChatEditBoxDisplacement(cf, false)
+            end
+        end)
+    end
+
+    if not editBoxShowHooked[eb] and hooksecurefunc then
+        editBoxShowHooked[eb] = true
+        hooksecurefunc(eb, "Show", function(editBox)
+            if not self.IsEnabled or self:IsEnabled() then
+                if self.RepositionEditBox then
+                    self:RepositionEditBox(editBox, cf)
+                end
+            end
+        end)
+        hooksecurefunc(eb, "Hide", function(editBox)
+            if not self.IsEnabled or self:IsEnabled() then
+                local b = editBoxBackdrops[editBox]
+                if b then b:Hide() end
+                self:SetChatEditBoxDisplacement(cf, false)
+            end
+        end)
+    end
+
+    local isInside = (self.db.editBoxPosition == "INSIDE" or self.db.editBoxPosition == nil)
+    if isInside and not (eb.HasFocus and eb:HasFocus()) then
+        bg:Hide()
+        eb:SetAlpha(0)
     end
 
     -- Font & insets
@@ -2063,9 +2252,9 @@ function ChatMod:AutoFitChatTabs(dock)
         local pos = self.db.buttonDockPosition or "INSIDE_TOP_RIGHT"
         local dockW = (self.buttonDock and self.buttonDock.GetWidth and self.buttonDock:GetWidth()) or 0
         if pos == "INSIDE_TOP_RIGHT" and self.buttonDock and self.buttonDock:IsShown() and dockW > 0 then
-            scrollFrame:SetPoint("RIGHT", self.buttonDock, "LEFT", -4, 0)
+            scrollFrame:SetPoint("RIGHT", self.buttonDock, "LEFT", -5, 0)
         else
-            scrollFrame:SetPoint("RIGHT", dock, "RIGHT", 0, 0)
+            scrollFrame:SetPoint("RIGHT", dock, "RIGHT", -5, 0)
         end
 
         if lastStaticTab then
@@ -2269,14 +2458,7 @@ function ChatMod:UpdateButtonsDock()
         if fps and fps:IsShown() then
             dock:SetPoint("BOTTOMRIGHT", fps, "TOPRIGHT", 0, 4)
         else
-            local padX = (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 4
-            local padY = (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 4
-
-            if self.bgPanel and self.bgPanel:IsShown() then
-                dock:SetPoint("TOPRIGHT", self.bgPanel, "TOPRIGHT", -padX, -padY)
-            else
-                dock:SetPoint("TOPRIGHT", cf1, "TOPRIGHT", -2, -2)
-            end
+            dock:SetPoint("BOTTOMRIGHT", cf1, "TOPRIGHT", 0, 2)
         end
         dock:SetSize(math.max(1, totalDockWidth), tabH)
     end

@@ -680,15 +680,12 @@ function UF:UpdateTagFrame(tagFrame)
 
     for i, segment in ipairs(segments) do
         local fs = tagFrame.SegmentPool:Acquire()
-        LibRoithi.mixins:SetFont(fs, fontName, tagFrame.fontSize or 12, fontOutline)
-        if fs.SetDrawLayer then fs:SetDrawLayer("OVERLAY", 7) end
-        if fs.SetShadowOffset then
-            if fontOutline ~= "NONE" and fontOutline ~= "" then
-                fs:SetShadowOffset(0, 0)
-            else
-                fs:SetShadowOffset(1, -1)
-            end
+        if ns.Utils and ns.Utils.ApplyTypography then
+            ns.Utils.ApplyTypography(fs, fontName, tagFrame.fontSize or 12, fontOutline, false, "Roithi Thick")
+        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+            LibRoithi.mixins:SetFont(fs, fontName, tagFrame.fontSize or 12, fontOutline)
         end
+        if fs.SetDrawLayer then fs:SetDrawLayer("OVERLAY", 7) end
 
         -- Direct pass-through: set text natively without comparison
         fs:SetText(segment.text)

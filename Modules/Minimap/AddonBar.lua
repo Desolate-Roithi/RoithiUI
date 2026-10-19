@@ -588,7 +588,11 @@ function MinimapMod:CreateFlyoutTrigger()
     end
 
     local text = ft:CreateFontString(nil, "OVERLAY")
-    LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 8, "OUTLINE")
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(text, "Friz Quadrata TT", 8, "OUTLINE", false, "Friz Quadrata TT")
+    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 8, "OUTLINE")
+    end
     text:SetPoint("CENTER", ft, "CENTER", 0, 0)
     text:SetText("•••")
     if text.SetTextColor then
@@ -631,7 +635,11 @@ function MinimapMod:CreateAddonBarExpander()
     end
 
     local text = expander:CreateFontString(nil, "OVERLAY")
-    LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(text, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
+    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
+    end
     if text.SetJustifyH then text:SetJustifyH("CENTER") end
     if text.SetJustifyV then text:SetJustifyV("MIDDLE") end
     text:SetPoint("CENTER", expander, "CENTER", 0, -1)

@@ -518,7 +518,11 @@ function EB:OnInitialize()
         or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline)
         or "OUTLINE"
     local text = encounterBar:CreateFontString(nil, "OVERLAY")
-    LibRoithi.mixins:SetFont(text, fontName, db.fontSize or 12, fontOutline)
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(text, fontName, db.fontSize or 12, fontOutline, false, "Roithi Thick")
+    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        LibRoithi.mixins:SetFont(text, fontName, db.fontSize or 12, fontOutline)
+    end
     text:SetPoint("CENTER", encounterBar, "CENTER", 0, 0)
     encounterBar.Text = text
 
@@ -580,14 +584,18 @@ function EB:RefreshProfile()
         if self.db.texture and LSM then
             bar:SetStatusBarTexture(LSM:Fetch("statusbar", self.db.texture) or "Interface\\TargetingFrame\\UI-StatusBar")
         end
-        if bar.Text and LibRoithi and LibRoithi.mixins then
+        if bar.Text then
             local fontName = (self.db and self.db.font)
                 or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
                 or "Roithi Thick"
             local fontOutline = (self.db and self.db.fontOutline)
                 or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline)
                 or "OUTLINE"
-            LibRoithi.mixins:SetFont(bar.Text, fontName, self.db.fontSize or 12, fontOutline)
+            if ns.Utils and ns.Utils.ApplyTypography then
+                ns.Utils.ApplyTypography(bar.Text, fontName, self.db.fontSize or 12, fontOutline, false, "Roithi Thick")
+            elseif LibRoithi and LibRoithi.mixins then
+                LibRoithi.mixins:SetFont(bar.Text, fontName, self.db.fontSize or 12, fontOutline)
+            end
         end
         local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
         if LEM and LEM.RefreshFrameSettings then

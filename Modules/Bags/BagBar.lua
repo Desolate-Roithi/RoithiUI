@@ -208,7 +208,7 @@ function BagsMod:SetupBagBar()
                         self.db.bagBar.x = val
                         local p = self.db.bagBar.point or "BOTTOMLEFT"
                         bar:ClearAllPoints()
-                        bar:SetPoint(p, UIParent, p, val, self.db.bagBar.y or 235)
+                        bar:SetPoint(p, UIParent, p, val, self.db.bagBar.y or 285)
                         self:UpdateBagBarLayout()
                     end,
                 },
@@ -219,7 +219,7 @@ function BagsMod:SetupBagBar()
                     maxValue = 1500,
                     valueStep = 1,
                     formatter = function(v) return string.format("%.0f", v) end,
-                    get = function() return self.db.bagBar and self.db.bagBar.y or 235 end,
+                    get = function() return self.db.bagBar and self.db.bagBar.y or 285 end,
                     set = function(_, val)
                         self.db.bagBar = self.db.bagBar or {}
                         self.db.bagBar.y = val
@@ -336,7 +336,9 @@ function BagsMod:CreateBagBarExpander()
     end
 
     local text = expander:CreateFontString(nil, "OVERLAY")
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(text, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
+    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
     end
     text:ClearAllPoints()

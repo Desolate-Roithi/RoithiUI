@@ -98,7 +98,9 @@ function UF:CreateIndicators(frame)
     frame.PvPIndicator = pvp
 
     local pvpTimer = parent:CreateFontString(nil, "OVERLAY")
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(pvpTimer, "Expressway", 10, "OUTLINE", false, "Expressway")
+    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(pvpTimer, "Expressway", 10, "OUTLINE")
     else
         pvpTimer:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")

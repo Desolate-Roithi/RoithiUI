@@ -349,7 +349,9 @@ local function UpdateAuraMover(
         and RoithiUI.db.profile.General
         and RoithiUI.db.profile.General.unitFrameFont)
         or "Friz Quadrata TT"
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(mover.Title, fontName, 10, "OUTLINE", false, "Friz Quadrata TT")
+    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(mover.Title, fontName, 10, "OUTLINE")
     end
     mover.Title:SetText(unit:upper() .. " " .. containerSuffix:upper())

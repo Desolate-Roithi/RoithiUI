@@ -2,11 +2,33 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1.5)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v2.0.3-Beta  
+**Latest Version:** v2.0.4-Beta  
 **Last Updated:** 2026-10-19  
 **Compatibility:** WoW 12.1.5 (Midnight) & WoW Forever (16001)
 
-## 🆕 Recent Updates (v2.0.3-Beta)
+## 🆕 Recent Updates (v2.0.4-Beta)
+
+### 1. Bags & Vendor Auto-Repair Automation
+* **Automated Equipment Repair**: Added automatic equipment repair when interacting with repair-capable merchants (`MERCHANT_SHOW`).
+* **Personal vs. Guild Bank Funding**: Configurable funding source allowing players to draw repair funds from Personal Gold (`PLAYER`) or the Guild Bank (`GUILD`).
+* **High-Cost Protection Guard**: Configurable warning threshold slider (1,000g – 50,000g, default 2,000g) with granular manual numeric input (`step = 1`, `bigStep = 500`). Repairs exceeding this threshold are safely skipped and reported in chat with the exact repair amount.
+* **Guild Allowance Fallback Notification**: Added contextual chat notification when guild bank funds or daily withdrawal limits are exhausted and personal gold is charged as a fallback.
+
+### 2. Modernized Chat & Bags Options Panels
+* **Multi-Tab AceConfig Re-Architecture**: Converted Chat and Bags settings into clean, intuitive tabbed layouts (`childGroups = "tab"`), replacing deep vertical scrolling with dedicated category tabs.
+* **Exposed Engine Controls**: Added missing UI controls for `showItemLevel` and `showFontShadow` within Bags settings.
+* **Edit Mode & Coordinate Synchronization**: Harmonized coordinate fallbacks between Edit Mode integration, options controls, and default configurations.
+
+### 3. Unified Typography Engine Integration
+* **Centralized Font Application**: Routed all font rendering across Actionbars, Bags, Chat, EncounterBar, Minimap, and UnitFrames through `ns.Utils.ApplyTypography`.
+* **Strict Shadow Decoupling**: Decoupled drop shadow rendering from font outlines, preventing unwanted shadows when outline is set to none unless shadow is explicitly checked.
+* **Engine Flag Normalization**: Prevented C-engine font rasterization warnings by strictly normalizing outline flags to empty strings when none are selected.
+
+### 4. Full Localization & Alphabetical Parity
+* **Complete String Parity**: Maintained 100% key parity across all 992 localized entries between `Locales/enUS.lua` and `Locales/deDE.lua`.
+* **Alphabetical Consistency**: Re-ordered all keys across 14 sections into strict alphabetical order for streamlined maintenance.
+
+## 📦 Previous Updates (v2.0.3-Beta)
 
 ### 1. Objective Tracker & UIWidget Zero-Touch Architecture
 * **Native Widget Preservation**: Enforced 100% native Blizzard styling for all scenario widgets (Awakening the Machine, Delves, Visions). Pure container centering without modifying child widget frames, scales, or fonts, preventing global `UIWidgetManager` pool taint and secret arithmetic errors.

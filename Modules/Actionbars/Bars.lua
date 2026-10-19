@@ -1120,21 +1120,16 @@ function AB:StyleButton(button, explicitBarKey)
             hotkey:ClearAllPoints()
             hotkey:SetPoint(pos, button, pos, ox, oy)
         end
-        local hotkeyFont = (barDb and barDb.font) or self.db.font or "Roithi Thick"
-        local hotkeyFontSize = (barDb and barDb.fontSize) or self.db.fontSize or 11
-        local hotkeyFontOutline = (barDb and barDb.fontOutline) or self.db.fontOutline or "OUTLINE"
-        if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        local hotkeyFont = (barDb and barDb.font) or self.db.hotkeyFont or self.db.font or "Roithi Thick"
+        local hotkeyFontSize = (barDb and barDb.fontSize) or self.db.hotkeyFontSize or self.db.fontSize or 11
+        local hotkeyFontOutline = (barDb and barDb.fontOutline) or self.db.hotkeyFontOutline or self.db.fontOutline or "OUTLINE"
+        local hotkeyFontShadow = (self.db.hotkeyFontShadow == true) or (self.db.showFontShadow == true)
+        if ns.Utils and ns.Utils.ApplyTypography then
+            ns.Utils.ApplyTypography(hotkey, hotkeyFont, hotkeyFontSize, hotkeyFontOutline, hotkeyFontShadow, "Roithi Thick")
+        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
             LibRoithi.mixins:SetFont(hotkey, hotkeyFont, hotkeyFontSize, hotkeyFontOutline)
         end
         if hotkey.SetDrawLayer then hotkey:SetDrawLayer("OVERLAY", 7) end
-        if hotkey.SetShadowOffset then
-            if hotkeyFontOutline ~= "NONE" and hotkeyFontOutline ~= "" then
-                hotkey:SetShadowOffset(0, 0)
-            else
-                hotkey:SetShadowOffset(1, -1)
-                if hotkey.SetShadowColor then hotkey:SetShadowColor(0, 0, 0, 1) end
-            end
-        end
         if not hotkey.roithiHooked and hooksecurefunc then
             hooksecurefunc(hotkey, "SetText", function(s, txt)
                 if s.roithiFormatting then return end
@@ -1206,21 +1201,16 @@ function AB:StyleButton(button, explicitBarKey)
             name:ClearAllPoints()
             name:SetPoint(pos, button, pos, ox, oy)
         end
-        local nameFont = (barDb and barDb.font) or self.db.font or "Roithi Thick"
-        local nameFontSize = math.max(8, ((barDb and barDb.fontSize) or self.db.fontSize or 11) - 2)
-        local nameFontOutline = (barDb and barDb.fontOutline) or self.db.fontOutline or "OUTLINE"
-        if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        local nameFont = (barDb and barDb.font) or self.db.macroFont or self.db.font or "Roithi Thick"
+        local nameFontSize = self.db.macroFontSize or math.max(8, ((barDb and barDb.fontSize) or self.db.fontSize or 11) - 2)
+        local nameFontOutline = (barDb and barDb.fontOutline) or self.db.macroFontOutline or self.db.fontOutline or "OUTLINE"
+        local nameFontShadow = (self.db.macroFontShadow == true) or (self.db.showFontShadow == true)
+        if ns.Utils and ns.Utils.ApplyTypography then
+            ns.Utils.ApplyTypography(name, nameFont, nameFontSize, nameFontOutline, nameFontShadow, "Roithi Thick")
+        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
             LibRoithi.mixins:SetFont(name, nameFont, nameFontSize, nameFontOutline)
         end
         if name.SetDrawLayer then name:SetDrawLayer("OVERLAY", 7) end
-        if name.SetShadowOffset then
-            if nameFontOutline ~= "NONE" and nameFontOutline ~= "" then
-                name:SetShadowOffset(0, 0)
-            else
-                name:SetShadowOffset(1, -1)
-                if name.SetShadowColor then name:SetShadowColor(0, 0, 0, 1) end
-            end
-        end
         -- Lock colour to white; Blizzard may reset via SetFontObject
         if name.SetTextColor then name:SetTextColor(1, 1, 1, 1) end
         if name.SetFontObject and not name.roithiFontObjectHooked and hooksecurefunc then
@@ -1278,19 +1268,14 @@ function AB:StyleButton(button, explicitBarKey)
             count:ClearAllPoints()
             count:SetPoint(pos, button, pos, ox, oy)
         end
-        local countFont = (barDb and barDb.font) or self.db.font or "Roithi Thick"
-        local countFontSize = math.max(8, ((barDb and barDb.fontSize) or self.db.fontSize or 11) - 1)
-        local countFontOutline = (barDb and barDb.fontOutline) or self.db.fontOutline or "OUTLINE"
-        if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        local countFont = (barDb and barDb.font) or self.db.countFont or self.db.font or "Roithi Thick"
+        local countFontSize = self.db.countFontSize or math.max(8, ((barDb and barDb.fontSize) or self.db.fontSize or 11) - 1)
+        local countFontOutline = (barDb and barDb.fontOutline) or self.db.countFontOutline or self.db.fontOutline or "OUTLINE"
+        local countFontShadow = (self.db.countFontShadow == true) or (self.db.showFontShadow == true)
+        if ns.Utils and ns.Utils.ApplyTypography then
+            ns.Utils.ApplyTypography(count, countFont, countFontSize, countFontOutline, countFontShadow, "Roithi Thick")
+        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
             LibRoithi.mixins:SetFont(count, countFont, countFontSize, countFontOutline)
-        end
-        if count.SetShadowOffset then
-            if countFontOutline ~= "NONE" and countFontOutline ~= "" then
-                count:SetShadowOffset(0, 0)
-            else
-                count:SetShadowOffset(1, -1)
-                if count.SetShadowColor then count:SetShadowColor(0, 0, 0, 1) end
-            end
         end
     end
 

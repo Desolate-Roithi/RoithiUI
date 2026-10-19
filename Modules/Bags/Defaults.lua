@@ -4,6 +4,9 @@ local RoithiUI = _G.RoithiUI
 
 local defaultSettings = {
     activeCategory = "ALL",
+    autoRepair = false,
+    autoRepairCostThreshold = 2000,
+    autoRepairSource = "PLAYER",
     autoSellJunk = false,
     bagBar = { buttonSize = 30, enabled = true, expanded = false, point = "BOTTOMLEFT", spacing = 4, x = 286, y = 285 },
     bagWindow = { point = "BOTTOMRIGHT", x = -10, y = 10, width = 380, height = 420 },

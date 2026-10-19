@@ -2095,7 +2095,9 @@ function MinimapMod:SetupCoordsWidget(anchor)
     end
 
     local text = clickBtn:CreateFontString(nil, "OVERLAY")
-    if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(text, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
+    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
         LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
     else
         text:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")

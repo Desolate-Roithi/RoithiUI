@@ -99,7 +99,12 @@ function MinimapMod:RenderButtonTiles(container, tilesTable)
             tile.icon = icon
 
             local badge = tile:CreateFontString(nil, "OVERLAY")
-            LibRoithi.mixins:SetFont(badge, "Friz Quadrata TT", 9, "OUTLINE")
+            local utils = (AT and AT.Utils) or (_G.RoithiUI and _G.RoithiUI.Utils)
+            if utils and utils.ApplyTypography then
+                utils.ApplyTypography(badge, "Friz Quadrata TT", 9, "OUTLINE", false, "Friz Quadrata TT")
+            elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+                LibRoithi.mixins:SetFont(badge, "Friz Quadrata TT", 9, "OUTLINE")
+            end
             badge:SetPoint("TOPLEFT", tile, "TOPLEFT", 2, -2)
             tile.badge = badge
 
@@ -250,13 +255,22 @@ function MinimapMod:OpenButtonConfigurator()
         frame:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
 
         local title = frame:CreateFontString(nil, "OVERLAY")
-        LibRoithi.mixins:SetFont(title, "Friz Quadrata TT", 14, "OUTLINE")
+        local utils = (AT and AT.Utils) or (_G.RoithiUI and _G.RoithiUI.Utils)
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(title, "Friz Quadrata TT", 14, "OUTLINE", false, "Friz Quadrata TT")
+        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+            LibRoithi.mixins:SetFont(title, "Friz Quadrata TT", 14, "OUTLINE")
+        end
         title:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -12)
         title:SetText(L["Addon Button Arrangement"] or "Addon Button Arrangement")
         title:SetTextColor(1, 0.82, 0, 1)
 
         local subtitle = frame:CreateFontString(nil, "OVERLAY")
-        LibRoithi.mixins:SetFont(subtitle, "Friz Quadrata TT", 10, "OUTLINE")
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(subtitle, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
+        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+            LibRoithi.mixins:SetFont(subtitle, "Friz Quadrata TT", 10, "OUTLINE")
+        end
         subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
         subtitle:SetPoint("RIGHT", frame, "RIGHT", -30, 0)
         subtitle:SetJustifyH("LEFT")
@@ -298,7 +312,10 @@ if AceGUI then
         frame:SetSize(420, 150)
 
         local desc = frame:CreateFontString(nil, "OVERLAY")
-        if LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
+        local utils = (AT and AT.Utils) or (_G.RoithiUI and _G.RoithiUI.Utils)
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(desc, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
+        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
             LibRoithi.mixins:SetFont(desc, "Friz Quadrata TT", 10, "OUTLINE")
         end
         desc:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
