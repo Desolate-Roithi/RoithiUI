@@ -28,6 +28,10 @@ A modular UI replacement for **World of Warcraft: Midnight (12.1.5)**. Built on 
 * **Complete String Parity**: Maintained 100% key parity across all 992 localized entries between `Locales/enUS.lua` and `Locales/deDE.lua`.
 * **Alphabetical Consistency**: Re-ordered all keys across 14 sections into strict alphabetical order for streamlined maintenance.
 
+### 5. Castbar Lifecycle & Profile Switching Hardening
+* **Eliminated Duplicate Castbars**: Enforced strict idempotency in `ns.InitializeBars()` and `ns.InitializeCastbarConfig()`, reusing existing statusbar frames and LibEditMode registrations rather than creating duplicate frames during profile transitions (`/rui dev`, sandbox test isolation, profile switching).
+* **Native Module Lifecycle**: Implemented dedicated `Castbar:RefreshProfile()` and `Castbar:OnDisable()` handlers and registered `Castbar` in `MODULE_REFRESH_ORDER`, preventing fallback `OnEnable()` re-execution and event listener leakage.
+
 ## 📦 Previous Updates (v2.0.3-Beta)
 
 ### 1. Objective Tracker & UIWidget Zero-Touch Architecture

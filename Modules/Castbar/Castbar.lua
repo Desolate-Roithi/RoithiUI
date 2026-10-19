@@ -176,17 +176,21 @@ function ns.RefreshAllCastbars()
 end
 
 function ns.InitializeBars()
+    if not ns.bars then ns.bars = {} end
     for unit, _ in pairs(ns.DEFAULTS) do
-        local bar = ns.CreateCastBar(unit)
-        ns.bars[unit] = bar
+        local bar = ns.bars[unit]
+        if not bar then
+            bar = ns.CreateCastBar(unit)
+            ns.bars[unit] = bar
+            if ns.RegisterBarUnitEvents then
+                ns.RegisterBarUnitEvents(bar)
+            end
+            if ns.RegisterCastbarLEM then
+                ns.RegisterCastbarLEM(bar, unit)
+            end
+        end
         if ns.UpdateBar then
             ns.UpdateBar(unit)
-        end
-        if ns.RegisterBarUnitEvents then
-            ns.RegisterBarUnitEvents(bar)
-        end
-        if ns.RegisterCastbarLEM then
-            ns.RegisterCastbarLEM(bar, unit)
         end
     end
 end

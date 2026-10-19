@@ -144,6 +144,13 @@ local BLIZZ_CAST_EVENTS = {
     "UNIT_SPELLCAST_INTERRUPTIBLE", "UNIT_SPELLCAST_NOT_INTERRUPTIBLE",
 }
 
+---@class Castbar : AceAddon, AceModule
+local Castbar = RoithiUI:NewModule("Castbar")
+Castbar.bars = ns.bars   -- Expose for AttachmentLogic
+Castbar.defaultSettings = ns.CastbarDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Castbar)
+Castbar.dbKey = "Castbar"
+local castbarsDB
+
 local regenVisibilityFrame = nil
 function ns.UpdateBlizzardVisibility()
     if InCombatLockdown and InCombatLockdown() then
@@ -164,6 +171,8 @@ function ns.UpdateBlizzardVisibility()
 
     local db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar
     if not db then return end
+
+    local isModEnabled = not Castbar or (Castbar.IsEnabled and Castbar:IsEnabled()) or (Castbar.IsEnabled == nil)
 
     -- Helper to hide/show
     local function ToggleBlizzBar(frame, unit, shouldHide)
@@ -199,43 +208,36 @@ function ns.UpdateBlizzardVisibility()
     -- Target
     local targetBar = (TargetFrame and TargetFrame.spellbar) or _G.TargetFrameSpellBar
     if targetBar then
-        ToggleBlizzBar(targetBar, "target", db.target and db.target.enabled)
+        ToggleBlizzBar(targetBar, "target", isModEnabled and db.target and db.target.enabled)
     end
 
     -- Focus
     local focusBar = (FocusFrame and FocusFrame.spellbar) or _G.FocusFrameSpellBar
     if focusBar then
-        ToggleBlizzBar(focusBar, "focus", db.focus and db.focus.enabled)
+        ToggleBlizzBar(focusBar, "focus", isModEnabled and db.focus and db.focus.enabled)
     end
 
     -- Player
     local playerBar = (PlayerFrame and PlayerFrame.Spellbar) or _G.PlayerCastingBarFrame
     if playerBar then
-        ToggleBlizzBar(playerBar, "player", db.player and db.player.enabled)
+        ToggleBlizzBar(playerBar, "player", isModEnabled and db.player and db.player.enabled)
     end
     if _G.PlayerCastingBarFrame and _G.PlayerCastingBarFrame ~= playerBar then
-        ToggleBlizzBar(_G.PlayerCastingBarFrame, "player", db.player and db.player.enabled)
+        ToggleBlizzBar(_G.PlayerCastingBarFrame, "player", isModEnabled and db.player and db.player.enabled)
     end
 
     -- Pet / Vehicle
     if _G.PetCastingBarFrame then
-        ToggleBlizzBar(_G.PetCastingBarFrame, "pet", db.pet and db.pet.enabled)
+        ToggleBlizzBar(_G.PetCastingBarFrame, "pet", isModEnabled and db.pet and db.pet.enabled)
     end
     if PetFrame and PetFrame.Spellbar and PetFrame.Spellbar ~= _G.PetCastingBarFrame then
-        ToggleBlizzBar(PetFrame.Spellbar, "pet", db.pet and db.pet.enabled)
+        ToggleBlizzBar(PetFrame.Spellbar, "pet", isModEnabled and db.pet and db.pet.enabled)
     end
 end
 
 -- ----------------------------------------------------------------------------
 -- 3. Main Event Handler
 -- ----------------------------------------------------------------------------
----@class Castbar : AceAddon, AceModule
-local Castbar = RoithiUI:NewModule("Castbar")
-Castbar.bars = ns.bars   -- Expose for AttachmentLogic
-Castbar.defaultSettings = ns.CastbarDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Castbar)
-Castbar.dbKey = "Castbar"
-local castbarsDB
-
 function Castbar:OnInitialize()
     -- Initialize DB reference
     -- RoithiUI.db should handle defaults via AceDB.
@@ -336,94 +338,99 @@ function Castbar:OnEnable()
         ns.RefreshAllCastbars()
     end
 
-    -- Register Cast Events
-    self.eventFrame = CreateFrame("Frame")
-    local f = self.eventFrame
-    -- Registered via self.eventFrame to avoid GC and allow external access/teardown
-
-    f:SetScript("OnEvent", function(_, event, ...)
-        if event == "PLAYER_TARGET_CHANGED" then
-            if ns.bars and ns.bars["target"] and not (InCombatLockdown and InCombatLockdown()) then
-                local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar["target"]
-                if cbDB and not cbDB.detached and ns.SetCastbarAttachment then
-                    ns.SetCastbarAttachment("target", true)
-                end
-            end
-            ns.UpdateCast(ns.bars["target"])
-            ns.UpdateCast(ns.bars["targettarget"])
-        elseif event == "PLAYER_FOCUS_CHANGED" then
-            if ns.bars and ns.bars["focus"] then
-                if not (InCombatLockdown and InCombatLockdown()) then
-                    local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar["focus"]
+    -- Register Cast Events (Singleton guard to prevent event leak across profile switches)
+    if not self.eventFrame then
+        self.eventFrame = CreateFrame("Frame")
+        local f = self.eventFrame
+        -- Registered via self.eventFrame to avoid GC and allow external access/teardown
+        f:SetScript("OnEvent", function(_, event, ...)
+            if event == "PLAYER_TARGET_CHANGED" then
+                if ns.bars and ns.bars["target"] and not (InCombatLockdown and InCombatLockdown()) then
+                    local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar["target"]
                     if cbDB and not cbDB.detached and ns.SetCastbarAttachment then
-                        ns.SetCastbarAttachment("focus", true)
+                        ns.SetCastbarAttachment("target", true)
                     end
                 end
-                ns.UpdateCast(ns.bars["focus"], "focus")
-            end
-            if ns.bars and ns.bars["focustarget"] then
-                ns.UpdateCast(ns.bars["focustarget"], "focustarget")
-            end
-        elseif event == "UNIT_TARGET" then
-            local unit = ...
-            if unit == "target" then
+                ns.UpdateCast(ns.bars["target"])
                 ns.UpdateCast(ns.bars["targettarget"])
-            elseif unit == "focus" then
-                ns.UpdateCast(ns.bars["focustarget"])
-            end
-        elseif event == "UNIT_PET" then
-            ns.UpdateCast(ns.bars["pet"])
-            -- Sync attachment on pet change
-            local cbDB = RoithiUI.db.profile.Castbar["pet"]
-            local isDetached = cbDB and cbDB.detached
-            ns.SetCastbarAttachment("pet", not isDetached)
-        elseif event == "SPELL_UPDATE_COOLDOWN" then
-            if ns.bars then
-                for u, bar in pairs(ns.bars) do
-                    if u ~= "player" and bar:IsShown() and (bar.casting or bar.channeling) then
-                        ns.UpdateCast(bar, u)
+            elseif event == "PLAYER_FOCUS_CHANGED" then
+                if ns.bars and ns.bars["focus"] then
+                    if not (InCombatLockdown and InCombatLockdown()) then
+                        local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar["focus"]
+                        if cbDB and not cbDB.detached and ns.SetCastbarAttachment then
+                            ns.SetCastbarAttachment("focus", true)
+                        end
+                    end
+                    ns.UpdateCast(ns.bars["focus"], "focus")
+                end
+                if ns.bars and ns.bars["focustarget"] then
+                    ns.UpdateCast(ns.bars["focustarget"], "focustarget")
+                end
+            elseif event == "UNIT_TARGET" then
+                local unit = ...
+                if unit == "target" then
+                    ns.UpdateCast(ns.bars["targettarget"])
+                elseif unit == "focus" then
+                    ns.UpdateCast(ns.bars["focustarget"])
+                end
+            elseif event == "UNIT_PET" then
+                ns.UpdateCast(ns.bars["pet"])
+                -- Sync attachment on pet change
+                local cbDB = RoithiUI.db.profile.Castbar["pet"]
+                local isDetached = cbDB and cbDB.detached
+                ns.SetCastbarAttachment("pet", not isDetached)
+            elseif event == "SPELL_UPDATE_COOLDOWN" then
+                if ns.bars then
+                    for u, bar in pairs(ns.bars) do
+                        if u ~= "player" and bar:IsShown() and (bar.casting or bar.channeling) then
+                            ns.UpdateCast(bar, u)
+                        end
                     end
                 end
-            end
-        elseif event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
-            if ns.UpdatePlayerInterruptSpell then
-                ns.UpdatePlayerInterruptSpell()
-            end
-            if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" then
-                if ns.RefreshAllCastbars then
-                    ns.RefreshAllCastbars()
+            elseif event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
+                if ns.UpdatePlayerInterruptSpell then
+                    ns.UpdatePlayerInterruptSpell()
                 end
-            end
-        else
-            local unit = ...
-            local targetBar = ns.bars[unit]
-            
-            -- Vehicle Aliasing: Map vehicle/pet casts to player bar if needed
-            if unit == "vehicle" then
-                targetBar = ns.bars["player"]
-            end
+                if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" then
+                    if ns.RefreshAllCastbars then
+                        ns.RefreshAllCastbars()
+                    end
+                end
+            else
+                local unit = ...
+                local targetBar = ns.bars and ns.bars[unit]
+                
+                -- Vehicle Aliasing: Map vehicle/pet casts to player bar if needed
+                if unit == "vehicle" then
+                    targetBar = ns.bars and ns.bars["player"]
+                end
 
-            if targetBar then
-                if event == "UNIT_SPELLCAST_INTERRUPTED" then
-                    ns.HandleInterrupt(targetBar)
-                elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
-                    local _, castGUID = ...
-                    local isSecretID = (issecretvalue and (issecretvalue(targetBar.castID) or issecretvalue(castGUID))) or (canaccessvalue and (not canaccessvalue(targetBar.castID) or not canaccessvalue(castGUID)))
-                    if not isSecretID and targetBar.castID and castGUID and targetBar.castID ~= castGUID then
-                        return
+                if targetBar then
+                    if event == "UNIT_SPELLCAST_INTERRUPTED" then
+                        ns.HandleInterrupt(targetBar)
+                    elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
+                        local _, castGUID = ...
+                        local isSecretID = (issecretvalue and (issecretvalue(targetBar.castID) or issecretvalue(castGUID))) or (canaccessvalue and (not canaccessvalue(targetBar.castID) or not canaccessvalue(castGUID)))
+                        if not isSecretID and targetBar.castID and castGUID and targetBar.castID ~= castGUID then
+                            return
+                        end
+                        if not targetBar.isInterrupted and not targetBar.isInEditMode then
+                            targetBar.casting = false
+                            targetBar.channeling = false
+                            targetBar:Hide(); targetBar:SetScript("OnUpdate", nil)
+                        end
+                    else
+                        ns.UpdateCast(targetBar, unit)
                     end
-                    if not targetBar.isInterrupted and not targetBar.isInEditMode then
-                        targetBar.casting = false
-                        targetBar.channeling = false
-                        targetBar:Hide(); targetBar:SetScript("OnUpdate", nil)
-                    end
-                else
-                    ns.UpdateCast(targetBar, unit)
                 end
             end
-        end
-    end)
+        end)
+    end
 
+    local f = self.eventFrame
+    if f.UnregisterAllEvents then
+        f:UnregisterAllEvents()
+    end
     f:RegisterEvent("UNIT_SPELLCAST_START")
     f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
     f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
@@ -442,8 +449,37 @@ function Castbar:OnEnable()
     f:RegisterEvent("SPELLS_CHANGED")
     f:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
-    -- Events are registered above
 end
+
+function Castbar:OnDisable()
+    if self.eventFrame and self.eventFrame.UnregisterAllEvents then
+        self.eventFrame:UnregisterAllEvents()
+    end
+    if ns.bars then
+        for _, bar in pairs(ns.bars) do
+            bar:Hide()
+            bar:SetScript("OnUpdate", nil)
+            if bar.UnregisterAllEvents then
+                bar:UnregisterAllEvents()
+            end
+        end
+    end
+    ns.UpdateBlizzardVisibility()
+end
+
+function Castbar:RefreshProfile()
+    castbarsDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar
+    if not castbarsDB then return end
+
+    ns.UpdateBlizzardVisibility()
+    if ns.RefreshAllCastbars then
+        ns.RefreshAllCastbars()
+    end
+    if ns.UpdatePlayerInterruptSpell then
+        ns.UpdatePlayerInterruptSpell()
+    end
+end
+Castbar.RefreshSettings = Castbar.RefreshProfile
 
 -- Slash Command
 if RoithiUI and RoithiUI.RegisterChatCommand then

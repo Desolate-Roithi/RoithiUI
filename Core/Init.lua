@@ -302,6 +302,7 @@ end
 
 local MODULE_REFRESH_ORDER = {
     "UnitFrames",
+    "Castbar",
     "Minimap",
     "Objectives",
     "Menu",
@@ -338,12 +339,7 @@ function RoithiUI:RefreshProfile()
         self.ModuleManager:EnableModules()
     end
 
-    -- 2. Castbars
-    if ns and ns.RefreshAllCastbars then
-        ns.RefreshAllCastbars()
-    end
-
-    -- 3. Sequenced Module Refresh
+    -- 2. Sequenced Module Refresh
     local refreshed = {}
     for _, modName in ipairs(MODULE_REFRESH_ORDER) do
         local mod = self:GetModule(modName, true)

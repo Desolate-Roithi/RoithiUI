@@ -851,6 +851,8 @@ end
 
 function ns.InitializeCastbarConfig()
     if not ns.bars or not LEM then return end
+    if ns.castbarConfigInitialized then return end
+    ns.castbarConfigInitialized = true
 
     for unit, bar in pairs(ns.bars) do
         bar.editModeName = "Roithi " .. unit:gsub("^%l", string.upper) .. " Castbar"
