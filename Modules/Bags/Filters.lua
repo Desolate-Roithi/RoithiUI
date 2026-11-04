@@ -39,6 +39,23 @@ if _G.WOW_PROJECT_ID == _G.WOW_PROJECT_CLASSIC or _G.KeyRingButton then
     table.insert(BagsMod.CATEGORIES, { id = CATEGORY_KEYRING, name = L["Keyring"] or "Keyring", order = 10 })
 end
 
+BagsMod.GEAR_SUB_FILTERS = {
+    { id = "ALL", name = L["All"] or "All", shortName = L["All"] or "All" },
+    { id = "WEAPONS", name = L["Weapons"] or "Weapons", shortName = L["Weapons"] or "Weapons" },
+    { id = "TRINKETS", name = L["Trinkets"] or "Trinkets", shortName = L["Trinkets"] or "Trinkets" },
+    { id = "ARMOR", name = L["Armor"] or "Armor", shortName = L["Armor"] or "Armor" },
+    { id = "SETS", name = L["Gear in Sets"] or "Gear in Sets", shortName = L["Sets"] or "Sets" },
+    { id = "PAST_EXP", name = L["Gear from past expansions"] or "Gear from past expansions", shortName = L["Legacy"] or "Legacy" },
+    { id = "NOT_SOULBOUND", name = L["Not soulbound Gear"] or "Not soulbound Gear", shortName = L["Unbound"] or "Unbound" },
+    { id = "WARBOUND", name = L["Warbound Gear"] or "Warbound Gear", shortName = L["Warbound"] or "Warbound" },
+}
+
+BagsMod.REAGENT_SUB_FILTERS = {
+    { id = "ALL", name = L["All"] or "All", shortName = L["All"] or "All" },
+    { id = "CURRENT_EXP", name = L["Current expansion Reagents"] or "Current expansion Reagents", shortName = L["Current"] or "Current" },
+    { id = "PAST_EXP", name = L["Past expansion reagents"] or "Past expansion reagents", shortName = L["Legacy"] or "Legacy" },
+}
+
 local filterDefaults = {
     enabled = true,
     slotSize = 36,
@@ -367,6 +384,122 @@ function BagsMod:ItemMatchesCategory(itemData, activeCategory)
     end
 
     return false
+end
+
+local function GetItemInfoSafe(item)
+    if not item then return end
+    if _G.C_Item and _G.C_Item.GetItemInfo then
+        return _G.C_Item.GetItemInfo(item)
+    elseif _G.GetItemInfo then
+        return _G.GetItemInfo(item)
+    end
+end
+
+local function GetCurrentExpLevel()
+    if _G.LE_EXPANSION_LEVEL_CURRENT then
+        return _G.LE_EXPANSION_LEVEL_CURRENT
+    elseif _G.GetServerExpansionLevel then
+        return _G.GetServerExpansionLevel()
+    elseif _G.GetExpansionLevel then
+        return _G.GetExpansionLevel()
+    end
+    return 10
+end
+
+function BagsMod:MatchesSubFilter(itemData, activeCategory, subFilterID)
+    if not itemData or not itemData.itemID then return false end
+    local subFilter = subFilterID
+    if not subFilter then
+        if activeCategory == "GEAR" then
+            subFilter = self.activeGearSubFilter or "ALL"
+        elseif activeCategory == "REAGENTS" then
+            subFilter = self.activeReagentSubFilter or "ALL"
+        else
+            return true
+        end
+    end
+
+    if subFilter == "ALL" then
+        return true
+    end
+
+    if activeCategory == "GEAR" then
+        if subFilter == "WEAPONS" then
+            return itemData.classID == 2
+                or itemData.equipLoc == "INVTYPE_SHIELD"
+                or itemData.equipLoc == "INVTYPE_HOLDABLE"
+        elseif subFilter == "TRINKETS" then
+            return itemData.equipLoc == "INVTYPE_TRINKET"
+        elseif subFilter == "ARMOR" then
+            return itemData.classID == 4
+                and itemData.equipLoc ~= "INVTYPE_TRINKET"
+                and itemData.equipLoc ~= "INVTYPE_SHIELD"
+                and itemData.equipLoc ~= "INVTYPE_HOLDABLE"
+        elseif subFilter == "SETS" then
+            if itemData.inEquipmentSet ~= nil then
+                return itemData.inEquipmentSet == true
+            end
+            if _G.C_Container and _G.C_Container.GetContainerItemEquipmentSetInfo and itemData.bag and itemData.slot then
+                local inSet = _G.C_Container.GetContainerItemEquipmentSetInfo(itemData.bag, itemData.slot)
+                return inSet == true
+            end
+            return false
+        elseif subFilter == "PAST_EXP" then
+            local currExp = GetCurrentExpLevel()
+            local expID = itemData.expID
+            if expID == nil then
+                local target = itemData.link or itemData.itemID
+                if target then
+                    expID = select(15, GetItemInfoSafe(target))
+                end
+                if expID == nil and itemData.itemID and _G.C_Item and _G.C_Item.RequestLoadItemDataByID then
+                    _G.C_Item.RequestLoadItemDataByID(itemData.itemID)
+                end
+            end
+            return (expID ~= nil and expID < currExp)
+        elseif subFilter == "NOT_SOULBOUND" then
+            local isBound = itemData.isBound
+            if isBound == nil and itemData.bag and itemData.slot and _G.ItemLocation and _G.ItemLocation.CreateFromBagAndSlot and _G.C_Item and _G.C_Item.IsBound then
+                local loc = _G.ItemLocation:CreateFromBagAndSlot(itemData.bag, itemData.slot)
+                if loc and _G.C_Item.DoesItemExist and _G.C_Item.DoesItemExist(loc) then
+                    isBound = _G.C_Item.IsBound(loc)
+                end
+            end
+            return not isBound
+        elseif subFilter == "WARBOUND" then
+            if itemData.bindType == 4 then
+                return true
+            end
+            if itemData.bag and itemData.slot and _G.ItemLocation and _G.ItemLocation.CreateFromBagAndSlot and _G.C_Item and _G.C_Item.IsBoundToAccountUntilEquip then
+                local loc = _G.ItemLocation:CreateFromBagAndSlot(itemData.bag, itemData.slot)
+                if loc and _G.C_Item.DoesItemExist and _G.C_Item.DoesItemExist(loc) then
+                    if _G.C_Item.IsBoundToAccountUntilEquip(loc) then
+                        return true
+                    end
+                end
+            end
+            return false
+        end
+    elseif activeCategory == "REAGENTS" then
+        local currExp = GetCurrentExpLevel()
+        local expID = itemData.expID
+        if expID == nil then
+            local target = itemData.link or itemData.itemID
+            if target then
+                expID = select(15, GetItemInfoSafe(target))
+            end
+            if expID == nil and itemData.itemID and _G.C_Item and _G.C_Item.RequestLoadItemDataByID then
+                _G.C_Item.RequestLoadItemDataByID(itemData.itemID)
+            end
+        end
+        if subFilter == "CURRENT_EXP" then
+            return (expID ~= nil and expID >= currExp)
+        elseif subFilter == "PAST_EXP" then
+            return (expID ~= nil and expID < currExp)
+        end
+    end
+
+    return true
 end
 
 local function GetSafeTooltipText(itemData)

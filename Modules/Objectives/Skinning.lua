@@ -323,9 +323,77 @@ function ObjectivesMod:ApplyQuestIconVisibility(block)
     end
 end
 
+local skinnedItemButtons = setmetatable({}, { __mode = "k" })
+
+function ObjectivesMod:SkinQuestItemButton(block, itemBtn)
+    if not itemBtn then return end
+
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.pendingItemButtonSkins = self.pendingItemButtonSkins or {}
+        self.pendingItemButtonSkins[itemBtn] = block
+        return
+    end
+
+    if itemBtn.SetFrameStrata then
+        itemBtn:SetFrameStrata("HIGH")
+    end
+    if itemBtn.SetFrameLevel and block and block.GetFrameLevel then
+        itemBtn:SetFrameLevel(block:GetFrameLevel() + 30)
+    end
+    if itemBtn.EnableMouse then
+        itemBtn:EnableMouse(true)
+    end
+
+    if block and block.SetMouseClickEnabled then
+        block:SetMouseClickEnabled(false)
+        if block.SetMouseMotionEnabled then
+            block:SetMouseMotionEnabled(true)
+        end
+    end
+
+    if not skinnedItemButtons[itemBtn] then
+        skinnedItemButtons[itemBtn] = true
+        if itemBtn.HookScript then
+            itemBtn:HookScript("OnEnter", function()
+                if block then
+                    if self.HandleBlockEnter then
+                        self:HandleBlockEnter(block)
+                    elseif self.UpdateBlockHoverObjectives then
+                        self:UpdateBlockHoverObjectives(block, true)
+                    end
+                end
+            end)
+            itemBtn:HookScript("OnLeave", function()
+                if block then
+                    if self.HandleBlockLeave then
+                        self:HandleBlockLeave(block)
+                    elseif self.UpdateBlockHoverObjectives then
+                        self:UpdateBlockHoverObjectives(block, false)
+                    end
+                end
+            end)
+        end
+    end
+end
+
 function ObjectivesMod:SkinBlock(block)
     if not block or type(block) ~= "table" then return end
     if not (block.IsObjectType or block.GetObjectType or block.SetPoint) then return end
+
+    local itemBtn = block.itemButton or block.ItemButton or (block.GetItemButton and block:GetItemButton())
+    if itemBtn then
+        self:SkinQuestItemButton(block, itemBtn)
+    end
+
+    if block.AddRightEdgeFrame and not self:IsHooked(block, "AddRightEdgeFrame") then
+        self:SecureHook(block, "AddRightEdgeFrame", function(b)
+            local rightBtn = b and (b.itemButton or b.ItemButton or (b.GetItemButton and b:GetItemButton()))
+            if rightBtn then
+                self:SkinQuestItemButton(b, rightBtn)
+            end
+        end)
+    end
+
     if skinnedBlocks[block] then return end
     skinnedBlocks[block] = true
 
@@ -465,28 +533,9 @@ function ObjectivesMod:SkinBlock(block)
         end
     end
 
-    local itemBtn = block.itemButton or block.ItemButton or (block.GetItemButton and block:GetItemButton())
+    itemBtn = block.itemButton or block.ItemButton or (block.GetItemButton and block:GetItemButton())
     if itemBtn then
-        if itemBtn.SetFrameLevel and block.GetFrameLevel then
-            itemBtn:SetFrameLevel(block:GetFrameLevel() + 20)
-        end
-        if itemBtn.EnableMouse then itemBtn:EnableMouse(true) end
-        if itemBtn.HookScript then
-            itemBtn:HookScript("OnEnter", function()
-                if self.HandleBlockEnter then
-                    self:HandleBlockEnter(block)
-                elseif self.UpdateBlockHoverObjectives then
-                    self:UpdateBlockHoverObjectives(block, true)
-                end
-            end)
-            itemBtn:HookScript("OnLeave", function()
-                if self.HandleBlockLeave then
-                    self:HandleBlockLeave(block)
-                elseif self.UpdateBlockHoverObjectives then
-                    self:UpdateBlockHoverObjectives(block, false)
-                end
-            end)
-        end
+        self:SkinQuestItemButton(block, itemBtn)
     end
 
     if self.UpdateBlockHoverObjectives then
@@ -585,9 +634,12 @@ function ObjectivesMod:SkinProgressBar(bar)
 
     local label = (sb and sb.Label) or bar.Label
     if label and label.SetFont then
-        local outline = self:GetFontOutline("objectiveFontOutline")
-        pcall(label.SetFont, label, self:GetFontPath("objectiveFont"), self.db.objectiveFontSize or 10, outline)
-        ApplyFontStringShadow(label, self:GetFontShadow("objectiveFontShadow"))
+        local pbFont = self:GetFontPath("progressBarFont") or self:GetFontPath("objectiveFont")
+        local pbSize = self.db.progressBarFontSize or self.db.objectiveFontSize or 10
+        local pbOutline = self:GetFontOutline("progressBarFontOutline") or self:GetFontOutline("objectiveFontOutline")
+        local pbShadow = self:GetFontShadow("progressBarFontShadow")
+        pcall(label.SetFont, label, pbFont, pbSize, pbOutline)
+        ApplyFontStringShadow(label, pbShadow)
         if label.SetDrawLayer then
             label:SetDrawLayer("OVERLAY", 7)
         end
@@ -818,6 +870,19 @@ function ObjectivesMod:UpdateFonts()
         end
     end
 
+    local pbFont = self:GetFontPath("progressBarFont") or oFont
+    local pbSize = self.db.progressBarFontSize or 10
+    local pbOutline = self:GetFontOutline("progressBarFontOutline") or oOutline
+    local pbShadow = self:GetFontShadow("progressBarFontShadow")
+    for bar in pairs(skinnedBars) do
+        local sb = bar.Bar or bar
+        local label = (sb and sb.Label) or bar.Label
+        if label and label.SetFont then
+            pcall(label.SetFont, label, pbFont, pbSize, pbOutline)
+            ApplyFontStringShadow(label, pbShadow)
+        end
+    end
+
     self:UpdateAllDividers()
 end
 
@@ -857,28 +922,24 @@ function ObjectivesMod:SkinStageBlock(stageBlock)
         return
     end
 
-    local hFont = self:GetFontPath("headerFont")
-    local tFont = self:GetFontPath("titleFont")
-    local hSize = self.db.headerFontSize or 13
-    local tSize = self.db.titleFontSize or 12
-    local hOutline = self:GetFontOutline("headerFontOutline")
-    local tOutline = self:GetFontOutline("titleFontOutline")
+    local sFont = self:GetFontPath("scenarioStageFont") or self:GetFontPath("headerFont")
+    local sSize = self.db.scenarioStageFontSize or self.db.headerFontSize or 13
+    local sOutline = self:GetFontOutline("scenarioStageFontOutline") or self:GetFontOutline("headerFontOutline")
+    local sShadow = self:GetFontShadow("scenarioStageFontShadow")
     local tc = self.db.titleColor or self.defaultSettings.titleColor
-    local hShadow = self:GetFontShadow("headerFontShadow")
-    local tShadow = self:GetFontShadow("titleFontShadow")
     if stageBlock.Stage and stageBlock.Stage.SetFont then
-        pcall(stageBlock.Stage.SetFont, stageBlock.Stage, hFont, hSize, hOutline)
+        pcall(stageBlock.Stage.SetFont, stageBlock.Stage, sFont, sSize, sOutline)
         stageBlock.Stage:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
-        ApplyFontStringShadow(stageBlock.Stage, hShadow)
+        ApplyFontStringShadow(stageBlock.Stage, sShadow)
         if not hasToast and stageBlock.Stage.ClearAllPoints and stageBlock.Stage.SetPoint then
             stageBlock.Stage:ClearAllPoints()
             stageBlock.Stage:SetPoint("TOPLEFT", stageBlock, "TOPLEFT", 0, 0)
         end
     end
     if stageBlock.Name and stageBlock.Name.SetFont then
-        pcall(stageBlock.Name.SetFont, stageBlock.Name, tFont, tSize, tOutline)
+        pcall(stageBlock.Name.SetFont, stageBlock.Name, sFont, sSize, sOutline)
         stageBlock.Name:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
-        ApplyFontStringShadow(stageBlock.Name, tShadow)
+        ApplyFontStringShadow(stageBlock.Name, sShadow)
     end
 
     if not hasWidget and self.GetStageBlockWidgetHeight then

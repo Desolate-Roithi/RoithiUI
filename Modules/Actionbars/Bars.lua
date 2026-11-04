@@ -1782,16 +1782,9 @@ function AB:DisableActionPageSwitching()
 end
 
 function AB:ProtectOverrideActionBar()
-    if _G.OverrideActionBar and _G.OverrideActionBar.slideOut and not self.overrideSlideOutHooked and hooksecurefunc then
-        hooksecurefunc(_G.OverrideActionBar.slideOut, "Play", function()
-            if _G.InCombatLockdown and _G.InCombatLockdown() then
-                if _G.OverrideActionBar then
-                    if _G.OverrideActionBar.slideOut and _G.OverrideActionBar.slideOut.Stop then _G.OverrideActionBar.slideOut:Stop() end
-                end
-            end
-        end)
-        self.overrideSlideOutHooked = true
-    end
+    -- No-op: Do not stop or intercept Blizzard's OverrideActionBar.slideOut animation in combat.
+    -- Stopping slideOut blocks the native <OnFinished> transition, leaving vehicle/sarcophagus
+    -- (e.g. King's Rest Entomb) shaking UI stuck on screen after being freed.
 end
 
 function AB:SyncBar1Page()

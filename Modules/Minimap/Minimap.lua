@@ -1545,10 +1545,16 @@ function MinimapMod:LayoutDefaultButtons()
         EnsureTitle(elp)
         if hooksecurefunc then
             if elp.UpdateIcon then
-                hooksecurefunc(elp, "UpdateIcon", EnsureTitle)
+                hooksecurefunc(elp, "UpdateIcon", function(btn)
+                    EnsureTitle(btn)
+                    if self.UpdateFolioVisibility then self:UpdateFolioVisibility() end
+                end)
             end
             if elp.UpdateIconForGarrison then
-                hooksecurefunc(elp, "UpdateIconForGarrison", EnsureTitle)
+                hooksecurefunc(elp, "UpdateIconForGarrison", function(btn)
+                    EnsureTitle(btn)
+                    if self.UpdateFolioVisibility then self:UpdateFolioVisibility() end
+                end)
             end
         end
         GetBlizzMinimapState(elp).tooltipVaccinated = true
@@ -1759,14 +1765,36 @@ function MinimapMod:UpdateLandingVisibility()
     end
 end
 
+function MinimapMod:IsOmniumFolioMode(btn)
+    if not btn then return false end
+    if btn.IsExpansionOverlayMode then
+        local ok, isOverlay = pcall(btn.IsExpansionOverlayMode, btn)
+        if ok and isOverlay ~= nil then
+            return isOverlay == true
+        end
+    end
+    if _G.ExpansionLandingPage and _G.ExpansionLandingPage.IsOverlayApplied then
+        local ok, isOverlay = pcall(_G.ExpansionLandingPage.IsOverlayApplied, _G.ExpansionLandingPage)
+        if ok and isOverlay ~= nil then
+            return isOverlay == true
+        end
+    end
+    if btn.garrisonType and btn.garrisonType > 0 then
+        return false
+    end
+    return true
+end
+
 function MinimapMod:UpdateFolioVisibility()
-    local show = (self.db.showFolio == true)
+    local folio = _G.ExpansionLandingPageMinimapButton
+    local isFolioMode = self:IsOmniumFolioMode(folio)
+    local isEditMode = self.isEditModeActive or (_G.EditModeManagerFrame and _G.EditModeManagerFrame.IsShown and _G.EditModeManagerFrame:IsShown())
+    local show = (self.db.showFolio == true) and (isFolioMode or isEditMode)
     if self.folioAnchor then
         self.folioAnchor:SetShown(show)
     end
-    local folio = _G.ExpansionLandingPageMinimapButton
     if folio and _G.PlumberLandingPageMinimapButton then
-        if show then
+        if show and isFolioMode then
             if folio.RefreshButton then
                 pcall(folio.RefreshButton, folio, true)
             end
@@ -1978,6 +2006,7 @@ function MinimapMod:UpdateAllElementVisibilities()
     self:UpdateTrackingVisibility()
     self:UpdateLFGVisibility()
     self:UpdateLandingVisibility()
+    self:UpdateFolioVisibility()
     self:UpdateDielVisibility()
     self:UpdateDifficultyVisibility()
 end

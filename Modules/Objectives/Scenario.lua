@@ -5,6 +5,8 @@ local ObjectivesMod = RoithiUI:GetModule("Objectives")
 local objState = ns.Objectives or {}
 ns.Objectives = objState
 
+local hookedWidgetContainers = setmetatable({}, { __mode = "k" })
+
 local function SharesWidgetPool(tracker)
     if not tracker then return true end
     if tracker == _G.ScenarioObjectiveTracker or tracker == _G.UIWidgetObjectiveTracker then
@@ -30,6 +32,15 @@ function ObjectivesMod:GetStageBlockWidgetHeight(stageBlock)
 
     local wc = stageBlock.WidgetContainer
     local hasWidget = false
+
+    if wc and not hookedWidgetContainers[wc] and wc.HookScript then
+        hookedWidgetContainers[wc] = true
+        wc:HookScript("OnSizeChanged", function()
+            if self.AlignScenarioElements then
+                self:AlignScenarioElements()
+            end
+        end)
+    end
 
     if wc and (wc.IsShown == nil or wc:IsShown()) then
         if (wc.HasAnyWidgetsShowing and wc:HasAnyWidgetsShowing())
@@ -190,10 +201,14 @@ function ObjectivesMod:AlignScenarioElements()
 
     local isDelve = false
     if _G.C_Scenario and _G.C_Scenario.GetInfo then
-        local _, _, _, _, _, _, _, _, _, scenarioType = _G.C_Scenario.GetInfo()
-        if scenarioType == "delves-scenario" then
+        local scenarioInfo = { _G.C_Scenario.GetInfo() }
+        local textureKit = scenarioInfo[12]
+        if textureKit == "delves-scenario" then
             isDelve = true
         end
+    end
+    if not isDelve and sb and sb.widgetSetID == 842 then
+        isDelve = true
     end
     if not isDelve and _G.C_ScenarioInfo and _G.C_ScenarioInfo.IsTieredEntranceScenario and _G.C_ScenarioInfo.IsTieredEntranceScenario() then
         isDelve = true
@@ -233,7 +248,7 @@ function ObjectivesMod:AlignScenarioElements()
             local textOnlyX = 4
             xOffset = textOnlyX + stageXOff
         end
-        local desiredH = isTextOnly and 16 or (isDelveWidget and (widgetH or 64)) or (hasWidget and (widgetH or ((self.db and self.db.scenarioStageWidgetHeight) or 83)) or 63)
+        local desiredH = isTextOnly and 16 or (isDelveWidget and (widgetH or ((self.db and self.db.scenarioStageWidgetHeight) or 83))) or (hasWidget and (widgetH or ((self.db and self.db.scenarioStageWidgetHeight) or 83)) or 63)
         local yOffset = -10
 
         local relTo = sot.Header and sot.Header:IsShown() and sot.Header or (sot.ContentsFrame or sot)

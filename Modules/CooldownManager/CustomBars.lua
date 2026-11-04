@@ -218,6 +218,7 @@ function CDM:ResolveSpellInfo(spellIdentifier)
         if itemID then
             local itemInfo = { (_G.C_Item and _G.C_Item.GetItemInfo and _G.C_Item.GetItemInfo(itemID)) or (_G.GetItemInfo and _G.GetItemInfo(itemID)) }
             local iName = itemInfo[1]
+            local iLink = itemInfo[2] or spellIdentifier.itemLink
             local iIcon = itemInfo[10]
             if not iName then
                 iName = "Item " .. tostring(itemID)
@@ -225,6 +226,7 @@ function CDM:ResolveSpellInfo(spellIdentifier)
             end
             return {
                 itemID = itemID,
+                itemLink = iLink,
                 isItem = true,
                 name = iName,
                 icon = iIcon or (_G.C_Item and _G.C_Item.GetItemIconByID and _G.C_Item.GetItemIconByID(itemID)) or 134400,
@@ -438,6 +440,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
     if spellInfo.isItem or (spellInfo.itemID and not spellInfo.spellID) then
         local itemID = spellInfo.itemID
         iconBtn.itemID = itemID
+        iconBtn.itemLink = spellInfo.itemLink
         iconBtn.spellID = nil
 
         local tex = spellInfo.icon or (_G.C_Item and _G.C_Item.GetItemIconByID and _G.C_Item.GetItemIconByID(itemID)) or 134400
@@ -1119,15 +1122,46 @@ function CDM:InitializeCustomBar(index)
             end)
 
             iconBtn:SetScript("OnEnter", function(selfBtn)
-                if selfBtn.spellID and _G.GameTooltip then
-                    _G.GameTooltip:SetOwner(selfBtn, "ANCHOR_RIGHT")
-                    if _G.GameTooltip.SetSpellByID then
-                        _G.GameTooltip:SetSpellByID(selfBtn.spellID)
+                if not _G.GameTooltip then return end
+                _G.GameTooltip:SetOwner(selfBtn, "ANCHOR_RIGHT")
+                if selfBtn.spellID and _G.GameTooltip.SetSpellByID then
+                    _G.GameTooltip:SetSpellByID(selfBtn.spellID)
+                    _G.GameTooltip:Show()
+                elseif selfBtn.itemID then
+                    local itemID = selfBtn.itemID
+                    local link = selfBtn.itemLink
+                    if not link and _G.C_Item and _G.C_Item.GetItemLinkByItemID then
+                        link = _G.C_Item.GetItemLinkByItemID(itemID)
+                    end
+                    if not link and _G.C_Item and _G.C_Item.GetItemInfo then
+                        link = select(2, _G.C_Item.GetItemInfo(itemID))
+                    elseif not link and _G.GetItemInfo then
+                        link = select(2, _G.GetItemInfo(itemID))
+                    end
+
+                    -- Check if it is an equipped item (e.g. trinket in slot 13/14)
+                    local equippedSlot = nil
+                    for slotID = 1, 19 do
+                        local eqItemID = (_G.GetInventoryItemID and _G.GetInventoryItemID("player", slotID))
+                                      or (_G.C_Item and _G.C_Item.GetInventoryItemID and _G.C_Item.GetInventoryItemID("player", slotID))
+                        if eqItemID == itemID then
+                            equippedSlot = slotID
+                            break
+                        end
+                    end
+
+                    if equippedSlot and _G.GameTooltip.SetInventoryItem then
+                        _G.GameTooltip:SetInventoryItem("player", equippedSlot)
+                    elseif link and _G.GameTooltip.SetHyperlink then
+                        _G.GameTooltip:SetHyperlink(link)
+                    elseif _G.C_TooltipInfo and _G.C_TooltipInfo.GetItemByID and _G.GameTooltip.ProcessInfo then
+                        _G.GameTooltip:ProcessInfo(_G.C_TooltipInfo.GetItemByID(itemID))
+                    elseif _G.GameTooltip.SetItemByID then
+                        _G.GameTooltip:SetItemByID(itemID)
                     end
                     _G.GameTooltip:Show()
-                elseif _G.GameTooltip then
-                    _G.GameTooltip:SetOwner(selfBtn, "ANCHOR_RIGHT")
-                    _G.GameTooltip:SetText(L["(Drop spell here)"] or "(Drop spell here)")
+                else
+                    _G.GameTooltip:SetText(L["(Drop spell or item here)"] or "(Drop spell or item here)")
                     _G.GameTooltip:Show()
                 end
             end)

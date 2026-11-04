@@ -457,14 +457,83 @@ function ObjectivesMod:GetOptions()
         objectiveFontOutline = CreateOutlineOption(L["Objective Font Outline"] or "Objective Font Outline", 14, "objectiveFontOutline", "OUTLINE"),
         objectiveFontShadow = CreateShadowOption(L["Objective Text Shadow"] or "Objective Text Shadow", 15, "objectiveFontShadow", false),
 
+        questLevelHeader = {
+            type = "header",
+            name = L["Quest Level Font"] or "Quest Level Font",
+            order = 16,
+        },
+        questLevelFont = CreateFontOption(L["Quest Level Font"] or "Quest Level Font", 17, "questLevelFont", "Expressway"),
+        questLevelFontSize = {
+            type = "range",
+            name = L["Quest Level Font Size"] or "Quest Level Font Size",
+            order = 18,
+            min = 8,
+            max = 20,
+            step = 1,
+            get = function() return (self.db and self.db.questLevelFontSize) or 12 end,
+            set = function(_, val)
+                self.db.questLevelFontSize = val
+                self:UpdateFonts()
+                self:SkinAllExisting()
+            end,
+        },
+        questLevelFontOutline = CreateOutlineOption(L["Quest Level Font Outline"] or "Quest Level Font Outline", 19, "questLevelFontOutline", "OUTLINE"),
+        questLevelFontShadow = CreateShadowOption(L["Quest Level Text Shadow"] or "Quest Level Text Shadow", 20, "questLevelFontShadow", false),
+
+        scenarioStageHeader = {
+            type = "header",
+            name = L["Scenario Stage Font"] or "Scenario Stage Font",
+            order = 21,
+        },
+        scenarioStageFont = CreateFontOption(L["Scenario Stage Font"] or "Scenario Stage Font", 22, "scenarioStageFont", "Expressway"),
+        scenarioStageFontSize = {
+            type = "range",
+            name = L["Scenario Stage Font Size"] or "Scenario Stage Font Size",
+            order = 23,
+            min = 9,
+            max = 22,
+            step = 1,
+            get = function() return (self.db and self.db.scenarioStageFontSize) or 13 end,
+            set = function(_, val)
+                self.db.scenarioStageFontSize = val
+                self:UpdateFonts()
+                self:SkinAllExisting()
+            end,
+        },
+        scenarioStageFontOutline = CreateOutlineOption(L["Scenario Stage Font Outline"] or "Scenario Stage Font Outline", 24, "scenarioStageFontOutline", "OUTLINE"),
+        scenarioStageFontShadow = CreateShadowOption(L["Scenario Stage Text Shadow"] or "Scenario Stage Text Shadow", 25, "scenarioStageFontShadow", false),
+
+        progressBarHeader = {
+            type = "header",
+            name = L["Progress Bar Font"] or "Progress Bar Font",
+            order = 26,
+        },
+        progressBarFont = CreateFontOption(L["Progress Bar Font"] or "Progress Bar Font", 27, "progressBarFont", "Expressway"),
+        progressBarFontSize = {
+            type = "range",
+            name = L["Progress Bar Font Size"] or "Progress Bar Font Size",
+            order = 28,
+            min = 8,
+            max = 18,
+            step = 1,
+            get = function() return (self.db and self.db.progressBarFontSize) or 10 end,
+            set = function(_, val)
+                self.db.progressBarFontSize = val
+                self:UpdateFonts()
+                self:SkinAllExisting()
+            end,
+        },
+        progressBarFontOutline = CreateOutlineOption(L["Progress Bar Font Outline"] or "Progress Bar Font Outline", 29, "progressBarFontOutline", "OUTLINE"),
+        progressBarFontShadow = CreateShadowOption(L["Progress Bar Text Shadow"] or "Progress Bar Text Shadow", 30, "progressBarFontShadow", false),
+
         globalHeader = {
             type = "header",
             name = L["Global Fallbacks"] or "Global Fallbacks",
-            order = 16,
+            order = 31,
         },
-        font = CreateFontOption(L["Global Fallback Font"] or "Global Fallback Font", 17, "font", "Expressway"),
-        fontOutline = CreateOutlineOption(L["Global Fallback Outline"] or "Global Fallback Outline", 18, "fontOutline", "OUTLINE"),
-        showFontShadow = CreateShadowOption(L["Global Fallback Text Shadow"] or "Global Fallback Text Shadow", 19, "showFontShadow", false),
+        font = CreateFontOption(L["Global Fallback Font"] or "Global Fallback Font", 32, "font", "Expressway"),
+        fontOutline = CreateOutlineOption(L["Global Fallback Outline"] or "Global Fallback Outline", 33, "fontOutline", "OUTLINE"),
+        showFontShadow = CreateShadowOption(L["Global Fallback Text Shadow"] or "Global Fallback Text Shadow", 34, "showFontShadow", false),
     }
 
     local colorsArgs = {

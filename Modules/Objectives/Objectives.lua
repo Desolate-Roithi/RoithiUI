@@ -167,6 +167,8 @@ function ObjectivesMod:OnEnable()
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "OnChallengeModeChanged")
     self:RegisterEvent("SCENARIO_UPDATE", "OnScenarioUpdate")
     self:RegisterEvent("SCENARIO_CRITERIA_UPDATE", "OnScenarioUpdate")
+    self:RegisterEvent("ACTIVE_DELVE_DATA_UPDATE", "OnScenarioUpdate")
+    self:RegisterEvent("SCENARIO_CRITERIA_SHOW_STATE_UPDATE", "OnScenarioUpdate")
     self:RegisterEvent("UPDATE_UI_WIDGET", "OnScenarioUpdate")
     self:RegisterEvent("UPDATE_ALL_UI_WIDGETS", "OnScenarioUpdate")
     self:HookBelowMinimapWidget()
@@ -212,6 +214,18 @@ function ObjectivesMod:OnRegenEnabled()
         self.pendingSuperTrackQuestID = nil
         if _G.C_SuperTrack and _G.C_SuperTrack.SetSuperTrackedQuestID then
             _G.C_SuperTrack.SetSuperTrackedQuestID(qid)
+        end
+    end
+    if self.pendingItemButtonSkins then
+        for itemBtn, block in pairs(self.pendingItemButtonSkins) do
+            if self.SkinQuestItemButton then
+                self:SkinQuestItemButton(block, itemBtn)
+            end
+        end
+        if _G.wipe then
+            _G.wipe(self.pendingItemButtonSkins)
+        else
+            self.pendingItemButtonSkins = {}
         end
     end
 end
@@ -782,6 +796,10 @@ function ObjectivesMod:HookTracker(tracker)
             -- heights; a C_Timer.After(0) deferred call wins the race.
             local pendingBlocks = {}
             ForEachTrackerBlock(tracker, function(block)
+                local itemBtn = block and (block.itemButton or block.ItemButton or (block.GetItemButton and block:GetItemButton()))
+                if itemBtn and self.SkinQuestItemButton then
+                    self:SkinQuestItemButton(block, itemBtn)
+                end
                 if not skinnedBlocks[block] then
                     self:SkinBlock(block)
                 else

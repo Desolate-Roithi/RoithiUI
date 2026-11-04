@@ -127,6 +127,7 @@ function BagsMod:OnEnable()
     self:RegisterEvent("MERCHANT_SHOW", "OnMerchantShow")
     self:RegisterEvent("MERCHANT_CLOSED", "OnMerchantClosed")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
+    self:RegisterEvent("ITEM_DATA_LOAD_RESULT", "OnItemDataLoadResult")
 
     self:HookTooltipShortcuts()
     self:SetupBagBar()
@@ -749,6 +750,15 @@ function BagsMod:GetNumBagSlots(bag)
     return 0
 end
 
+local function GetItemInfoSafe(item)
+    if not item then return end
+    if _G.C_Item and _G.C_Item.GetItemInfo then
+        return _G.C_Item.GetItemInfo(item)
+    elseif _G.GetItemInfo then
+        return _G.GetItemInfo(item)
+    end
+end
+
 function BagsMod:GetItemInfoAt(bag, slot)
     if _G.C_Container and _G.C_Container.GetContainerItemInfo then
         local info = _G.C_Container.GetContainerItemInfo(bag, slot)
@@ -776,19 +786,24 @@ function BagsMod:GetItemInfoAt(bag, slot)
                 classID = cID
                 subclassID = scID
             end
-            if link and _G.GetItemInfo then
-                local iName, _, iQuality, iLvl, _, iType, iSubType, _, eqLoc, _, _, cID, scID, bType, expacID, _, isCraft = _G.GetItemInfo(link)
-                name = iName
-                itemType = itemType or iType
-                itemSubType = itemSubType or iSubType
-                equipLoc = equipLoc or eqLoc
-                quality = iQuality or quality
-                itemLevel = iLvl
-                classID = classID or cID
-                subclassID = subclassID or scID
-                bindType = bType
-                expID = expacID
-                isCraftingReagent = isCraft
+            local targetItem = link or itemID
+            if targetItem then
+                local iName, _, iQuality, iLvl, _, iType, iSubType, _, eqLoc, _, _, cID, scID, bType, expacID, _, isCraft = GetItemInfoSafe(targetItem)
+                if iName then
+                    name = iName
+                    itemType = itemType or iType
+                    itemSubType = itemSubType or iSubType
+                    equipLoc = equipLoc or eqLoc
+                    quality = iQuality or quality
+                    itemLevel = iLvl
+                    classID = classID or cID
+                    subclassID = subclassID or scID
+                    bindType = bType
+                    expID = expacID
+                    isCraftingReagent = isCraft
+                elseif itemID and _G.C_Item and _G.C_Item.RequestLoadItemDataByID then
+                    _G.C_Item.RequestLoadItemDataByID(itemID)
+                end
             end
             if not itemLevel and link and _G.C_Item and _G.C_Item.GetDetailedItemLevelInfo then
                 itemLevel = _G.C_Item.GetDetailedItemLevelInfo(link)
@@ -797,6 +812,12 @@ function BagsMod:GetItemInfoAt(bag, slot)
             local isQuest = false
             local showQuestBang = false
             local showQuestBorder = false
+            local isBound = info.isBound
+            local inEquipmentSet = nil
+            if _G.C_Container and _G.C_Container.GetContainerItemEquipmentSetInfo then
+                local inSet = _G.C_Container.GetContainerItemEquipmentSetInfo(bag, slot)
+                inEquipmentSet = (inSet == true)
+            end
             if _G.C_Container and _G.C_Container.GetContainerItemQuestInfo then
                 local qInfo = _G.C_Container.GetContainerItemQuestInfo(bag, slot)
                 if qInfo then
@@ -841,6 +862,8 @@ function BagsMod:GetItemInfoAt(bag, slot)
                 showQuestBorder = showQuestBorder,
                 isCraftingReagent = isCraftingReagent,
                 itemGUID = itemGUID,
+                isBound = isBound,
+                inEquipmentSet = inEquipmentSet,
             }
             itemInfo.isNew = self:IsSlotNew(bag, slot, itemInfo)
             return itemInfo
@@ -876,6 +899,12 @@ function BagsMod:OnBagUpdate()
         _G.C_Timer.After(0.05, PerformUpdate)
     else
         PerformUpdate()
+    end
+end
+
+function BagsMod:OnItemDataLoadResult(event, itemID, success)
+    if success and self.mainFrame and self.mainFrame:IsShown() then
+        self:OnBagUpdate()
     end
 end
 
@@ -1528,7 +1557,16 @@ function BagsMod:RebuildCategoryButtons()
         self.catContainer:Hide()
         self.catContainer = nil
     end
+    if self.subCatContainer then
+        self.subCatContainer:Hide()
+        self.subCatContainer = nil
+    end
+    if self.subCatSeparator then
+        self.subCatSeparator:Hide()
+        self.subCatSeparator = nil
+    end
     self.categoryButtons = {}
+    self.subCategoryButtons = nil
     self:CreateCategoryButtons()
 end
 
@@ -1560,7 +1598,20 @@ function BagsMod:CreateCategoryButtons()
         local text = btn:CreateFontString(nil, "OVERLAY")
         self:ApplyFont(text, 12, "categoryFontSize", "OUTLINE")
         text:SetPoint("LEFT", btn, "LEFT", 2, 0)
-        text:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
+        if cat.id == "GEAR" or cat.id == "REAGENTS" then
+            local arrow = btn:CreateTexture(nil, "OVERLAY")
+            arrow:SetSize(8, 8)
+            arrow:SetPoint("RIGHT", btn, "RIGHT", -4, 0)
+            arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
+            if arrow.SetRotation then
+                arrow:SetRotation(-math.pi / 2)
+            end
+            arrow:SetVertexColor(0.55, 0.55, 0.55, 0.8)
+            btn.subFilterArrow = arrow
+            text:SetPoint("RIGHT", btn, "RIGHT", -12, 0)
+        else
+            text:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
+        end
         text:SetJustifyH("CENTER")
         if text.SetWordWrap then text:SetWordWrap(false) end
         text:SetText(cat.name)
@@ -1568,6 +1619,7 @@ function BagsMod:CreateCategoryButtons()
 
         btn.catId = cat.id
         btn.isCustom = cat.isCustom
+        btn.baseName = cat.name
         btn.label = text
 
         if btn.RegisterForClicks then btn:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
@@ -1595,7 +1647,29 @@ function BagsMod:CreateCategoryButtons()
                     return
                 end
             end
-            self.db.activeCategory = cat.id
+
+            if button == "RightButton" then
+                if cat.id == "GEAR" or cat.id == "REAGENTS" then
+                    self:OpenSubFilterDropdown(b, cat.id)
+                    return
+                end
+            end
+
+            if self.db.activeCategory ~= cat.id then
+                self.db.activeCategory = cat.id
+                if cat.id == "GEAR" then
+                    self.activeGearSubFilter = "ALL"
+                elseif cat.id == "REAGENTS" then
+                    self.activeReagentSubFilter = "ALL"
+                end
+            else
+                -- Clicked already active category: reset sub-filter back to ALL
+                if cat.id == "GEAR" and self.activeGearSubFilter ~= "ALL" then
+                    self.activeGearSubFilter = "ALL"
+                elseif cat.id == "REAGENTS" and self.activeReagentSubFilter ~= "ALL" then
+                    self.activeReagentSubFilter = "ALL"
+                end
+            end
             self:UpdateCategoryButtonStyles()
             self:UpdateInventory()
         end)
@@ -1626,6 +1700,27 @@ function BagsMod:CreateCategoryButtons()
                 _G.GameTooltip:AddLine("|cff00ff00<" .. L["Shift-Click to Rename Filter"] .. ">|r", 0.2, 0.9, 0.2)
                 _G.GameTooltip:AddLine("|cffff4444<" .. L["Right-Click for Options / Delete"] .. ">|r", 0.9, 0.4, 0.4)
                 _G.GameTooltip:Show()
+            elseif (cat.id == "GEAR" or cat.id == "REAGENTS") and _G.GameTooltip then
+                local activeSub = (cat.id == "GEAR" and (self.activeGearSubFilter or "ALL"))
+                               or (cat.id == "REAGENTS" and (self.activeReagentSubFilter or "ALL"))
+                local subList = (cat.id == "GEAR" and self.GEAR_SUB_FILTERS) or self.REAGENT_SUB_FILTERS
+                local subDisplayName = activeSub
+                for _, s in ipairs(subList or {}) do
+                    if s.id == activeSub then
+                        subDisplayName = s.name
+                        break
+                    end
+                end
+                _G.GameTooltip:SetOwner(btn, "ANCHOR_TOP")
+                _G.GameTooltip:SetText(cat.name, 1, 1, 1)
+                local subFmt = L["Active Sub-Filter: %s"] or "Active Sub-Filter: %s"
+                _G.GameTooltip:AddLine(string.format(subFmt, "|cff00ccff" .. subDisplayName .. "|r"), 0.9, 0.9, 0.9)
+                _G.GameTooltip:AddLine(" ")
+                if activeSub ~= "ALL" then
+                    _G.GameTooltip:AddLine("|cff00ff00" .. (L["<Left-Click to reset to All>"] or "<Left-Click to reset to All>") .. "|r", 0.2, 0.9, 0.2)
+                end
+                _G.GameTooltip:AddLine("|cff00ccff" .. (L["<Right-Click for Sub-Filters>"] or "<Right-Click for Sub-Filters>") .. "|r", 0.2, 0.8, 1)
+                _G.GameTooltip:Show()
             end
         end)
         btn:SetScript("OnLeave", function()
@@ -1654,8 +1749,12 @@ function BagsMod:UpdateCategoryButtonsLayout(overrideW)
 
     local numButtons = #self.categoryButtons
     local btnSpacing = 3
-    local minBtnW = 86
-    local buttonsPerRow = math.max(2, math.floor((totalW + btnSpacing) / (minBtnW + btnSpacing)))
+    -- Dynamically balance buttons across 2 rows so rows are symmetrical and buttons have ample width
+    local buttonsPerRow = math.max(2, math.ceil(numButtons / 2))
+    local maxBtnW = 125
+    if (totalW / buttonsPerRow) > maxBtnW and math.floor(totalW / maxBtnW) > buttonsPerRow then
+        buttonsPerRow = math.floor(totalW / maxBtnW)
+    end
     local btnH = 22
     local btnW = math.floor((totalW - (buttonsPerRow - 1) * btnSpacing) / buttonsPerRow)
 
@@ -1671,7 +1770,8 @@ function BagsMod:UpdateCategoryButtonsLayout(overrideW)
         if btn.label then
             btn.label:ClearAllPoints()
             btn.label:SetPoint("LEFT", btn, "LEFT", 2, 0)
-            btn.label:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
+            local rightPad = btn.subFilterArrow and -12 or -2
+            btn.label:SetPoint("RIGHT", btn, "RIGHT", rightPad, 0)
             btn.label:SetJustifyH("CENTER")
             if btn.label.SetWordWrap then btn.label:SetWordWrap(false) end
         end
@@ -1688,7 +1788,27 @@ end
 function BagsMod:UpdateCategoryButtonStyles()
     local active = self.db.activeCategory or "ALL"
     for _, btn in ipairs(self.categoryButtons) do
-        if btn.catId == active then
+        local catId = btn.catId
+        local labelText = btn.baseName or (btn.label and btn.label:GetText()) or ""
+        btn.baseName = btn.baseName or labelText
+
+        if btn.label then
+            btn.label:SetText(btn.baseName)
+        end
+
+        if catId == "GEAR" or catId == "REAGENTS" then
+            local activeSub = (catId == "GEAR" and (self.activeGearSubFilter or "ALL"))
+                           or (self.activeReagentSubFilter or "ALL")
+            if btn.subFilterArrow then
+                if activeSub ~= "ALL" then
+                    btn.subFilterArrow:SetVertexColor(0, 0.85, 1, 1)
+                else
+                    btn.subFilterArrow:SetVertexColor(0.55, 0.55, 0.55, 0.8)
+                end
+            end
+        end
+
+        if catId == active then
             btn:SetBackdropColor(0.15, 0.35, 0.6, 0.9)
             btn:SetBackdropBorderColor(0.3, 0.6, 1.0, 1.0)
             if btn.label then btn.label:SetTextColor(1, 1, 1, 1) end
@@ -1698,6 +1818,34 @@ function BagsMod:UpdateCategoryButtonStyles()
             if btn.label then btn.label:SetTextColor(0.75, 0.75, 0.75, 1) end
         end
     end
+end
+
+function BagsMod:OpenSubFilterDropdown(owner, catID)
+    if not _G.MenuUtil or not _G.MenuUtil.CreateContextMenu then return end
+    local subList = (catID == "GEAR" and self.GEAR_SUB_FILTERS) or (catID == "REAGENTS" and self.REAGENT_SUB_FILTERS)
+    if not subList then return end
+
+    _G.MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
+        local title = (catID == "GEAR" and (L["Gear Sub-Filters"] or "Gear Sub-Filters"))
+                   or (L["Reagent Sub-Filters"] or "Reagent Sub-Filters")
+        rootDescription:CreateTitle(title)
+
+        for _, sub in ipairs(subList) do
+            rootDescription:CreateRadio(sub.name, function()
+                local cur = (catID == "GEAR" and (self.activeGearSubFilter or "ALL"))
+                         or (catID == "REAGENTS" and (self.activeReagentSubFilter or "ALL"))
+                return cur == sub.id
+            end, function()
+                if catID == "GEAR" then
+                    self.activeGearSubFilter = sub.id
+                elseif catID == "REAGENTS" then
+                    self.activeReagentSubFilter = sub.id
+                end
+                self:UpdateCategoryButtonStyles()
+                self:UpdateInventory()
+            end)
+        end
+    end)
 end
 
 function BagsMod:CreateFooterBar()
@@ -3398,6 +3546,13 @@ function BagsMod:UpdateInventory()
                     isMatch = self:MatchesSearchQuery(itemData, self.searchText)
                 end
 
+                local isSubFilterActive = (activeCat == "GEAR" and self.activeGearSubFilter and self.activeGearSubFilter ~= "ALL")
+                                       or (activeCat == "REAGENTS" and self.activeReagentSubFilter and self.activeReagentSubFilter ~= "ALL")
+                local subFilterMatch = not isSubFilterActive or self:MatchesSubFilter(itemData, activeCat)
+
+                local isDimmed = (isSearching and not isMatch) or (isSubFilterActive and not subFilterMatch)
+                local isHighlighted = (isSearching and isMatch) or (isSubFilterActive and subFilterMatch)
+
                 local tex = itemData.texture or "Interface\\Icons\\INV_Misc_QuestionMark"
                 if slotFrame.lastTexture ~= tex then
                     if slotFrame.SetItemButtonTexture then
@@ -3414,13 +3569,13 @@ function BagsMod:UpdateInventory()
                     iconTex:Show()
                 end
 
-                local targetAlpha = (isSearching and not isMatch) and 0.2 or 1.0
+                local targetAlpha = isDimmed and 0.2 or 1.0
                 if slotFrame.lastAlpha ~= targetAlpha then
                     slotFrame:SetAlpha(targetAlpha)
                     slotFrame.lastAlpha = targetAlpha
                 end
                 if iconTex and iconTex.SetDesaturated then
-                    local desat = (isSearching and not isMatch)
+                    local desat = isDimmed
                     if slotFrame.lastDesat ~= desat then
                         iconTex:SetDesaturated(desat)
                         slotFrame.lastDesat = desat
@@ -3428,9 +3583,9 @@ function BagsMod:UpdateInventory()
                 end
 
                 local br, bg, bb, ba
-                if isSearching and not isMatch then
+                if isDimmed then
                     br, bg, bb, ba = 0.15, 0.15, 0.15, 0.5
-                elseif isSearching then
+                elseif (isSearching or isSubFilterActive) and isHighlighted then
                     br, bg, bb, ba = 1.0, 0.82, 0.0, 1.0
                 elseif itemData.showQuestBang or itemData.showQuestBorder or itemData.isQuest or (itemData.classID == 12) then
                     br, bg, bb, ba = 1.0, 0.85, 0.0, 1.0
@@ -3661,6 +3816,28 @@ function BagsMod:UpdateInventory()
             if s.Cooldown then s.Cooldown:Hide() end
             if s.newOverlay then s.newOverlay:Hide() end
             if s.roithiBorder then s.roithiBorder:Hide() end
+        end
+    end
+
+    if self.activeTooltipSlot and _G.GameTooltip and _G.GameTooltip:GetOwner() == self.activeTooltipSlot then
+        local bag = self.activeTooltipSlot.bag
+        local slot = self.activeTooltipSlot.slot
+        local itemID = nil
+        if bag and slot then
+            if _G.C_Container and _G.C_Container.GetContainerItemID then
+                itemID = _G.C_Container.GetContainerItemID(bag, slot)
+            elseif _G.GetContainerItemID then
+                itemID = _G.GetContainerItemID(bag, slot)
+            end
+        end
+        if itemID and self.activeTooltipSlot:IsShown() then
+            self:OnSlotEnter(self.activeTooltipSlot)
+        else
+            _G.GameTooltip:Hide()
+            self.activeTooltipSlot = nil
+            if _G.ResetCursor then
+                _G.ResetCursor()
+            end
         end
     end
 end

@@ -40,6 +40,7 @@ function CDM:OnEnable()
     self:RegisterEvent("SPELL_UPDATE_CHARGES", "UpdateAllCustomBarCooldowns")
     self:RegisterEvent("BAG_UPDATE_COOLDOWN", "UpdateAllCustomBarCooldowns")
     self:RegisterEvent("BAG_UPDATE", "UpdateAllCustomBarCooldowns")
+    self:RegisterEvent("ITEM_DATA_LOAD_RESULT", "OnItemDataLoadResult")
 
     self:HookAllViewers()
     self:StyleAllActiveItems()
@@ -94,6 +95,14 @@ function CDM:OnAddonLoaded(event, loadedAddonName)
     end
 end
 
+function CDM:OnItemDataLoadResult(event, itemID, success)
+    if success and self:IsEnabled() and self.db and self.db.enabled ~= false then
+        if self.UpdateAllCustomBars then
+            self:UpdateAllCustomBars()
+        end
+    end
+end
+
 function CDM:HookAllViewers()
     for viewerKey, globalName in pairs(self.VIEWER_KEYS) do
         local viewer = _G[globalName]
@@ -136,9 +145,9 @@ function CDM:HookItemMixins()
             hooksecurefunc(mixin, "OnCooldownIDSet", function(itemFrame)
                 if self:IsEnabled() and self.db and self.db.enabled ~= false then
                     self:StyleItemFrame(viewerKey, itemFrame)
-                    if viewerKey == "BuffIcon" then
-                        local viewer = _G.BuffIconCooldownViewer
-                        if viewer then self:AlignViewerItems("BuffIcon", viewer) end
+                    if viewerKey == "BuffIcon" or viewerKey == "BuffBar" then
+                        local viewer = _G[self.VIEWER_KEYS[viewerKey]]
+                        if viewer then self:AlignViewerItems(viewerKey, viewer) end
                     end
                 end
             end)
@@ -162,6 +171,20 @@ function CDM:HookItemMixins()
         end
     end
 
+    if _G.CooldownViewerBuffBarItemMixin then
+        if _G.CooldownViewerBuffBarItemMixin.UpdateShownState and not self.buffBarUpdateShownStateHooked then
+            hooksecurefunc(_G.CooldownViewerBuffBarItemMixin, "UpdateShownState", function()
+                if self:IsEnabled() and self.db and self.db.enabled ~= false then
+                    local viewer = _G.BuffBarCooldownViewer
+                    if viewer then
+                        self:AlignViewerItems("BuffBar", viewer)
+                    end
+                end
+            end)
+            self.buffBarUpdateShownStateHooked = true
+        end
+    end
+
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.dataChangedCallbackRegistered then
         _G.EventRegistry:RegisterCallback("CooldownViewerSettings.OnDataChanged", function()
             if not InCombatLockdown() and self:IsEnabled() and self.db and self.db.enabled ~= false then
@@ -180,17 +203,19 @@ end
 
 
 function CDM:PopulateSettingsPanel(panel)
+    if not panel then return end
     if self.selectedOptionsBar then
         panel.selectedBar = self.selectedOptionsBar
         self.selectedOptionsBar = nil
-        if panel.RebuildTabs then panel:RebuildTabs() end
-        if panel.RefreshView then panel:RefreshView() end
     end
     if panel.populated then
+        if panel.RebuildTabs then panel:RebuildTabs() end
+        if panel.RefreshView then panel:RefreshView() end
         return
     end
 
     panel.selectedBar = panel.selectedBar or "Essential"
+    local RebuildTabs
 
     local modernBtnState = setmetatable({}, { __mode = "k" })
     local function StyleModernButton(btn, isAccent)
@@ -556,10 +581,77 @@ function CDM:PopulateSettingsPanel(panel)
             local cData = customList[customIdx]
             if not cData then return end
 
-            local lblCustom = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            local lblCustom = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
             lblCustom:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 12, -4)
-            lblCustom:SetText(string.format("|cff00ccff%s|r", cData.name or "Custom Bar"))
+            lblCustom:SetText(L["Bar Name"] or "Bar Name")
             table.insert(contentFrame.widgets, lblCustom)
+
+            local renameBox = CreateFrame("EditBox", nil, contentFrame, "BackdropTemplate")
+            renameBox:SetSize(130, 20)
+            renameBox:SetPoint("LEFT", lblCustom, "RIGHT", 8, 0)
+            renameBox:SetAutoFocus(false)
+            renameBox:SetFontObject("GameFontHighlightSmall")
+            renameBox:SetBackdrop({
+                bgFile = "Interface\\Buttons\\WHITE8x8",
+                edgeFile = "Interface\\Buttons\\WHITE8x8",
+                edgeSize = 1,
+            })
+            renameBox:SetBackdropColor(0.06, 0.06, 0.08, 0.9)
+            renameBox:SetBackdropBorderColor(0.3, 0.3, 0.35, 1)
+            renameBox:SetTextInsets(4, 4, 0, 0)
+            renameBox:SetText(cData.name or string.format("Custom Bar %d", customIdx))
+            table.insert(contentFrame.widgets, renameBox)
+
+            local function ApplyNewBarName()
+                local txt = renameBox:GetText()
+                if txt then
+                    txt = txt:match("^%s*(.-)%s*$")
+                end
+                if txt and txt ~= "" and txt ~= cData.name then
+                    cData.name = txt
+                    local barFrame = CDM.customBarFrames and CDM.customBarFrames[customIdx]
+                    if barFrame then
+                        barFrame.editModeName = txt
+                    end
+                    if CDM.InitializeCustomBar then
+                        CDM:InitializeCustomBar(customIdx)
+                    end
+                    if RebuildTabs then RebuildTabs() end
+                    if RenderBarSettings then RenderBarSettings() end
+                end
+            end
+
+            renameBox:SetScript("OnEnterPressed", function(selfBox)
+                ApplyNewBarName()
+                selfBox:ClearFocus()
+            end)
+            renameBox:SetScript("OnEscapePressed", function(selfBox)
+                selfBox:SetText(cData.name or string.format("Custom Bar %d", customIdx))
+                selfBox:ClearFocus()
+            end)
+
+            local btnApplyName = CreateFrame("Button", nil, contentFrame, "UIPanelButtonTemplate")
+            btnApplyName:SetSize(50, 20)
+            btnApplyName:SetPoint("LEFT", renameBox, "RIGHT", 4, 0)
+            btnApplyName:SetText(L["Apply"] or "Apply")
+            StyleModernButton(btnApplyName, false)
+            btnApplyName:SetScript("OnClick", function()
+                ApplyNewBarName()
+                renameBox:ClearFocus()
+            end)
+            btnApplyName:SetScript("OnEnter", function(selfBtn)
+                if _G.GameTooltip then
+                    _G.GameTooltip:SetOwner(selfBtn, "ANCHOR_RIGHT")
+                    _G.GameTooltip:SetText(L["Rename Bar"] or "Rename Bar")
+                    _G.GameTooltip:Show()
+                end
+            end)
+            btnApplyName:SetScript("OnLeave", function()
+                if _G.GameTooltip then
+                    _G.GameTooltip:Hide()
+                end
+            end)
+            table.insert(contentFrame.widgets, btnApplyName)
 
             -- Sliders & Controls for Custom Bar
             -- Column 1 (x=12, width=165)
@@ -877,10 +969,41 @@ function CDM:PopulateSettingsPanel(panel)
                 end)
                 slotRow:SetScript("OnEnter", function(selfRow)
                     selfRow:SetBackdropBorderColor(0, 0.8, 1, 1)
-                    if sData and sData.spellID and _G.GameTooltip then
-                        _G.GameTooltip:SetOwner(selfRow, "ANCHOR_RIGHT")
-                        if _G.GameTooltip.SetSpellByID then
-                            _G.GameTooltip:SetSpellByID(sData.spellID)
+                    if not _G.GameTooltip then return end
+                    _G.GameTooltip:SetOwner(selfRow, "ANCHOR_RIGHT")
+                    if sData and sData.spellID and _G.GameTooltip.SetSpellByID then
+                        _G.GameTooltip:SetSpellByID(sData.spellID)
+                        _G.GameTooltip:Show()
+                    elseif sData and sData.itemID then
+                        local itemID = sData.itemID
+                        local link = sData.itemLink
+                        if not link and _G.C_Item and _G.C_Item.GetItemLinkByItemID then
+                            link = _G.C_Item.GetItemLinkByItemID(itemID)
+                        end
+                        if not link and _G.C_Item and _G.C_Item.GetItemInfo then
+                            link = select(2, _G.C_Item.GetItemInfo(itemID))
+                        elseif not link and _G.GetItemInfo then
+                            link = select(2, _G.GetItemInfo(itemID))
+                        end
+
+                        local equippedSlot = nil
+                        for slotID = 1, 19 do
+                            local eqItemID = (_G.GetInventoryItemID and _G.GetInventoryItemID("player", slotID))
+                                          or (_G.C_Item and _G.C_Item.GetInventoryItemID and _G.C_Item.GetInventoryItemID("player", slotID))
+                            if eqItemID == itemID then
+                                equippedSlot = slotID
+                                break
+                            end
+                        end
+
+                        if equippedSlot and _G.GameTooltip.SetInventoryItem then
+                            _G.GameTooltip:SetInventoryItem("player", equippedSlot)
+                        elseif link and _G.GameTooltip.SetHyperlink then
+                            _G.GameTooltip:SetHyperlink(link)
+                        elseif _G.C_TooltipInfo and _G.C_TooltipInfo.GetItemByID and _G.GameTooltip.ProcessInfo then
+                            _G.GameTooltip:ProcessInfo(_G.C_TooltipInfo.GetItemByID(itemID))
+                        elseif _G.GameTooltip.SetItemByID then
+                            _G.GameTooltip:SetItemByID(itemID)
                         end
                         _G.GameTooltip:Show()
                     end
@@ -1242,7 +1365,7 @@ function CDM:PopulateSettingsPanel(panel)
         end
     end
 
-    local function RebuildTabs()
+    RebuildTabs = function()
         -- Rebuild Row 1 Native Tabs
         for _, b in ipairs(nativeTabButtons) do
             b:Hide()
@@ -1361,6 +1484,10 @@ function CDM:PopulateSettingsPanel(panel)
             customMenu:Hide()
             RebuildTabs()
             RenderBarSettings()
+            for vKey, gName in pairs(CDM.VIEWER_KEYS) do
+                local v = _G[gName]
+                if v then CDM:AlignViewerItems(vKey, v) end
+            end
         end
     end)
 
@@ -1390,9 +1517,16 @@ function CDM:HookCooldownViewerSettings()
     if not groupBuffsTab then return end
 
     local lastTab = parent.GroupBuffsTab or parent.AurasTab or parent.SpellsTab
-    local tab = CreateFrame("Button", "RoithiUI_CDM_SettingsTab", parent, "CooldownViewerSettingsTabTemplate")
+    local tab = CreateFrame("Button", "RoithiUI_CDM_SettingsTab", parent, "LargeSideTabButtonTemplate")
     if not tab then
-        tab = CreateFrame("Button", "RoithiUI_CDM_SettingsTab", parent, "LargeSideTabButtonTemplate")
+        tab = CreateFrame("Button", "RoithiUI_CDM_SettingsTab", parent, "CooldownViewerSettingsTabTemplate")
+    end
+    if parent.TabButtons then
+        for idx = #parent.TabButtons, 1, -1 do
+            if parent.TabButtons[idx] == tab then
+                table.remove(parent.TabButtons, idx)
+            end
+        end
     end
     tab:SetFrameStrata("HIGH")
     tab:ClearAllPoints()
@@ -1447,7 +1581,8 @@ function CDM:HookCooldownViewerSettings()
     else
         panel:SetAllPoints(parent)
     end
-    panel:SetFrameLevel(parent:GetFrameLevel() + 5)
+    panel:SetFrameStrata(parent:GetFrameStrata() or "HIGH")
+    panel:SetFrameLevel(math.max(520, parent:GetFrameLevel() + 50))
     panel:Hide()
     self.customSettingsPanel = panel
 
@@ -1462,14 +1597,17 @@ function CDM:HookCooldownViewerSettings()
         if _G.GameTooltip then _G.GameTooltip:Hide() end
     end)
 
-    local function SwitchToRoithiPanel()
-        local function RestoreBlizzardHeader()
-            if parent.SetTitle and _G.COOLDOWN_VIEWER_SETTINGS_TITLE then
-                parent:SetTitle(_G.COOLDOWN_VIEWER_SETTINGS_TITLE)
-            end
-            if parent.SearchBox and parent.SearchBox.Show then parent.SearchBox:Show() end
-            if parent.SettingsDropdown and parent.SettingsDropdown.Show then parent.SettingsDropdown:Show() end
+    local function RestoreBlizzardHeader()
+        if parent.SetTitle and _G.COOLDOWN_VIEWER_SETTINGS_TITLE then
+            parent:SetTitle(_G.COOLDOWN_VIEWER_SETTINGS_TITLE)
         end
+        if parent.SearchBox and parent.SearchBox.Show then parent.SearchBox:Show() end
+        if parent.SettingsDropdown and parent.SettingsDropdown.Show then parent.SettingsDropdown:Show() end
+        if parent.CooldownScroll and parent.CooldownScroll.Show then parent.CooldownScroll:Show() end
+    end
+
+    local function SwitchToRoithiPanel()
+        self.isSwitchingToRoithi = true
         local hookedSettingsTabs = self.hookedSettingsTabs or setmetatable({}, { __mode = "k" })
         self.hookedSettingsTabs = hookedSettingsTabs
         local function OnBlizzardTabSelected(clickedTab)
@@ -1550,22 +1688,34 @@ function CDM:HookCooldownViewerSettings()
         if CDM.InitializeAllCustomBars then
             CDM:InitializeAllCustomBars()
         end
+        self.isSwitchingToRoithi = false
     end
 
-    tab:SetScript("OnClick", function()
+    local function OnTabTriggered()
         SwitchToRoithiPanel()
-    end)
-
-    local function RestoreBlizzardHeader()
-        if parent.SetTitle and _G.COOLDOWN_VIEWER_SETTINGS_TITLE then
-            parent:SetTitle(_G.COOLDOWN_VIEWER_SETTINGS_TITLE)
-        end
-        if parent.SearchBox and parent.SearchBox.Show then parent.SearchBox:Show() end
-        if parent.SettingsDropdown and parent.SettingsDropdown.Show then parent.SettingsDropdown:Show() end
     end
+
+    if tab.SetCustomOnMouseUpHandler then
+        tab:SetCustomOnMouseUpHandler(function(_, button, upInside)
+            if button == "LeftButton" and (upInside == nil or upInside == true) then
+                OnTabTriggered()
+            end
+        end)
+    end
+    if tab.HookScript then
+        tab:HookScript("OnMouseUp", function(_, button, upInside)
+            if button == "LeftButton" and (upInside == nil or upInside == true) then
+                OnTabTriggered()
+            end
+        end)
+    end
+    tab:SetScript("OnClick", OnTabTriggered)
+
+    self.SwitchToRoithiPanel = SwitchToRoithiPanel
 
     if parent.SetDisplayMode and hooksecurefunc and not self.settingsDisplayModeHooked then
         hooksecurefunc(parent, "SetDisplayMode", function()
+            if self.isSwitchingToRoithi then return end
             if panel:IsShown() then
                 panel:Hide()
                 RestoreBlizzardHeader()
@@ -1590,7 +1740,28 @@ function CDM:HookCooldownViewerSettings()
             if CDM.InitializeAllCustomBars then
                 CDM:InitializeAllCustomBars()
             end
+            for vKey, gName in pairs(CDM.VIEWER_KEYS) do
+                local v = _G[gName]
+                if v then
+                    CDM:AlignViewerItems(vKey, v)
+                end
+            end
         end)
+        if not self.settingsOnShowHooked then
+            parent:HookScript("OnShow", function()
+                if self.openToRoithiPanel then
+                    self.openToRoithiPanel = nil
+                    if C_Timer and C_Timer.After then
+                        C_Timer.After(0, function()
+                            SwitchToRoithiPanel()
+                        end)
+                    else
+                        SwitchToRoithiPanel()
+                    end
+                end
+            end)
+            self.settingsOnShowHooked = true
+        end
     end
 
     self.settingsTab = tab
@@ -1611,11 +1782,27 @@ function CDM:OpenBlizzardSettings(fromEditMode)
     if self.HookCooldownViewerSettings then
         self:HookCooldownViewerSettings()
     end
+    self.openToRoithiPanel = true
+    local isEdit = fromEditMode == true
     if _G.CooldownViewerSettings then
+        if fromEditMode then
+            if _G.EditModeManagerFrame and _G.EditModeManagerFrame.CheckHideAndLockEditMode then
+                _G.EditModeManagerFrame:CheckHideAndLockEditMode()
+            end
+        end
         if _G.CooldownViewerSettings.ShowUIPanel then
-            _G.CooldownViewerSettings:ShowUIPanel(false)
+            _G.CooldownViewerSettings:ShowUIPanel(isEdit)
         elseif _G.CooldownViewerSettings.Show then
             _G.CooldownViewerSettings:Show()
+        end
+        if not (_G.CooldownViewerSettings.IsShown and _G.CooldownViewerSettings:IsShown()) and _G.CooldownViewerSettings.Show then
+            _G.CooldownViewerSettings:Show()
+        end
+        if _G.CooldownViewerSettings.Raise then
+            _G.CooldownViewerSettings:Raise()
+        end
+        if self.SwitchToRoithiPanel then
+            self:SwitchToRoithiPanel()
         end
     else
         RoithiUI:Print(L["Blizzard Cooldown Viewer is not available."] or "Blizzard Cooldown Viewer is not available.")
@@ -1683,9 +1870,6 @@ function CDM:SetupEditMode()
     end
 end
 
--- Addon-owned state kept outside Blizzard frame tables to avoid taint.
-local maxBuffWidthByViewer = setmetatable({}, { __mode = "k" })
-
 function CDM:AlignViewerItems(viewerKey, viewer)
     if viewerKey ~= "BuffIcon" and InCombatLockdown() then return end
     if not viewer or not self.db then return end
@@ -1702,22 +1886,19 @@ function CDM:AlignViewerItems(viewerKey, viewer)
                     table.insert(items, itemFrame)
                 end
             end
-            if #items <= 1 then return end
+            if #items == 0 then return end
             table.sort(items, function(a, b) return (a.layoutIndex or 0) < (b.layoutIndex or 0) end)
             local container = (viewer.GetItemContainerFrame and viewer:GetItemContainerFrame()) or viewer
             local barHeight = (vConf and vConf.barHeight) or (items[1].Bar and items[1].Bar:GetHeight()) or 24
             local spacing = (vConf and vConf.spacing) or 4
             local pitch = barHeight + spacing
             for idx, itemFrame in ipairs(items) do
-                local numPoints = itemFrame:GetNumPoints()
-                if numPoints and numPoints > 0 then
-                    local _, relTo, _, x, _ = itemFrame:GetPoint(1)
-                    itemFrame:ClearAllPoints()
-                    if growthDir == "UP" then
-                        itemFrame:SetPoint("BOTTOMLEFT", relTo or container, "BOTTOMLEFT", x or 0, (idx - 1) * pitch)
-                    else
-                        itemFrame:SetPoint("TOPLEFT", relTo or container, "TOPLEFT", x or 0, -((idx - 1) * pitch))
-                    end
+                local _, _, _, x, _ = itemFrame:GetPoint(1)
+                itemFrame:ClearAllPoints()
+                if growthDir == "UP" then
+                    itemFrame:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", x or 0, (idx - 1) * pitch)
+                else
+                    itemFrame:SetPoint("TOPLEFT", container, "TOPLEFT", x or 0, -((idx - 1) * pitch))
                 end
             end
         end
@@ -1789,35 +1970,20 @@ function CDM:AlignViewerItems(viewerKey, viewer)
         end
 
         if isEditing then
-            maxBuffWidthByViewer[viewer] = totalW
-        end
-
-        -- Do NOT call viewer:GetCooldownIDs() here: it lazily (re)builds Blizzard's
-        -- shared CooldownViewerSettings display data, and doing so from addon code
-        -- taints every Cooldown Viewer (secret compare / forbidden table errors).
-        local totalTrackedCount = 0
-        if viewer.itemFramePool.GetNumActive then
-            totalTrackedCount = viewer.itemFramePool:GetNumActive() or 0
-        end
-        local maxW = 0
-        if totalTrackedCount > 0 then
-            maxW = (totalTrackedCount * itemW) + math.max(0, totalTrackedCount - 1) * spacing
+            pcall(function()
+                local w = totalW * itemScale
+                local h = itemH * itemScale
+                container:SetSize(w, h)
+                if viewer ~= container then
+                    viewer:SetSize(w, h)
+                end
+            end)
         end
 
         local containerW = (container:GetWidth() or 0) / itemScale
-        local cW = isEditing and totalW or math.max(totalW, maxW, containerW, maxBuffWidthByViewer[viewer] or 0)
-        local targetW = isEditing and totalW or cW
+        local cW = isEditing and totalW or math.max(totalW, containerW)
 
-        pcall(function()
-            local w = math.max(targetW, itemW) * itemScale
-            local h = itemH * itemScale
-            container:SetSize(w, h)
-            if viewer ~= container then
-                viewer:SetSize(w, h)
-            end
-        end)
-
-        if align == "RIGHT" then
+        if not isEditing and align == "RIGHT" then
             -- Place 1 is the rightmost active buff. Place 2 is immediately to its left, growing left.
             local startRight = cW - itemW
             for idx, itemFrame in ipairs(items) do
@@ -1825,7 +1991,7 @@ function CDM:AlignViewerItems(viewerKey, viewer)
                 itemFrame:ClearAllPoints()
                 itemFrame:SetPoint("TOPLEFT", container, "TOPLEFT", xOffset, 0)
             end
-        elseif align == "CENTER" then
+        elseif not isEditing and align == "CENTER" then
             -- Symmetrically centered in the frame, contiguous with no empty spaces.
             local shift = (cW - totalW) / 2
             for idx, itemFrame in ipairs(items) do
@@ -1833,7 +1999,7 @@ function CDM:AlignViewerItems(viewerKey, viewer)
                 itemFrame:ClearAllPoints()
                 itemFrame:SetPoint("TOPLEFT", container, "TOPLEFT", xOffset, 0)
             end
-        else -- "LEFT"
+        else -- "LEFT" or isEditing
             -- Place 1 is on the far left, growing to the right.
             for idx, itemFrame in ipairs(items) do
                 local xOffset = (idx - 1) * pitch

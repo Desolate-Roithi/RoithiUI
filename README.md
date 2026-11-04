@@ -2,11 +2,35 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1.5)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v2.0.4-Beta  
-**Last Updated:** 2026-10-19  
+**Latest Version:** v2.0.5-Beta  
+**Last Updated:** 2026-11-04  
 **Compatibility:** WoW 12.1.5 (Midnight) & WoW Forever (16001)
 
-## 🆕 Recent Updates (v2.0.4-Beta)
+## 🆕 Recent Updates (v2.0.5-Beta)
+
+### 1. Bags Sub-Filters & Category Grid Balancing
+* **Symmetrical 2x5 Category Layout**: Rebalanced bag category buttons into two equal rows of 5 buttons (~105px width), eliminating text truncation and ellipsis in both English and German.
+* **Native Texture Dropdown Arrows**: Replaced Unicode character glyphs with native Blizzard rotated arrow textures (`ChatFrameExpandArrow`), preventing missing font glyph boxes (`?`).
+* **Sub-Filter Context Menus**: Added dropdown sub-filtering for Gear (Weapons, Trinkets, Armor, Sets, Past Expansions, Unbound, Warbound) and Reagents (Current vs. Past Expansions) with right-click menu toggle and left-click reset to All.
+* **Async Cold-Login Item Streaming**: Registered `ITEM_DATA_LOAD_RESULT` and integrated `C_Item.RequestLoadItemDataByID` so un-cached items automatically update their sub-filter categories on login without requiring manual bag reloads.
+
+### 2. Cooldown Manager Refinements & Tab Isolation
+* **Settings Tab Isolation**: Re-templated RoithiUI Cooldown Settings tab to `LargeSideTabButtonTemplate` and pruned it from Blizzard's `TabButtons` array, resolving `assertsafe` Lua errors when switching between tabs.
+* **Reopen Lifecycle Protection**: Resolved race conditions between Blizzard's `OnShow` display mode reset and RoithiUI panel activation, ensuring the settings panel reliably reopens every time.
+* **Custom Bar Renaming**: Added inline custom bar renaming with instant Edit Mode label updating (`editModeName`) and dynamic bar initialization.
+* **Enhanced Item & Trinket Tooltips**: Implemented robust fallback tooltip resolution checking equipped inventory slots (1–19), item links, and `C_TooltipInfo` for custom cooldown bars.
+* **Async Cache Hydration**: Registered `ITEM_DATA_LOAD_RESULT` to dynamically update custom bar item icons and tooltips on cold login.
+
+### 3. Actionbars & Minimap Hardening
+* **Vehicle Transition Protection**: Preserved Blizzard's native `OverrideActionBar.slideOut` animation to prevent players from becoming stuck in vehicle or sarcophagus UI states during combat.
+* **Omnium / Midnight Folio Button Mode**: Added intelligent detection (`IsOmniumFolioMode`) to cleanly distinguish the modern expansion landing button from legacy garrison buttons.
+
+### 4. Objectives Skinning & Complete Localization Parity
+* **Quest Item Action Buttons**: Safely skinned objective block item buttons without secure frame taint.
+* **Independent Typography Controls**: Added dedicated configuration options for Scenario Stage and Progress Bar fonts.
+* **100% Locale Parity**: Maintained full string parity and 0 orphan keys across 1,074 entries between `Locales/enUS.lua` and `Locales/deDE.lua`.
+
+## 📦 Previous Updates (v2.0.4-Beta)
 
 ### 1. Bags & Vendor Auto-Repair Automation
 * **Automated Equipment Repair**: Added automatic equipment repair when interacting with repair-capable merchants (`MERCHANT_SHOW`).
