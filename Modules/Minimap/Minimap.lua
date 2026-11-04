@@ -18,6 +18,16 @@ local UpdateDataText
 local date = _G.date or os.date
 local hookedButtons = setmetatable({}, { __mode = "k" })
 local buttonAnchors = setmetatable({}, { __mode = "k" })
+local blizzMinimapState = setmetatable({}, { __mode = "k" })
+
+local function GetBlizzMinimapState(frame)
+    local st = blizzMinimapState[frame]
+    if not st then
+        st = {}
+        blizzMinimapState[frame] = st
+    end
+    return st
+end
 
 MinimapMod.displayName = L["Minimap"]
 MinimapMod.description = L["Enables the custom RoithiUI Minimap and Addon Button Bar module."]
@@ -338,8 +348,8 @@ function MinimapMod:OnEnable()
 
             -- We only cancel the ticker if all buttons that exist in this expansion are hooked.
             local landingSupported = C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist("Blizzard_ExpansionLandingPage")
-            local qsbHooked = not not (qsb and (hookedButtons[qsb] or qsb.isRoithiHooked))
-            local elpHooked = not landingSupported or not not (elp and (hookedButtons[elp] or elp.isRoithiHooked))
+            local qsbHooked = not not (qsb and hookedButtons[qsb])
+            local elpHooked = not landingSupported or not not (elp and hookedButtons[elp])
 
             if qsbHooked and elpHooked and self.lfgHookTicker then
                 self.lfgHookTicker:Cancel()
@@ -674,7 +684,7 @@ function MinimapMod:StyleMinimap()
 
         LEM:AddFrameSettingsButtons(self.container, {
             {
-                text = "Open Full Settings",
+                text = L["Open Full Settings"],
                 click = function()
                     if RoithiUI and RoithiUI.OpenSettings then
                         RoithiUI:OpenSettings("minimap")
@@ -1117,7 +1127,7 @@ function MinimapMod:RegisterAnchorSettings(f, key)
     if LEM.AddFrameSettingsButtons then
         LEM:AddFrameSettingsButtons(f, {
             {
-                text = "Open Full Settings",
+                text = L["Open Full Settings"],
                 click = function()
                     if RoithiUI and RoithiUI.OpenSettings then
                         RoithiUI:OpenSettings("minimap")
@@ -1272,30 +1282,52 @@ function MinimapMod:LayoutDefaultButtons()
             return
         end
         hookedButtons[btn] = true
-        btn.isRoithiHooked = true
 
         local originalSetParent = btn.SetParent
-        btn.SetParent = function(frame, parent)
+        if hooksecurefunc and btn.SetParent then hooksecurefunc(btn, "SetParent", function(frame)
             local targetAnchor = buttonAnchors[frame] or anchor
+            local st = GetBlizzMinimapState(frame)
+            if st.isReanchoring then return end
+            st.isReanchoring = true
             originalSetParent(frame, targetAnchor)
+            st.isReanchoring = false
+        end)
         end
 
         local originalSetPoint = btn.SetPoint
-        btn.SetPoint = function(frame, point, relF, relP, x, y)
+        if hooksecurefunc and btn.SetPoint then hooksecurefunc(btn, "SetPoint", function(frame)
             local targetAnchor = buttonAnchors[frame] or anchor
+            local st = GetBlizzMinimapState(frame)
+            if st.isReanchoring then return end
+            st.isReanchoring = true
+            if frame.ClearAllPoints then frame:ClearAllPoints() end
             originalSetPoint(frame, "CENTER", targetAnchor, "CENTER", 0, 0)
+            st.isReanchoring = false
+        end)
         end
 
-        btn.SetAllPoints = function(frame, relF)
+        if hooksecurefunc and btn.SetAllPoints then hooksecurefunc(btn, "SetAllPoints", function(frame)
             local targetAnchor = buttonAnchors[frame] or anchor
+            local st = GetBlizzMinimapState(frame)
+            if st.isReanchoring then return end
+            st.isReanchoring = true
+            if frame.ClearAllPoints then frame:ClearAllPoints() end
             originalSetPoint(frame, "CENTER", targetAnchor, "CENTER", 0, 0)
+            st.isReanchoring = false
+        end)
         end
 
         local originalClearAllPoints = btn.ClearAllPoints
-        btn.ClearAllPoints = function(frame)
+        if hooksecurefunc and btn.ClearAllPoints and not btn.SetPoint then hooksecurefunc(btn, "ClearAllPoints", function(frame)
             originalClearAllPoints(frame)
             local targetAnchor = buttonAnchors[frame] or anchor
+            local st = GetBlizzMinimapState(frame)
+            if st.isReanchoring then return end
+            st.isReanchoring = true
+            if frame.ClearAllPoints then frame:ClearAllPoints() end
             originalSetPoint(frame, "CENTER", targetAnchor, "CENTER", 0, 0)
+            st.isReanchoring = false
+        end)
         end
 
         originalSetParent(btn, anchor)
@@ -1325,8 +1357,10 @@ function MinimapMod:LayoutDefaultButtons()
     self.zoneTextAnchorRef = zoneTextAnchor
 
     local function HookZoneTextFS(fontStr)
-        if not fontStr or fontStr.isRoithiZoneTextHooked or not hooksecurefunc then return end
-        fontStr.isRoithiZoneTextHooked = true
+        if not fontStr or not hooksecurefunc then return end
+        local ztState = GetBlizzMinimapState(fontStr)
+        if ztState.zoneTextHooked then return end
+        ztState.zoneTextHooked = true
 
         if fontStr.SetJustifyH then
             hooksecurefunc(fontStr, "SetJustifyH", function(frame, justifyH)
@@ -1385,7 +1419,7 @@ function MinimapMod:LayoutDefaultButtons()
         if not targetFS or not targetAnchor or self.isReanchoringZoneText then return end
         self.isReanchoringZoneText = true
 
-        if not targetFS.isRoithiZoneTextHooked then
+        if not GetBlizzMinimapState(targetFS).zoneTextHooked then
             HookZoneTextFS(targetFS)
         end
 
@@ -1471,7 +1505,13 @@ function MinimapMod:LayoutDefaultButtons()
     for _, lfg in ipairs(lfgs) do
         if lfg then
             if lfg.UpdatePosition then
-                lfg.UpdatePosition = function() end
+                local lfgState = GetBlizzMinimapState(lfg)
+                if hooksecurefunc and not lfgState.updatePosHooked then
+                    lfgState.updatePosHooked = true
+                    hooksecurefunc(lfg, "UpdatePosition", function(frame)
+                        HookBlizzardButton(frame, lfgAnchor)
+                    end)
+                end
             end
             HookBlizzardButton(lfg, lfgAnchor)
         end
@@ -1496,10 +1536,10 @@ function MinimapMod:LayoutDefaultButtons()
 
     -- Vaccinate ExpansionLandingPageMinimapButton against Blizzard FrameXML nil title hover crash
     local elp = _G.ExpansionLandingPageMinimapButton
-    if elp and not elp.roithiTooltipVaccinated then
+    if elp and not GetBlizzMinimapState(elp).tooltipVaccinated then
         local function EnsureTitle(btn)
-            if btn and (not btn.title or btn.title == "") then
-                btn.title = _G.GARRISON_LANDING_PAGE_TITLE or _G.EXPANSION_LANDING_PAGE_TITLE or "Landing Page"
+            if btn and btn.SetMouseMotionEnabled then
+                btn:SetMouseMotionEnabled(btn.title ~= nil and btn.title ~= "")
             end
         end
         EnsureTitle(elp)
@@ -1511,7 +1551,7 @@ function MinimapMod:LayoutDefaultButtons()
                 hooksecurefunc(elp, "UpdateIconForGarrison", EnsureTitle)
             end
         end
-        elp.roithiTooltipVaccinated = true
+        GetBlizzMinimapState(elp).tooltipVaccinated = true
     end
 
     -- Setup Omnium Folio Anchor
@@ -1581,8 +1621,6 @@ function MinimapMod:LayoutDefaultButtons()
         end
         if textFS.SetJustifyH then textFS:SetJustifyH("CENTER") end
         if textFS.SetJustifyV then textFS:SetJustifyV("MIDDLE") end
-        if textFS.SetShadowOffset then textFS:SetShadowOffset(1, -1) end
-        if textFS.SetShadowColor then textFS:SetShadowColor(0, 0, 0, 1) end
         if textFS.SetTextColor then textFS:SetTextColor(1, 1, 1, 1) end
         difficultyAnchor.difficultyTextFS = textFS
         self.difficultyTextFS = textFS
@@ -1592,8 +1630,9 @@ function MinimapMod:LayoutDefaultButtons()
     local instDiff = (MinimapCluster and MinimapCluster.InstanceDifficulty) or _G.MiniMapInstanceDifficulty
     if instDiff then
         HookBlizzardButton(instDiff, difficultyAnchor)
-        if not instDiff.roithiDiffHooked then
-            instDiff.roithiDiffHooked = true
+        local instState = GetBlizzMinimapState(instDiff)
+        if not instState.diffHooked then
+            instState.diffHooked = true
             self:StripDifficultyBlizzardArt(instDiff)
             if hooksecurefunc and instDiff.Update then
                 hooksecurefunc(instDiff, "Update", function(f)
@@ -1604,12 +1643,14 @@ function MinimapMod:LayoutDefaultButtons()
         end
     end
     if MinimapCluster and MinimapCluster.GuildInstanceDifficulty then
-        HookBlizzardButton(MinimapCluster.GuildInstanceDifficulty, difficultyAnchor)
-        if not MinimapCluster.GuildInstanceDifficulty.roithiDiffHooked then
-            MinimapCluster.GuildInstanceDifficulty.roithiDiffHooked = true
-            self:StripDifficultyBlizzardArt(MinimapCluster.GuildInstanceDifficulty)
-            if hooksecurefunc and MinimapCluster.GuildInstanceDifficulty.Update then
-                hooksecurefunc(MinimapCluster.GuildInstanceDifficulty, "Update", function(f)
+        local guildDiff = MinimapCluster.GuildInstanceDifficulty
+        HookBlizzardButton(guildDiff, difficultyAnchor)
+        local guildState = GetBlizzMinimapState(guildDiff)
+        if not guildState.diffHooked then
+            guildState.diffHooked = true
+            self:StripDifficultyBlizzardArt(guildDiff)
+            if hooksecurefunc and guildDiff.Update then
+                hooksecurefunc(guildDiff, "Update", function(f)
                     self:StripDifficultyBlizzardArt(f)
                     self:UpdateDifficultyText()
                 end)
@@ -2095,12 +2136,9 @@ function MinimapMod:SetupCoordsWidget(anchor)
     end
 
     local text = clickBtn:CreateFontString(nil, "OVERLAY")
-    if ns.Utils and ns.Utils.ApplyTypography then
-        ns.Utils.ApplyTypography(text, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
-    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
-    else
-        text:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(text, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
     end
     if text.SetJustifyH then text:SetJustifyH("CENTER") end
     if text.SetPoint then text:SetPoint("CENTER", clickBtn, "CENTER", 0, 0) end
@@ -2627,8 +2665,12 @@ end
 
 
 
+local origGetMinimapShape = _G.GetMinimapShape
 _G.GetMinimapShape = function()
-    return MinimapMod.db and MinimapMod.db.shape or "SQUARE"
+    if MinimapMod and (not MinimapMod.IsEnabled or MinimapMod:IsEnabled()) and MinimapMod.db and MinimapMod.db.enabled ~= false then
+        return MinimapMod.db.shape or "SQUARE"
+    end
+    return (origGetMinimapShape and origGetMinimapShape()) or "ROUND"
 end
 
 if RoithiUI and RoithiUI.RegisterChatCommand then
@@ -2658,7 +2700,7 @@ if RoithiUI and RoithiUI.RegisterChatCommand then
                 end
                 print("    Scale:", lfg:GetScale())
                 print("    Alpha:", lfg:GetAlpha())
-                print("    isRoithiHooked:", lfg.isRoithiHooked)
+                print("    isRoithiHooked:", not not hookedButtons[lfg])
                 if lfg.SetFrameStrata then
                     print("    Strata:", lfg:GetFrameStrata())
                     print("    Level:", lfg:GetFrameLevel())

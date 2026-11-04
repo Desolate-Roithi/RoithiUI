@@ -165,7 +165,7 @@ end
 function AB:PLAYER_REGEN_DISABLED()
     if _G.OverrideActionBar and _G.OverrideActionBar.slideOut then
         if _G.OverrideActionBar.slideOut.IsPlaying and _G.OverrideActionBar.slideOut:IsPlaying() then
-            _G.OverrideActionBar.hideOnFinish = false
+            if _G.OverrideActionBar.slideOut.Stop then _G.OverrideActionBar.slideOut:Stop() end
         end
     end
     self:OnFaderEvent()

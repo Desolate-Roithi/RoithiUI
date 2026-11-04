@@ -192,8 +192,13 @@ function CDM:PopulateSettingsPanel(panel)
 
     panel.selectedBar = panel.selectedBar or "Essential"
 
+    local modernBtnState = setmetatable({}, { __mode = "k" })
     local function StyleModernButton(btn, isAccent)
-        if not btn or btn.roithiStyled then return end
+        if not btn then return end
+        local bState = modernBtnState[btn]
+        if bState and bState.styled then return end
+        bState = bState or {}
+        modernBtnState[btn] = bState
         if btn.Left and btn.Left.SetAlpha then btn.Left:SetAlpha(0) end
         if btn.Right and btn.Right.SetAlpha then btn.Right:SetAlpha(0) end
         if btn.Middle and btn.Middle.SetAlpha then btn.Middle:SetAlpha(0) end
@@ -220,7 +225,7 @@ function CDM:PopulateSettingsPanel(panel)
             bg:SetBackdropBorderColor(0.25, 0.25, 0.28, 0.9)
         end
         bg:SetFrameLevel(math.max(0, btn:GetFrameLevel() - 1))
-        btn.roithiBg = bg
+        bState.bg = bg
 
         btn:HookScript("OnEnter", function()
             if btn.IsEnabled and not btn:IsEnabled() then return end
@@ -228,7 +233,7 @@ function CDM:PopulateSettingsPanel(panel)
             bg:SetBackdropColor(0.12, 0.16, 0.22, 0.95)
         end)
         btn:HookScript("OnLeave", function()
-            if btn.roithiActive then
+            if bState.active then
                 bg:SetBackdropColor(0.05, 0.3, 0.42, 0.95)
                 bg:SetBackdropBorderColor(0, 0.85, 1, 1)
             elseif isAccent then
@@ -240,21 +245,22 @@ function CDM:PopulateSettingsPanel(panel)
             end
         end)
 
-        btn.roithiStyled = true
+        bState.styled = true
     end
 
     local function SetModernButtonActive(btn, active)
-        if not btn or not btn.roithiBg then return end
-        btn.roithiActive = active
+        local bState = btn and modernBtnState[btn]
+        if not bState or not bState.bg then return end
+        bState.active = active
         if active then
-            btn.roithiBg:SetBackdropColor(0.05, 0.3, 0.42, 0.95)
-            btn.roithiBg:SetBackdropBorderColor(0, 0.85, 1, 1)
+            bState.bg:SetBackdropColor(0.05, 0.3, 0.42, 0.95)
+            bState.bg:SetBackdropBorderColor(0, 0.85, 1, 1)
             if btn.GetFontString and btn:GetFontString() then
                 btn:GetFontString():SetTextColor(0, 0.9, 1, 1)
             end
         else
-            btn.roithiBg:SetBackdropColor(0.08, 0.08, 0.1, 0.85)
-            btn.roithiBg:SetBackdropBorderColor(0.25, 0.25, 0.28, 0.9)
+            bState.bg:SetBackdropColor(0.08, 0.08, 0.1, 0.85)
+            bState.bg:SetBackdropBorderColor(0.25, 0.25, 0.28, 0.9)
             if btn.GetFontString and btn:GetFontString() then
                 btn:GetFontString():SetTextColor(1, 1, 1, 1)
             end
@@ -1457,7 +1463,64 @@ function CDM:HookCooldownViewerSettings()
     end)
 
     local function SwitchToRoithiPanel()
-        parent.displayMode = "RoithiUI_CDM"
+        local function RestoreBlizzardHeader()
+            if parent.SetTitle and _G.COOLDOWN_VIEWER_SETTINGS_TITLE then
+                parent:SetTitle(_G.COOLDOWN_VIEWER_SETTINGS_TITLE)
+            end
+            if parent.SearchBox and parent.SearchBox.Show then parent.SearchBox:Show() end
+            if parent.SettingsDropdown and parent.SettingsDropdown.Show then parent.SettingsDropdown:Show() end
+        end
+        local hookedSettingsTabs = self.hookedSettingsTabs or setmetatable({}, { __mode = "k" })
+        self.hookedSettingsTabs = hookedSettingsTabs
+        local function OnBlizzardTabSelected(clickedTab)
+            if panel:IsShown() then
+                panel:Hide()
+                RestoreBlizzardHeader()
+                local mode = (clickedTab and clickedTab.displayMode) or parent.displayMode
+                local isGroupBuffs = (mode == "groupBuffs")
+                if parent.CooldownScroll then
+                    if parent.CooldownScroll.SetShown then
+                        parent.CooldownScroll:SetShown(not isGroupBuffs)
+                    elseif isGroupBuffs and parent.CooldownScroll.Hide then
+                        parent.CooldownScroll:Hide()
+                    elseif not isGroupBuffs and parent.CooldownScroll.Show then
+                        parent.CooldownScroll:Show()
+                    end
+                end
+                if parent.GroupBuffFilter then
+                    if parent.GroupBuffFilter.SetShown then
+                        parent.GroupBuffFilter:SetShown(isGroupBuffs)
+                    elseif isGroupBuffs and parent.GroupBuffFilter.Show then
+                        parent.GroupBuffFilter:Show()
+                    elseif not isGroupBuffs and parent.GroupBuffFilter.Hide then
+                        parent.GroupBuffFilter:Hide()
+                    end
+                end
+                if clickedTab and clickedTab.SetChecked then
+                    clickedTab:SetChecked(true)
+                end
+            end
+            if tab.SetChecked then
+                tab:SetChecked(false)
+            end
+            if CDM.InitializeAllCustomBars then
+                CDM:InitializeAllCustomBars()
+            end
+        end
+        local function HookBlizzardTabButton(tabBtn)
+            if not tabBtn or hookedSettingsTabs[tabBtn] or not tabBtn.HookScript then return end
+            hookedSettingsTabs[tabBtn] = true
+            pcall(tabBtn.HookScript, tabBtn, "OnMouseUp", function(btn) OnBlizzardTabSelected(btn) end)
+            pcall(tabBtn.HookScript, tabBtn, "OnClick", function(btn) OnBlizzardTabSelected(btn) end)
+        end
+        if parent.TabButtons then
+            for _, frame in ipairs(parent.TabButtons) do
+                HookBlizzardTabButton(frame)
+            end
+        end
+        HookBlizzardTabButton(parent.SpellsTab)
+        HookBlizzardTabButton(parent.AurasTab)
+        HookBlizzardTabButton(parent.GroupBuffsTab)
         if parent.SetTitle then
             parent:SetTitle("|cff00ccffRoithiUI|r " .. (L["Cooldown Settings"] or "Cooldown Settings"))
         elseif parent.TitleContainer and parent.TitleContainer.TitleText then
@@ -1631,7 +1694,7 @@ function CDM:AlignViewerItems(viewerKey, viewer)
 
     if viewerKey == "BuffBar" then
         local growthDir = (vConf and vConf.growthDirection) or "DOWN"
-        if growthDir == "UP" then
+        if growthDir == "UP" or (vConf and vConf.spacing ~= nil) then
             if not viewer.itemFramePool or not viewer.itemFramePool.EnumerateActive then return end
             local items = {}
             for itemFrame in viewer.itemFramePool:EnumerateActive() do
@@ -1650,7 +1713,11 @@ function CDM:AlignViewerItems(viewerKey, viewer)
                 if numPoints and numPoints > 0 then
                     local _, relTo, _, x, _ = itemFrame:GetPoint(1)
                     itemFrame:ClearAllPoints()
-                    itemFrame:SetPoint("BOTTOMLEFT", relTo or container, "BOTTOMLEFT", x or 0, (idx - 1) * pitch)
+                    if growthDir == "UP" then
+                        itemFrame:SetPoint("BOTTOMLEFT", relTo or container, "BOTTOMLEFT", x or 0, (idx - 1) * pitch)
+                    else
+                        itemFrame:SetPoint("TOPLEFT", relTo or container, "TOPLEFT", x or 0, -((idx - 1) * pitch))
+                    end
                 end
             end
         end
@@ -1778,7 +1845,8 @@ function CDM:AlignViewerItems(viewerKey, viewer)
     end
 
     if #items <= 1 then return end
-    if not shouldCenter then return end
+    local customSpacing = vConf and vConf.spacing
+    if not shouldCenter and customSpacing == nil then return end
 
     local lines = {}
     local currentLine = {}
@@ -1789,7 +1857,7 @@ function CDM:AlignViewerItems(viewerKey, viewer)
             currentLine = {}
         end
     end
-    if #lines <= 1 and #items <= stride then
+    if #lines <= 1 and #items <= stride and customSpacing == nil then
         return
     end
 
@@ -1813,11 +1881,15 @@ function CDM:AlignViewerItems(viewerKey, viewer)
         end
         local pitch = itemW + spacing
         local mult = (container.layoutFramesGoingRight == false) and -1 or 1
+        local itemH = (vConf and vConf.iconSize) or firstItem:GetHeight()
+        if not itemH or itemH <= 0 then itemH = itemW end
+        local vPitch = itemH + spacing
+        local vMult = container.layoutFramesGoingUp and 1 or -1
 
-        for _, line in ipairs(lines) do
+        for lineIdx, line in ipairs(lines) do
             local count = #line
-            if count < maxCount then
-                local xShift = mult * ((maxCount - count) * pitch) / 2
+            if (shouldCenter and count < maxCount) or customSpacing ~= nil then
+                local xShift = (shouldCenter and count < maxCount) and (mult * ((maxCount - count) * pitch) / 2) or 0
                 for idx, itemFrame in ipairs(line) do
                     local numPoints = itemFrame:GetNumPoints()
                     if numPoints and numPoints > 0 then
@@ -1825,7 +1897,8 @@ function CDM:AlignViewerItems(viewerKey, viewer)
                         if point and y then
                             local xFinal = mult * ((idx - 1) * pitch) + xShift
                             itemFrame:ClearAllPoints()
-                            itemFrame:SetPoint(point, relTo, relPoint, xFinal, y)
+                            local yFinal = (customSpacing ~= nil and #lines > 1) and (vMult * ((lineIdx - 1) * vPitch)) or y
+                            itemFrame:SetPoint(point, relTo, relPoint, xFinal, yFinal)
                         end
                     end
                 end
@@ -1843,11 +1916,15 @@ function CDM:AlignViewerItems(viewerKey, viewer)
         end
         local pitch = itemH + spacing
         local mult = container.layoutFramesGoingUp and 1 or -1
+        local itemW = (vConf and vConf.iconSize) or firstItem:GetWidth()
+        if not itemW or itemW <= 0 then itemW = itemH end
+        local hPitch = itemW + spacing
+        local hMult = (container.layoutFramesGoingRight == false) and -1 or 1
 
-        for _, line in ipairs(lines) do
+        for lineIdx, line in ipairs(lines) do
             local count = #line
-            if count < maxCount then
-                local yShift = mult * ((maxCount - count) * pitch) / 2
+            if (shouldCenter and count < maxCount) or customSpacing ~= nil then
+                local yShift = (shouldCenter and count < maxCount) and (mult * ((maxCount - count) * pitch) / 2) or 0
                 for idx, itemFrame in ipairs(line) do
                     local numPoints = itemFrame:GetNumPoints()
                     if numPoints and numPoints > 0 then
@@ -1855,7 +1932,8 @@ function CDM:AlignViewerItems(viewerKey, viewer)
                         if point and x then
                             local yFinal = mult * ((idx - 1) * pitch) + yShift
                             itemFrame:ClearAllPoints()
-                            itemFrame:SetPoint(point, relTo, relPoint, x, yFinal)
+                            local xFinal = (customSpacing ~= nil and #lines > 1) and (hMult * ((lineIdx - 1) * hPitch)) or x
+                            itemFrame:SetPoint(point, relTo, relPoint, xFinal, yFinal)
                         end
                     end
                 end
@@ -1880,11 +1958,11 @@ function CDM:ApplyViewerConfig(viewerKey)
 
     if spacing ~= nil then
         if container then
-            container.childXPadding = spacing
-            container.childYPadding = spacing
+            local keepContainerUntainted = container ~= nil and spacing ~= nil
+            if not keepContainerUntainted then return end
         end
-        viewer.childXPadding = spacing
-        viewer.childYPadding = spacing
+        -- viewer.childXPadding left untainted; spacing applied via AlignViewerItems
+        -- viewer.childYPadding left untainted; spacing applied via AlignViewerItems
     end
 
     if viewer.itemFramePool and viewer.itemFramePool.EnumerateActive then

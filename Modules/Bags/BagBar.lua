@@ -3,8 +3,27 @@ if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local BagsMod = RoithiUI:GetModule("Bags")
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
-local LibRoithi = LibStub("LibRoithi-1.0")
 local LEM = LibStub("LibEditMode-Roithi", true)
+
+local bagBtnState = setmetatable({}, { __mode = "k" })
+local function GetBagBtnState(btn)
+    local st = bagBtnState[btn]
+    if not st then
+        st = {}
+        bagBtnState[btn] = st
+    end
+    return st
+end
+
+function BagsMod:GetBagButtonBackdrop(btn)
+    local st = btn and bagBtnState[btn]
+    return st and st.backdrop or nil
+end
+
+function BagsMod:GetBagButtonIcon(btn)
+    local st = btn and bagBtnState[btn]
+    return (st and st.icon) or (btn and (btn.icon or btn.Icon)) or nil
+end
 
 local REGULAR_BAG_SLOTS = {
     "CharacterBag0Slot",
@@ -67,8 +86,14 @@ function BagsMod:SetupBagBar()
 
     local function SuppressBagsBarSelection()
         if _G.BagsBar then
-            _G.BagsBar.defaultHideSelection = true
             if _G.BagsBar.Selection then
+                local selSt = GetBagBtnState(_G.BagsBar.Selection)
+                if not selSt.selectionHooked and hooksecurefunc then
+                    selSt.selectionHooked = true
+                    hooksecurefunc(_G.BagsBar.Selection, "Show", function(sel)
+                        sel:Hide()
+                    end)
+                end
                 _G.BagsBar.Selection:Hide()
                 if _G.BagsBar.Selection.EnableMouse then _G.BagsBar.Selection:EnableMouse(false) end
             end
@@ -336,10 +361,9 @@ function BagsMod:CreateBagBarExpander()
     end
 
     local text = expander:CreateFontString(nil, "OVERLAY")
-    if ns.Utils and ns.Utils.ApplyTypography then
-        ns.Utils.ApplyTypography(text, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
-    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(text, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
     end
     text:ClearAllPoints()
     text:SetPoint("CENTER", expander, "CENTER", 0, 0)
@@ -387,10 +411,11 @@ end
 
 function BagsMod:UpdateBagButtonVisual(btn)
     if not btn then return end
-    local icon = btn.icon or btn.Icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "IconTexture")]
+    local st = GetBagBtnState(btn)
+    local icon = st.icon or btn.icon or btn.Icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "IconTexture")]
     if not icon and btn.CreateTexture then
         icon = btn:CreateTexture(nil, "BORDER")
-        btn.icon = icon
+        st.icon = icon
     end
     if not icon then return end
 
@@ -467,10 +492,11 @@ function BagsMod:StyleBagButton(btn)
         if btn.SlotHighlightTexture.Hide then btn.SlotHighlightTexture:Hide() end
     end
 
-    local icon = btn.icon or btn.Icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "IconTexture")]
+    local st = GetBagBtnState(btn)
+    local icon = st.icon or btn.icon or btn.Icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "IconTexture")]
     if not icon and btn.CreateTexture then
         icon = btn:CreateTexture(nil, "BORDER")
-        btn.icon = icon
+        st.icon = icon
     end
 
     -- Remove any mask textures attached to the icon
@@ -524,7 +550,7 @@ function BagsMod:StyleBagButton(btn)
     end
 
     -- Hook UpdateTextures so Blizzard does not re-apply circular atlases over our styled square button
-    if not btn.roithiTexturesHooked and btn.UpdateTextures then
+    if not st.texturesHooked and btn.UpdateTextures then
         hooksecurefunc(btn, "UpdateTextures", function(selfBtn)
             local n = selfBtn.GetNormalTexture and selfBtn:GetNormalTexture()
             if n then
@@ -544,11 +570,11 @@ function BagsMod:StyleBagButton(btn)
             if selfBtn.CircleMask and selfBtn.CircleMask.Hide then selfBtn.CircleMask:Hide() end
             BagsMod:UpdateBagButtonVisual(selfBtn)
         end)
-        btn.roithiTexturesHooked = true
+        st.texturesHooked = true
     end
 
     -- 1px dark backdrop
-    if not btn.roithiBackdrop then
+    if not st.backdrop then
         local bg = CreateFrame("Frame", nil, btn, "BackdropTemplate")
         if bg.SetAllPoints then bg:SetAllPoints(btn) end
         if bg.SetFrameLevel and btn.GetFrameLevel then
@@ -563,13 +589,13 @@ function BagsMod:StyleBagButton(btn)
             bg:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
             bg:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
         end
-        btn.roithiBackdrop = bg
+        st.backdrop = bg
     else
-        if btn.roithiBackdrop.SetBackdropColor then
-            btn.roithiBackdrop:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
-            btn.roithiBackdrop:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
+        if st.backdrop.SetBackdropColor then
+            st.backdrop:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+            st.backdrop:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
         end
-        if btn.roithiBackdrop.Show then btn.roithiBackdrop:Show() end
+        if st.backdrop.Show then st.backdrop:Show() end
     end
 
     self:UpdateBagButtonVisual(btn)
@@ -631,13 +657,13 @@ function BagsMod:StyleBagButtons()
 
     for _, name in ipairs(REGULAR_BAG_SLOTS) do
         local btn = _G[name]
-        if btn and not btn.roithiBagHooked and btn.HookScript then
+        if btn and not GetBagBtnState(btn).bagHooked and btn.HookScript then
             btn:HookScript("OnClick", function()
                 if self.db and self.db.enabled ~= false then
                     self:ToggleBags("ALL")
                 end
             end)
-            btn.roithiBagHooked = true
+            GetBagBtnState(btn).bagHooked = true
         end
     end
 
@@ -676,8 +702,9 @@ function BagsMod:RestoreBlizzardBagBar()
     end
     for _, btn in ipairs(allButtons) do
         if btn then
-            if btn.originalParent and btn.SetParent then
-                btn:SetParent(btn.originalParent)
+            local origParent = GetBagBtnState(btn).originalParent
+            if origParent and btn.SetParent then
+                btn:SetParent(origParent)
             elseif _G.BagsBar and btn.SetParent then
                 btn:SetParent(_G.BagsBar)
             end
@@ -742,8 +769,8 @@ function BagsMod:UpdateBagBarLayout()
     if backpack then
         self:StyleBagButton(backpack)
         self:UpdateBagButtonVisual(backpack)
-        if not backpack.originalParent and backpack.GetParent then
-            backpack.originalParent = backpack:GetParent()
+        if not GetBagBtnState(backpack).originalParent and backpack.GetParent then
+            GetBagBtnState(backpack).originalParent = backpack:GetParent()
         end
         if backpack.SetParent then backpack:SetParent(self.bagBarFrame) end
         if backpack.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
@@ -779,8 +806,8 @@ function BagsMod:UpdateBagBarLayout()
         if btn then
             self:StyleBagButton(btn)
             self:UpdateBagButtonVisual(btn)
-            if not btn.originalParent and btn.GetParent then
-                btn.originalParent = btn:GetParent()
+            if not GetBagBtnState(btn).originalParent and btn.GetParent then
+                GetBagBtnState(btn).originalParent = btn:GetParent()
             end
             if btn.SetParent then btn:SetParent(self.bagBarFrame) end
             if btn.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
@@ -822,8 +849,8 @@ function BagsMod:UpdateBagBarLayout()
 
             self:StyleBagButton(reagentBag)
             self:UpdateBagButtonVisual(reagentBag)
-            if not reagentBag.originalParent and reagentBag.GetParent then
-                reagentBag.originalParent = reagentBag:GetParent()
+            if not GetBagBtnState(reagentBag).originalParent and reagentBag.GetParent then
+                GetBagBtnState(reagentBag).originalParent = reagentBag:GetParent()
             end
             if reagentBag.SetParent then reagentBag:SetParent(self.bagBarFrame) end
             if reagentBag.SetFrameLevel and self.bagBarFrame.GetFrameLevel then
@@ -852,8 +879,8 @@ function BagsMod:UpdateBagBarLayout()
     if keyring then
         self:StyleBagButton(keyring)
         self:UpdateBagButtonVisual(keyring)
-        if not keyring.originalParent and keyring.GetParent then
-            keyring.originalParent = keyring:GetParent()
+        if not GetBagBtnState(keyring).originalParent and keyring.GetParent then
+            GetBagBtnState(keyring).originalParent = keyring:GetParent()
         end
         if keyring.SetParent then keyring:SetParent(self.bagBarFrame) end
         if keyring.SetFrameLevel and self.bagBarFrame.GetFrameLevel then

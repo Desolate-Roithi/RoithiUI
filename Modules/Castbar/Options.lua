@@ -602,7 +602,7 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
         local db = GetCastbarDB(unit)
         local settings = {
             {
-                name = "Detached",
+                name = L["Detached"],
                 kind = LEM.SettingType.Checkbox,
                 default = false,
                 get = function() return db.detached end,
@@ -638,7 +638,7 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
 
         if db.detached then
             table.insert(settings, {
-                name = "Width",
+                name = L["Width"],
                 kind = LEM.SettingType.Slider,
                 default = 200,
                 minValue = 50,
@@ -653,7 +653,7 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
             })
 
             table.insert(settings, {
-                name = "X Position",
+                name = L["X Position"],
                 kind = LEM.SettingType.Slider,
                 default = 0,
                 minValue = -2500,
@@ -668,7 +668,7 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
             })
 
             table.insert(settings, {
-                name = "Y Position",
+                name = L["Y Position"],
                 kind = LEM.SettingType.Slider,
                 default = 0,
                 minValue = -1500,
@@ -684,7 +684,7 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
         end
 
         table.insert(settings, {
-            name = "Height",
+            name = L["Height"],
             kind = LEM.SettingType.Slider,
             default = 20,
             minValue = 10,
@@ -699,7 +699,7 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
         })
 
         table.insert(settings, {
-            name = "Font Size",
+            name = L["Font Size"],
             kind = LEM.SettingType.Slider,
             defaultValue = 12,
             minValue = 8,
@@ -713,7 +713,7 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
         })
 
         table.insert(settings, {
-            name = "Show Icon",
+            name = L["Show Icon"],
             kind = LEM.SettingType.Checkbox,
             default = true,
             get = function() return db.showIcon ~= false end,
@@ -729,7 +729,7 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
 
         if db.showIcon ~= false then
             table.insert(settings, {
-                name = "Icon Scale",
+                name = L["Icon Scale"],
                 kind = LEM.SettingType.Slider,
                 default = 1.0,
                 minValue = 0.5,
@@ -760,9 +760,9 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
         table.insert(settings, { kind = LEM.SettingType.Divider })
 
         table.insert(settings, {
-            name = "Colors",
-            expandedLabel = "Collapse colors",
-            collapsedLabel = "Expand colors",
+            name = L["Colors"],
+            expandedLabel = L["Collapse colors"],
+            collapsedLabel = L["Expand colors"],
             kind = LEM.SettingType.Expander,
             default = false,
             get = function() return colorSectionsExpanded[unit] end,
@@ -775,10 +775,10 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
 
         if colorSectionsExpanded[unit] then
             local colorKeys = {
-                { key = "cast",        name = "Cast" },
-                { key = "channel",     name = "Channel" },
-                { key = "interrupted", name = "Interrupted" },
-                { key = "shield",      name = "Shield" },
+                { key = "cast",        name = L["Cast"] },
+                { key = "channel",     name = L["Channel"] },
+                { key = "interrupted", name = L["Interrupted"] },
+                { key = "shield",      name = L["Shield"] },
             }
             if unit ~= "player" then
                 table.insert(colorKeys, { key = "interruptOnCD", name = L["Interrupt on CD"] or "Interrupt on CD" })
@@ -806,7 +806,7 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
             end
 
             local empowerRow = {
-                name = "Empower",
+                name = L["Empower"],
                 kind = LEM.SettingType.ColorRow,
                 colors = {}
             }
@@ -836,7 +836,7 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
     bar.extraButtons = nil
     LEM:AddFrameSettingsButtons(bar, {
         {
-            text = "Open Full Settings",
+            text = L["Open Full Settings"],
             click = function()
                 if RoithiUI and RoithiUI.OpenSettings then
                     RoithiUI:OpenSettings("castbars", unit)

@@ -59,16 +59,21 @@ function ns.CreateCastBar(unit)
     icon:SetTexCoord(0.1, 0.9, 0.1, 0.9) -- Square crop/zoom
     bar.Icon = icon
 
-    local fontPath, fontSize, fontOutline = ns.GetCastbarFontInfo(unit)
+    local _, fontSize, fontOutline, fontName = ns.GetCastbarFontInfo(unit)
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
 
     -- 1. Create sub-widgets first to allow relative anchoring
     local timeText = bar:CreateFontString(nil, "OVERLAY")
-    timeText:SetFont(fontPath, fontSize, fontOutline)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(timeText, fontName, fontSize, fontOutline, false, "Roithi Thick")
+    end
     timeText:SetPoint("RIGHT", -4, 0)
     bar.TimeFS = timeText
 
     local text = bar:CreateFontString(nil, "OVERLAY");
-    text:SetFont(fontPath, fontSize, fontOutline)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(text, fontName, fontSize, fontOutline, false, "Roithi Thick")
+    end
     text:SetPoint("LEFT", 4, 0);                      -- Align Left with padding
     text:SetPoint("RIGHT", bar.TimeFS, "LEFT", -4, 0) -- Now valid as TimeFS exists
     bar.Text = text
@@ -103,12 +108,13 @@ function ns.UpdateCastBarMedia(bar)
     local texture = ns.GetCastbarTexture(unit)
     bar:SetStatusBarTexture(texture)
 
-    local fontPath, fontSize, fontOutline = ns.GetCastbarFontInfo(unit)
-    if bar.Text then
-        bar.Text:SetFont(fontPath, fontSize, fontOutline)
+    local _, fontSize, fontOutline, fontName = ns.GetCastbarFontInfo(unit)
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if bar.Text and utils and utils.ApplyTypography then
+        utils.ApplyTypography(bar.Text, fontName, fontSize, fontOutline, false, "Roithi Thick")
     end
-    if bar.TimeFS then
-        bar.TimeFS:SetFont(fontPath, fontSize, fontOutline)
+    if bar.TimeFS and utils and utils.ApplyTypography then
+        utils.ApplyTypography(bar.TimeFS, fontName, fontSize, fontOutline, false, "Roithi Thick")
     end
 end
 

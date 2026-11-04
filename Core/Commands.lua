@@ -1,6 +1,9 @@
 local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
+local localeLib = LibStub and LibStub("AceLocale-3.0", true)
+local L = (localeLib and localeLib.GetLocale and localeLib:GetLocale("RoithiUI", true))
+    or setmetatable({}, { __index = function(_, k) return k end })
 
 -- ----------------------------------------------------------------------------
 -- Serialization (Export)
@@ -20,9 +23,9 @@ end
 -- ----------------------------------------------------------------------------
 function RoithiUI:ResetSettings()
     StaticPopupDialogs["ROITHI_RESET"] = {
-        text = "Are you sure you want to reset all RoithiUI settings to defaults? UI will reload.",
-        button1 = "Yes",
-        button2 = "No",
+        text = L["Are you sure you want to reset all RoithiUI settings to defaults? UI will reload."],
+        button1 = L["Yes"],
+        button2 = L["No"],
         OnAccept = function()
             -- Reset current profile to defaults
             RoithiUI.db:ResetProfile()
@@ -278,9 +281,9 @@ RoithiUI:RegisterChatCommand("roithikb", function()
     end
 end)
 StaticPopupDialogs["ROITHI_RELOAD"] = {
-    text = "Changing module settings requires a UI reload. Reload now?",
-    button1 = "Yes",
-    button2 = "No",
+    text = L["Changing module settings requires a UI reload. Reload now?"],
+    button1 = L["Yes"],
+    button2 = L["No"],
     OnAccept = function()
         ReloadUI()
     end,

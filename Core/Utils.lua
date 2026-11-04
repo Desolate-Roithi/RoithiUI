@@ -18,6 +18,9 @@ ns.IsRetail = not ns.IsForever and (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 -- Utils Module
 -- -------------------------------------------------------------------------
 ns.Utils = {}
+if type(_G.RoithiUI) == "table" and not _G.RoithiUI.Utils then
+    _G.RoithiUI.Utils = ns.Utils
+end
 
 -- -------------------------------------------------------------------------
 -- Table Helpers
@@ -84,9 +87,9 @@ function ns.Utils.ApplyTypography(fontString, fontName, fontSize, fontOutline, f
     end
 
     if fontString.GetText and fontString.SetText then
-        pcall(function()
-            fontString:SetText(fontString:GetText())
-        end)
+        local ok, txt = pcall(fontString.GetText, fontString)
+        if ok and txt ~= nil and type(txt) ~= "userdata" and not (_G.issecretvalue and _G.issecretvalue(txt)) then pcall(fontString.SetText, fontString, txt) end
+        -- Skip GetText/SetText round-trip when text is Midnight Secret userdata
     end
 end
 
@@ -179,8 +182,8 @@ function ns.Utils.SanitizeAndCenterPoint(point, x, y, width, height, padding, ex
     padding = tonumber(padding) or 10
     extraLeft = tonumber(extraLeft) or 0
 
-    local sw = UIParent and UIParent:GetWidth() or 1920
-    local sh = UIParent and UIParent:GetHeight() or 1080
+    local sw = (UIParent and UIParent.GetWidth and UIParent:GetWidth()) or 1920
+    local sh = (UIParent and UIParent.GetHeight and UIParent:GetHeight()) or 1080
     if not sw or sw <= 0 then sw = 1920 end
     if not sh or sh <= 0 then sh = 1080 end
 
@@ -224,8 +227,8 @@ function ns.Utils.ClampFrameToScreen(frame, padding)
     if not frame or not frame.GetPoint then return end
     padding = padding or 10
 
-    local sw = UIParent and UIParent:GetWidth() or 1920
-    local sh = UIParent and UIParent:GetHeight() or 1080
+    local sw = (UIParent and UIParent.GetWidth and UIParent:GetWidth()) or 1920
+    local sh = (UIParent and UIParent.GetHeight and UIParent:GetHeight()) or 1080
     if not sw or sw <= 0 then sw = 1920 end
     if not sh or sh <= 0 then sh = 1080 end
 

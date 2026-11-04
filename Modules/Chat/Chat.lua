@@ -31,6 +31,19 @@ local editModePositionHooked = setmetatable({}, { __mode = "k" })
 local clampHookedFrames = setmetatable({}, { __mode = "k" })
 local sizeHookedFrames = setmetatable({}, { __mode = "k" })
 local addMessageHooked = setmetatable({}, { __mode = "k" })
+local blizzFrameState = setmetatable({}, { __mode = "k" })
+local function GetChatFrameState(f)
+    local st = blizzFrameState[f]
+    if not st then
+        st = {}
+        blizzFrameState[f] = st
+    end
+    return st
+end
+
+function ChatMod:GetButtonState(btn)
+    return btn and blizzFrameState[btn] or nil
+end
 local isDisplacing = false
 
 function ChatMod:GetFontPath()
@@ -433,7 +446,7 @@ function ChatMod:OnInitialize()
 
     if _G.StaticPopupDialogs and not _G.StaticPopupDialogs["ROITHI_CHAT_COPY_URL"] then
         _G.StaticPopupDialogs["ROITHI_CHAT_COPY_URL"] = {
-            text = "URL: (Ctrl+C to Copy)",
+            text = L["URL: (Ctrl+C to Copy)"],
             button1 = _G.OKAY or "OK",
             hasEditBox = true,
             hasWideEditBox = true,
@@ -589,18 +602,20 @@ function ChatMod:AdjustToastFrameStrata()
             if toast.SetFrameLevel and toast.GetFrameLevel then
                 toast:SetFrameLevel(math.max(toast:GetFrameLevel(), 100))
             end
-            if not toast.roithiStrataHooked and _G.hooksecurefunc then
-                toast.roithiStrataHooked = true
+            local tSt = GetChatFrameState(toast)
+            if not tSt.strataHooked and _G.hooksecurefunc then
+                tSt.strataHooked = true
                 _G.hooksecurefunc(toast, "SetFrameStrata", function(f, strata)
-                    if strata ~= targetStrata and not f.settingRoithiStrata then
-                        f.settingRoithiStrata = true
+                    local fSt = GetChatFrameState(f)
+                    if strata ~= targetStrata and not fSt.settingStrata then
+                        fSt.settingStrata = true
                         f:SetFrameStrata(targetStrata)
-                        f.settingRoithiStrata = nil
+                        fSt.settingStrata = nil
                     end
                 end)
             end
-            if not toast.roithiShowHooked and toast.HookScript then
-                toast.roithiShowHooked = true
+            if not tSt.showHooked and toast.HookScript then
+                tSt.showHooked = true
                 toast:HookScript("OnShow", function(f)
                     if f.SetFrameStrata then
                         f:SetFrameStrata(targetStrata)
@@ -995,7 +1010,7 @@ function ChatMod:RegisterWithEditMode()
     if cf1.SetMovable then cf1:SetMovable(true) end
     if cf1.SetClampedToScreen then cf1:SetClampedToScreen(self.db.clampToScreen == true) end
 
-    cf1.editModeName = L["Chat"] or "Chat"
+    -- EditMode label passed via LEM:AddFrame fourth argument
     local defaults = { point = "BOTTOMLEFT", x = 0, y = 0 }
 
     local function OnPositionChanged()
@@ -1064,7 +1079,7 @@ function ChatMod:RegisterWithEditMode()
     end
 
     if not (_G.Enum and _G.Enum.EditModeSystem and _G.Enum.EditModeSystem.ChatFrame) then
-        LEM:AddFrame(cf1, OnPositionChanged, defaults)
+        LEM:AddFrame(cf1, OnPositionChanged, defaults, L["Chat"] or "Chat")
         if LEM.AddFrameSettings and self.GetLEMFrameSettings then
             LEM:AddFrameSettings(cf1, self:GetLEMFrameSettings())
         end
@@ -1136,14 +1151,15 @@ function ChatMod:UpdateChatFonts()
 
         local eb = _G["ChatFrame" .. i .. "EditBox"]
         if eb then
-            if eb.SetFont then
-                pcall(eb.SetFont, eb, font, size, outline)
+            local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+            if utils and utils.ApplyTypography then utils.ApplyTypography(eb, font, size, outline, showShadow)
+                -- handled via ApplyTypography
             end
-            if eb.header and eb.header.SetFont then
-                pcall(eb.header.SetFont, eb.header, font, size, outline)
+            if eb.header and utils and utils.ApplyTypography then utils.ApplyTypography(eb.header, font, size, outline, showShadow)
+                -- handled via ApplyTypography
             end
-            if eb.headerSuffix and eb.headerSuffix.SetFont then
-                pcall(eb.headerSuffix.SetFont, eb.headerSuffix, font, size, outline)
+            if eb.headerSuffix and utils and utils.ApplyTypography then utils.ApplyTypography(eb.headerSuffix, font, size, outline, showShadow)
+                -- handled via ApplyTypography
             end
         end
     end
@@ -1205,8 +1221,8 @@ function ChatMod:SkinAllChatFrames()
     if dock and not wheelHookedFrames[dock] then
         wheelHookedFrames[dock] = true
         if dock.EnableMouseWheel then dock:EnableMouseWheel(true) end
-        if dock.SetScript then
-            dock:SetScript("OnMouseWheel", function(_, delta)
+        if dock.HookScript then
+            dock:HookScript("OnMouseWheel", function(_, delta)
                 self:OnTabMouseWheel(delta)
             end)
         end
@@ -1214,8 +1230,8 @@ function ChatMod:SkinAllChatFrames()
     if dock and dock.scrollFrame and not wheelHookedFrames[dock.scrollFrame] then
         wheelHookedFrames[dock.scrollFrame] = true
         if dock.scrollFrame.EnableMouseWheel then dock.scrollFrame:EnableMouseWheel(true) end
-        if dock.scrollFrame.SetScript then
-            dock.scrollFrame:SetScript("OnMouseWheel", function(_, delta)
+        if dock.scrollFrame.HookScript then
+            dock.scrollFrame:HookScript("OnMouseWheel", function(_, delta)
                 self:OnTabMouseWheel(delta)
             end)
         end
@@ -1227,8 +1243,10 @@ function ChatMod:SkinAllChatFrames()
 end
 
 function ChatMod:SkinScrollToBottomButton(btn)
-    if not btn or btn.roithiRestyled then return end
-    btn.roithiRestyled = true
+    if not btn then return end
+    local st = GetChatFrameState(btn)
+    if st.restyled then return end
+    st.restyled = true
 
     if btn.SetSize then btn:SetSize(20, 20) end
 
@@ -1254,7 +1272,7 @@ function ChatMod:SkinScrollToBottomButton(btn)
     end
 
     -- Clean RoithiUI backdrop tile
-    if not btn.roithiBackdrop then
+    if not st.backdrop then
         local bg = CreateFrame("Frame", nil, btn, "BackdropTemplate")
         bg:SetAllPoints(btn)
         bg:SetFrameLevel(math.max(0, btn:GetFrameLevel() - 1))
@@ -1262,11 +1280,11 @@ function ChatMod:SkinScrollToBottomButton(btn)
         LibRoithi.mixins:CreateBackdrop(bg)
         bg:SetBackdropColor(0.08, 0.11, 0.14, 0.85)
         bg:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.8)
-        btn.roithiBackdrop = bg
+        st.backdrop = bg
     end
 
     -- Clean golden downward chevron icon
-    if not btn.roithiArrow then
+    if not st.arrow then
         local arrow = btn:CreateTexture(nil, "ARTWORK")
         arrow:SetPoint("CENTER", btn, "CENTER", 0, 0)
         arrow:SetSize(12, 12)
@@ -1278,19 +1296,19 @@ function ChatMod:SkinScrollToBottomButton(btn)
             arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollEnd-Up")
             arrow:SetTexCoord(0.33, 0.67, 0.33, 0.67)
         end
-        btn.roithiArrow = arrow
+        st.arrow = arrow
     end
 
-    if btn.HookScript and not btn.roithiPushedHooked then
-        btn.roithiPushedHooked = true
+    if btn.HookScript and not st.pushedHooked then
+        st.pushedHooked = true
         btn:HookScript("OnMouseDown", function()
-            if btn.roithiArrow then
-                btn.roithiArrow:SetPoint("CENTER", btn, "CENTER", 0, -1)
+            if st.arrow then
+                st.arrow:SetPoint("CENTER", btn, "CENTER", 0, -1)
             end
         end)
         btn:HookScript("OnMouseUp", function()
-            if btn.roithiArrow then
-                btn.roithiArrow:SetPoint("CENTER", btn, "CENTER", 0, 0)
+            if st.arrow then
+                st.arrow:SetPoint("CENTER", btn, "CENTER", 0, 0)
             end
         end)
     end
@@ -1327,7 +1345,7 @@ function ChatMod:SkinChatFrame(cf, idx)
         if bg.SetTexture then bg:SetTexture("") end
         if bg.SetAlpha then bg:SetAlpha(0) end
         if bg.Hide then bg:Hide() end
-        if not bg.roithiHooked and hooksecurefunc then
+        if not GetChatFrameState(bg).hooked and hooksecurefunc then
             hooksecurefunc(bg, "SetAlpha", function(f, a)
                 if a ~= 0 and ChatMod.db and ChatMod.db.enabled then
                     f:SetAlpha(0)
@@ -1338,7 +1356,7 @@ function ChatMod:SkinChatFrame(cf, idx)
                     f:Hide()
                 end
             end)
-            bg.roithiHooked = true
+            GetChatFrameState(bg).hooked = true
         end
     end
 
@@ -1605,12 +1623,12 @@ function ChatMod:UpdateEditBoxStyle(eb)
     local font = self:GetFontPath()
     local size = self.db.fontSize or 12
     local outline = NormalizeFontFlags(self.db.fontOutline)
-    pcall(eb.SetFont, eb, font, size, outline)
-    if eb.header then
-        pcall(eb.header.SetFont, eb.header, font, size, outline)
-    end
-    if eb.headerSuffix then
-        pcall(eb.headerSuffix.SetFont, eb.headerSuffix, font, size, outline)
+    local showShadow = (self.db.fontShadow == true)
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(eb, font, size, outline, showShadow)
+        if eb.header then utils.ApplyTypography(eb.header, font, size, outline, showShadow) end
+        if eb.headerSuffix then utils.ApplyTypography(eb.headerSuffix, font, size, outline, showShadow) end
     end
 end
 
@@ -1719,7 +1737,11 @@ function ChatMod:SkinEditBox(eb, cf, idx)
     local font = self:GetFontPath()
     local size = self.db.fontSize or 12
     local outline = NormalizeFontFlags(self.db.fontOutline)
-    pcall(eb.SetFont, eb, font, size, outline)
+    local showShadow = (self.db.fontShadow == true)
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(eb, font, size, outline, showShadow)
+    end
     eb:SetTextInsets(6, 6, 0, 0)
 
     -- Alt arrow key handling
@@ -1728,11 +1750,11 @@ function ChatMod:SkinEditBox(eb, cf, idx)
     end
 
     -- Header text styling
-    if eb.header then
-        pcall(eb.header.SetFont, eb.header, font, size, outline)
+    if eb.header and utils and utils.ApplyTypography then
+        utils.ApplyTypography(eb.header, font, size, outline, showShadow)
     end
-    if eb.headerSuffix then
-        pcall(eb.headerSuffix.SetFont, eb.headerSuffix, font, size, outline)
+    if eb.headerSuffix and utils and utils.ApplyTypography then
+        utils.ApplyTypography(eb.headerSuffix, font, size, outline, showShadow)
     end
     -- Style Language Button
     local langBtn = _G[name .. "Language"] or eb.Language
@@ -1766,11 +1788,16 @@ function ChatMod:SkinEditBox(eb, cf, idx)
     if idx <= 10 and not editBoxFocusHooked[eb] and hooksecurefunc then
         editBoxFocusHooked[eb] = true
         hooksecurefunc(eb, "SetFocus", function()
-            if eb.header then
-                pcall(eb.header.SetFont, eb.header, font, size, outline)
+            local f = self:GetFontPath()
+            local sz = self.db.fontSize or 12
+            local out = NormalizeFontFlags(self.db.fontOutline)
+            local sh = (self.db.fontShadow == true)
+            local u = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+            if eb.header and u and u.ApplyTypography then
+                u.ApplyTypography(eb.header, f, sz, out, sh)
             end
-            if eb.headerSuffix then
-                pcall(eb.headerSuffix.SetFont, eb.headerSuffix, font, size, outline)
+            if eb.headerSuffix and u and u.ApplyTypography then
+                u.ApplyTypography(eb.headerSuffix, f, sz, out, sh)
             end
         end)
     end
@@ -1842,7 +1869,11 @@ function ChatMod:UpdateTabFont(tab)
         local font = self:GetFontPath()
         local size = self.db.tabFontSize or 11
         local outline = NormalizeFontFlags(self.db.fontOutline)
-        pcall(tabText.SetFont, tabText, font, size, outline)
+        local showShadow = (self.db.fontShadow == true)
+        local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(tabText, font, size, outline, showShadow)
+        end
         -- Center tabText inside tab away from the bottom edge so it doesn't collide with chat text
         if tabText.ClearAllPoints and tabText.SetPoint then
             tabText:ClearAllPoints()
@@ -1943,8 +1974,9 @@ function ChatMod:SkinTab(tab, cf, idx)
     if tab.EnableMouseWheel then
         tab:EnableMouseWheel(true)
     end
-    if tab.SetScript then
-        tab:SetScript("OnMouseWheel", function(_, delta)
+    if tab.HookScript and not wheelHookedFrames[tab] then
+        wheelHookedFrames[tab] = true
+        tab:HookScript("OnMouseWheel", function(_, delta)
             self:OnTabMouseWheel(delta)
         end)
     end
@@ -2535,8 +2567,8 @@ function ChatMod:UpdateButtonsDock()
 
             ApplyMenuButtonTextures(btn)
 
-            if not btn.roithiMenuHooked then
-                btn.roithiMenuHooked = true
+            if not GetChatFrameState(btn).menuHooked then
+                GetChatFrameState(btn).menuHooked = true
                 local isApplying = false
                 if btn.SetNormalTexture and ChatMod.SecureHook then
                     ChatMod:SecureHook(btn, "SetNormalTexture", function(b)
@@ -2567,8 +2599,8 @@ function ChatMod:UpdateButtonsDock()
             if btn.FriendsButton then
                 btn.FriendsButton:ClearAllPoints()
                 btn.FriendsButton:SetAllPoints(btn)
-                if not btn.roithiFriendsHooked then
-                    btn.roithiFriendsHooked = true
+                if not GetChatFrameState(btn).friendsHooked then
+                    GetChatFrameState(btn).friendsHooked = true
                     local settingFriendsAtlas = false
                     if _G.hooksecurefunc and btn.FriendsButton.SetAtlas then
                         _G.hooksecurefunc(btn.FriendsButton, "SetAtlas", function(tex, atlas)
@@ -2623,8 +2655,8 @@ function ChatMod:UpdateButtonsDock()
                 if dt.SetAlpha then dt:SetAlpha(0) end
             end
 
-            if not btn.roithiBorderStripped then
-                btn.roithiBorderStripped = true
+            if not GetChatFrameState(btn).borderStripped then
+                GetChatFrameState(btn).borderStripped = true
                 if btn.SetNormalTexture and ChatMod.SecureHook then
                     ChatMod:SecureHook(btn, "SetNormalTexture", function(b)
                         local bnt = b:GetNormalTexture()
@@ -2682,8 +2714,8 @@ function ChatMod:UpdateButtonsDock()
             btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
         end
 
-        if not btn.roithiDockHooked and hooksecurefunc then
-            btn.roithiDockHooked = true
+        if not GetChatFrameState(btn).dockHooked and hooksecurefunc then
+            GetChatFrameState(btn).dockHooked = true
             local isRepositioning = false
             hooksecurefunc(btn, "SetPoint", function(b)
                 if isRepositioning then return end

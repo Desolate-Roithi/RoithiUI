@@ -64,6 +64,9 @@ local CLASSIC_MICRO_BUTTONS = {
 MenuMod.dbKey = "Menu"
 MenuMod.defaultSettings = ns.MenuDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Menu)
 
+local tabardHooked = setmetatable({}, { __mode = "k" })
+local selectionHooked = setmetatable({}, { __mode = "k" })
+
 function MenuMod:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Menu or self.defaultSettings
     self.microButtons = {}
@@ -74,7 +77,7 @@ end
 
 function MenuMod:GetBackdrop(btn)
     if not btn then return nil end
-    return (self.backdrops and self.backdrops[btn]) or btn.roithiBackdrop
+    return self.backdrops and self.backdrops[btn]
 end
 
 function MenuMod:QueueLayoutMicroMenu()
@@ -188,8 +191,13 @@ function MenuMod:SetupMicroMenu()
     local function SuppressMicroMenuSelection()
         for _, f in ipairs({ _G.MicroMenu, _G.MicroMenuContainer, _G.MicroButtonAndBagsBar }) do
             if f then
-                f.defaultHideSelection = true
                 if f.Selection then
+                    if not selectionHooked[f.Selection] and hooksecurefunc then
+                        selectionHooked[f.Selection] = true
+                        hooksecurefunc(f.Selection, "Show", function(sel)
+                            sel:Hide()
+                        end)
+                    end
                     f.Selection:Hide()
                     if f.Selection.EnableMouse then f.Selection:EnableMouse(false) end
                 end
@@ -236,11 +244,6 @@ function MenuMod:SetupMicroMenu()
                 reg:SetAlpha(0)
             end
         end
-    end
-
-    -- Set overrideScale to signal to EditModeExpanded and other frame managers not to clobber button positions
-    if _G.MicroMenu then
-        _G.MicroMenu.overrideScale = 1
     end
 
     -- Hook native layout methods to prevent Blizzard and other addons from stealing micro buttons back
@@ -609,8 +612,8 @@ function MenuMod:StyleMicroButton(btn)
         if tabard.background and tabard.background.SetSize then tabard.background:SetSize(emblemW, emblemH) end
     end
 
-    if btn.UpdateTabard and not btn.roithiTabardHooked and hooksecurefunc then
-        btn.roithiTabardHooked = true
+    if btn.UpdateTabard and not tabardHooked[btn] and hooksecurefunc then
+        tabardHooked[btn] = true
         hooksecurefunc(btn, "UpdateTabard", function()
             if self.isUpdatingTabard then return end
             self.isUpdatingTabard = true

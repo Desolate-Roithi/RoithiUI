@@ -1,7 +1,6 @@
 local _, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
-local LibRoithi = LibStub("LibRoithi-1.0")
 
 -- WoW APIs
 local _G = _G
@@ -678,12 +677,11 @@ function UF:UpdateTagFrame(tagFrame)
     local fontName = tagFrame.font or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Roithi Thick"
     local fontOutline = tagFrame.fontOutline or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE"
 
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
     for i, segment in ipairs(segments) do
         local fs = tagFrame.SegmentPool:Acquire()
-        if ns.Utils and ns.Utils.ApplyTypography then
-            ns.Utils.ApplyTypography(fs, fontName, tagFrame.fontSize or 12, fontOutline, false, "Roithi Thick")
-        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(fs, fontName, tagFrame.fontSize or 12, fontOutline)
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(fs, fontName, tagFrame.fontSize or 12, fontOutline, false, "Roithi Thick")
         end
         if fs.SetDrawLayer then fs:SetDrawLayer("OVERLAY", 7) end
 

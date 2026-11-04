@@ -193,15 +193,17 @@ function SwingTimer:SyncNativeClear(hand, _)
     end
 end
 
+local selectionHooked = setmetatable({}, { __mode = "k" })
+
 local function SuppressNativeSelection(targetFrame)
     if not targetFrame then return end
     if targetFrame.Selection then
         targetFrame.Selection:Hide()
-        if not targetFrame.roithiSelectionHooked and hooksecurefunc then
+        if not selectionHooked[targetFrame] and hooksecurefunc then
             hooksecurefunc(targetFrame.Selection, "Show", function(sel)
                 sel:Hide()
             end)
-            targetFrame.roithiSelectionHooked = true
+            selectionHooked[targetFrame] = true
         end
     end
 end
@@ -477,20 +479,21 @@ local function CreateBarWidget(parent, name)
     local fontName = (SwingTimer.db and SwingTimer.db.font)
         or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
         or "Roithi Thick"
-    local fontPath = (LSM and LSM:Fetch("font", fontName))
-        or (LSM and LSM:Fetch("font", "Roithi Thick"))
-        or (LSM and LSM:Fetch("font", "Friz Quadrata TT"))
-        or "Fonts\\FRIZQT__.TTF"
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
 
     local labelText = bar:CreateFontString(nil, "OVERLAY")
     labelText:SetPoint("LEFT", bar, "LEFT", 4, 0)
-    labelText:SetFont(fontPath, 9, "OUTLINE")
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(labelText, fontName, 9, "OUTLINE", false, "Roithi Thick")
+    end
     labelText:SetJustifyH("LEFT")
     bar.labelText = labelText
 
     local timeText = bar:CreateFontString(nil, "OVERLAY")
     timeText:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
-    timeText:SetFont(fontPath, 9, "OUTLINE")
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(timeText, fontName, 9, "OUTLINE", false, "Roithi Thick")
+    end
     timeText:SetJustifyH("RIGHT")
     bar.timeText = timeText
 
@@ -1458,19 +1461,16 @@ function SwingTimer:UpdateFonts()
     local fontName = (self.db and self.db.font)
         or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
         or "Roithi Thick"
-    local fontPath = (LSM and LSM:Fetch("font", fontName))
-        or (LSM and LSM:Fetch("font", "Roithi Thick"))
-        or (LSM and LSM:Fetch("font", "Friz Quadrata TT"))
-        or "Fonts\\FRIZQT__.TTF"
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
     local bars = { self.playerBars, self.targetBars }
     for _, group in ipairs(bars) do
         if group then
             for _, bar in pairs(group) do
-                if bar and bar.labelText and bar.labelText.SetFont then
-                    bar.labelText:SetFont(fontPath, 9, "OUTLINE")
+                if bar and bar.labelText and utils and utils.ApplyTypography then
+                    utils.ApplyTypography(bar.labelText, fontName, 9, "OUTLINE", false, "Roithi Thick")
                 end
-                if bar and bar.timeText and bar.timeText.SetFont then
-                    bar.timeText:SetFont(fontPath, 9, "OUTLINE")
+                if bar and bar.timeText and utils and utils.ApplyTypography then
+                    utils.ApplyTypography(bar.timeText, fontName, 9, "OUTLINE", false, "Roithi Thick")
                 end
             end
         end

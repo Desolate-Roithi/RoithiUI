@@ -6,6 +6,11 @@ local LSM = LibStub("LibSharedMedia-3.0", true)
 
 local itemBackdrops = setmetatable({}, { __mode = "k" })
 local itemStackOverlays = setmetatable({}, { __mode = "k" })
+local itemShownHooked = setmetatable({}, { __mode = "k" })
+
+function CDM:GetItemBackdrop(frameObj)
+    return frameObj and itemBackdrops[frameObj] or nil
+end
 
 local function GetActiveFont(fontName)
     if fontName and (fontName:find("\\") or fontName:find("/")) then
@@ -115,7 +120,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
     end
 
     -- 1px Roithi Backdrop
-    local bg = itemBackdrops[itemFrame] or itemFrame.roithiBackdrop
+    local bg = itemBackdrops[itemFrame]
     if not bg then
         bg = CreateFrame("Frame", nil, itemFrame, "BackdropTemplate")
         if bg.SetAllPoints then bg:SetAllPoints(itemFrame) end
@@ -130,7 +135,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
             })
         end
         itemBackdrops[itemFrame] = bg
-        itemFrame.roithiBackdrop = bg
+        -- stored strictly in weak table itemBackdrops to avoid Blizzard table taint
     else
         if bg.SetFrameLevel and itemFrame.GetFrameLevel then
             bg:SetFrameLevel(itemFrame:GetFrameLevel() + 2)
@@ -179,6 +184,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
         end
 
         local fontName = (isOverridden and vConf.font) or self.db.font
+        -- fontPath resolved via ApplyTypography
         local fontPath = GetActiveFont(fontName)
         if cd.SetCountdownFont then
             pcall(cd.SetCountdownFont, cd, fontPath)
@@ -196,18 +202,13 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                 if cdFS.Hide then cdFS:Hide() end
             else
                 if cdFS.Show then cdFS:Show() end
-                if cdFS.SetFont then
-                    cdFS:SetFont(fontPath, cdSize, cdOutline)
+                local cdShadow = (isOverridden and vConf and vConf.cooldownFontShadow == true) or (not isOverridden and self.db.cooldownFontShadow == true)
+                local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+                if utils and utils.ApplyTypography then
+                    utils.ApplyTypography(cdFS, fontPath, cdSize, cdOutline, cdShadow, "Roithi Thick")
                 end
                 if cdFS.SetDrawLayer then
                     cdFS:SetDrawLayer("OVERLAY", 7)
-                end
-                if cdFS.SetShadowOffset then
-                    if cdOutline ~= "NONE" and cdOutline ~= "" then
-                        cdFS:SetShadowOffset(0, 0)
-                    else
-                        cdFS:SetShadowOffset(1, -1)
-                    end
                 end
             end
             local cdAnchor = (isOverridden and (vConf.cooldownAnchor or vConf.timerAnchor)) or self.db.cooldownAnchor or "CENTER"
@@ -264,7 +265,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                 stackParent:SetFrameLevel((itemFrame:GetFrameLevel() or 10) + 25)
             end
         elseif stackParent and stackParent == itemFrame then
-            local stackOverlay = itemStackOverlays[itemFrame] or itemFrame.roithiStackOverlay
+            local stackOverlay = itemStackOverlays[itemFrame]
             if not stackOverlay and CreateFrame then
                 stackOverlay = CreateFrame("Frame", nil, itemFrame)
                 stackOverlay:SetAllPoints(itemFrame)
@@ -287,18 +288,13 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
         end
 
         local fontName = (isOverridden and vConf.font) or self.db.font
-        local fontPath = GetActiveFont(fontName)
+        -- fontPath resolved via ApplyTypography
         local fontSize = (isOverridden and vConf.stackFontSize) or self.db.stackFontSize or 11
         local fontOutline = (isOverridden and vConf.stackFontOutline) or self.db.stackFontOutline or "OUTLINE"
-        if stackFS.SetFont then
-            stackFS:SetFont(fontPath, fontSize, fontOutline)
-        end
-        if stackFS.SetShadowOffset then
-            if fontOutline ~= "NONE" and fontOutline ~= "" then
-                stackFS:SetShadowOffset(0, 0)
-            else
-                stackFS:SetShadowOffset(1, -1)
-            end
+        local stackShadow = (isOverridden and vConf and vConf.stackFontShadow == true) or (not isOverridden and self.db.stackFontShadow == true)
+        local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(stackFS, fontName, fontSize, fontOutline, stackShadow, "Roithi Thick")
         end
         if stackFS.SetSize then
             stackFS:SetSize(0, 0)
@@ -371,7 +367,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
 
             if not showIcon then
                 if iconFrame.Hide then iconFrame:Hide() end
-                local oldIconBg = itemBackdrops[iconFrame] or iconFrame.roithiBackdrop
+                local oldIconBg = itemBackdrops[iconFrame]
                 if oldIconBg and oldIconBg.Hide then
                     oldIconBg:Hide()
                 end
@@ -384,7 +380,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                 end
 
                 -- Dedicated 1px border for BuffBar icon
-                local iconBg = itemBackdrops[iconFrame] or iconFrame.roithiBackdrop
+                local iconBg = itemBackdrops[iconFrame]
                 if not iconBg then
                     iconBg = CreateFrame("Frame", nil, iconFrame, "BackdropTemplate")
                     if iconBg.SetAllPoints then iconBg:SetAllPoints(iconFrame) end
@@ -405,7 +401,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                     iconBg:SetBackdropBorderColor(c.r or 0.2, c.g or 0.2, c.b or 0.2, c.a or 1.0)
                 end
                 if iconBg.Show then iconBg:Show() end
-                iconFrame.roithiBackdrop = iconBg
+                -- iconBg stored in itemBackdrops weak table
             end
         end
 
@@ -458,7 +454,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
             end
 
             -- Dedicated 1px border for statusbar
-            local barBorder = itemBackdrops[bar] or bar.roithiBackdrop
+            local barBorder = itemBackdrops[bar]
             if not barBorder then
                 barBorder = CreateFrame("Frame", nil, bar, "BackdropTemplate")
                 if barBorder.SetAllPoints then barBorder:SetAllPoints(bar) end
@@ -474,7 +470,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                 end
                 itemBackdrops[bar] = barBorder
             end
-            bar.roithiBackdrop = barBorder
+            -- barBorder stored in itemBackdrops weak table
             if barBorder.SetBackdropColor then barBorder:SetBackdropColor(0, 0, 0, 0) end
             if barBorder.SetBackdropBorderColor then
                 barBorder:SetBackdropBorderColor(c.r or 0.2, c.g or 0.2, c.b or 0.2, c.a or 1.0)
@@ -498,21 +494,16 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                 else
                     if nameFS.Show then nameFS:Show() end
                     local fontName = (isOverridden and vConf.font) or self.db.font
-                    local fontPath = GetActiveFont(fontName)
+                    -- fontPath resolved via ApplyTypography
                     local nSize = (isOverridden and vConf.nameFontSize) or 11
                     local nOutline = (isOverridden and vConf.nameFontOutline) or "OUTLINE"
-                    if nameFS.SetFont then
-                        nameFS:SetFont(fontPath, nSize, nOutline)
+                    local nShadow = (isOverridden and vConf and vConf.nameFontShadow == true) or (not isOverridden and self.db.nameFontShadow == true)
+                    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+                    if utils and utils.ApplyTypography then
+                        utils.ApplyTypography(nameFS, fontName, nSize, nOutline, nShadow, "Roithi Thick")
                     end
                     if nameFS.SetDrawLayer then
                         nameFS:SetDrawLayer("OVERLAY", 7)
-                    end
-                    if nameFS.SetShadowOffset then
-                        if nOutline ~= "NONE" and nOutline ~= "" then
-                            nameFS:SetShadowOffset(0, 0)
-                        else
-                            nameFS:SetShadowOffset(1, -1)
-                        end
                     end
                     if nameFS.ClearAllPoints and nameFS.SetPoint then
                         nameFS:ClearAllPoints()
@@ -533,21 +524,16 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                 else
                     if durFS.Show then durFS:Show() end
                     local fontName = (isOverridden and vConf.font) or self.db.font
-                    local fontPath = GetActiveFont(fontName)
+                    -- fontPath resolved via ApplyTypography
                     local tSize = (isOverridden and vConf.timerFontSize) or self.db.cooldownFontSize or 11
                     local tOutline = (isOverridden and vConf.timerFontOutline) or self.db.cooldownFontOutline or "OUTLINE"
-                    if durFS.SetFont then
-                        durFS:SetFont(fontPath, tSize, tOutline)
+                    local tShadow = (isOverridden and vConf and vConf.timerFontShadow == true) or (not isOverridden and self.db.cooldownFontShadow == true)
+                    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+                    if utils and utils.ApplyTypography then
+                        utils.ApplyTypography(durFS, fontName, tSize, tOutline, tShadow, "Roithi Thick")
                     end
                     if durFS.SetDrawLayer then
                         durFS:SetDrawLayer("OVERLAY", 7)
-                    end
-                    if durFS.SetShadowOffset then
-                        if tOutline ~= "NONE" and tOutline ~= "" then
-                            durFS:SetShadowOffset(0, 0)
-                        else
-                            durFS:SetShadowOffset(1, -1)
-                        end
                     end
                     if durFS.ClearAllPoints and durFS.SetPoint then
                         durFS:ClearAllPoints()
@@ -577,8 +563,8 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
         end
 
         if viewerKey == "BuffIcon" then
-            if not itemFrame.roithiShownHooked and itemFrame.HookScript then
-                itemFrame.roithiShownHooked = true
+            if not itemShownHooked[itemFrame] and itemFrame.HookScript then
+                itemShownHooked[itemFrame] = true
                 itemFrame:HookScript("OnShow", function()
                     local viewer = _G.BuffIconCooldownViewer
                     if viewer and CDM.AlignViewerItems then
@@ -620,7 +606,7 @@ end
 function CDM:RestoreItemFrame(itemFrame)
     if not itemFrame then return end
 
-    local bg = itemBackdrops[itemFrame] or itemFrame.roithiBackdrop
+    local bg = itemBackdrops[itemFrame]
     if bg and bg.Hide then
         bg:Hide()
     end

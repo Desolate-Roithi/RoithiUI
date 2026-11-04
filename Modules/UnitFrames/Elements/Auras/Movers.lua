@@ -1,7 +1,8 @@
 local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
-local LibRoithi = LibStub("LibRoithi-1.0")
+local localeLib = LibStub and LibStub("AceLocale-3.0", true)
+local L = (localeLib and localeLib.GetLocale and localeLib:GetLocale("RoithiUI", true)) or setmetatable({}, { __index = function(_, k) return k end })
 
 ---@class UF : AceModule, AceAddon
 local UF = RoithiUI:GetModule("UnitFrames") --[[@as UF]]
@@ -209,7 +210,7 @@ local function GetOrCreateAuraMover(container, unit, containerSuffix)
                 LEM:AddFrameSettings(mover, ns.GetSettingsForCustomAura(customID))
                 LEM:AddFrameSettingsButtons(mover, {
                     {
-                        text = "Open Full Settings",
+                        text = L["Open Full Settings"],
                         click = function()
                             if RoithiUI and RoithiUI.OpenSettings then
                                 RoithiUI:OpenSettings("auras", "custom", customID)
@@ -224,7 +225,7 @@ local function GetOrCreateAuraMover(container, unit, containerSuffix)
                 LEM:AddFrameSettings(mover, ns.GetSettingsForAuras(unit, containerSuffix))
                 LEM:AddFrameSettingsButtons(mover, {
                     {
-                        text = "Open Full Settings",
+                        text = L["Open Full Settings"],
                         click = function()
                             if RoithiUI and RoithiUI.OpenSettings then
                                 RoithiUI:OpenSettings("unitframes", unit)
@@ -349,10 +350,9 @@ local function UpdateAuraMover(
         and RoithiUI.db.profile.General
         and RoithiUI.db.profile.General.unitFrameFont)
         or "Friz Quadrata TT"
-    if ns.Utils and ns.Utils.ApplyTypography then
-        ns.Utils.ApplyTypography(mover.Title, fontName, 10, "OUTLINE", false, "Friz Quadrata TT")
-    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(mover.Title, fontName, 10, "OUTLINE")
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(mover.Title, fontName, 10, "OUTLINE", false, "Friz Quadrata TT")
     end
     mover.Title:SetText(unit:upper() .. " " .. containerSuffix:upper())
 
@@ -487,7 +487,7 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
     return {
         {
             kind = LEM.SettingType.Checkbox,
-            name = "Enable Auras",
+            name = L["Enable Auras"],
             get = function()
                 local db = GetUnitDB(unit)
                 return db and db.aurasEnabled ~= false
@@ -500,7 +500,7 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
         },
         {
             kind = LEM.SettingType.Checkbox,
-            name = "Detach Auras",
+            name = L["Detach Auras"],
             get = function()
                 local db = GetUnitDB(unit)
                 if isBuffs then return db and db.buffDetached == true end
@@ -565,7 +565,7 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
         },
         {
             kind = LEM.SettingType.Slider,
-            name = "Aura Size",
+            name = L["Aura Size"],
             get = function()
                 local db = GetUnitDB(unit)
                 if isBuffs then return (db and db.buffSize) or 20 end
@@ -587,7 +587,7 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
         },
         {
             kind = LEM.SettingType.Slider,
-            name = "Icons Per Row",
+            name = L["Icons Per Row"],
             get = function()
                 local db = GetUnitDB(unit)
                 if isBuffs then return (db and db.buffsPerRow) or 8 end
@@ -609,7 +609,7 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
         },
         {
             kind = LEM.SettingType.Slider,
-            name = "Max Auras",
+            name = L["Max Auras"],
             get = function()
                 local db = GetUnitDB(unit)
                 if isBuffs then return (db and db.maxBuffs) or 16 end
@@ -631,7 +631,7 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
         },
         {
             kind = LEM.SettingType.Dropdown,
-            name = "Anchor Point",
+            name = L["Anchor Point"],
             values = (ns.Utils and ns.Utils.GetAnchorLEMValues) and ns.Utils.GetAnchorLEMValues() or {},
             get = function()
                 local db = GetUnitDB(unit)
@@ -659,18 +659,18 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
         },
         {
             kind = LEM.SettingType.Dropdown,
-            name = "Grow Direction",
+            name = L["Grow Direction"],
             values = {
-                { text = "Right then Down",      value = "RIGHT_DOWN" },
-                { text = "Right then Up",        value = "RIGHT_UP" },
-                { text = "Left then Down",       value = "LEFT_DOWN" },
-                { text = "Left then Up",         value = "LEFT_UP" },
-                { text = "Down then Right",      value = "DOWN_RIGHT" },
-                { text = "Down then Left",       value = "DOWN_LEFT" },
-                { text = "Up then Right",        value = "UP_RIGHT" },
-                { text = "Up then Left",         value = "UP_LEFT" },
-                { text = "Centered Horizontal",  value = "CENTER_HORIZONTAL" },
-                { text = "Centered Vertical",    value = "CENTER_VERTICAL" },
+                { text = L["Right then Down"],      value = "RIGHT_DOWN" },
+                { text = L["Right then Up"],        value = "RIGHT_UP" },
+                { text = L["Left then Down"],       value = "LEFT_DOWN" },
+                { text = L["Left then Up"],         value = "LEFT_UP" },
+                { text = L["Down then Right"],      value = "DOWN_RIGHT" },
+                { text = L["Down then Left"],       value = "DOWN_LEFT" },
+                { text = L["Up then Right"],        value = "UP_RIGHT" },
+                { text = L["Up then Left"],         value = "UP_LEFT" },
+                { text = L["Centered Horizontal"],  value = "CENTER_HORIZONTAL" },
+                { text = L["Centered Vertical"],    value = "CENTER_VERTICAL" },
             },
             get = function()
                 local db = GetUnitDB(unit)
@@ -695,7 +695,7 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
         },
         {
             kind = LEM.SettingType.Slider,
-            name = "X Position",
+            name = L["X Position"],
             get = function()
                 local db = GetUnitDB(unit)
                 if not db then return 0 end
@@ -739,7 +739,7 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
         },
         {
             kind = LEM.SettingType.Slider,
-            name = "Y Position",
+            name = L["Y Position"],
             get = function()
                 local db = GetUnitDB(unit)
                 if not db then return 0 end
@@ -797,7 +797,7 @@ function ns.GetSettingsForCustomAura(customID)
     return {
         {
             kind = LEM.SettingType.Slider,
-            name = "Aura Size",
+            name = L["Aura Size"],
             get = function()
                 local db = GetCDB()
                 return (db and db.auraSize) or 30
@@ -814,7 +814,7 @@ function ns.GetSettingsForCustomAura(customID)
         },
         {
             kind = LEM.SettingType.Slider,
-            name = "Icons Per Row",
+            name = L["Icons Per Row"],
             get = function()
                 local db = GetCDB()
                 return (db and db.aurasPerRow) or 8
@@ -831,7 +831,7 @@ function ns.GetSettingsForCustomAura(customID)
         },
         {
             kind = LEM.SettingType.Slider,
-            name = "Max Auras",
+            name = L["Max Auras"],
             get = function()
                 local db = GetCDB()
                 return (db and db.maxAuras) or 16
@@ -848,18 +848,18 @@ function ns.GetSettingsForCustomAura(customID)
         },
         {
             kind = LEM.SettingType.Dropdown,
-            name = "Grow Direction",
+            name = L["Grow Direction"],
             values = {
-                { text = "Right then Down",      value = "RIGHT_DOWN" },
-                { text = "Right then Up",        value = "RIGHT_UP" },
-                { text = "Left then Down",       value = "LEFT_DOWN" },
-                { text = "Left then Up",         value = "LEFT_UP" },
-                { text = "Down then Right",      value = "DOWN_RIGHT" },
-                { text = "Down then Left",       value = "DOWN_LEFT" },
-                { text = "Up then Right",        value = "UP_RIGHT" },
-                { text = "Up then Left",         value = "UP_LEFT" },
-                { text = "Centered Horizontal",  value = "CENTER_HORIZONTAL" },
-                { text = "Centered Vertical",    value = "CENTER_VERTICAL" },
+                { text = L["Right then Down"],      value = "RIGHT_DOWN" },
+                { text = L["Right then Up"],        value = "RIGHT_UP" },
+                { text = L["Left then Down"],       value = "LEFT_DOWN" },
+                { text = L["Left then Up"],         value = "LEFT_UP" },
+                { text = L["Down then Right"],      value = "DOWN_RIGHT" },
+                { text = L["Down then Left"],       value = "DOWN_LEFT" },
+                { text = L["Up then Right"],        value = "UP_RIGHT" },
+                { text = L["Up then Left"],         value = "UP_LEFT" },
+                { text = L["Centered Horizontal"],  value = "CENTER_HORIZONTAL" },
+                { text = L["Centered Vertical"],    value = "CENTER_VERTICAL" },
             },
             get = function()
                 local db = GetCDB()
@@ -874,7 +874,7 @@ function ns.GetSettingsForCustomAura(customID)
         },
         {
             kind = LEM.SettingType.Checkbox,
-            name = "Hide Icon",
+            name = L["Hide Icon"],
             get = function()
                 local db = GetCDB()
                 return db and db.hideIcon == true
@@ -888,7 +888,7 @@ function ns.GetSettingsForCustomAura(customID)
         },
         {
             kind = LEM.SettingType.Checkbox,
-            name = "Hide Timer",
+            name = L["Hide Timer"],
             get = function()
                 local db = GetCDB()
                 return db and db.hideTimer == true
@@ -902,7 +902,7 @@ function ns.GetSettingsForCustomAura(customID)
         },
         {
             kind = LEM.SettingType.Checkbox,
-            name = "Hide Stack Count",
+            name = L["Hide Stack Count"],
             get = function()
                 local db = GetCDB()
                 return db and db.hideCount == true
@@ -916,7 +916,7 @@ function ns.GetSettingsForCustomAura(customID)
         },
         {
             kind = LEM.SettingType.Slider,
-            name = "X Position",
+            name = L["X Position"],
             get = function()
                 local db = GetCDB()
                 return (db and (db.screenX or db.auraScreenX or db.x)) or 0
@@ -938,7 +938,7 @@ function ns.GetSettingsForCustomAura(customID)
         },
         {
             kind = LEM.SettingType.Slider,
-            name = "Y Position",
+            name = L["Y Position"],
             get = function()
                 local db = GetCDB()
                 return (db and (db.screenY or db.auraScreenY or db.y)) or 0

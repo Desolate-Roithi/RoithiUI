@@ -3,7 +3,6 @@ if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local BagsMod = RoithiUI:GetModule("Bags")
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
-local LibRoithi = LibStub("LibRoithi-1.0")
 
 local QUALITY_COLORS = {
     [0] = { r = 0.62, g = 0.62, b = 0.62 }, -- Poor
@@ -164,6 +163,10 @@ function BagsMod:PrewarmItemSlots()
 end
 
 function BagsMod:OnRegenEnabled()
+    if self.pendingKillBlizzBags then
+        self.pendingKillBlizzBags = nil
+        self:KillBlizzardBags()
+    end
     if self.pendingCombatRelogBagUpdate then
         self.pendingCombatRelogBagUpdate = nil
         self:PrewarmItemSlots()
@@ -177,6 +180,10 @@ function BagsMod:OnRegenEnabled()
 end
 
 function BagsMod:RestoreBlizzardBags()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+    if _G.BagUpdaterFrame and _G.BagUpdaterFrame.SetParent then
+        _G.BagUpdaterFrame:SetParent(UIParent)
+    end
     for i = 1, 13 do
         local f = _G["ContainerFrame" .. i]
         if f and f.SetParent then
@@ -209,6 +216,10 @@ local function GetBlizzBagHidden()
 end
 
 function BagsMod:KillBlizzardBags()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.pendingKillBlizzBags = true
+        return
+    end
     if self.db and self.db.enabled == false then return end
     local hidden = GetBlizzBagHidden()
     for i = 1, 13 do
@@ -237,8 +248,15 @@ function BagsMod:KillBlizzardBags()
             cb:UnregisterAllEvents()
         end
     end
-    if _G.BagUpdaterFrame and _G.BagUpdaterFrame.SetScript then
-        _G.BagUpdaterFrame:SetScript("OnUpdate", nil)
+    local buf = _G.BagUpdaterFrame
+    if buf then
+        if buf.SetParent and buf:GetParent() ~= hidden then
+            buf:SetParent(hidden)
+        end
+        if buf.Hide and buf:IsShown() then
+            buf:Hide()
+        end
+        -- Handled via reparent + Hide above
     end
 end
 
@@ -267,11 +285,14 @@ function BagsMod:HookBlizzardBagFunctions()
         self:CloseBags()
     end
 
-    if _G.ToggleAllBags then hooksecurefunc("ToggleAllBags", SmartToggleBags) end
-    if _G.ToggleBackpack then hooksecurefunc("ToggleBackpack", SmartToggleBags) end
-    if _G.ToggleBag then hooksecurefunc("ToggleBag", SmartToggleBags) end
-    if _G.OpenAllBags then hooksecurefunc("OpenAllBags", SmartOpenBags) end
-    if _G.CloseAllBags then hooksecurefunc("CloseAllBags", SmartCloseBags) end
+    if not self.blizzBagFuncsHooked and hooksecurefunc then
+        self.blizzBagFuncsHooked = true
+        if _G.ToggleAllBags then hooksecurefunc("ToggleAllBags", SmartToggleBags) end
+        if _G.ToggleBackpack then hooksecurefunc("ToggleBackpack", SmartToggleBags) end
+        if _G.ToggleBag then hooksecurefunc("ToggleBag", SmartToggleBags) end
+        if _G.OpenAllBags then hooksecurefunc("OpenAllBags", SmartOpenBags) end
+        if _G.CloseAllBags then hooksecurefunc("CloseAllBags", SmartCloseBags) end
+    end
 
     if _G.C_CurrencyInfo and not self.currencyWatchHooked then
         if _G.C_CurrencyInfo.SetCurrencyBackpack then
@@ -638,7 +659,7 @@ function BagsMod:HookTooltipShortcuts()
     if _G.TooltipDataProcessor and _G.TooltipDataProcessor.AddTooltipPostCall and _G.Enum and _G.Enum.TooltipDataType then
         _G.TooltipDataProcessor.AddTooltipPostCall(_G.Enum.TooltipDataType.Item, function(tooltip, _)
             local owner = tooltip:GetOwner()
-            if owner and (owner.isRoithiBagSlot or tooltip.roithiBagSlot == owner) then
+            if owner and (owner.isRoithiBagSlot or self.activeTooltipSlot == owner) then
                 local itemID = (owner.itemData and owner.itemData.itemID)
                     or (_G.C_Container and _G.C_Container.GetContainerItemID and _G.C_Container.GetContainerItemID(owner.bag, owner.slot))
                     or (_G.GetContainerItemID and _G.GetContainerItemID(owner.bag, owner.slot))
@@ -650,7 +671,7 @@ function BagsMod:HookTooltipShortcuts()
     elseif _G.GameTooltip and _G.GameTooltip.HookScript then
         _G.GameTooltip:HookScript("OnTooltipSetItem", function(tooltip)
             local owner = tooltip:GetOwner()
-            if owner and (owner.isRoithiBagSlot or tooltip.roithiBagSlot == owner) then
+            if owner and (owner.isRoithiBagSlot or self.activeTooltipSlot == owner) then
                 local itemID = (owner.itemData and owner.itemData.itemID)
                     or (_G.C_Container and _G.C_Container.GetContainerItemID and _G.C_Container.GetContainerItemID(owner.bag, owner.slot))
                     or (_G.GetContainerItemID and _G.GetContainerItemID(owner.bag, owner.slot))
@@ -932,22 +953,9 @@ function BagsMod:ApplyFont(fontString, defaultSize, customSizeKey, defaultOutlin
     local outline = (self.db and customOutlineKey and self.db[customOutlineKey]) or (self.db and self.db.fontOutline) or defaultOutline or "OUTLINE"
     local size = (self.db and customSizeKey and self.db[customSizeKey]) or defaultSize or 12
     local showShadow = self.db and self.db.showFontShadow == true
-    if ns.Utils and ns.Utils.ApplyTypography then
-        ns.Utils.ApplyTypography(fontString, fontFace, size, outline, showShadow, "Friz Quadrata TT")
-    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(fontString, fontFace, size, outline)
-        if fontString.SetShadowOffset then
-            if outline == "OUTLINE" or outline == "THICKOUTLINE" then
-                fontString:SetShadowOffset(0, 0)
-            else
-                fontString:SetShadowOffset(1, -1)
-                if fontString.SetShadowColor then
-                    fontString:SetShadowColor(0, 0, 0, 1)
-                end
-            end
-        end
-    else
-        fontString:SetFont("Fonts\\FRIZQT__.TTF", size, outline)
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(fontString, fontFace, size, outline, showShadow, "Friz Quadrata TT")
     end
     if fontString.IsObjectType and fontString:IsObjectType("FontString") and fontString.SetDrawLayer then
         fontString:SetDrawLayer("OVERLAY", 7)
@@ -1134,12 +1142,9 @@ function BagsMod:CreateHeaderBar()
         saveFilterBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1.0)
     end
     local plusText = saveFilterBtn:CreateFontString(nil, "OVERLAY")
-    if ns.Utils and ns.Utils.ApplyTypography then
-        ns.Utils.ApplyTypography(plusText, "Friz Quadrata TT", 12, "OUTLINE", false, "Friz Quadrata TT")
-    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(plusText, "Friz Quadrata TT", 12, "OUTLINE")
-    else
-        plusText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(plusText, "Friz Quadrata TT", 12, "OUTLINE", false, "Friz Quadrata TT")
     end
     plusText:SetJustifyH("CENTER")
     plusText:SetJustifyV("MIDDLE")
@@ -1178,12 +1183,8 @@ function BagsMod:CreateHeaderBar()
         infoBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1.0)
     end
     local infoText = infoBtn:CreateFontString(nil, "OVERLAY")
-    if ns.Utils and ns.Utils.ApplyTypography then
-        ns.Utils.ApplyTypography(infoText, "Friz Quadrata TT", 11, "OUTLINE", false, "Friz Quadrata TT")
-    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(infoText, "Friz Quadrata TT", 11, "OUTLINE")
-    else
-        infoText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(infoText, "Friz Quadrata TT", 11, "OUTLINE", false, "Friz Quadrata TT")
     end
     infoText:SetJustifyH("CENTER")
     infoText:SetJustifyV("MIDDLE")
@@ -1622,8 +1623,8 @@ function BagsMod:CreateCategoryButtons()
                 _G.GameTooltip:SetText(cat.name, 1, 1, 1)
                 _G.GameTooltip:AddLine((L["Query: "] or "Query: ") .. (cat.query or cat.name), 0.8, 0.8, 0.8)
                 _G.GameTooltip:AddLine(" ")
-                _G.GameTooltip:AddLine("|cff00ff00<Shift-Click to Rename Filter>|r", 0.2, 0.9, 0.2)
-                _G.GameTooltip:AddLine("|cffff4444<Right-Click for Options / Delete>|r", 0.9, 0.4, 0.4)
+                _G.GameTooltip:AddLine("|cff00ff00<" .. L["Shift-Click to Rename Filter"] .. ">|r", 0.2, 0.9, 0.2)
+                _G.GameTooltip:AddLine("|cffff4444<" .. L["Right-Click for Options / Delete"] .. ">|r", 0.9, 0.4, 0.4)
                 _G.GameTooltip:Show()
             end
         end)
@@ -2442,7 +2443,7 @@ function BagsMod:OnSlotEnter(s)
 
     s.isRoithiBagSlot = true
     if s.bag and s.slot and _G.GameTooltip then
-        _G.GameTooltip.roithiBagSlot = s
+        self.activeTooltipSlot = s
         _G.GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
         local hasItem = false
         if _G.C_Container and _G.C_Container.GetContainerItemInfo then
@@ -2895,7 +2896,7 @@ function BagsMod:AcquireItemSlot(index)
     end)
     slot:SetScript("OnLeave", function(s)
         if _G.GameTooltip then
-            _G.GameTooltip.roithiBagSlot = nil
+            if self.activeTooltipSlot == s then self.activeTooltipSlot = nil end
             _G.GameTooltip:Hide()
         end
         if _G.ResetCursor then

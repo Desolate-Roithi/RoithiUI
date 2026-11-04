@@ -2,9 +2,18 @@ local addonName, AT = ...
 if AT.skipLoad then return end
 local RoithiUI = AT.RoithiUI or _G.RoithiUI
 local MinimapMod = RoithiUI:GetModule("Minimap")
-local LibRoithi = LibStub("LibRoithi-1.0")
 
 local isStylingBuffs = false
+local buffBtnState = setmetatable({}, { __mode = "k" })
+
+local function GetBuffBtnState(frame)
+    local st = buffBtnState[frame]
+    if not st then
+        st = {}
+        buffBtnState[frame] = st
+    end
+    return st
+end
 
 local function StyleAuraButton(button)
     if not button then return end
@@ -21,25 +30,26 @@ local function StyleAuraButton(button)
         end
     end
 
-    if not button.backdrop then
+    local st = GetBuffBtnState(button)
+    if not st.backdrop then
         local bg = CreateFrame("Frame", nil, button, "BackdropTemplate")
         bg:SetAllPoints(button)
         bg:SetFrameLevel(button:GetFrameLevel() > 0 and (button:GetFrameLevel() - 1) or 0)
-        button.backdrop = bg
+        st.backdrop = bg
     end
 
-    if button.backdrop then
+    if st.backdrop then
         if showBorder then
             local edgeSize = (db and db.buffFrameBorderSize) or 1
             local col = (db and db.buffFrameBorderColor) or { r = 0, g = 0, b = 0, a = 1 }
-            button.backdrop:SetBackdrop({
+            st.backdrop:SetBackdrop({
                 edgeFile = "Interface\\Buttons\\WHITE8x8",
                 edgeSize = edgeSize,
             })
-            button.backdrop:SetBackdropBorderColor(col.r or 0, col.g or 0, col.b or 0, col.a or 1)
-            button.backdrop:Show()
+            st.backdrop:SetBackdropBorderColor(col.r or 0, col.g or 0, col.b or 0, col.a or 1)
+            st.backdrop:Show()
         else
-            button.backdrop:Hide()
+            st.backdrop:Hide()
         end
     end
 
@@ -52,25 +62,17 @@ local function StyleAuraButton(button)
     local showShadow = db and db.buffFrameShowShadow == true
 
     local utils = (AT and AT.Utils) or (_G.RoithiUI and _G.RoithiUI.Utils)
-    if duration then
+    if duration and utils and utils.ApplyTypography then
         local size = (db and db.buffFrameDurationSize) or 10
-        if utils and utils.ApplyTypography then
-            utils.ApplyTypography(duration, font, size, outline, showShadow, "Friz Quadrata TT")
-        elseif LibRoithi and LibRoithi.mixins then
-            LibRoithi.mixins:SetFont(duration, font, size, outline)
-        end
+        utils.ApplyTypography(duration, font, size, outline, showShadow, "Friz Quadrata TT")
     end
 
-    if count then
+    if count and utils and utils.ApplyTypography then
         local size = (db and db.buffFrameCountSize) or 10
-        if utils and utils.ApplyTypography then
-            utils.ApplyTypography(count, font, size, outline, showShadow, "Friz Quadrata TT")
-        elseif LibRoithi and LibRoithi.mixins then
-            LibRoithi.mixins:SetFont(count, font, size, outline)
-        end
+        utils.ApplyTypography(count, font, size, outline, showShadow, "Friz Quadrata TT")
     end
 
-    button.roithiStyled = true
+    st.styled = true
 end
 
 function MinimapMod:RefreshBuffFrameStyling()
@@ -123,13 +125,14 @@ function MinimapMod:HookBuffFrameStyling()
 
     if _G.BuffFrame and _G.BuffFrame.CollapseAndExpandButton then
         local btn = _G.BuffFrame.CollapseAndExpandButton
-        if not btn.roithiHooked and btn.HookScript then
+        local btnSt = GetBuffBtnState(btn)
+        if not btnSt.hooked and btn.HookScript then
             btn:HookScript("OnClick", function()
                 if MinimapMod.UpdateBuffFrameDisplacement then
                     MinimapMod:UpdateBuffFrameDisplacement(true)
                 end
             end)
-            btn.roithiHooked = true
+            btnSt.hooked = true
         end
     end
 end

@@ -2,8 +2,28 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local AB = RoithiUI:GetModule("Actionbars")
-local LibRoithi = LibStub("LibRoithi-1.0")
+-- LibRoithi typography replaced by centralized ns.Utils.ApplyTypography
 local LEM = LibStub("LibEditMode-Roithi", true)
+
+local frameState = setmetatable({}, { __mode = "k" })
+local function GetFrameState(f)
+    local st = frameState[f]
+    if not st then
+        st = {}
+        frameState[f] = st
+    end
+    return st
+end
+
+function AB:GetButtonBackdrop(btn)
+    local st = btn and frameState[btn]
+    return st and st.backdrop or nil
+end
+
+function AB:IsButtonOutOfRange(btn)
+    local st = btn and frameState[btn]
+    return (st and st.isOutOfRange == true) or false
+end
 
 local BAR_CONFIGS = {
     bar1 = { name = "RoithiActionBar1", prefix = "ActionButton", count = 12 },
@@ -91,13 +111,13 @@ local function ButtonHasAction(btn)
             return _G.HasAction(action) == true
         end
     end
-    local barKey = btn.roithiBarKey or btn.barKey
+    local barKey = GetFrameState(btn).barKey or btn.barKey
     if not barKey then
         local bName = btn.GetName and btn:GetName() or ""
         for k, cfg in pairs(BAR_CONFIGS) do
             if cfg.prefix and bName:find("^" .. cfg.prefix) then
                 barKey = k
-                btn.roithiBarKey = k
+                GetFrameState(btn).barKey = k
                 break
             end
         end
@@ -203,7 +223,7 @@ function AB:GetBarButtons(barKey)
             btn = _G[cfg.altPrefix .. i]
         end
         if btn then
-            btn.roithiBarKey = barKey
+            GetFrameState(btn).barKey = barKey
             table.insert(buttons, btn)
         end
     end
@@ -342,16 +362,16 @@ function AB:UpdateEmptyButtons(barKey, customButtons)
             if hideEmpty then
                 if hasAct then
                     if btn.SetAlpha then btn:SetAlpha(1) end
-                    if btn.roithiBackdrop and btn.roithiBackdrop.Show then btn.roithiBackdrop:Show() end
+                    local bg = GetFrameState(btn).backdrop; if bg and bg.Show then bg:Show() end
                     if btn.HotKey and btn.HotKey.SetAlpha then btn.HotKey:SetAlpha(1) end
                 else
                     if btn.SetAlpha then btn:SetAlpha(0) end
-                    if btn.roithiBackdrop and btn.roithiBackdrop.Hide then btn.roithiBackdrop:Hide() end
+                    local bg = GetFrameState(btn).backdrop; if bg and bg.Hide then bg:Hide() end
                     if btn.HotKey and btn.HotKey.SetAlpha then btn.HotKey:SetAlpha(0) end
                 end
             else
                 if btn.SetAlpha then btn:SetAlpha(1) end
-                if btn.roithiBackdrop and btn.roithiBackdrop.Show then btn.roithiBackdrop:Show() end
+                local bg = GetFrameState(btn).backdrop; if bg and bg.Show then bg:Show() end
                 if btn.HotKey and btn.HotKey.SetAlpha then btn.HotKey:SetAlpha(1) end
             end
         else
@@ -363,7 +383,7 @@ function AB:UpdateEmptyButtons(barKey, customButtons)
                 self.queuedMouseUpdate = true
             end
             if btn.SetAlpha then btn:SetAlpha(0) end
-            if btn.roithiBackdrop and btn.roithiBackdrop.Hide then btn.roithiBackdrop:Hide() end
+            local bg = GetFrameState(btn).backdrop; if bg and bg.Hide then bg:Hide() end
         end
     end
 end
@@ -567,10 +587,9 @@ function AB:SetupBars()
                 for _, fname in ipairs(bFrames) do
                     local bf = _G[fname]
                     if bf then
-                        bf.defaultHideSelection = true
                         if bf.Selection then
-                            if not bf.roithiSelectionHooked and hooksecurefunc then
-                                bf.roithiSelectionHooked = true
+                            if not GetFrameState(bf).selectionHooked and hooksecurefunc then
+                                GetFrameState(bf).selectionHooked = true
                                 hooksecurefunc(bf.Selection, "Show", function(sel)
                                     sel:Hide()
                                 end)
@@ -600,13 +619,13 @@ function AB:SetupBars()
 
     local function HandleButtonUpdate(btn)
         if not btn then return end
-        local barKey = btn.roithiBarKey
+        local barKey = GetFrameState(btn).barKey or btn.barKey
         if not barKey then
             local bName = btn.GetName and btn:GetName() or ""
             for k, cfg in pairs(BAR_CONFIGS) do
                 if cfg.prefix and bName:find("^" .. cfg.prefix) then
                     barKey = k
-                    btn.roithiBarKey = k
+                    GetFrameState(btn).barKey = k
                     break
                 end
             end
@@ -708,7 +727,7 @@ function AB:SetupBars()
 
                     local icon = btn.icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "Icon") or ""]
                     if isOutOfRange then
-                        btn.roithiIsOutOfRange = true
+                        GetFrameState(btn).isOutOfRange = true
                         if self.db and self.db.outOfRangeColoring ~= false then
                             if icon and icon.SetVertexColor then
                                 icon:SetVertexColor(0.85, 0.35, 0.35)
@@ -717,19 +736,19 @@ function AB:SetupBars()
                         if btn.HotKey and btn.HotKey.SetVertexColor then
                             btn.HotKey:SetVertexColor(0.85, 0.35, 0.35)
                         end
-                        if btn.roithiRangeDot then
-                            btn.roithiRangeDot:Show()
+                        if GetFrameState(btn).rangeDot then
+                            GetFrameState(btn).rangeDot:Show()
                         end
                     else
-                        if btn.roithiIsOutOfRange then
-                            btn.roithiIsOutOfRange = false
+                        if GetFrameState(btn).isOutOfRange then
+                            GetFrameState(btn).isOutOfRange = false
                             RestoreButtonUsability(btn, icon)
                         end
                         if btn.HotKey and btn.HotKey.SetVertexColor then
                             btn.HotKey:SetVertexColor(1, 1, 1)
                         end
-                        if btn.roithiRangeDot then
-                            btn.roithiRangeDot:Hide()
+                        if GetFrameState(btn).rangeDot then
+                            GetFrameState(btn).rangeDot:Hide()
                         end
                     end
                 end
@@ -738,7 +757,7 @@ function AB:SetupBars()
         end
         if _G.ActionBarActionButtonMixin and _G.ActionBarActionButtonMixin.UpdateUsable and not self.updateUsableHooked then
             hooksecurefunc(_G.ActionBarActionButtonMixin, "UpdateUsable", function(btn)
-                if (not self.IsEnabled or self:IsEnabled()) and btn and self.db and self.db.outOfRangeColoring ~= false and btn.roithiIsOutOfRange then
+                if (not self.IsEnabled or self:IsEnabled()) and btn and self.db and self.db.outOfRangeColoring ~= false and GetFrameState(btn).isOutOfRange then
                     local stillOutOfRange = false
                     if _G.UnitExists and _G.UnitExists("target") then
                         if btn.action and _G.C_ActionBar and _G.C_ActionBar.IsActionInRange then
@@ -751,12 +770,12 @@ function AB:SetupBars()
                         end
                     end
                     if not stillOutOfRange then
-                        btn.roithiIsOutOfRange = false
+                        GetFrameState(btn).isOutOfRange = false
                         if btn.HotKey and btn.HotKey.SetVertexColor then
                             btn.HotKey:SetVertexColor(1, 1, 1)
                         end
-                        if btn.roithiRangeDot then
-                            btn.roithiRangeDot:Hide()
+                        if GetFrameState(btn).rangeDot then
+                            GetFrameState(btn).rangeDot:Hide()
                         end
                         return
                     end
@@ -801,7 +820,7 @@ function AB:UpdateButtonRange(btn)
     end
 
     if isOutOfRange then
-        btn.roithiIsOutOfRange = true
+        GetFrameState(btn).isOutOfRange = true
         if self.db and self.db.outOfRangeColoring ~= false then
             if icon and icon.SetVertexColor then
                 icon:SetVertexColor(0.85, 0.35, 0.35)
@@ -810,19 +829,19 @@ function AB:UpdateButtonRange(btn)
         if btn.HotKey and btn.HotKey.SetVertexColor then
             btn.HotKey:SetVertexColor(0.85, 0.35, 0.35)
         end
-        if btn.roithiRangeDot then
-            btn.roithiRangeDot:Show()
+        if GetFrameState(btn).rangeDot then
+            GetFrameState(btn).rangeDot:Show()
         end
     else
-        if btn.roithiIsOutOfRange then
-            btn.roithiIsOutOfRange = false
+        if GetFrameState(btn).isOutOfRange then
+            GetFrameState(btn).isOutOfRange = false
             RestoreButtonUsability(btn, icon)
         end
         if btn.HotKey and btn.HotKey.SetVertexColor then
             btn.HotKey:SetVertexColor(1, 1, 1)
         end
-        if btn.roithiRangeDot then
-            btn.roithiRangeDot:Hide()
+        if GetFrameState(btn).rangeDot then
+            GetFrameState(btn).rangeDot:Hide()
         end
     end
 end
@@ -844,8 +863,8 @@ function AB:UpdateRangeColoringState()
         local buttons = self:GetBarButtons(barKey)
         for _, btn in ipairs(buttons) do
             if not enabled then
-                if btn.roithiIsOutOfRange then
-                    btn.roithiIsOutOfRange = false
+                if GetFrameState(btn).isOutOfRange then
+                    GetFrameState(btn).isOutOfRange = false
                     local icon = btn.icon or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "Icon") or ""]
                     RestoreButtonUsability(btn, icon)
                 end
@@ -964,7 +983,8 @@ function AB:UpdateOverlayContainment(button)
     end
 
     -- 5. Dynamic 1px Border Color for Active Auras / Equipped Actions / Stances
-    if button.roithiBackdrop and button.roithiBackdrop.SetBackdropBorderColor then
+    local btnBg = GetFrameState(button).backdrop
+    if btnBg and btnBg.SetBackdropBorderColor then
         local isEquipped = false
         local action = button.action or (button.GetPagedID and button:GetPagedID()) or (button.CalculateAction and button:CalculateAction())
         if action then
@@ -982,10 +1002,10 @@ function AB:UpdateOverlayContainment(button)
 
         if isEquipped or isChecked then
             -- Crisp 1px green border for equipped items and active stances/auras, perfectly fitting the frame
-            button.roithiBackdrop:SetBackdropBorderColor(0.2, 0.9, 0.2, 1.0)
+            btnBg:SetBackdropBorderColor(0.2, 0.9, 0.2, 1.0)
         else
             local bc = self.db and self.db.borderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
-            button.roithiBackdrop:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
+            btnBg:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
         end
     end
 end
@@ -994,7 +1014,8 @@ function AB:StyleButton(button, explicitBarKey)
     if not button then return end
 
     -- Suppress Blizzard bulky style/placeholder artwork on Extra Action & Zone Ability buttons
-    if button.style and not button.roithiStyleHooked then
+    local btnSt = GetFrameState(button)
+    if button.style and not btnSt.styleHooked then
         button.style:SetAlpha(0)
         if button.style.Hide then button.style:Hide() end
         if hooksecurefunc then
@@ -1003,9 +1024,9 @@ function AB:StyleButton(button, explicitBarKey)
                 if s.Hide then s:Hide() end
             end)
         end
-        button.roithiStyleHooked = true
+        btnSt.styleHooked = true
     end
-    if _G.ZoneAbilityFrame and _G.ZoneAbilityFrame.Style and not _G.ZoneAbilityFrame.roithiStyleHooked then
+    if _G.ZoneAbilityFrame and _G.ZoneAbilityFrame.Style and not GetFrameState(_G.ZoneAbilityFrame).styleHooked then
         _G.ZoneAbilityFrame.Style:SetAlpha(0)
         if _G.ZoneAbilityFrame.Style.Hide then _G.ZoneAbilityFrame.Style:Hide() end
         if hooksecurefunc then
@@ -1014,7 +1035,7 @@ function AB:StyleButton(button, explicitBarKey)
                 if s.Hide then s:Hide() end
             end)
         end
-        _G.ZoneAbilityFrame.roithiStyleHooked = true
+        GetFrameState(_G.ZoneAbilityFrame).styleHooked = true
     end
 
     -- 1. Icon TexCoords (Zoomed to create modern square look)
@@ -1026,7 +1047,7 @@ function AB:StyleButton(button, explicitBarKey)
     end
 
     -- 2. 1px Custom Backdrop
-    if not button.roithiBackdrop then
+    if not btnSt.backdrop then
         local bg = CreateFrame("Frame", nil, button, "BackdropTemplate")
         if bg.SetAllPoints then
             bg:SetAllPoints(button)
@@ -1047,13 +1068,14 @@ function AB:StyleButton(button, explicitBarKey)
             local bc = self.db.borderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
             bg:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
         end
-        button.roithiBackdrop = bg
-        if button.roithiBackdrop.EnableMouse then button.roithiBackdrop:EnableMouse(false) end
-        if button.roithiBackdrop.SetMouseClickEnabled then button.roithiBackdrop:SetMouseClickEnabled(false) end
-        if button.roithiBackdrop.SetMouseMotionEnabled then button.roithiBackdrop:SetMouseMotionEnabled(false) end
+        btnSt.backdrop = bg
+        if btnSt.backdrop.EnableMouse then btnSt.backdrop:EnableMouse(false) end
+        if btnSt.backdrop.SetMouseClickEnabled then btnSt.backdrop:SetMouseClickEnabled(false) end
+        if btnSt.backdrop.SetMouseMotionEnabled then btnSt.backdrop:SetMouseMotionEnabled(false) end
         local bc = self.db.borderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
-        if button.roithiBackdrop.SetBackdropBorderColor then
-            button.roithiBackdrop:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
+        local btnBg = btnSt.backdrop
+        if btnBg.SetBackdropBorderColor then
+            btnBg:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
         end
     end
 
@@ -1073,7 +1095,7 @@ function AB:StyleButton(button, explicitBarKey)
 
     -- 3. Securely hook Border Show/Hide and Checked states
     local border = button.Border or _G[button.GetName and button:GetName() and (button:GetName() .. "Border") or ""]
-    if border and not border.roithiBorderHooked and hooksecurefunc then
+    if border and not GetFrameState(border).borderHooked and hooksecurefunc then
         hooksecurefunc(border, "Show", function(b)
             if b.SetAlpha then b:SetAlpha(0) end
             AB:UpdateOverlayContainment(button)
@@ -1081,14 +1103,14 @@ function AB:StyleButton(button, explicitBarKey)
         hooksecurefunc(border, "Hide", function()
             AB:UpdateOverlayContainment(button)
         end)
-        border.roithiBorderHooked = true
+        GetFrameState(border).borderHooked = true
     end
 
-    if button.SetChecked and not button.roithiCheckedHooked and hooksecurefunc then
+    if button.SetChecked and not btnSt.checkedHooked and hooksecurefunc then
         hooksecurefunc(button, "SetChecked", function(btn)
             AB:UpdateOverlayContainment(btn)
         end)
-        button.roithiCheckedHooked = true
+        btnSt.checkedHooked = true
     end
 
     -- 4. Overlay & Aura Sizing Containment
@@ -1124,17 +1146,19 @@ function AB:StyleButton(button, explicitBarKey)
         local hotkeyFontSize = (barDb and barDb.fontSize) or self.db.hotkeyFontSize or self.db.fontSize or 11
         local hotkeyFontOutline = (barDb and barDb.fontOutline) or self.db.hotkeyFontOutline or self.db.fontOutline or "OUTLINE"
         local hotkeyFontShadow = (self.db.hotkeyFontShadow == true) or (self.db.showFontShadow == true)
-        if ns.Utils and ns.Utils.ApplyTypography then
-            ns.Utils.ApplyTypography(hotkey, hotkeyFont, hotkeyFontSize, hotkeyFontOutline, hotkeyFontShadow, "Roithi Thick")
-        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(hotkey, hotkeyFont, hotkeyFontSize, hotkeyFontOutline)
+        local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(hotkey, hotkeyFont, hotkeyFontSize, hotkeyFontOutline, hotkeyFontShadow, "Roithi Thick")
+        -- Unified Typography mandate (ApplyTypography)
+            -- fallback removed
         end
         if hotkey.SetDrawLayer then hotkey:SetDrawLayer("OVERLAY", 7) end
-        if not hotkey.roithiHooked and hooksecurefunc then
+        if not GetFrameState(hotkey).hooked and hooksecurefunc then
             hooksecurefunc(hotkey, "SetText", function(s, txt)
-                if s.roithiFormatting then return end
+                local sSt = GetFrameState(s)
+                if sSt.formatting then return end
                 if IsRangeIndicator(txt) then
-                    if not button.roithiRangeDot then
+                    if not btnSt.rangeDot then
                         local dot = button:CreateTexture(nil, "OVERLAY")
                         dot:SetSize(8, 8)
                         local pos = barDb.hotkeyPosition or "TOPRIGHT"
@@ -1142,21 +1166,21 @@ function AB:StyleButton(button, explicitBarKey)
                         local oy = barDb.hotkeyOffsetY or -2
                         dot:SetPoint(pos, button, pos, ox, oy)
                         dot:SetTexture("Interface\\Common\\Indicator-Red")
-                        button.roithiRangeDot = dot
+                        btnSt.rangeDot = dot
                     end
-                    if button.roithiRangeDot then button.roithiRangeDot:Show() end
-                    s.roithiFormatting = true
+                    if btnSt.rangeDot then btnSt.rangeDot:Show() end
+                    sSt.formatting = true
                     s:SetText("")
-                    s.roithiFormatting = false
+                    sSt.formatting = false
                     return
                 else
-                    if button.roithiRangeDot then button.roithiRangeDot:Hide() end
+                    if btnSt.rangeDot then btnSt.rangeDot:Hide() end
                 end
                 local formatted = FormatHotkey(txt)
                 if formatted ~= txt then
-                    s.roithiFormatting = true
+                    sSt.formatting = true
                     s:SetText(formatted)
-                    s.roithiFormatting = false
+                    sSt.formatting = false
                 end
                 -- Re-lock colour to white; Blizzard resets it via SetFontObject
                 if s.SetTextColor then s:SetTextColor(1, 1, 1, 1) end
@@ -1168,15 +1192,15 @@ function AB:StyleButton(button, explicitBarKey)
                     if s.SetTextColor then s:SetTextColor(1, 1, 1, 1) end
                 end)
             end
-            hotkey.roithiHooked = true
+            GetFrameState(hotkey).hooked = true
         end
         currentText = hotkey.GetText and hotkey:GetText()
         if currentText then
             local formatted = FormatHotkey(currentText)
             if formatted ~= currentText then
-                hotkey.roithiFormatting = true
+                GetFrameState(hotkey).formatting = true
                 hotkey:SetText(formatted)
-                hotkey.roithiFormatting = false
+                GetFrameState(hotkey).formatting = false
             end
         end
     end
@@ -1205,19 +1229,20 @@ function AB:StyleButton(button, explicitBarKey)
         local nameFontSize = self.db.macroFontSize or math.max(8, ((barDb and barDb.fontSize) or self.db.fontSize or 11) - 2)
         local nameFontOutline = (barDb and barDb.fontOutline) or self.db.macroFontOutline or self.db.fontOutline or "OUTLINE"
         local nameFontShadow = (self.db.macroFontShadow == true) or (self.db.showFontShadow == true)
-        if ns.Utils and ns.Utils.ApplyTypography then
-            ns.Utils.ApplyTypography(name, nameFont, nameFontSize, nameFontOutline, nameFontShadow, "Roithi Thick")
-        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(name, nameFont, nameFontSize, nameFontOutline)
+        local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(name, nameFont, nameFontSize, nameFontOutline, nameFontShadow, "Roithi Thick")
+        -- Unified Typography mandate (ApplyTypography)
+            -- fallback removed
         end
         if name.SetDrawLayer then name:SetDrawLayer("OVERLAY", 7) end
         -- Lock colour to white; Blizzard may reset via SetFontObject
         if name.SetTextColor then name:SetTextColor(1, 1, 1, 1) end
-        if name.SetFontObject and not name.roithiFontObjectHooked and hooksecurefunc then
+        if name.SetFontObject and not GetFrameState(name).fontObjectHooked and hooksecurefunc then
             hooksecurefunc(name, "SetFontObject", function(s)
                 if s.SetTextColor then s:SetTextColor(1, 1, 1, 1) end
             end)
-            name.roithiFontObjectHooked = true
+            GetFrameState(name).fontObjectHooked = true
         end
     end
 
@@ -1234,7 +1259,7 @@ function AB:StyleButton(button, explicitBarKey)
                 countParent:SetFrameLevel((button:GetFrameLevel() or 10) + 25)
             end
         elseif countParent and countParent == button then
-            local countOverlay = button.roithiCountOverlay
+            local countOverlay = btnSt.countOverlay
             if not countOverlay and CreateFrame then
                 countOverlay = CreateFrame("Frame", nil, button)
                 countOverlay:SetAllPoints(button)
@@ -1245,7 +1270,7 @@ function AB:StyleButton(button, explicitBarKey)
                     countOverlay:SetFrameLevel((button:GetFrameLevel() or 10) + 25)
                 end
                 if countOverlay.EnableMouse then countOverlay:EnableMouse(false) end
-                button.roithiCountOverlay = countOverlay
+                btnSt.countOverlay = countOverlay
             end
             if countOverlay and count.SetParent then
                 pcall(count.SetParent, count, countOverlay)
@@ -1272,36 +1297,41 @@ function AB:StyleButton(button, explicitBarKey)
         local countFontSize = self.db.countFontSize or math.max(8, ((barDb and barDb.fontSize) or self.db.fontSize or 11) - 1)
         local countFontOutline = (barDb and barDb.fontOutline) or self.db.countFontOutline or self.db.fontOutline or "OUTLINE"
         local countFontShadow = (self.db.countFontShadow == true) or (self.db.showFontShadow == true)
-        if ns.Utils and ns.Utils.ApplyTypography then
-            ns.Utils.ApplyTypography(count, countFont, countFontSize, countFontOutline, countFontShadow, "Roithi Thick")
-        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(count, countFont, countFontSize, countFontOutline)
+        local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(count, countFont, countFontSize, countFontOutline, countFontShadow, "Roithi Thick")
+        -- Unified Typography mandate (ApplyTypography)
+            -- fallback removed
         end
     end
 
     -- 8. Hook Mouseover
-    if not button.roithiMouseoverHooked and button.HookScript then
+    if not btnSt.mouseoverHooked and button.HookScript then
         button:HookScript("OnEnter", function()
-            if button.barKey then
-                self:OnBarEnter(button.barKey)
+            local isHoverEnter = true
+            local k = GetFrameState(button).barKey or button.barKey
+            if k then
+                if isHoverEnter then self:OnBarEnter(k) else self:OnBarLeave(k) end
             end
         end)
         button:HookScript("OnLeave", function()
-            if button.barKey then
-                self:OnBarLeave(button.barKey)
+            local isHoverEnter = false
+            local k = GetFrameState(button).barKey or button.barKey
+            if k then
+                if isHoverEnter then self:OnBarEnter(k) else self:OnBarLeave(k) end
             end
         end)
-        button.roithiMouseoverHooked = true
+        btnSt.mouseoverHooked = true
     end
 
-    local bKey = explicitBarKey or button.roithiBarKey or button.barKey
+    local bKey = explicitBarKey or btnSt.barKey or button.barKey
     if not bKey then
         local bName = button.GetName and button:GetName() or ""
         for k, cfg in pairs(BAR_CONFIGS) do
             if cfg.prefix and bName:find("^" .. cfg.prefix) then
                 bKey = k
-                button.roithiBarKey = k
-                button.barKey = k
+                btnSt.barKey = k
+                -- barKey stored in frameState
                 break
             end
         end
@@ -1317,10 +1347,10 @@ function AB:StyleButton(button, explicitBarKey)
     local hasAct = ButtonHasAction(button)
     if hideEmpty and not hasAct then
         if button.SetAlpha then button:SetAlpha(0) end
-        if button.roithiBackdrop and button.roithiBackdrop.Hide then button.roithiBackdrop:Hide() end
+        if btnSt.backdrop and btnSt.backdrop.Hide then btnSt.backdrop:Hide() end
         if button.HotKey and button.HotKey.SetAlpha then button.HotKey:SetAlpha(0) end
     else
-        if button.roithiBackdrop and button.roithiBackdrop.Show then button.roithiBackdrop:Show() end
+        if btnSt.backdrop and btnSt.backdrop.Show then btnSt.backdrop:Show() end
         if button.HotKey and button.HotKey.SetAlpha then button.HotKey:SetAlpha(1) end
     end
 end
@@ -1343,8 +1373,9 @@ function AB:UnstyleButton(button)
         normal:SetAlpha(1)
     end
 
-    if button.roithiBackdrop and button.roithiBackdrop.Hide then
-        button.roithiBackdrop:Hide()
+    local unstyleBg = GetFrameState(button).backdrop
+    if unstyleBg and unstyleBg.Hide then
+        unstyleBg:Hide()
     end
 end
 
@@ -1416,8 +1447,8 @@ function AB:LayoutBarInternal(barKey)
                 if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
                     if bf.Hide and bf:IsShown() then bf:Hide() end
                     if bf.Selection then
-                        if not bf.roithiSelectionHooked and hooksecurefunc then
-                            bf.roithiSelectionHooked = true
+                        if not GetFrameState(bf).selectionHooked and hooksecurefunc then
+                            GetFrameState(bf).selectionHooked = true
                             hooksecurefunc(bf.Selection, "Show", function(sel)
                                 sel:Hide()
                             end)
@@ -1564,20 +1595,21 @@ function AB:LayoutBarInternal(barKey)
 
     for i, btn in ipairs(buttons) do
         if i <= displayCount then
-            btn.barKey = barKey
-            if not btn.originalParent and btn.GetParent then
-                btn.originalParent = btn:GetParent()
+            local bSt = GetFrameState(btn)
+            bSt.barKey = barKey
+            if not bSt.originalParent and btn.GetParent then
+                bSt.originalParent = btn:GetParent()
             end
-            if not btn.roithiOriginalPoints and btn.GetNumPoints then
-                btn.roithiOriginalPoints = {}
+            if not bSt.originalPoints and btn.GetNumPoints then
+                bSt.originalPoints = {}
                 for p = 1, btn:GetNumPoints() do
                     local pt, relTo, relPt, x, y = btn:GetPoint(p)
-                    table.insert(btn.roithiOriginalPoints, { point = pt, relTo = relTo, relPt = relPt, x = x, y = y })
+                    table.insert(bSt.originalPoints, { point = pt, relTo = relTo, relPt = relPt, x = x, y = y })
                 end
                 if btn.GetSize then
                     local w, h = btn:GetSize()
-                    btn.roithiOriginalWidth = w
-                    btn.roithiOriginalHeight = h
+                    bSt.originalWidth = w
+                    bSt.originalHeight = h
                 end
             end
             if btn.SetParent then
@@ -1614,8 +1646,9 @@ function AB:LayoutBarInternal(barKey)
         else
             if btn.Hide then btn:Hide() end
             if btn.SetAlpha then btn:SetAlpha(0) end
-            if btn.roithiBackdrop and btn.roithiBackdrop.Hide then
-                btn.roithiBackdrop:Hide()
+            local bBg = GetFrameState(btn).backdrop
+            if bBg and bBg.Hide then
+                bBg:Hide()
             end
         end
     end
@@ -1635,19 +1668,20 @@ function AB:RestoreBlizzardBars()
         if container.Hide then container:Hide() end
         local buttons = self:GetBarButtons(barKey)
         for _, btn in ipairs(buttons) do
-            if btn.originalParent and btn.SetParent then
-                btn:SetParent(btn.originalParent)
+            local bSt = GetFrameState(btn)
+            if (bSt.originalParent or btn.originalParent) and btn.SetParent then
+                btn:SetParent(bSt.originalParent or btn.originalParent)
             end
-            if btn.roithiOriginalPoints and #btn.roithiOriginalPoints > 0 then
+            if bSt.originalPoints and #bSt.originalPoints > 0 then
                 if btn.ClearAllPoints then btn:ClearAllPoints() end
-                for _, pt in ipairs(btn.roithiOriginalPoints) do
+                for _, pt in ipairs(bSt.originalPoints) do
                     if btn.SetPoint then
                         btn:SetPoint(pt.point, pt.relTo, pt.relPt, pt.x, pt.y)
                     end
                 end
             end
-            if btn.roithiOriginalWidth and btn.roithiOriginalHeight and btn.SetSize then
-                btn:SetSize(btn.roithiOriginalWidth, btn.roithiOriginalHeight)
+            if bSt.originalWidth and bSt.originalHeight and btn.SetSize then
+                btn:SetSize(bSt.originalWidth, bSt.originalHeight)
             end
             if btn.SetAlpha then btn:SetAlpha(1) end
             if btn.Show then btn:Show() end
@@ -1702,10 +1736,9 @@ function AB:SuppressBlizzardBarSelections()
         for _, fname in ipairs(bFrames) do
             local bf = _G[fname]
             if bf then
-                bf.defaultHideSelection = true
                 if bf.Selection then
-                    if not bf.roithiSelectionHooked and hooksecurefunc then
-                        bf.roithiSelectionHooked = true
+                    if not GetFrameState(bf).selectionHooked and hooksecurefunc then
+                        GetFrameState(bf).selectionHooked = true
                         hooksecurefunc(bf.Selection, "Show", function(sel)
                             sel:Hide()
                         end)
@@ -1753,7 +1786,7 @@ function AB:ProtectOverrideActionBar()
         hooksecurefunc(_G.OverrideActionBar.slideOut, "Play", function()
             if _G.InCombatLockdown and _G.InCombatLockdown() then
                 if _G.OverrideActionBar then
-                    _G.OverrideActionBar.hideOnFinish = false
+                    if _G.OverrideActionBar.slideOut and _G.OverrideActionBar.slideOut.Stop then _G.OverrideActionBar.slideOut:Stop() end
                 end
             end
         end)

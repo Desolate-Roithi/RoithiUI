@@ -20,11 +20,11 @@ end
 function RoithiUI.Config.GetCustomTagsOptions()
     local options = {
         type = "group",
-        name = "Custom Tags",
+        name = L["Custom Tags"],
         args = {
             intro = {
                 type = "description",
-                name = "Configure custom text tags for unit frames. You can add as many tags as you like.\n\n" ..
+                name = L["Configure custom text tags for unit frames. You can add as many tags as you like."] .. "\n\n" ..
                     "|cffffd100Available Tags:|r\n" ..
                     "  |cff00ff00@name|r - Unit Name\n" ..
                     "  |cff00ff00@level|r - Unit Level\n" ..
@@ -66,13 +66,13 @@ function RoithiUI.Config.GetCustomTagsOptions()
     }
 
     local units = {
-        { "player",       "Player" },
-        { "target",       "Target" },
-        { "targettarget", "Target of Target" },
-        { "focus",        "Focus" },
-        { "focustarget",  "Focus Target" }, -- If supported by core
-        { "pet",          "Pet" },
-        { "boss1",        "Boss Frames" },
+        { "player",       L["Player"] },
+        { "target",       L["Target"] },
+        { "targettarget", L["Target of Target"] },
+        { "focus",        L["Focus"] },
+        { "focustarget",  L["Focus Target"] }, -- If supported by core
+        { "pet",          L["Pet"] },
+        { "boss1",        L["Boss Frames"] },
     }
 
     for i, u in ipairs(units) do
@@ -90,7 +90,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
             local ufUnit = (unit:match("^boss%d$")) and "boss" or unit
             args.unitframes = {
                 type = "execute",
-                name = "> Unit Frames",
+                name = "> " .. L["Unit Frames"],
                 order = order,
                 func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", ufUnit) end,
             }
@@ -98,7 +98,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
             if not unit:match("^boss%d$") then
                 args.castbars = {
                     type = "execute",
-                    name = "> Castbars",
+                    name = "> " .. L["Castbars"],
                     order = order,
                     func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "castbars", unit) end,
                 }
@@ -107,7 +107,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
             local isBoss = unit:match("^boss%d$")
             args.auras = {
                 type = "execute",
-                name = "> Auras",
+                name = "> " .. L["Auras"],
                 order = order,
                 func = function()
                     if isBoss then
@@ -119,7 +119,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
             }
             return {
                 type = "group",
-                name = "Quick Links",
+                name = L["Quick Links"],
                 inline = true,
                 order = 999,
                 args = args
@@ -134,8 +134,8 @@ function RoithiUI.Config.GetCustomTagsOptions()
                 quickLinks = CreateQuickLinks(),
                 addTag = {
                     type = "execute",
-                    name = "Add New Tag",
-                    desc = "Add a new text tag to this unit frame.",
+                    name = L["Add New Tag"],
+                    desc = L["Add a new text tag to this unit frame."],
                     order = 0,
                     func = function()
                         local tags = GetDB()
@@ -159,14 +159,14 @@ function RoithiUI.Config.GetCustomTagsOptions()
         for idx, tagConfig in ipairs(tags) do
             unitGroup.args["tag" .. idx] = {
                 type = "group",
-                name = "Tag " .. idx .. (tagConfig.formatString and (" - " .. tagConfig.formatString) or ""),
+                name = L["Tag"] .. " " .. idx .. (tagConfig.formatString and (" - " .. tagConfig.formatString) or ""),
                 order = idx + 10,
                 inline = false,
                 args = {
                     delete = {
                         type = "execute",
-                        name = "Delete Tag",
-                        desc = "Remove this tag.",
+                        name = L["Delete Tag"],
+                        desc = L["Remove this tag."],
                         order = 100,
                         confirm = true,
                         func = function()
@@ -177,7 +177,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     },
                     enabled = {
                         type = "toggle",
-                        name = "Enable",
+                        name = L["Enable"],
                         order = 1,
                         get = function() return tagConfig.enabled end,
                         set = function(_, v)
@@ -187,8 +187,8 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     },
                     text = {
                         type = "input",
-                        name = "Format Text",
-                        desc = "E.g. @health.current or @name",
+                        name = L["Format Text"],
+                        desc = L["E.g. @health.current or @name"],
                         width = "double",
                         order = 2,
                         get = function() return tagConfig.formatString end,
@@ -201,8 +201,8 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     font = {
                         type = "select",
                         dialogControl = "LSM30_Font",
-                        name = "Font",
-                        desc = "Leave empty to use general Unit Frame font.",
+                        name = L["Font"],
+                        desc = L["Leave empty to use general Unit Frame font."],
                         order = 2.4,
                         values = function()
                             local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
@@ -216,7 +216,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     },
                     fontSize = {
                         type = "range",
-                        name = "Font Size",
+                        name = L["Font Size"],
                         order = 2.5, -- Between Text and Anchor
                         min = 8,
                         max = 32,
@@ -229,8 +229,8 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     },
                     order = {
                         type = "range",
-                        name = "Draw Order",
-                        desc = "Higher numbers draw on top.",
+                        name = L["Draw Order"],
+                        desc = L["Higher numbers draw on top."],
                         order = 2.6,
                         min = 1,
                         max = 100,
@@ -243,14 +243,14 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     },
                     anchorTo = {
                         type = "select",
-                        name = "Anchor To",
+                        name = L["Anchor To"],
                         order = 3,
                         values = {
-                            ["Frame"] = "Frame",
-                            ["Health"] = "Health Bar",
-                            ["Power"] = "Power Bar",
-                            ["ClassPower"] = "Class Power",
-                            ["AdditionalPower"] = "Add. Power"
+                            ["Frame"] = L["Frame"],
+                            ["Health"] = L["Health Bar"],
+                            ["Power"] = L["Power Bar"],
+                            ["ClassPower"] = L["Class Power"],
+                            ["AdditionalPower"] = L["Add. Power"]
                         },
                         get = function() return tagConfig.anchorTo or "Frame" end,
                         set = function(_, v)
@@ -260,7 +260,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     },
                     point = {
                         type = "select",
-                        name = "Point",
+                        name = L["Point"],
                         order = 4,
                         values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
                         sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
@@ -272,7 +272,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     },
                     x = {
                         type = "range",
-                        name = "X Offset",
+                        name = L["X Offset"],
                         order = 5,
                         min = -300,
                         max = 300,
@@ -285,7 +285,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     },
                     y = {
                         type = "range",
-                        name = "Y Offset",
+                        name = L["Y Offset"],
                         order = 6,
                         min = -200,
                         max = 200,

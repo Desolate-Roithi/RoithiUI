@@ -61,7 +61,7 @@ local function IsSafeFrame(frame)
     if not frame then return false end
     if _G.issecretvalue and _G.issecretvalue(frame) then return false end
     if _G.canaccessvalue and not _G.canaccessvalue(frame) then return false end
-    if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(frame) then
+    if type(frame) ~= "table" then
         return false
     end
     if frame.IsForbidden then
@@ -588,10 +588,9 @@ function MinimapMod:CreateFlyoutTrigger()
     end
 
     local text = ft:CreateFontString(nil, "OVERLAY")
-    if ns.Utils and ns.Utils.ApplyTypography then
-        ns.Utils.ApplyTypography(text, "Friz Quadrata TT", 8, "OUTLINE", false, "Friz Quadrata TT")
-    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 8, "OUTLINE")
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(text, "Friz Quadrata TT", 8, "OUTLINE", false, "Friz Quadrata TT")
     end
     text:SetPoint("CENTER", ft, "CENTER", 0, 0)
     text:SetText("•••")
@@ -635,10 +634,9 @@ function MinimapMod:CreateAddonBarExpander()
     end
 
     local text = expander:CreateFontString(nil, "OVERLAY")
-    if ns.Utils and ns.Utils.ApplyTypography then
-        ns.Utils.ApplyTypography(text, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
-    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(text, "Friz Quadrata TT", 10, "OUTLINE")
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(text, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
     end
     if text.SetJustifyH then text:SetJustifyH("CENTER") end
     if text.SetJustifyV then text:SetJustifyV("MIDDLE") end
@@ -713,7 +711,6 @@ function MinimapMod:ReleaseAllAddonButtons()
     if not self.scannedButtons then return end
     for name, btn in pairs(self.scannedButtons) do
         btn.isAligning = true
-        btn.RoithiAlphaHooked = false
         if btn.originalParent then
             btn:SetParent(btn.originalParent)
         else
@@ -932,7 +929,7 @@ function MinimapMod:CreateAddonBar()
         if LEM.AddFrameSettingsButtons then
             LEM:AddFrameSettingsButtons(bar, {
                 {
-                    text = "Open Full Settings",
+                    text = L["Open Full Settings"],
                     click = function()
                         if RoithiUI and RoithiUI.OpenSettings then
                             RoithiUI:OpenSettings("minimap")
@@ -962,7 +959,6 @@ function MinimapMod:UpdateAddonBarVisibility()
 
         for name, btn in pairs(self.scannedButtons) do
             btn.isAligning = true
-            btn.RoithiAlphaHooked = false
             if btn.originalParent then
                 btn:SetParent(btn.originalParent)
             else
@@ -1451,7 +1447,6 @@ function MinimapMod:UpdateAddonBarLayout()
             if btn.SetParent then btn:SetParent(self.hiddenFrame or Minimap) end
             if btn.Hide then btn:Hide() end
             btn.isAligning = nil
-            btn.RoithiAlphaHooked = false
 
             if self.customButtons[name] then
                 self.customButtons[name]:Hide()

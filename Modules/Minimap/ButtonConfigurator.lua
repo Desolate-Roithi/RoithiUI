@@ -102,8 +102,6 @@ function MinimapMod:RenderButtonTiles(container, tilesTable)
             local utils = (AT and AT.Utils) or (_G.RoithiUI and _G.RoithiUI.Utils)
             if utils and utils.ApplyTypography then
                 utils.ApplyTypography(badge, "Friz Quadrata TT", 9, "OUTLINE", false, "Friz Quadrata TT")
-            elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-                LibRoithi.mixins:SetFont(badge, "Friz Quadrata TT", 9, "OUTLINE")
             end
             badge:SetPoint("TOPLEFT", tile, "TOPLEFT", 2, -2)
             tile.badge = badge
@@ -258,8 +256,6 @@ function MinimapMod:OpenButtonConfigurator()
         local utils = (AT and AT.Utils) or (_G.RoithiUI and _G.RoithiUI.Utils)
         if utils and utils.ApplyTypography then
             utils.ApplyTypography(title, "Friz Quadrata TT", 14, "OUTLINE", false, "Friz Quadrata TT")
-        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(title, "Friz Quadrata TT", 14, "OUTLINE")
         end
         title:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -12)
         title:SetText(L["Addon Button Arrangement"] or "Addon Button Arrangement")
@@ -268,8 +264,6 @@ function MinimapMod:OpenButtonConfigurator()
         local subtitle = frame:CreateFontString(nil, "OVERLAY")
         if utils and utils.ApplyTypography then
             utils.ApplyTypography(subtitle, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
-        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(subtitle, "Friz Quadrata TT", 10, "OUTLINE")
         end
         subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
         subtitle:SetPoint("RIGHT", frame, "RIGHT", -30, 0)
@@ -315,8 +309,6 @@ if AceGUI then
         local utils = (AT and AT.Utils) or (_G.RoithiUI and _G.RoithiUI.Utils)
         if utils and utils.ApplyTypography then
             utils.ApplyTypography(desc, "Friz Quadrata TT", 10, "OUTLINE", false, "Friz Quadrata TT")
-        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(desc, "Friz Quadrata TT", 10, "OUTLINE")
         end
         desc:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
         desc:SetPoint("RIGHT", frame, "RIGHT", 0, 0)

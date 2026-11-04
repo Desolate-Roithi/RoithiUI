@@ -9,17 +9,17 @@ local LEM = LibStub("LibEditMode-Roithi", true)
 function ns.BuildUnitAndCastbarOptions(options)
     -- Populate Unit Frame Options
     local units = {
-        { "player",       "Player" },
-        { "target",       "Target" },
-        { "targettarget", "Target of Target" },
-        { "focus",        "Focus" },
-        { "focustarget",  "Focus Target" },
-        { "pet",          "Pet" },
-        { "boss1",        "Boss 1" },
-        { "boss2",        "Boss 2" },
-        { "boss3",        "Boss 3" },
-        { "boss4",        "Boss 4" },
-        { "boss5",        "Boss 5" },
+        { "player",       L["Player"] },
+        { "target",       L["Target"] },
+        { "targettarget", L["Target of Target"] },
+        { "focus",        L["Focus"] },
+        { "focustarget",  L["Focus Target"] },
+        { "pet",          L["Pet"] },
+        { "boss1",        L["Boss 1"] },
+        { "boss2",        L["Boss 2"] },
+        { "boss3",        L["Boss 3"] },
+        { "boss4",        L["Boss 4"] },
+        { "boss5",        L["Boss 5"] },
     }
 
     for i, u in ipairs(units) do
@@ -1823,7 +1823,7 @@ local function GetSettingsForPower(unit)
     if not LEM then return {} end
     return {
         {
-            name = "Enable",
+            name = L["Enable"],
             kind = LEM.SettingType.Checkbox,
             default = true,
             get = function() return GetUnitDB(unit).powerEnabled ~= false end,
@@ -1835,7 +1835,7 @@ local function GetSettingsForPower(unit)
             end,
         },
         {
-            name = "Detached",
+            name = L["Detached"],
             kind = LEM.SettingType.Checkbox,
             default = false,
             get = function() return GetUnitDB(unit).powerDetached end,
@@ -1860,7 +1860,7 @@ local function GetSettingsForPower(unit)
             end,
         },
         {
-            name = "Height",
+            name = L["Height"],
             kind = LEM.SettingType.Slider,
             default = 10,
             minValue = 2,
@@ -1873,7 +1873,7 @@ local function GetSettingsForPower(unit)
             end,
         },
         {
-            name = "Width",
+            name = L["Width"],
             kind = LEM.SettingType.Slider,
             default = 200,
             minValue = 50,
@@ -1888,7 +1888,7 @@ local function GetSettingsForPower(unit)
             hidden = function() return not GetUnitDB(unit).powerDetached end,
         },
         {
-            name = "X Position",
+            name = L["X Position"],
             kind = LEM.SettingType.Slider,
             default = 0,
             minValue = -1000,
@@ -1907,7 +1907,7 @@ local function GetSettingsForPower(unit)
             hidden = function() return not GetUnitDB(unit).powerDetached end,
         },
         {
-            name = "Y Position",
+            name = L["Y Position"],
             kind = LEM.SettingType.Slider,
             default = -50,
             minValue = -1000,
@@ -1932,7 +1932,7 @@ local function GetSettingsForClassPower(unit)
     if not LEM then return {} end
     return {
         {
-            name = "Enable",
+            name = L["Enable"],
             kind = LEM.SettingType.Checkbox,
             default = true,
             get = function() return GetUnitDB(unit).classPowerEnabled ~= false end,
@@ -1944,7 +1944,7 @@ local function GetSettingsForClassPower(unit)
             end,
         },
         {
-            name = "Detached",
+            name = L["Detached"],
             kind = LEM.SettingType.Checkbox,
             default = false,
             get = function() return GetUnitDB(unit).classPowerDetached end,
@@ -1972,7 +1972,7 @@ local function GetSettingsForClassPower(unit)
             end,
         },
         {
-            name = "Height",
+            name = L["Height"],
             kind = LEM.SettingType.Slider,
             default = 10,
             minValue = 2,
@@ -1985,7 +1985,7 @@ local function GetSettingsForClassPower(unit)
             end,
         },
         {
-            name = "Timer Font Size",
+            name = L["Timer Font Size"],
             kind = LEM.SettingType.Slider,
             default = 14,
             minValue = 8,
@@ -1998,7 +1998,7 @@ local function GetSettingsForClassPower(unit)
             end,
         },
         {
-            name = "Width",
+            name = L["Width"],
             kind = LEM.SettingType.Slider,
             default = 200,
             minValue = 50,
@@ -2013,7 +2013,7 @@ local function GetSettingsForClassPower(unit)
             hidden = function() return not GetUnitDB(unit).classPowerDetached end,
         },
         {
-            name = "X Position",
+            name = L["X Position"],
             kind = LEM.SettingType.Slider,
             default = 0,
             minValue = -1000,
@@ -2032,7 +2032,7 @@ local function GetSettingsForClassPower(unit)
             hidden = function() return not GetUnitDB(unit).classPowerDetached end,
         },
         {
-            name = "Y Position",
+            name = L["Y Position"],
             kind = LEM.SettingType.Slider,
             default = -50,
             minValue = -1000,
@@ -2057,7 +2057,7 @@ local function GetSettingsForAdditionalPower(unit)
     if not LEM then return {} end
     return {
         {
-            name = "Enable",
+            name = L["Enable"],
             kind = LEM.SettingType.Checkbox,
             default = true,
             get = function() return GetUnitDB(unit).additionalPowerEnabled ~= false end,
@@ -2073,7 +2073,7 @@ local function GetSettingsForAdditionalPower(unit)
             end,
         },
         {
-            name = "Detached",
+            name = L["Detached"],
             kind = LEM.SettingType.Checkbox,
             default = false,
             get = function() return GetUnitDB(unit).additionalPowerDetached end,
@@ -2100,7 +2100,7 @@ local function GetSettingsForAdditionalPower(unit)
             end,
         },
         {
-            name = "Height",
+            name = L["Height"],
             kind = LEM.SettingType.Slider,
             default = 10,
             minValue = 2,
@@ -2113,7 +2113,7 @@ local function GetSettingsForAdditionalPower(unit)
             end,
         },
         {
-            name = "Width",
+            name = L["Width"],
             kind = LEM.SettingType.Slider,
             default = 200,
             minValue = 50,
@@ -2128,7 +2128,7 @@ local function GetSettingsForAdditionalPower(unit)
             hidden = function() return not GetUnitDB(unit).additionalPowerDetached end,
         },
         {
-            name = "X Position",
+            name = L["X Position"],
             kind = LEM.SettingType.Slider,
             default = 0,
             minValue = -1000,
@@ -2147,7 +2147,7 @@ local function GetSettingsForAdditionalPower(unit)
             hidden = function() return not GetUnitDB(unit).additionalPowerDetached end,
         },
         {
-            name = "Y Position",
+            name = L["Y Position"],
             kind = LEM.SettingType.Slider,
             default = -50,
             minValue = -1000,
@@ -2172,7 +2172,7 @@ local function GetSettingsForMainFrame(unit, frame)
     if not LEM then return {} end
     local settings = {
         {
-            name = "Width",
+            name = L["Width"],
             kind = LEM.SettingType.Slider,
             default = 200,
             minValue = 50,
@@ -2188,7 +2188,7 @@ local function GetSettingsForMainFrame(unit, frame)
             formatter = function(v) return string.format("%.1f", v) end,
         },
         {
-            name = "Height",
+            name = L["Height"],
             kind = LEM.SettingType.Slider,
             default = 50,
             minValue = 20,
@@ -2202,7 +2202,7 @@ local function GetSettingsForMainFrame(unit, frame)
             formatter = function(v) return string.format("%.1f", v) end,
         },
         {
-            name = "X Position",
+            name = L["X Position"],
             kind = LEM.SettingType.Slider,
             default = 0,
             minValue = -2500,
@@ -2216,7 +2216,7 @@ local function GetSettingsForMainFrame(unit, frame)
             formatter = function(v) return string.format("%.1f", v) end,
         },
         {
-            name = "Y Position",
+            name = L["Y Position"],
             kind = LEM.SettingType.Slider,
             default = 0,
             minValue = -1500,
@@ -2231,7 +2231,7 @@ local function GetSettingsForMainFrame(unit, frame)
         },
         { kind = LEM.SettingType.Divider },
         {
-            name = "Primary Power",
+            name = L["Primary Power"],
             kind = LEM.SettingType.Expander,
             get = function() return GetUnitDB(unit).powerSectionExpanded end,
             set = function(_, value)
@@ -2255,7 +2255,7 @@ local function GetSettingsForMainFrame(unit, frame)
     if unit == "player" then
         table.insert(settings, { kind = LEM.SettingType.Divider })
         table.insert(settings, {
-            name = "Secondary Power",
+            name = L["Secondary Power"],
             kind = LEM.SettingType.Expander,
             get = function() return GetUnitDB(unit).classPowerSectionExpanded end,
             set = function(_, value)
@@ -2277,7 +2277,7 @@ local function GetSettingsForMainFrame(unit, frame)
 
         table.insert(settings, { kind = LEM.SettingType.Divider })
         table.insert(settings, {
-            name = "Additional Power",
+            name = L["Additional Power"],
             kind = LEM.SettingType.Expander,
             get = function() return GetUnitDB(unit).additionalPowerSectionExpanded end,
             set = function(_, value)
@@ -2347,7 +2347,7 @@ function ns.InitializeUnitFrameConfig()
                     frame.extraButtons = nil
                     LEM:AddFrameSettingsButtons(frame, {
                         {
-                            text = "Open Full Settings",
+                            text = L["Open Full Settings"],
                             click = function()
                                 if RoithiUI and RoithiUI.OpenSettings then
                                     RoithiUI:OpenSettings("unitframes", unit)
@@ -2366,7 +2366,7 @@ function ns.InitializeUnitFrameConfig()
                         if LEM.AddFrameSettingsButtons then
                             LEM:AddFrameSettingsButtons(frame.Power, {
                                 {
-                                    text = "Open Full Settings",
+                                    text = L["Open Full Settings"],
                                     click = function()
                                         if RoithiUI and RoithiUI.OpenSettings then
                                             RoithiUI:OpenSettings("unitframes", unit)
@@ -2386,7 +2386,7 @@ function ns.InitializeUnitFrameConfig()
                         if LEM.AddFrameSettingsButtons then
                             LEM:AddFrameSettingsButtons(frame.ClassPower, {
                                 {
-                                    text = "Open Full Settings",
+                                    text = L["Open Full Settings"],
                                     click = function()
                                         if RoithiUI and RoithiUI.OpenSettings then
                                             RoithiUI:OpenSettings("unitframes", unit)
@@ -2406,7 +2406,7 @@ function ns.InitializeUnitFrameConfig()
                         if LEM.AddFrameSettingsButtons then
                             LEM:AddFrameSettingsButtons(frame.AdditionalPower, {
                                 {
-                                    text = "Open Full Settings",
+                                    text = L["Open Full Settings"],
                                     click = function()
                                         if RoithiUI and RoithiUI.OpenSettings then
                                             RoithiUI:OpenSettings("unitframes", unit)
@@ -2435,9 +2435,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
     local function GetBossSettings()
         local settings = {}
         table.insert(settings, {
-            name = "Size & Spacing",
-            expandedLabel = "Collapse size & spacing",
-            collapsedLabel = "Expand size & spacing",
+            name = L["Size & Spacing"],
+            expandedLabel = L["Collapse size & spacing"],
+            collapsedLabel = L["Expand size & spacing"],
             kind = LEM.SettingType.Expander,
             default = false,
             get = function() return GetBossGroupDB().sizeSectionExpanded end,
@@ -2451,7 +2451,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
         if GetBossGroupDB().sizeSectionExpanded then
             local sizeSettings = {
                 {
-                    name = "Width",
+                    name = L["Width"],
                     kind = LEM.SettingType.Slider,
                     default = 200,
                     minValue = 50,
@@ -2465,7 +2465,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     formatter = function(v) return string.format("%.1f", v) end,
                 },
                 {
-                    name = "Height",
+                    name = L["Height"],
                     kind = LEM.SettingType.Slider,
                     default = 50,
                     minValue = 20,
@@ -2481,7 +2481,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     formatter = function(v) return string.format("%.1f", v) end,
                 },
                 {
-                    name = "X Position",
+                    name = L["X Position"],
                     kind = LEM.SettingType.Slider,
                     default = -250,
                     minValue = -2500,
@@ -2499,7 +2499,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     formatter = function(v) return string.format("%.1f", v) end,
                 },
                 {
-                    name = "Y Position",
+                    name = L["Y Position"],
                     kind = LEM.SettingType.Slider,
                     default = 0,
                     minValue = -1500,
@@ -2518,7 +2518,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                 },
                 {
                     kind = LEM.SettingType.Slider,
-                    name = "Spacing",
+                    name = L["Spacing"],
                     get = function() return GetBossGroupDB().spacing or 30 end,
                     set = function(_, v)
                         GetBossGroupDB().spacing = v
@@ -2538,9 +2538,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
         table.insert(settings, { kind = LEM.SettingType.Divider })
 
         table.insert(settings, {
-            name = "Power",
-            expandedLabel = "Collapse power",
-            collapsedLabel = "Expand power",
+            name = L["Power"],
+            expandedLabel = L["Collapse power"],
+            collapsedLabel = L["Expand power"],
             kind = LEM.SettingType.Expander,
             default = false,
             get = function() return GetBossGroupDB().powerSectionExpanded end,
@@ -2554,7 +2554,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
         if GetBossGroupDB().powerSectionExpanded then
             local powerSettings = {
                 {
-                    name = "Enable Power",
+                    name = L["Enable Power"],
                     kind = LEM.SettingType.Checkbox,
                     default = true,
                     get = function() return GetBossGroupDB().powerEnabled ~= false end,
@@ -2564,7 +2564,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     end,
                 },
                 {
-                    name = "Height",
+                    name = L["Height"],
                     kind = LEM.SettingType.Slider,
                     default = 10,
                     minValue = 2,
@@ -2578,7 +2578,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     formatter = function(v) return string.format("%.1f", v) end,
                 },
                 {
-                    name = "Detached",
+                    name = L["Detached"],
                     kind = LEM.SettingType.Checkbox,
                     default = false,
                     get = function() return GetBossGroupDB().powerDetached end,
@@ -2592,7 +2592,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
             }
             if GetBossGroupDB().powerDetached then
                 table.insert(powerSettings, {
-                    name = "X Position",
+                    name = L["X Position"],
                     kind = LEM.SettingType.Slider,
                     default = 0,
                     minValue = -1000,
@@ -2606,7 +2606,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     formatter = function(v) return string.format("%.1f", v) end,
                 })
                 table.insert(powerSettings, {
-                    name = "Y Position",
+                    name = L["Y Position"],
                     kind = LEM.SettingType.Slider,
                     default = -50,
                     minValue = -1000,
@@ -2620,7 +2620,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     formatter = function(v) return string.format("%.1f", v) end,
                 })
                 table.insert(powerSettings, {
-                    name = "Width",
+                    name = L["Width"],
                     kind = LEM.SettingType.Slider,
                     default = 200,
                     minValue = 50,
@@ -2640,9 +2640,9 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
         table.insert(settings, { kind = LEM.SettingType.Divider })
 
         table.insert(settings, {
-            name = "Castbar",
-            expandedLabel = "Collapse castbar",
-            collapsedLabel = "Expand castbar",
+            name = L["Castbar"],
+            expandedLabel = L["Collapse castbar"],
+            collapsedLabel = L["Expand castbar"],
             kind = LEM.SettingType.Expander,
             default = false,
             get = function() return GetBossGroupDB().castbarSectionExpanded end,
@@ -2656,7 +2656,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
         if GetBossGroupDB().castbarSectionExpanded then
             local castbarSettings = {
                 {
-                    name = "Enable Castbar",
+                    name = L["Enable Castbar"],
                     kind = LEM.SettingType.Checkbox,
                     default = true,
                     get = function()
@@ -2674,7 +2674,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     end,
                 },
                 {
-                    name = "Height",
+                    name = L["Height"],
                     kind = LEM.SettingType.Slider,
                     default = 20,
                     minValue = 10,
@@ -2695,7 +2695,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     end,
                 },
                 {
-                    name = "Detached",
+                    name = L["Detached"],
                     kind = LEM.SettingType.Checkbox,
                     default = false,
                     get = function()
@@ -2718,7 +2718,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
             local cbDB = RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar["boss1"]
             if cbDB and cbDB.detached then
                 table.insert(castbarSettings, {
-                    name = "X Position",
+                    name = L["X Position"],
                     kind = LEM.SettingType.Slider,
                     default = 0,
                     minValue = -1000,
@@ -2740,7 +2740,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
                     formatter = function(v) return string.format("%.1f", v) end,
                 })
                 table.insert(castbarSettings, {
-                    name = "Y Position",
+                    name = L["Y Position"],
                     kind = LEM.SettingType.Slider,
                     default = -50,
                     minValue = -1000,
@@ -2772,7 +2772,7 @@ function ns.ApplyLEMBossConfiguration(frame, unit)
     frame.extraButtons = nil
     LEM:AddFrameSettingsButtons(frame, {
         {
-            text = "Open Full Settings",
+            text = L["Open Full Settings"],
             click = function()
                 if RoithiUI and RoithiUI.OpenSettings then
                     RoithiUI:OpenSettings("unitframes", "boss", "boss1")

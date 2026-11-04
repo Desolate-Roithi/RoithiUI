@@ -1,7 +1,6 @@
 local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
-local LibRoithi = LibStub("LibRoithi-1.0")
 
 -------------------------------------------------------------------------------
 -- FormatAuraButton Callback for 12.1.0 AuraButtons
@@ -130,10 +129,9 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                 local timerX = isDebuff and (db.debuffTimerX or db.timerX) or (db.buffTimerX or db.timerX) or 0
                 local timerY = isDebuff and (db.debuffTimerY or db.timerY) or (db.buffTimerY or db.timerY) or 0
 
-                if ns.Utils and ns.Utils.ApplyTypography then
-                    ns.Utils.ApplyTypography(durationText, fontName, timerFontSize, "OUTLINE", false, "Expressway")
-                elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-                    LibRoithi.mixins:SetFont(durationText, fontName, timerFontSize, "OUTLINE")
+                local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+                if utils and utils.ApplyTypography then
+                    utils.ApplyTypography(durationText, fontName, timerFontSize, "OUTLINE", false, "Expressway")
                 end
                 if durationText.ClearAllPoints then durationText:ClearAllPoints() end
                 if durationText.SetPoint then durationText:SetPoint(timerAnchor, auraButton, timerAnchor, timerX, timerY) end
@@ -176,10 +174,9 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                 local stackX = isDebuff and (db.debuffStackX or db.stackX) or (db.buffStackX or db.stackX) or 2
                 local stackY = isDebuff and (db.debuffStackY or db.stackY) or (db.buffStackY or db.stackY) or -2
 
-                if ns.Utils and ns.Utils.ApplyTypography then
-                    ns.Utils.ApplyTypography(countText, fontName, stackFontSize, "OUTLINE", false, "Expressway")
-                elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-                    LibRoithi.mixins:SetFont(countText, fontName, stackFontSize, "OUTLINE")
+                local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+                if utils and utils.ApplyTypography then
+                    utils.ApplyTypography(countText, fontName, stackFontSize, "OUTLINE", false, "Expressway")
                 end
                 if countText.ClearAllPoints then countText:ClearAllPoints() end
                 if countText.SetPoint then countText:SetPoint(stackAnchor, auraButton, stackAnchor, stackX, stackY) end

@@ -104,10 +104,9 @@ function UF:CreateClassPower(frame)
         -- Timer Text (For Runes)
         point.Timer = point:CreateFontString(nil, "OVERLAY")
         if point.Timer.SetDrawLayer then point.Timer:SetDrawLayer("OVERLAY", 7) end
-        if ns.Utils and ns.Utils.ApplyTypography then
-            ns.Utils.ApplyTypography(point.Timer, fontName, 14, fontOutline, false, "Expressway")
-        elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-            LibRoithi.mixins:SetFont(point.Timer, fontName, 14, fontOutline)
+        local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(point.Timer, fontName, 14, fontOutline, false, "Expressway")
         end
         point.Timer:SetPoint("CENTER", point, "CENTER", 0, 0)
         point.Timer:SetText("")
@@ -181,10 +180,9 @@ function UF:CreateClassPower(frame)
 
             if point.Timer then
                 if point.Timer.SetDrawLayer then point.Timer:SetDrawLayer("OVERLAY", 7) end
-                if ns.Utils and ns.Utils.ApplyTypography then
-                    ns.Utils.ApplyTypography(point.Timer, currentFont, timerFontSize, currentOutline, false, "Expressway")
-                elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-                    LibRoithi.mixins:SetFont(point.Timer, currentFont, timerFontSize, currentOutline)
+                local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+                if utils and utils.ApplyTypography then
+                    utils.ApplyTypography(point.Timer, currentFont, timerFontSize, currentOutline, false, "Expressway")
                 end
                 point.Timer:SetPoint("CENTER", point, "CENTER", 0, 0)
             end

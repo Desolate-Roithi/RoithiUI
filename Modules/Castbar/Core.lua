@@ -151,6 +151,11 @@ Castbar.defaultSettings = ns.CastbarDefaults or (ns.Defaults and ns.Defaults.pro
 Castbar.dbKey = "Castbar"
 local castbarsDB
 
+local suppressedBlizzSpellbars = setmetatable({}, { __mode = "k" })
+function ns.IsBlizzardSpellbarSuppressed(frame)
+    return frame ~= nil and suppressedBlizzSpellbars[frame] == true
+end
+
 local regenVisibilityFrame = nil
 function ns.UpdateBlizzardVisibility()
     if InCombatLockdown and InCombatLockdown() then
@@ -179,7 +184,7 @@ function ns.UpdateBlizzardVisibility()
         if not frame then return end
 
         if shouldHide then
-            frame.shouldBeHiddenRoithi = true
+            suppressedBlizzSpellbars[frame] = true
             if frame.UnregisterAllEvents then
                 frame:UnregisterAllEvents()
             end
@@ -187,7 +192,7 @@ function ns.UpdateBlizzardVisibility()
             if frame.EnableMouse then frame:EnableMouse(false) end
             frame:Hide()
         else
-            frame.shouldBeHiddenRoithi = false
+            suppressedBlizzSpellbars[frame] = false
             frame:SetAlpha(1)
             if frame.EnableMouse then frame:EnableMouse(true) end
             if unit and frame.RegisterUnitEvent and not (frame.IsEventRegistered and frame:IsEventRegistered("UNIT_SPELLCAST_START")) then

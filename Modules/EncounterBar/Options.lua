@@ -237,8 +237,6 @@ end
 -- Single Source of Truth - Moved from Config/LEMConfig/
 -- ============================================================================
 
-local LibRoithi = LibStub("LibRoithi-1.0", true)
-
 local function GetEncounterDB()
     return RoithiUI.db.profile.EncounterResource
 end
@@ -255,10 +253,9 @@ local function ApplyBarToDB()
     if LSM then
         bar:SetStatusBarTexture(LSM:Fetch("statusbar", db.texture or "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
     end
-    if ns.Utils and ns.Utils.ApplyTypography then
-        ns.Utils.ApplyTypography(bar.Text, "Friz Quadrata TT", db.fontSize or 12, "OUTLINE", false, "Friz Quadrata TT")
-    elseif LibRoithi and LibRoithi.mixins then
-        LibRoithi.mixins:SetFont(bar.Text, "Friz Quadrata TT", db.fontSize or 12, "OUTLINE")
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(bar.Text, "Friz Quadrata TT", db.fontSize or 12, "OUTLINE", false, "Friz Quadrata TT")
     end
     bar:ClearAllPoints()
     local defEB = ns.Defaults.profile.EncounterResource
@@ -270,7 +267,7 @@ function ns.InitEncounterBarLEM()
     local bar = GetEncounterBar()
     if not bar then return end
 
-    bar.editModeName = "Encounter Resource Bar"
+    bar.editModeName = L["Encounter Resource Bar"]
     bar:SetMovable(true)
     bar:SetClampedToScreen(true)
     local defEB = ns.Defaults.profile.EncounterResource
@@ -289,7 +286,7 @@ function ns.InitEncounterBarLEM()
     local function GetLEMEncounterSettings()
         return {
             {
-                name = "Enabled",
+                name = L["Enabled"],
                 kind = LEM.SettingType.Checkbox,
                 default = true,
                 get = function() return GetEncounterDB().enabled end,
@@ -302,7 +299,7 @@ function ns.InitEncounterBarLEM()
             },
             { kind = LEM.SettingType.Divider },
             {
-                name = "Width",
+                name = L["Width"],
                 kind = LEM.SettingType.Slider,
                 default = 250,
                 minValue = 50,
@@ -315,7 +312,7 @@ function ns.InitEncounterBarLEM()
                 formatter = function(v) return string.format("%.0f", v) end,
             },
             {
-                name = "Height",
+                name = L["Height"],
                 kind = LEM.SettingType.Slider,
                 default = 20,
                 minValue = 4,
@@ -328,7 +325,7 @@ function ns.InitEncounterBarLEM()
                 formatter = function(v) return string.format("%.0f", v) end,
             },
             {
-                name = "Font Size",
+                name = L["Font Size"],
                 kind = LEM.SettingType.Slider,
                 default = 12,
                 minValue = 6,
@@ -341,7 +338,7 @@ function ns.InitEncounterBarLEM()
                 formatter = function(v) return string.format("%.0f", v) end,
             },
             {
-                name = "X Position",
+                name = L["X Position"],
                 kind = LEM.SettingType.Slider,
                 default = 0,
                 minValue = -2500,
@@ -354,7 +351,7 @@ function ns.InitEncounterBarLEM()
                 formatter = function(v) return string.format("%.0f", v) end,
             },
             {
-                name = "Y Position",
+                name = L["Y Position"],
                 kind = LEM.SettingType.Slider,
                 default = -100,
                 minValue = -1500,
@@ -374,7 +371,7 @@ function ns.InitEncounterBarLEM()
     bar.extraButtons = nil
     LEM:AddFrameSettingsButtons(bar, {
         {
-            text = "Open Full Settings",
+            text = L["Open Full Settings"],
             click = function()
                 if RoithiUI and RoithiUI.OpenSettings then
                     RoithiUI:OpenSettings("encounterbar")

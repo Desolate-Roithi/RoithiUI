@@ -14,7 +14,7 @@ local function SafeIsGreaterThan(val, threshold)
     if val == nil then return false end
     if _G.issecretvalue and _G.issecretvalue(val) then return false end
     if _G.canaccessvalue and not _G.canaccessvalue(val) then return false end
-    if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(val) then return false end
+
     local ok, res = pcall(function() return val > threshold end)
     return ok and res == true
 end
@@ -27,7 +27,7 @@ local function SafeEquals(val, expected)
     if val == nil then return false end
     if _G.issecretvalue and _G.issecretvalue(val) then return false end
     if _G.canaccessvalue and not _G.canaccessvalue(val) then return false end
-    if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(val) then return false end
+
     local ok, res = pcall(function() return val == expected end)
     return ok and res == true
 end
@@ -36,13 +36,13 @@ local function SafeDurationIsZero(durObj)
     if not durObj then return true end
     if _G.issecretvalue and _G.issecretvalue(durObj) then return false end
     if _G.canaccessvalue and not _G.canaccessvalue(durObj) then return false end
-    if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(durObj) then return false end
+
     if durObj.IsZero then
         local ok, isZero = pcall(durObj.IsZero, durObj)
         if ok and isZero ~= nil then
             if _G.issecretvalue and _G.issecretvalue(isZero) then return false end
             if _G.canaccessvalue and not _G.canaccessvalue(isZero) then return false end
-            if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(isZero) then return false end
+
             local cmpOk, res = pcall(function() return isZero == true end)
             if cmpOk and res ~= nil then
                 return res == true
@@ -55,7 +55,7 @@ local function SafeDurationIsZero(durObj)
         if ok and rem ~= nil then
             if _G.issecretvalue and _G.issecretvalue(rem) then return false end
             if _G.canaccessvalue and not _G.canaccessvalue(rem) then return false end
-            if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(rem) then return false end
+
             return not SafeIsGreaterThanZero(rem)
         end
     end
@@ -66,13 +66,13 @@ local function SafeDurationIsActive(durObj)
     if not durObj then return false end
     if _G.issecretvalue and _G.issecretvalue(durObj) then return false end
     if _G.canaccessvalue and not _G.canaccessvalue(durObj) then return false end
-    if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(durObj) then return false end
+
     if durObj.IsZero then
         local ok, isZero = pcall(durObj.IsZero, durObj)
         if ok and isZero ~= nil then
             if _G.issecretvalue and _G.issecretvalue(isZero) then return false end
             if _G.canaccessvalue and not _G.canaccessvalue(isZero) then return false end
-            if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(isZero) then return false end
+
             local cmpOk, res = pcall(function() return isZero == false end)
             if cmpOk and res == true then
                 return true
@@ -87,7 +87,7 @@ local function SafeDurationIsActive(durObj)
         if ok and rem ~= nil then
             if _G.issecretvalue and _G.issecretvalue(rem) then return false end
             if _G.canaccessvalue and not _G.canaccessvalue(rem) then return false end
-            if _G.C_Secrets and _G.C_Secrets.IsSecret and _G.C_Secrets.IsSecret(rem) then return false end
+
             return SafeIsGreaterThan(rem, 0.1)
         end
     end

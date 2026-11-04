@@ -518,10 +518,9 @@ function EB:OnInitialize()
         or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline)
         or "OUTLINE"
     local text = encounterBar:CreateFontString(nil, "OVERLAY")
-    if ns.Utils and ns.Utils.ApplyTypography then
-        ns.Utils.ApplyTypography(text, fontName, db.fontSize or 12, fontOutline, false, "Roithi Thick")
-    elseif LibRoithi and LibRoithi.mixins and LibRoithi.mixins.SetFont then
-        LibRoithi.mixins:SetFont(text, fontName, db.fontSize or 12, fontOutline)
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.ApplyTypography then
+        utils.ApplyTypography(text, fontName, db.fontSize or 12, fontOutline, false, "Roithi Thick")
     end
     text:SetPoint("CENTER", encounterBar, "CENTER", 0, 0)
     encounterBar.Text = text
@@ -591,10 +590,9 @@ function EB:RefreshProfile()
             local fontOutline = (self.db and self.db.fontOutline)
                 or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline)
                 or "OUTLINE"
-            if ns.Utils and ns.Utils.ApplyTypography then
-                ns.Utils.ApplyTypography(bar.Text, fontName, self.db.fontSize or 12, fontOutline, false, "Roithi Thick")
-            elseif LibRoithi and LibRoithi.mixins then
-                LibRoithi.mixins:SetFont(bar.Text, fontName, self.db.fontSize or 12, fontOutline)
+            local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+            if utils and utils.ApplyTypography then
+                utils.ApplyTypography(bar.Text, fontName, self.db.fontSize or 12, fontOutline, false, "Roithi Thick")
             end
         end
         local LEM = LibStub and LibStub("LibEditMode-Roithi", true)

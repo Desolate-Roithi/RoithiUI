@@ -111,22 +111,34 @@ function Totems:OnInitialize()
     self.availableSpells = {}
 end
 
+local suppressedBars = setmetatable({}, { __mode = "k" })
+
 function Totems:HideBlizzardTotems()
+    local inLockdown = _G.InCombatLockdown and _G.InCombatLockdown()
     local function SuppressBar(f)
         if not f then return end
         if f.UnregisterAllEvents then f:UnregisterAllEvents() end
-        if f.Hide then f:Hide() end
         if f.SetAlpha then f:SetAlpha(0) end
-        if f.EnableMouse then f:EnableMouse(false) end
-        if f.ClearAllPoints then f:ClearAllPoints() end
-        if f.SetPoint then f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", -9999, -9999) end
-        if not f.roithiSuppressed and hooksecurefunc then
+        if inLockdown then
+            self.pendingSuppress = true
+        else
+            if f.Hide then f:Hide() end
+            if f.EnableMouse then f:EnableMouse(false) end
+            if f.ClearAllPoints then f:ClearAllPoints() end
+            if f.SetPoint then f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", -9999, -9999) end
+        end
+        if not suppressedBars[f] and hooksecurefunc then
             hooksecurefunc(f, "Show", function(s)
                 if self:IsEnabled() and self:ShouldRun() then
-                    s:Hide()
+                    if s.SetAlpha then s:SetAlpha(0) end
+                    if _G.InCombatLockdown and _G.InCombatLockdown() then
+                        self.pendingSuppress = true
+                    else
+                        s:Hide()
+                    end
                 end
             end)
-            f.roithiSuppressed = true
+            suppressedBars[f] = true
         end
     end
 
@@ -138,7 +150,12 @@ function Totems:HideBlizzardTotems()
     if _G.MultiCastActionBarFrame_Update and hooksecurefunc and not self.multiCastHooked then
         hooksecurefunc("MultiCastActionBarFrame_Update", function()
             if self:IsEnabled() and self:ShouldRun() and _G.MultiCastActionBarFrame then
-                _G.MultiCastActionBarFrame:Hide()
+                if _G.MultiCastActionBarFrame.SetAlpha then _G.MultiCastActionBarFrame:SetAlpha(0) end
+                if _G.InCombatLockdown and _G.InCombatLockdown() then
+                    self.pendingSuppress = true
+                else
+                    _G.MultiCastActionBarFrame:Hide()
+                end
             end
         end)
         self.multiCastHooked = true
@@ -146,7 +163,12 @@ function Totems:HideBlizzardTotems()
     if _G.TotemFrame_Update and hooksecurefunc and not self.totemFrameHooked then
         hooksecurefunc("TotemFrame_Update", function()
             if self:IsEnabled() and self:ShouldRun() and _G.TotemFrame then
-                _G.TotemFrame:Hide()
+                if _G.TotemFrame.SetAlpha then _G.TotemFrame:SetAlpha(0) end
+                if _G.InCombatLockdown and _G.InCombatLockdown() then
+                    self.pendingSuppress = true
+                else
+                    _G.TotemFrame:Hide()
+                end
             end
         end)
         self.totemFrameHooked = true
@@ -175,6 +197,15 @@ end
 function Totems:OnCombatEnter()
     if self.flyout and self.flyout:IsShown() then
         self.flyout:Hide()
+    end
+end
+
+function Totems:OnCombatLeave()
+    if self.pendingSuppress then
+        self.pendingSuppress = false
+        if self:IsEnabled() and self:ShouldRun() then
+            self:HideBlizzardTotems()
+        end
     end
 end
 
@@ -216,6 +247,7 @@ function Totems:OnEnable()
     self:RegisterEvent("WEAPON_SLOT_CHANGED", "OnWeaponEnchantChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatEnter")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatLeave")
     self:RegisterEvent("UPDATE_BINDINGS", "OnUpdateBindings")
     self:RegisterEvent("ADDON_LOADED", "OnAddonLoaded")
 
@@ -430,13 +462,14 @@ function Totems:CreateTotemBar()
         cd.noOCC = nil
         btn.cooldown = cd
 
-        local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
         local fontName = (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Roithi Thick"
-        local fontPath = (LSM and LSM:Fetch("font", fontName)) or (LSM and LSM:Fetch("font", "Roithi Thick")) or STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
+        local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
 
         local fsCooldown = btn:CreateFontString(nil, "OVERLAY", nil, 7)
         fsCooldown:SetPoint("CENTER", btn, "CENTER", 0, 0)
-        fsCooldown:SetFont(fontPath, (self.db.fontSize or 11) + 2, "OUTLINE")
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(fsCooldown, fontName, (self.db.fontSize or 11) + 2, "OUTLINE", false, "Roithi Thick")
+        end
         fsCooldown:SetTextColor(1, 0.82, 0, 1)
         fsCooldown:SetJustifyH("CENTER")
         fsCooldown:Hide()
@@ -444,20 +477,26 @@ function Totems:CreateTotemBar()
 
         local fsTimer = btn:CreateFontString(nil, "OVERLAY")
         fsTimer:SetPoint("TOP", btn, "BOTTOM", 0, -2)
-        fsTimer:SetFont(fontPath, self.db.fontSize or 11, "OUTLINE")
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(fsTimer, fontName, self.db.fontSize or 11, "OUTLINE", false, "Roithi Thick")
+        end
         fsTimer:SetTextColor(1, 1, 1, 1)
         fsTimer:SetJustifyH("CENTER")
         btn.timerText = fsTimer
 
         local fsHotkey = btn:CreateFontString(nil, "OVERLAY")
         fsHotkey:SetPoint("TOPRIGHT", btn, "TOPRIGHT", -2, -2)
-        fsHotkey:SetFont(fontPath, 9, "OUTLINE")
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(fsHotkey, fontName, 9, "OUTLINE", false, "Roithi Thick")
+        end
         fsHotkey:SetJustifyH("RIGHT")
         btn.hotkeyText = fsHotkey
 
         local fsCount = btn:CreateFontString(nil, "OVERLAY")
         fsCount:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -2, 2)
-        fsCount:SetFont(fontPath, 10, "OUTLINE")
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(fsCount, fontName, 10, "OUTLINE", false, "Roithi Thick")
+        end
         fsCount:SetJustifyH("RIGHT")
         btn.countText = fsCount
 
@@ -1123,10 +1162,11 @@ function Totems:UpdateBarLayout()
             if isVisible then
                 btn:Show()
                 if btn.timerText then
-                    local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
                     local fontName = (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Roithi Thick"
-                    local fontPath = (LSM and LSM:Fetch("font", fontName)) or (LSM and LSM:Fetch("font", "Roithi Thick")) or STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
-                    btn.timerText:SetFont(fontPath, self.db.fontSize or 11, "OUTLINE")
+                    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+                    if utils and utils.ApplyTypography then
+                        utils.ApplyTypography(btn.timerText, fontName, self.db.fontSize or 11, "OUTLINE", false, "Roithi Thick")
+                    end
                 end
                 if btn.extender then
                     btn.extender:ClearAllPoints()
