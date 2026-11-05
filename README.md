@@ -2,11 +2,33 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1.5)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v2.0.5-Beta  
-**Last Updated:** 2026-11-04  
+**Latest Version:** v2.0.6-Beta  
+**Last Updated:** 2026-11-05  
 **Compatibility:** WoW 12.1.5 (Midnight) & WoW Forever (16001)
 
-## 🆕 Recent Updates (v2.0.5-Beta)
+## 🆕 Recent Updates (v2.0.6-Beta)
+
+### 1. Edit Mode Taint Elimination & Midnight Secret Value Safety
+* **EventRegistry Lifecycle Migration**: Replaced `EditModeManagerFrame:HookScript("OnShow" / "OnHide")` closures in `LibEditMode`, `BagBar`, and `Chat` with native `EventRegistry:RegisterCallback("EditMode.Enter" / "EditMode.Exit")`, eliminating AddOn taint on Edit Mode dispatch.
+* **CompactUnitFrame Secret Number Protection**: Resolved `CompactUnitFrame.lua:698: attempt to compare local 'oldR' (a secret number value)` on `ExitEditMode` and `ClearTarget()` forbidden action on `EnterEditMode`.
+* **Synchronous Layout Guarding**: Guarded `ObjectiveTrackerFrame` and `BuffFrame` anchor reapplications while Edit Mode layout resets (`RevertAllChanges`) are executing.
+* **Blizzard Action Bar Visibility Safety**: Suppressed native Blizzard bar frames via `SetAlpha(0)` and `EnableMouse(false)` without calling `Hide()` on standard bars (`bar1..8`, `pet`, `stance`).
+
+### 2. Minimap Landing Page Tooltip Crash Prevention
+* **Nil Title Guarding**: Vaccinated `ExpansionLandingPageMinimapButton` against `Minimap.lua:1121` nil `self.title` tooltip crashes in environments without an active expansion campaign (e.g., WoW Forever).
+* **Mouse Motion State Protection**: Prevented uninitialized buttons from becoming visible or interactive, enforcing `SetMouseMotionEnabled(false)` when mouse input is toggled.
+
+### 3. Action Bar Cooldown Timers & Modern Overlay Scaling
+* **Native Cooldown Number Display**: Configured action button cooldowns with `SetHideCountdownNumbers(false)`, square white swipe textures, and hooked `ActionButton_UpdateCooldownNumberHidden` to prevent CVar defaults from hiding timers.
+* **Unified Cooldown Typography**: Styled cooldown timer countdown numbers with `ns.Utils.ApplyTypography` centered on action buttons.
+* **Crisp Square Auto-Attack & Highlight Overlays**: Replaced rounded `UI-HUD-ActionBar-IconFrame-Flash` and mouseover atlases with crisp 1px-inset square color fills matching active buttons.
+* **Proportional SpellFX Scaling**: Scaled centered spell activation animations (`SpellCastAnimFrame`, `TargetReticleAnimFrame`, `InterruptDisplay`) and `AutoCastOverlay` proportionally to button dimensions (`btnSize / 45`).
+
+### 4. Objectives Tracker Combat Stability & Forever Quest Badges
+* **Combat Anchor Stabilization**: Removed premature combat lockdown early-return in `ObjectivesMod:ApplyPosition()`, keeping the tracker flush `-5px` below `RoithiMinimapDataTextBar` whenever Blizzard updates tracker layout in combat.
+* **Dedicated Infinity Badge Texture**: Added `Media/Textures/Infinity.tga` (64x64 anti-aliased white-alpha) to render the Forever Quest infinity badge cleanly without missing-glyph font box (`□`) artifacts.
+
+## 📦 Previous Updates (v2.0.5-Beta)
 
 ### 1. Bags Sub-Filters & Category Grid Balancing
 * **Symmetrical 2x5 Category Layout**: Rebalanced bag category buttons into two equal rows of 5 buttons (~105px width), eliminating text truncation and ellipsis in both English and German.

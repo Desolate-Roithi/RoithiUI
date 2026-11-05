@@ -495,21 +495,21 @@ function ChatMod:OnEnable()
     self:ApplyScreenClamping()
     self:RegisterWithEditMode()
 
-    -- Hook EditModeManagerFrame to ensure chat clamp insets never restrict edge movement
-    if _G.EditModeManagerFrame and not self.editModeHooked and hooksecurefunc then
+    -- Listen to EditMode Enter/Exit via EventRegistry (avoids tainting EditModeManagerFrame OnShow/OnHide script slots)
+    if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.editModeHooked then
         self.editModeHooked = true
-        _G.EditModeManagerFrame:HookScript("OnShow", function()
+        _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
             self:ApplyScreenClamping()
             if self.UpdateEditModeSelection then
                 self:UpdateEditModeSelection()
             end
-        end)
-        _G.EditModeManagerFrame:HookScript("OnHide", function()
+        end, self)
+        _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
             self:ApplyScreenClamping()
             self:SyncChatPositionFromFrame()
             self:ApplyChatPosition()
             self:UpdateBackgroundPosition()
-        end)
+        end, self)
     end
 
     -- Voice Chat events to refresh button dock

@@ -23,7 +23,9 @@ objState.titleFSCache = setmetatable({}, { __mode = "k" })
 objState.barBackdrops = setmetatable({}, { __mode = "k" })
 objState.blockBaseTitles = setmetatable({}, { __mode = "k" })
 objState.blockQuestIDs = setmetatable({}, { __mode = "k" })
+objState.selectionHooked = setmetatable({}, { __mode = "k" })
 local barBackdrops = objState.barBackdrops
+local selectionHooked = objState.selectionHooked
 
 local function ForEachTrackerBlock(tracker, callback)
     if not tracker or not callback then return end
@@ -178,9 +180,8 @@ end
 
 function ObjectivesMod:OnScenarioUpdate()
     if not self:IsEnabled() then return end
-    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
 
-    if self.AlignScenarioElements then
+    if self.AlignScenarioElements and not (_G.InCombatLockdown and _G.InCombatLockdown()) then
         self:AlignScenarioElements()
     end
 
@@ -206,6 +207,10 @@ function ObjectivesMod:OnRegenEnabled()
         if otf and otf.Update then
             otf:Update()
         end
+    end
+    if self.db and self.db.enabled ~= false then
+        self:ApplyPosition()
+        self:ApplyScaleAndHeight()
     end
     self:CheckMythicPlusVisibility()
     self:CheckAutoCollapse()
@@ -466,12 +471,16 @@ end
 function ObjectivesMod:ApplyPosition()
     local otf = _G.ObjectiveTrackerFrame
     if not otf then return end
-    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+    if otf.IsProtected and otf:IsProtected() and _G.InCombatLockdown and _G.InCombatLockdown() then return end
 
     self:HookBelowMinimapWidget()
 
     if not self.positionHooked and hooksecurefunc then
         hooksecurefunc(otf, "SetPoint", function(_, _, relativeTo)
+            local em = _G.EditModeManagerFrame
+            if (em and em.layoutApplyInProgress) or (self.isEditModeActive and em and em.editModeActive == false) then
+                return
+            end
             if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
                 local expectedTarget = self:GetMinimapAnchorTarget()
                 if relativeTo ~= expectedTarget then
@@ -485,6 +494,7 @@ function ObjectivesMod:ApplyPosition()
 
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.editModeEventsRegistered then
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
+            self.isEditModeActive = true
             if self.db and self.db.enabled ~= false then
                 if self.db.attachedToMinimap ~= false then
                     self:ApplyPosition()
@@ -493,11 +503,19 @@ function ObjectivesMod:ApplyPosition()
             end
         end, self)
         _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
-            if self.db and self.db.enabled ~= false then
-                if self.db.attachedToMinimap ~= false then
-                    self:ApplyPosition()
+            self.isEditModeActive = false
+            local function RefreshAfterExit()
+                if self.db and self.db.enabled ~= false then
+                    if self.db.attachedToMinimap ~= false then
+                        self:ApplyPosition()
+                    end
+                    self:ApplyScaleAndHeight()
                 end
-                self:ApplyScaleAndHeight()
+            end
+            if _G.C_Timer and _G.C_Timer.After then
+                _G.C_Timer.After(0, RefreshAfterExit)
+            else
+                RefreshAfterExit()
             end
         end, self)
         self.editModeEventsRegistered = true
@@ -532,10 +550,16 @@ function ObjectivesMod:ApplyPosition()
                     otf.Header:SetWidth(mmWidth)
                 end
                 if otf.HeaderMenu and otf.HeaderMenu.SetWidth then otf.HeaderMenu:SetWidth(mmWidth) end
+                if self.anchor and self.anchor.SetWidth then self.anchor:SetWidth(mmWidth) end
+            end
+            if self.anchor and self.anchor.ClearAllPoints and self.anchor.SetPoint then
+                self.anchor:ClearAllPoints()
+                self.anchor:SetPoint("TOPRIGHT", anchorTarget, "BOTTOMRIGHT", xOffset, yOffset - extraY)
             end
         end
     else
         if otf.SetClampedToScreen then otf:SetClampedToScreen(true) end
+        if self.anchor and self.anchor.SetClampedToScreen then self.anchor:SetClampedToScreen(true) end
         local parent = otf:GetParent() or _G.UIParent
         if parent and otf.ClearAllPoints and otf.SetPoint then
             self.settingPosition = true
@@ -545,6 +569,10 @@ function ObjectivesMod:ApplyPosition()
             local y = self.db.detachedY or self.db.y or -200
             otf:ClearAllPoints()
             otf:SetPoint(p, parent, rp, x, y)
+            if self.anchor and self.anchor.ClearAllPoints and self.anchor.SetPoint then
+                self.anchor:ClearAllPoints()
+                self.anchor:SetPoint(p, parent, rp, x, y)
+            end
             self.settingPosition = nil
 
             local customWidth = self.db.detachedWidth or 235
@@ -554,6 +582,7 @@ function ObjectivesMod:ApplyPosition()
                     otf.Header:SetWidth(customWidth)
                 end
                 if otf.HeaderMenu and otf.HeaderMenu.SetWidth then otf.HeaderMenu:SetWidth(customWidth) end
+                if self.anchor and self.anchor.SetWidth then self.anchor:SetWidth(customWidth) end
             end
         end
     end
@@ -565,6 +594,10 @@ function ObjectivesMod:ApplyScaleAndHeight()
 
     if otf.UpdateHeight and not self.updateHeightHooked and hooksecurefunc then
         hooksecurefunc(otf, "UpdateHeight", function()
+            local em = _G.EditModeManagerFrame
+            if (em and em.layoutApplyInProgress) or (self.isEditModeActive and em and em.editModeActive == false) then
+                return
+            end
             if not self.settingHeight and self.db and self.db.enabled ~= false then
                 self.settingHeight = true
                 self:ApplyScaleAndHeight()
@@ -577,6 +610,9 @@ function ObjectivesMod:ApplyScaleAndHeight()
     local scale = self.db.scale or 1.0
     if otf.SetScale then
         otf:SetScale(scale)
+    end
+    if self.anchor and self.anchor.SetScale then
+        self.anchor:SetScale(scale)
     end
 
     local maxH = self.db.maxHeight or 800
@@ -596,15 +632,24 @@ function ObjectivesMod:ApplyScaleAndHeight()
         if otf.SetClampedToScreen then
             otf:SetClampedToScreen(false)
         end
+        if self.anchor and self.anchor.SetClampedToScreen then
+            self.anchor:SetClampedToScreen(false)
+        end
     else
         if otf.SetClampedToScreen then
             otf:SetClampedToScreen(true)
+        end
+        if self.anchor and self.anchor.SetClampedToScreen then
+            self.anchor:SetClampedToScreen(true)
         end
     end
 
     self.lastMaxHeight = maxH
     if otf.SetHeight then
         otf:SetHeight(maxH)
+    end
+    if self.anchor and self.anchor.SetHeight then
+        self.anchor:SetHeight(maxH)
     end
 end
 
@@ -627,13 +672,39 @@ function ObjectivesMod:OnPlayerEnteringWorld()
     end)
 end
 
+function ObjectivesMod:EnsureAnchor()
+    if not self.anchor then
+        local anchor = CreateFrame("Frame", "RoithiObjectiveTrackerAnchor", _G.UIParent)
+        if anchor.SetSize then anchor:SetSize(235, 400) end
+        if anchor.SetMovable then anchor:SetMovable(true) end
+        if anchor.EnableMouse then anchor:EnableMouse(false) end
+        anchor.editModeName = L["Objectives"] or "Objectives"
+        self.anchor = anchor
+    end
+
+    local otf = _G.ObjectiveTrackerFrame
+    if otf and otf.Selection then
+        if not selectionHooked[otf.Selection] and hooksecurefunc then
+            selectionHooked[otf.Selection] = true
+            hooksecurefunc(otf.Selection, "Show", function(sel)
+                sel:Hide()
+            end)
+        end
+        if otf.Selection.Hide then otf.Selection:Hide() end
+        if otf.Selection.EnableMouse then otf.Selection:EnableMouse(false) end
+    end
+
+    return self.anchor
+end
+
 function ObjectivesMod:RegisterWithEditMode()
     if not LEM or not self.db then return end
     local otf = _G.ObjectiveTrackerFrame
     if not otf then return end
 
-    if otf.SetMovable then otf:SetMovable(true) end
+    local anchor = self:EnsureAnchor()
     if otf.SetClampedToScreen then otf:SetClampedToScreen(self.db.attachedToMinimap == false) end
+    if anchor.SetClampedToScreen then anchor:SetClampedToScreen(self.db.attachedToMinimap == false) end
 
     local defaults = {
         point = "TOPRIGHT",
@@ -651,6 +722,7 @@ function ObjectivesMod:RegisterWithEditMode()
             set = function(_, val)
                 self.db.attachedToMinimap = val
                 if otf.SetClampedToScreen then otf:SetClampedToScreen(not val) end
+                if anchor.SetClampedToScreen then anchor:SetClampedToScreen(not val) end
                 self:ApplyPosition()
                 self:ApplyScaleAndHeight()
             end,
@@ -674,19 +746,18 @@ function ObjectivesMod:RegisterWithEditMode()
     }
 
     pcall(function()
-        LEM:AddFrame(otf, function()
+        LEM:AddFrame(anchor, function(f, _, newPoint, newX, newY)
             if self.db.attachedToMinimap == false then
-                local point, _, relPoint, x, y = otf:GetPoint(1)
-                if point then
-                    self.db.point = point
-                    self.db.relativePoint = relPoint
-                    self.db.detachedX = x
-                    self.db.detachedY = y
-                end
+                local point, _, relPoint, x, y = (f or anchor):GetPoint(1)
+                self.db.point = point or newPoint or "TOPRIGHT"
+                self.db.relativePoint = relPoint or newPoint or "TOPRIGHT"
+                self.db.detachedX = x or newX or -20
+                self.db.detachedY = y or newY or -200
+                self:ApplyPosition()
             end
-        end, defaults)
-        LEM:AddFrameSettings(otf, settings)
-        LEM:AddFrameSettingsButtons(otf, buttons)
+        end, defaults, L["Objectives"] or "Objectives")
+        LEM:AddFrameSettings(anchor, settings)
+        LEM:AddFrameSettingsButtons(anchor, buttons)
     end)
 end
 

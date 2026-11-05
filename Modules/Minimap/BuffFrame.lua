@@ -92,12 +92,35 @@ function MinimapMod:HookBuffFrameStyling()
     if isStylingBuffs then return end
     isStylingBuffs = true
 
+    if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.buffEditModeRegistered then
+        _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
+            self.isBuffEditModeActive = true
+        end, self)
+        _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
+            self.isBuffEditModeActive = false
+            if _G.C_Timer and _G.C_Timer.After then
+                _G.C_Timer.After(0, function()
+                    if self.UpdateBuffFrameDisplacement then
+                        self:UpdateBuffFrameDisplacement(true)
+                    end
+                end)
+            elseif self.UpdateBuffFrameDisplacement then
+                self:UpdateBuffFrameDisplacement(true)
+            end
+        end, self)
+        self.buffEditModeRegistered = true
+    end
+
     if _G.BuffFrame and _G.BuffFrame.UpdateAuraButtons then
         hooksecurefunc(_G.BuffFrame, "UpdateAuraButtons", function(frame)
             if frame.auraFrames then
                 for _, auraFrame in ipairs(frame.auraFrames) do
                     StyleAuraButton(auraFrame)
                 end
+            end
+            local em = _G.EditModeManagerFrame
+            if self.isBuffEditModeActive or (em and (em.editModeActive or em.layoutApplyInProgress or (em.IsShown and em:IsShown()))) then
+                return
             end
             if MinimapMod.UpdateBuffFrameDisplacement then
                 MinimapMod:UpdateBuffFrameDisplacement()
@@ -107,6 +130,10 @@ function MinimapMod:HookBuffFrameStyling()
 
     if _G.BuffFrame and _G.BuffFrame.UpdateGridLayout then
         hooksecurefunc(_G.BuffFrame, "UpdateGridLayout", function()
+            local em = _G.EditModeManagerFrame
+            if self.isBuffEditModeActive or (em and (em.editModeActive or em.layoutApplyInProgress or (em.IsShown and em:IsShown()))) then
+                return
+            end
             if MinimapMod.UpdateBuffFrameDisplacement then
                 MinimapMod:UpdateBuffFrameDisplacement()
             end

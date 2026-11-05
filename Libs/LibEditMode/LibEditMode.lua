@@ -328,24 +328,26 @@ do -- deal with hooks and events
 		end
 	end)
 
-	-- hook EditMode shown state, since QuickKeybindMode will hide/show EditMode
-	EditModeManagerFrame:HookScript("OnShow", function(...)
+	-- listen to EditMode enter/exit via EventRegistry (avoids tainting EditModeManagerFrame OnShow/OnHide script slots)
+	EventRegistry:RegisterCallback("EditMode.Enter", function(...)
 		if lib.hookVersion == MINOR then
 			onEditModeEnter(...)
 		end
 	end)
-	EditModeManagerFrame:HookScript("OnHide", function(...)
+	EventRegistry:RegisterCallback("EditMode.Exit", function(...)
 		if lib.hookVersion == MINOR then
 			onEditModeExit(...)
 		end
 	end)
 
 	-- we don't want any custom frames dangling around
-	EditModeSystemSettingsDialog:HookScript("OnHide", function(...)
-		if lib.hookVersion == MINOR then
-			resetDialogs(...)
-		end
-	end)
+	if EditModeSystemSettingsDialog.OnHide then
+		hooksecurefunc(EditModeSystemSettingsDialog, "OnHide", function(...)
+			if lib.hookVersion == MINOR then
+				resetDialogs(...)
+			end
+		end)
+	end
 
 	-- unselect our selections whenever a system is selected and try to add an extension
 	hooksecurefunc(EditModeManagerFrame, "SelectSystem", function(_, systemFrame)

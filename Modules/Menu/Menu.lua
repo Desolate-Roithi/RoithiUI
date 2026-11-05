@@ -111,11 +111,6 @@ MenuMod.RefreshSettings = MenuMod.RefreshProfile
 function MenuMod:OnEnable()
     if self.db.enabled == false then return end
 
-    -- Preload Blizzard_EncounterJournal so ToggleEncounterJournal is defined untainted
-    if _G.C_AddOns and _G.C_AddOns.LoadAddOn then
-        pcall(_G.C_AddOns.LoadAddOn, "Blizzard_EncounterJournal")
-    end
-
     self:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED", "QueueLayoutMicroMenu")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "QueueLayoutMicroMenu")
     self:RegisterEvent("UNIT_PORTRAIT_UPDATE", "UpdateCharacterPortrait")
@@ -212,12 +207,17 @@ function MenuMod:SetupMicroMenu()
         self.editModeRegistered = true
     end
 
-    -- Explicitly hide unsupported micro buttons in Forever / Classic
+    -- Suppress unsupported micro buttons in Forever / Classic without calling :Hide() (which triggers OnHide -> MicroMenuContainer:Layout taint)
     if not isRetail then
-        if _G.HousingMicroButton and _G.HousingMicroButton.Hide then _G.HousingMicroButton:Hide() end
-        if _G.EJMicroButton and _G.EJMicroButton.Hide then _G.EJMicroButton:Hide() end
-        if isForever and _G.AchievementMicroButton and _G.AchievementMicroButton.Hide then
-            _G.AchievementMicroButton:Hide()
+        local unsupported = { _G.HousingMicroButton, _G.EJMicroButton }
+        if isForever and _G.AchievementMicroButton then
+            table.insert(unsupported, _G.AchievementMicroButton)
+        end
+        for _, uBtn in ipairs(unsupported) do
+            if uBtn then
+                if uBtn.SetAlpha then uBtn:SetAlpha(0) end
+                if uBtn.EnableMouse then uBtn:EnableMouse(false) end
+            end
         end
     end
 

@@ -795,6 +795,17 @@ function AB:SetupBars()
             end)
             self.updateActionHooked = true
         end
+        if _G.ActionButton_UpdateCooldownNumberHidden and not self.cooldownNumberHiddenHooked then
+            hooksecurefunc("ActionButton_UpdateCooldownNumberHidden", function(btn)
+                if (not self.IsEnabled or self:IsEnabled()) and btn then
+                    local cd = btn.cooldown or _G[btn.GetName and btn:GetName() and (btn:GetName() .. "Cooldown") or ""]
+                    if cd and cd.SetHideCountdownNumbers then
+                        cd:SetHideCountdownNumbers(false)
+                    end
+                end
+            end)
+            self.cooldownNumberHiddenHooked = true
+        end
         self.overlayHooksRegistered = true
     end
 end
@@ -934,35 +945,126 @@ function AB:UpdateOverlayContainment(button)
         end
     end
 
-    local cd = button.cooldown or _G[button.GetName and button:GetName() and (button:GetName() .. "Cooldown") or ""]
-    if cd and cd.ClearAllPoints and cd.SetPoint then
-        cd:ClearAllPoints()
-        cd:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
-        cd:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+    local btnName = button.GetName and button:GetName() or ""
+    local cd = button.cooldown or (btnName ~= "" and _G[btnName .. "Cooldown"])
+    if cd then
+        if cd.ClearAllPoints and cd.SetPoint then
+            cd:ClearAllPoints()
+            cd:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+            cd:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        end
+        if cd.SetSwipeTexture then
+            cd:SetSwipeTexture("Interface\\Buttons\\WHITE8x8", 0, 0, 0, 0.64)
+        end
+        if cd.SetDrawEdge then
+            cd:SetDrawEdge(false)
+        end
+        if cd.SetDrawBling then
+            cd:SetDrawBling(false)
+        end
+        if cd.SetHideCountdownNumbers then
+            cd:SetHideCountdownNumbers(false)
+        end
+        cd.noCooldownCount = nil
     end
 
-    -- 3. Constrain overlays (SpellHighlight, Flash, NewAction, AutoCast, SpellFX)
-    local subOverlays = {
-        button.SpellHighlightTexture,
-        button.Flash,
-        button.NewActionTexture,
-        button.AutoCastOverlay,
+    for _, extraCd in ipairs({ button.chargeCooldown, button.lossOfControlCooldown }) do
+        if extraCd then
+            if extraCd.ClearAllPoints and extraCd.SetPoint then
+                extraCd:ClearAllPoints()
+                extraCd:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+                extraCd:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+            end
+            if extraCd.SetDrawEdge then extraCd:SetDrawEdge(false) end
+            if extraCd.SetDrawBling then extraCd:SetDrawBling(false) end
+        end
+    end
+
+    -- 3. Constrain overlays (Flash, SpellHighlight, NewAction, AutoCast, SpellFX)
+    local flash = button.Flash or (btnName ~= "" and _G[btnName .. "Flash"])
+    if flash then
+        if flash.ClearAllPoints and flash.SetPoint then
+            flash:ClearAllPoints()
+            flash:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+            flash:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        end
+        if flash.SetColorTexture then
+            flash:SetColorTexture(1.0, 0.15, 0.15, 0.40)
+        end
+        if flash.SetDrawLayer then
+            flash:SetDrawLayer("OVERLAY", 2)
+        end
+    end
+
+    for _, hlTex in ipairs({ button.SpellHighlightTexture, button.NewActionTexture }) do
+        if hlTex then
+            if hlTex.ClearAllPoints and hlTex.SetPoint then
+                hlTex:ClearAllPoints()
+                hlTex:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+                hlTex:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+            end
+            if hlTex.SetColorTexture then
+                hlTex:SetColorTexture(1.0, 0.82, 0.0, 0.30)
+            end
+        end
+    end
+
+    local btnW = (button.GetWidth and button:GetWidth()) or 36
+    local fxScale = (btnW and btnW > 0) and (btnW / 45) or 1
+
+    local centeredFXFrames = {
         button.SpellCastAnimFrame,
         button.TargetReticleAnimFrame,
         button.InterruptDisplay,
         button.CooldownFlash,
     }
-    for _, overlay in ipairs(subOverlays) do
-        if overlay and overlay.ClearAllPoints and overlay.SetPoint then
-            overlay:ClearAllPoints()
-            overlay:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
-            overlay:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+    for _, fxFrame in ipairs(centeredFXFrames) do
+        if fxFrame then
+            if fxFrame.ClearAllPoints and fxFrame.SetPoint then
+                fxFrame:ClearAllPoints()
+                fxFrame:SetPoint("CENTER", button, "CENTER", 0, 0)
+            end
+            if fxFrame.SetSize then
+                fxFrame:SetSize(128, 128)
+            end
+            if fxFrame.SetScale then
+                fxFrame:SetScale(fxScale)
+            end
+            if fxFrame.EnableMouse then fxFrame:EnableMouse(false) end
+            if fxFrame.SetMouseClickEnabled then fxFrame:SetMouseClickEnabled(false) end
+            if fxFrame.SetMouseMotionEnabled then fxFrame:SetMouseMotionEnabled(false) end
         end
-        if overlay then
-            if overlay.EnableMouse then overlay:EnableMouse(false) end
-            if overlay.SetMouseClickEnabled then overlay:SetMouseClickEnabled(false) end
-            if overlay.SetMouseMotionEnabled then overlay:SetMouseMotionEnabled(false) end
+    end
+
+    local autoCast = button.AutoCastOverlay or button.AutoCastShine or (btnName ~= "" and _G[btnName .. "Shine"])
+    if autoCast then
+        if autoCast.ClearAllPoints and autoCast.SetPoint then
+            autoCast:ClearAllPoints()
+            autoCast:SetPoint("CENTER", button, "CENTER", 0, 0)
         end
+        if autoCast.SetSize then
+            autoCast:SetSize(45, 45)
+        end
+        if autoCast.SetScale then
+            autoCast:SetScale(fxScale)
+        end
+        if autoCast.EnableMouse then autoCast:EnableMouse(false) end
+        if autoCast.SetMouseClickEnabled then autoCast:SetMouseClickEnabled(false) end
+        if autoCast.SetMouseMotionEnabled then autoCast:SetMouseMotionEnabled(false) end
+    end
+
+    if button.AssistedCombatRotationFrame then
+        local acr = button.AssistedCombatRotationFrame
+        if acr.ClearAllPoints and acr.SetPoint then
+            acr:ClearAllPoints()
+            acr:SetPoint("CENTER", button, "CENTER", 0, 0)
+        end
+        if acr.SetSize and btnW and btnW > 0 then
+            acr:SetSize(btnW * 1.4, btnW * 1.4)
+        end
+        if acr.EnableMouse then acr:EnableMouse(false) end
+        if acr.SetMouseClickEnabled then acr:SetMouseClickEnabled(false) end
+        if acr.SetMouseMotionEnabled then acr:SetMouseMotionEnabled(false) end
     end
 
     if button.SlotArt and button.SlotArt.SetAlpha then button.SlotArt:SetAlpha(0) end
@@ -1305,6 +1407,36 @@ function AB:StyleButton(button, explicitBarKey)
         end
     end
 
+    -- 7b. Cooldown Countdown FontString Styling
+    local cd = button.cooldown or _G[button.GetName and button:GetName() and (button:GetName() .. "Cooldown") or ""]
+    if cd then
+        local cdFS = cd.GetCountdownFontString and cd:GetCountdownFontString()
+        if not cdFS and cd.GetRegions then
+            local regions = { cd:GetRegions() }
+            for _, reg in ipairs(regions) do
+                if reg and reg.GetObjectType and reg:GetObjectType() == "FontString" then
+                    cdFS = reg
+                    break
+                end
+            end
+        end
+        if cdFS then
+            local cdFont = (barDb and barDb.font) or self.db.cooldownFont or self.db.font or "Roithi Thick"
+            local btnW = (button.GetWidth and button:GetWidth()) or (barDb and barDb.buttonSize) or 36
+            local cdFontSize = self.db.cooldownFontSize or math.max(11, math.floor(btnW * 0.38 + 0.5))
+            local cdFontOutline = (barDb and barDb.fontOutline) or self.db.cooldownFontOutline or self.db.fontOutline or "OUTLINE"
+            local cdFontShadow = (self.db.cooldownFontShadow == true) or (self.db.showFontShadow == true)
+            local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+            if utils and utils.ApplyTypography then
+                utils.ApplyTypography(cdFS, cdFont, cdFontSize, cdFontOutline, cdFontShadow, "Roithi Thick")
+            end
+            if cdFS.ClearAllPoints and cdFS.SetPoint then
+                cdFS:ClearAllPoints()
+                cdFS:SetPoint("CENTER", cd, "CENTER", 0, 0)
+            end
+        end
+    end
+
     -- 8. Hook Mouseover
     if not btnSt.mouseoverHooked and button.HookScript then
         button:HookScript("OnEnter", function()
@@ -1445,7 +1577,7 @@ function AB:LayoutBarInternal(barKey)
                 if bf.SetAlpha then bf:SetAlpha(0) end
                 if bf.EnableMouse then bf:EnableMouse(false) end
                 if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
-                    if bf.Hide and bf:IsShown() then bf:Hide() end
+                    if not bf.HideOverride and bf.Hide and bf:IsShown() then bf:Hide() end
                     if bf.Selection then
                         if not GetFrameState(bf).selectionHooked and hooksecurefunc then
                             GetFrameState(bf).selectionHooked = true
@@ -1643,6 +1775,7 @@ function AB:LayoutBarInternal(barKey)
 
             if btn.SetSize then btn:SetSize(btnSize, btnSize) end
             if btn.SetPoint then btn:SetPoint("TOPLEFT", container, "TOPLEFT", x, y) end
+            self:UpdateOverlayContainment(btn)
         else
             if btn.Hide then btn:Hide() end
             if btn.SetAlpha then btn:SetAlpha(0) end
@@ -1694,7 +1827,7 @@ function AB:RestoreBlizzardBars()
                 if bf then
                     if bf.SetAlpha then bf:SetAlpha(1) end
                     if bf.EnableMouse then bf:EnableMouse(true) end
-                    if bf.Show then bf:Show() end
+                    if not bf.ShowOverride and bf.Show then bf:Show() end
                     if bf.Selection and bf.Selection.Show then bf.Selection:Show() end
                     if bf.UpdateGridLayout then
                         pcall(bf.UpdateGridLayout, bf)

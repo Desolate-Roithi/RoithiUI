@@ -92,9 +92,19 @@ local function ProtectSelectionTooltip(selection)
     end
 end
 
+local securedGetPointFrames = setmetatable({}, { __mode = "k" })
+local securedBoundsFrames = setmetatable({}, { __mode = "k" })
+
+local function IsBlizzardSystemFrame(frameObj)
+    if not frameObj then return false end
+    if frameObj.system ~= nil then return true end
+    if frameObj == _G.ObjectiveTrackerFrame or frameObj == _G.ChatFrame1 then return true end
+    return false
+end
+
 local function ProtectGetPoint(frameObj, defaultObj)
-    if not frameObj or not frameObj.GetPoint or frameObj.roithiGetPointSecured then return end
-    frameObj.roithiGetPointSecured = true
+    if not frameObj or not frameObj.GetPoint or securedGetPointFrames[frameObj] or IsBlizzardSystemFrame(frameObj) then return end
+    securedGetPointFrames[frameObj] = true
     local origGetPoint = frameObj.GetPoint
     frameObj.GetPoint = function(s, idx)
         local p, relTo, relP, x, y = origGetPoint(s, idx or 1)
@@ -114,8 +124,8 @@ local function ProtectGetPoint(frameObj, defaultObj)
 end
 
 local function ProtectFrameBounds(frameObj)
-    if not frameObj or frameObj.roithiBoundsSecured then return end
-    frameObj.roithiBoundsSecured = true
+    if not frameObj or securedBoundsFrames[frameObj] or IsBlizzardSystemFrame(frameObj) then return end
+    securedBoundsFrames[frameObj] = true
 
     local methods = { "GetLeft", "GetTop", "GetRight", "GetBottom", "GetCenter", "GetRect" }
     for _, method in ipairs(methods) do

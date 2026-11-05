@@ -545,8 +545,10 @@ function ObjectivesMod:ApplyQuestLevelToTitle(block)
     local baseText = GetCleanQuestTitle(block, questID, curText)
 
     local fc = self.db.foreverColor or (self.defaultSettings and self.defaultSettings.foreverColor) or { r = 0.22, g = 0.74, b = 0.97 }
-    local infinityHex = string.format("ff%02x%02x%02x", math.floor((fc.r or 0.22) * 255 + 0.5), math.floor((fc.g or 0.74) * 255 + 0.5), math.floor((fc.b or 0.97) * 255 + 0.5))
-    local infinityStr = string.format("|c%s\226\136\158|r", infinityHex)
+    local infR = math.floor((fc.r or 0.22) * 255 + 0.5)
+    local infG = math.floor((fc.g or 0.74) * 255 + 0.5)
+    local infB = math.floor((fc.b or 0.97) * 255 + 0.5)
+    local infinityStr = string.format("|TInterface\\AddOns\\%s\\Media\\Textures\\Infinity:12:12:0:0:64:64:0:64:0:64:%d:%d:%d|t", addonName or "RoithiUI", infR, infG, infB)
 
     local newText
     if colorCode then

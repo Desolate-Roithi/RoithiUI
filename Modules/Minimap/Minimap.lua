@@ -159,6 +159,9 @@ function MinimapMod:UpdateBlizzardButtonsMouseState(enable)
     for _, btn in pairs(buttons) do
         if btn then
             btn:EnableMouse(enable)
+            if enable and btn == _G.ExpansionLandingPageMinimapButton and btn.SetMouseMotionEnabled and (btn.title == nil or btn.title == "") then
+                btn:SetMouseMotionEnabled(false)
+            end
         end
     end
 end
@@ -374,7 +377,11 @@ function MinimapMod:OnEnable()
             end
             local landing = _G.ExpansionLandingPageMinimapButton or _G.PlumberLandingPageMinimapButton or _G.GarrisonLandingPageMinimapButton
             if landing then
-                if landing.Show then landing:Show() end
+                if landing == _G.ExpansionLandingPageMinimapButton and landing.SetMouseMotionEnabled and (landing.title == nil or landing.title == "") then
+                    landing:SetMouseMotionEnabled(false)
+                elseif landing.Show then
+                    landing:Show()
+                end
             end
 
             -- Temporarily show all anchors so they are visible/movable in Edit Mode
@@ -1556,6 +1563,12 @@ function MinimapMod:LayoutDefaultButtons()
                     if self.UpdateFolioVisibility then self:UpdateFolioVisibility() end
                 end)
             end
+            if elp.Show then
+                hooksecurefunc(elp, "Show", EnsureTitle)
+            end
+            if elp.EnableMouse then
+                hooksecurefunc(elp, "EnableMouse", EnsureTitle)
+            end
         end
         GetBlizzMinimapState(elp).tooltipVaccinated = true
     end
@@ -1745,8 +1758,15 @@ function MinimapMod:UpdateLandingVisibility()
                 if landing.RefreshButton then
                     pcall(landing.RefreshButton, landing, true)
                 end
-                if landing.Show then
+                local canShow = true
+                if landing == _G.ExpansionLandingPageMinimapButton and landing.RefreshButton then
+                    canShow = (landing.IsShown and landing:IsShown()) or (landing.isShown == true) or (landing.title ~= nil and landing.title ~= "")
+                end
+                if canShow and landing.Show then
                     pcall(landing.Show, landing)
+                end
+                if landing == _G.ExpansionLandingPageMinimapButton and landing.SetMouseMotionEnabled and (landing.title == nil or landing.title == "") then
+                    landing:SetMouseMotionEnabled(false)
                 end
                 if self.landingAnchor then
                     if landing.SetFrameStrata and self.landingAnchor.GetFrameStrata then
@@ -1798,8 +1818,12 @@ function MinimapMod:UpdateFolioVisibility()
             if folio.RefreshButton then
                 pcall(folio.RefreshButton, folio, true)
             end
-            if folio.Show then
+            local canShowFolio = (not folio.RefreshButton) or (folio.IsShown and folio:IsShown()) or (folio.isShown == true) or (folio.title ~= nil and folio.title ~= "")
+            if canShowFolio and folio.Show then
                 pcall(folio.Show, folio)
+            end
+            if folio.SetMouseMotionEnabled and (folio.title == nil or folio.title == "") then
+                folio:SetMouseMotionEnabled(false)
             end
             if self.folioAnchor then
                 if folio.SetFrameStrata and self.folioAnchor.GetFrameStrata then

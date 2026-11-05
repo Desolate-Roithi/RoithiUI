@@ -330,10 +330,6 @@ function BagsMod:SetupBagBar()
             table.insert(LEM.anonCallbacksEnter, OnEditModeEnter)
             table.insert(LEM.anonCallbacksExit, OnEditModeExit)
         end
-        if _G.EditModeManagerFrame and _G.EditModeManagerFrame.HookScript then
-            _G.EditModeManagerFrame:HookScript("OnShow", OnEditModeEnter)
-            _G.EditModeManagerFrame:HookScript("OnHide", OnEditModeExit)
-        end
         self.editModeBagHooked = true
     end
 
