@@ -50,6 +50,7 @@ function ChatMod:GetButtonState(btn)
 end
 local isDisplacing = false
 local isApplyingChatPosition = false
+local isUpdatingButtonsDock = false
 
 local function IsUserEditingChat(chatMod)
     if isApplyingChatPosition or isDisplacing then return false end
@@ -2478,6 +2479,7 @@ function ChatMod:ApplyTimestampFormat()
 end
 
 function ChatMod:UpdateButtonsDock()
+    if isUpdatingButtonsDock then return end
     local cf1 = _G.ChatFrame1
     if not cf1 then return end
 
@@ -2838,28 +2840,17 @@ function ChatMod:UpdateButtonsDock()
         if btn.SetHighlightTexture then
             btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
         end
-
-        if not GetChatFrameState(btn).dockHooked and hooksecurefunc then
-            GetChatFrameState(btn).dockHooked = true
-            local isRepositioning = false
-            hooksecurefunc(btn, "SetPoint", function(b)
-                if isRepositioning then return end
-                if ChatMod.db and ChatMod.db.buttonDockPosition ~= "HIDDEN" and ChatMod.buttonDock and b:GetParent() ~= ChatMod.buttonDock then
-                    isRepositioning = true
-                    ChatMod:UpdateButtonsDock()
-                    isRepositioning = false
-                end
-            end)
-        end
     end
 
     local prevBtn = nil
+    isUpdatingButtonsDock = true
     for _, btn in ipairs(activeButtons) do
         StripChatButtonBorder(btn)
         btn:SetParent(dock)
         btn:SetFrameStrata("HIGH")
         btn:SetFrameLevel(310)
         btn:Show()
+        btn:SetAlpha(1)
         btn:ClearAllPoints()
         btn:SetSize(20, 20)
         if not prevBtn then
@@ -2878,16 +2869,54 @@ function ChatMod:UpdateButtonsDock()
             end
         end
         prevBtn = btn
+
+        if not GetChatFrameState(btn).dockHooked and hooksecurefunc then
+            GetChatFrameState(btn).dockHooked = true
+            hooksecurefunc(btn, "SetPoint", function(b, _, relTo)
+                if isUpdatingButtonsDock then return end
+                if ChatMod.db and ChatMod.db.buttonDockPosition ~= "HIDDEN" and ChatMod.buttonDock then
+                    local isForeignParent = (b:GetParent() ~= ChatMod.buttonDock)
+                    local isForeignAnchor = (relTo ~= ChatMod.buttonDock and (type(relTo) ~= "table" or relTo:GetParent() ~= ChatMod.buttonDock))
+                    if isForeignParent or isForeignAnchor then
+                        ChatMod:UpdateButtonsDock()
+                    end
+                end
+            end)
+        end
+    end
+    isUpdatingButtonsDock = false
+
+    local chatAlert = _G.ChatAlertFrame
+    if chatAlert and chatAlert.UpdateAnchors and not GetChatFrameState(chatAlert).updateAnchorsHooked and hooksecurefunc then
+        GetChatFrameState(chatAlert).updateAnchorsHooked = true
+        hooksecurefunc(chatAlert, "UpdateAnchors", function()
+            if isUpdatingButtonsDock then return end
+            if ChatMod.db and ChatMod.db.buttonDockPosition ~= "HIDDEN" and ChatMod.buttonDock then
+                ChatMod:UpdateButtonsDock()
+            end
+        end)
     end
 
     local qjBtn = _G.QuickJoinToastButton
-    if qjBtn and qjBtn.SetToastDirection then
-        local right = qjBtn.GetRight and qjBtn:GetRight()
-        local screenW = _G.GetScreenWidth and _G.GetScreenWidth()
-        if right and screenW and (right + 250 < screenW) then
-            qjBtn:SetToastDirection(true)
-        else
-            qjBtn:SetToastDirection(false)
+    if qjBtn then
+        if not GetChatFrameState(qjBtn).hideHooked and qjBtn.HookScript then
+            GetChatFrameState(qjBtn).hideHooked = true
+            qjBtn:HookScript("OnHide", function(b)
+                if isUpdatingButtonsDock then return end
+                if ChatMod.db and ChatMod.db.buttonDockPosition ~= "HIDDEN" and ChatMod.buttonDock and b:GetParent() == ChatMod.buttonDock then
+                    b:Show()
+                    b:SetAlpha(1)
+                end
+            end)
+        end
+        if qjBtn.SetToastDirection then
+            local right = qjBtn.GetRight and qjBtn:GetRight()
+            local screenW = _G.GetScreenWidth and _G.GetScreenWidth()
+            if right and screenW and (right + 250 < screenW) then
+                qjBtn:SetToastDirection(true)
+            else
+                qjBtn:SetToastDirection(false)
+            end
         end
     end
 
