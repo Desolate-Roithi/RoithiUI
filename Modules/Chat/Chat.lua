@@ -2874,7 +2874,8 @@ function ChatMod:UpdateButtonsDock()
             GetChatFrameState(btn).dockHooked = true
             hooksecurefunc(btn, "SetPoint", function(b, _, relTo)
                 if isUpdatingButtonsDock then return end
-                if ChatMod.db and ChatMod.db.buttonDockPosition ~= "HIDDEN" and ChatMod.buttonDock then
+                if ChatMod.IsEnabled and not ChatMod:IsEnabled() then return end
+                if ChatMod.db and ChatMod.db.enabled ~= false and ChatMod.db.buttonDockPosition ~= "HIDDEN" and ChatMod.buttonDock then
                     local isForeignParent = (b:GetParent() ~= ChatMod.buttonDock)
                     local isForeignAnchor = (relTo ~= ChatMod.buttonDock and (type(relTo) ~= "table" or relTo:GetParent() ~= ChatMod.buttonDock))
                     if isForeignParent or isForeignAnchor then
@@ -2891,7 +2892,8 @@ function ChatMod:UpdateButtonsDock()
         GetChatFrameState(chatAlert).updateAnchorsHooked = true
         hooksecurefunc(chatAlert, "UpdateAnchors", function()
             if isUpdatingButtonsDock then return end
-            if ChatMod.db and ChatMod.db.buttonDockPosition ~= "HIDDEN" and ChatMod.buttonDock then
+            if ChatMod.IsEnabled and not ChatMod:IsEnabled() then return end
+            if ChatMod.db and ChatMod.db.enabled ~= false and ChatMod.db.buttonDockPosition ~= "HIDDEN" and ChatMod.buttonDock then
                 ChatMod:UpdateButtonsDock()
             end
         end)
@@ -2903,9 +2905,12 @@ function ChatMod:UpdateButtonsDock()
             GetChatFrameState(qjBtn).hideHooked = true
             qjBtn:HookScript("OnHide", function(b)
                 if isUpdatingButtonsDock then return end
-                if ChatMod.db and ChatMod.db.buttonDockPosition ~= "HIDDEN" and ChatMod.buttonDock and b:GetParent() == ChatMod.buttonDock then
-                    b:Show()
-                    b:SetAlpha(1)
+                if ChatMod.IsEnabled and not ChatMod:IsEnabled() then return end
+                if ChatMod.db and ChatMod.db.enabled ~= false and ChatMod.db.buttonDockPosition ~= "HIDDEN" and ChatMod.buttonDock and b:GetParent() == ChatMod.buttonDock then
+                    if not b:IsShown() then
+                        b:Show()
+                        b:SetAlpha(1)
+                    end
                 end
             end)
         end

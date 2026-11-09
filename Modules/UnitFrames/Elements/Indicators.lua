@@ -218,13 +218,21 @@ function UF:CreateIndicators(frame)
             local timer = frame.PvPTimerText
             local pvpTexture = frame.PvPIndicator
             local s = (db and db.pvp) or {}
+            local pvpSize = s.size or ((frame.unit == "player") and 25 or 24)
             local pt = s.point or pvpDefPoint
             local rel = s.relativePoint or s.point or pvpDefRel
+            local userX = s.timerX or 0
+            local userY = s.timerY or 0
+            local alignY = math.floor(pvpSize * 0.24 + 0.5) + userY
             timer:ClearAllPoints()
-            if (rel and rel:find("RIGHT")) or (pt and pt:find("RIGHT")) or (frame.unit == "player") then
-                timer:SetPoint("RIGHT", pvpTexture, "LEFT", -2, 0)
+            if (rel and rel:find("RIGHT")) or (pt and pt:find("RIGHT")) or (frame.unit == "player" and not (pt and pt:find("LEFT"))) then
+                local alignX = math.floor(pvpSize * 0.36 + 0.5) - 2 + userX
+                if timer.SetJustifyH then timer:SetJustifyH("RIGHT") end
+                timer:SetPoint("RIGHT", pvpTexture, "LEFT", alignX, alignY)
             else
-                timer:SetPoint("LEFT", pvpTexture, "RIGHT", 2, 0)
+                local alignX = -math.floor(pvpSize * 0.16 + 0.5) + 2 + userX
+                if timer.SetJustifyH then timer:SetJustifyH("LEFT") end
+                timer:SetPoint("LEFT", pvpTexture, "RIGHT", alignX, alignY)
             end
         end
         ApplySettings(frame.QuestIndicator, "quest", 20, "CENTER", "TOPLEFT", 10, 10)
@@ -400,10 +408,18 @@ function UF:CreateIndicators(frame)
                     pvpTimerFS:SetText(string.format("%d:%02d", m, s))
                     pvpTimerFS:Show()
                     if frame.pvpTicker then frame.pvpTicker:Show() end
+                elseif inTestMode then
+                    pvpTimerFS:SetText("4:59")
+                    pvpTimerFS:Show()
+                    if frame.pvpTicker then frame.pvpTicker:Hide() end
                 else
                     pvpTimerFS:Hide()
                     if frame.pvpTicker then frame.pvpTicker:Hide() end
                 end
+            elseif inTestMode and unit == "player" and pvp:IsShown() then
+                pvpTimerFS:SetText("4:59")
+                pvpTimerFS:Show()
+                if frame.pvpTicker then frame.pvpTicker:Hide() end
             else
                 pvpTimerFS:Hide()
                 if frame.pvpTicker then frame.pvpTicker:Hide() end
@@ -470,6 +486,7 @@ function UF:CreateIndicators(frame)
     frame:RegisterEvent("UPDATE_MOUSEOVER_UNIT", UpdateIndicators, true)
     if frame.unit == "player" then
         frame:RegisterEvent("PLAYER_FLAGS_CHANGED", UpdateIndicators, true)
+        frame:RegisterEvent("PVP_TIMER_UPDATE", UpdateIndicators, true)
     end
 
     -- Initial

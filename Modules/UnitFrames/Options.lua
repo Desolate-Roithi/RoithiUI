@@ -717,6 +717,7 @@ function ns.BuildUnitAndCastbarOptions(options)
                                             if not GetDB().indicators then GetDB().indicators = {} end
                                             if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
                                             GetDB().indicators[k].point = v
+                                            GetDB().indicators[k].relativePoint = v
                                             ns.RefreshUnitFrame(unit)
                                         end,
                                     },
@@ -757,6 +758,48 @@ function ns.BuildUnitAndCastbarOptions(options)
                                             if not GetDB().indicators then GetDB().indicators = {} end
                                             if not GetDB().indicators[k] then GetDB().indicators[k] = {} end
                                             GetDB().indicators[k].y = v
+                                            ns.RefreshUnitFrame(unit)
+                                        end,
+                                    },
+                                    timerX = {
+                                        type = "range",
+                                        name = L["Timer X Offset"],
+                                        order = 6,
+                                        min = -50,
+                                        max = 50,
+                                        step = 1,
+                                        hidden = function()
+                                            return unit ~= "player" or RoithiUI.db.profile.tempIndicatorSelect ~= "pvp"
+                                        end,
+                                        get = function()
+                                            local db = GetDB().indicators and GetDB().indicators.pvp
+                                            return db and db.timerX or 0
+                                        end,
+                                        set = function(_, v)
+                                            if not GetDB().indicators then GetDB().indicators = {} end
+                                            if not GetDB().indicators.pvp then GetDB().indicators.pvp = {} end
+                                            GetDB().indicators.pvp.timerX = v
+                                            ns.RefreshUnitFrame(unit)
+                                        end,
+                                    },
+                                    timerY = {
+                                        type = "range",
+                                        name = L["Timer Y Offset"],
+                                        order = 7,
+                                        min = -50,
+                                        max = 50,
+                                        step = 1,
+                                        hidden = function()
+                                            return unit ~= "player" or RoithiUI.db.profile.tempIndicatorSelect ~= "pvp"
+                                        end,
+                                        get = function()
+                                            local db = GetDB().indicators and GetDB().indicators.pvp
+                                            return db and db.timerY or 0
+                                        end,
+                                        set = function(_, v)
+                                            if not GetDB().indicators then GetDB().indicators = {} end
+                                            if not GetDB().indicators.pvp then GetDB().indicators.pvp = {} end
+                                            GetDB().indicators.pvp.timerY = v
                                             ns.RefreshUnitFrame(unit)
                                         end,
                                     },
