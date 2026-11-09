@@ -151,26 +151,26 @@ function ObjectivesMod:GetOptions()
                 self:SkinAllExisting()
             end,
         },
-        autoCollapseCombat = {
+        hideInCombat = {
             type = "toggle",
-            name = L["Auto-Collapse in Combat"] or "Auto-Collapse in Combat",
-            desc = L["Automatically minimize the objective tracker upon entering combat."] or "Automatically minimize the objective tracker upon entering combat.",
+            name = L["Hide in Combat"] or "Hide in Combat",
+            desc = L["Completely hide the objective tracker while in combat."] or "Completely hide the objective tracker while in combat.",
             order = 6,
-            get = function() return self.db.autoCollapseCombat == true end,
+            get = function() return self.db.hideInCombat == true end,
             set = function(info, val)
-                self.db.autoCollapseCombat = val
-                self:CheckAutoCollapse()
+                self.db.hideInCombat = val
+                self:UpdateTrackerVisibility()
             end,
         },
-        autoCollapseInstance = {
+        hideInInstance = {
             type = "toggle",
-            name = L["Auto-Collapse in Dungeons/Raids"] or "Auto-Collapse in Dungeons/Raids",
-            desc = L["Automatically minimize the objective tracker inside instances."] or "Automatically minimize the objective tracker inside instances.",
+            name = L["Hide in Dungeons/Raids"] or "Hide in Dungeons/Raids",
+            desc = L["Completely hide the objective tracker inside dungeons and raids."] or "Completely hide the objective tracker inside dungeons and raids.",
             order = 7,
-            get = function() return self.db.autoCollapseInstance == true end,
+            get = function() return self.db.hideInInstance == true end,
             set = function(info, val)
-                self.db.autoCollapseInstance = val
-                self:CheckAutoCollapse()
+                self.db.hideInInstance = val
+                self:UpdateTrackerVisibility()
             end,
         },
         hideInMythicPlus = {
@@ -181,10 +181,7 @@ function ObjectivesMod:GetOptions()
             get = function() return self.db.hideInMythicPlus == true end,
             set = function(info, val)
                 self.db.hideInMythicPlus = val
-                if self.CheckMythicPlusVisibility then
-                    self:CheckMythicPlusVisibility()
-                end
-                self:CheckAutoCollapse()
+                self:UpdateTrackerVisibility()
             end,
         },
     }

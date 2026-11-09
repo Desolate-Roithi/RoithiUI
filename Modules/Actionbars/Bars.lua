@@ -57,8 +57,23 @@ local BLIZZARD_BAR_FRAMES = {
 }
 AB.BLIZZARD_BAR_FRAMES = BLIZZARD_BAR_FRAMES
 
+local HIGHLIGHT_TEX_KEYS = { "SpellHighlightTexture", "NewActionTexture" }
+local CENTERED_FX_KEYS = { "SpellCastAnimFrame", "TargetReticleAnimFrame", "InterruptDisplay", "CooldownFlash" }
+local singleButtonScratch = {}
+
+local function IsSecret(val)
+    if ns.Utils and ns.Utils.IsSecret then
+        return ns.Utils.IsSecret(val)
+    end
+    if val == nil then return false end
+    if _G.issecretvalue and _G.issecretvalue(val) then return true end
+    if _G.canaccessvalue and not _G.canaccessvalue(val) then return true end
+    return type(val) == "userdata"
+end
+
 local function IsRangeIndicator(text)
-    if not text or text == "" then return false end
+    if not text then return false end
+    if IsSecret(text) or type(text) ~= "string" or text == "" then return false end
     if (_G.RANGE_INDICATOR and text == _G.RANGE_INDICATOR) or text == "·" or text == "•" or text:find("[\194\183\226\128\162]") then
         return true
     end
@@ -73,6 +88,50 @@ local function FormatHotkey(text)
     return text or ""
 end
 AB.FormatHotkey = FormatHotkey
+
+local function IsSecretSafeNumber(val)
+    if val == nil or IsSecret(val) then return false end
+    return type(val) == "number"
+end
+AB.IsSecretSafeNumber = IsSecretSafeNumber
+
+local function ResolveButtonOwnerBarKey(btn)
+    if not btn then return nil end
+    local barKey = GetFrameState(btn).barKey or btn.barKey
+    if barKey then return barKey end
+    local bName = btn.GetName and btn:GetName() or ""
+    if bName ~= "" then
+        for k, cfg in pairs(BAR_CONFIGS) do
+            if cfg.prefix and bName:find("^" .. cfg.prefix) then
+                GetFrameState(btn).barKey = k
+                return k
+            elseif cfg.altPrefix and bName:find("^" .. cfg.altPrefix) then
+                GetFrameState(btn).barKey = k
+                return k
+            end
+        end
+    end
+    return nil
+end
+AB.ResolveButtonOwnerBarKey = ResolveButtonOwnerBarKey
+
+local function GetSafeButtonSize(btn, barKey, fallback)
+    fallback = fallback or 36
+    if barKey and AB.db and AB.db[barKey] and AB.db[barKey].buttonSize then
+        local sz = AB.db[barKey].buttonSize
+        if IsSecretSafeNumber(sz) and sz > 0 then
+            return sz
+        end
+    end
+    if btn and btn.GetWidth then
+        local ok, w = pcall(btn.GetWidth, btn)
+        if ok and IsSecretSafeNumber(w) and w > 0 then
+            return w
+        end
+    end
+    return fallback
+end
+AB.GetSafeButtonSize = GetSafeButtonSize
 
 local function RestoreButtonUsability(btn, icon)
     if btn.UpdateUsable then
@@ -100,9 +159,51 @@ end
 
 local function ButtonHasAction(btn)
     if not btn then return false end
+
+    local name = btn.GetName and btn:GetName() or ""
+    local barKey = ResolveButtonOwnerBarKey(btn)
+
+    -- 1. Stance / Shapeshift buttons (Paladin Auras, Druid Forms, Warrior Stances, Rogue Stealth)
+    -- Must be evaluated BEFORE generic btn.HasAction, because StanceButtonTemplate inherits ActionButtonTemplate
+    -- whose HasAction(self.action) returns false since stance buttons do not use action slot IDs.
+    if barKey == "stance" or name:find("Stance") or name:find("Shapeshift") then
+        local id = (btn.GetID and btn:GetID()) or 0
+        if id <= 0 then
+            id = tonumber(name:match("%d+$")) or 0
+        end
+        if id > 0 then
+            local numForms = _G.GetNumShapeshiftForms and _G.GetNumShapeshiftForms() or 0
+            if id <= numForms then
+                if _G.GetShapeshiftFormInfo then
+                    local texture = _G.GetShapeshiftFormInfo(id)
+                    if IsSecret(texture) then return true end
+                    return texture ~= nil and texture ~= ""
+                end
+                return true
+            end
+        end
+        return false
+    end
+
+    -- 2. Pet action buttons (PetActionButtonTemplate also inherits SmallActionButtonTemplate)
+    if barKey == "pet" or btn.GetPetActionInfo or name:find("PetAction") then
+        local id = (btn.GetID and btn:GetID()) or 0
+        if id <= 0 then
+            id = tonumber(name:match("%d+$")) or 0
+        end
+        if id > 0 and _G.GetPetActionInfo then
+            local _, _, texture = _G.GetPetActionInfo(id)
+            if IsSecret(texture) then return true end
+            return texture ~= nil and texture ~= ""
+        end
+        return false
+    end
+
+    -- 3. Standard Action Buttons with HasAction method (NOT stance or pet)
     if btn.HasAction then
         return btn:HasAction() == true
     end
+
     local action = btn.action or (btn.CalculateAction and btn:CalculateAction()) or (btn.GetPagedID and btn:GetPagedID())
     if action and action > 0 then
         if _G.C_ActionBar and _G.C_ActionBar.HasAction then
@@ -111,17 +212,7 @@ local function ButtonHasAction(btn)
             return _G.HasAction(action) == true
         end
     end
-    local barKey = GetFrameState(btn).barKey or btn.barKey
-    if not barKey then
-        local bName = btn.GetName and btn:GetName() or ""
-        for k, cfg in pairs(BAR_CONFIGS) do
-            if cfg.prefix and bName:find("^" .. cfg.prefix) then
-                barKey = k
-                GetFrameState(btn).barKey = k
-                break
-            end
-        end
-    end
+
     local cfg = barKey and BAR_CONFIGS[barKey]
     if cfg and cfg.actionPage then
         local id = btn.GetID and btn:GetID()
@@ -134,22 +225,7 @@ local function ButtonHasAction(btn)
             end
         end
     end
-    local name = btn.GetName and btn:GetName() or ""
-    if btn.GetPetActionInfo or name:find("PetAction") then
-        local id = btn.GetID and btn:GetID()
-        if id and _G.GetPetActionInfo then
-            local _, _, texture = _G.GetPetActionInfo(id)
-            return texture ~= nil
-        end
-    end
-    if name:find("Stance") or name:find("Shapeshift") then
-        local id = btn.GetID and btn:GetID()
-        if id and _G.GetShapeshiftFormInfo then
-            local texture = _G.GetShapeshiftFormInfo(id)
-            return texture ~= nil
-        end
-        return false
-    end
+
     return false
 end
 
@@ -350,6 +426,8 @@ function AB:UpdateEmptyButtons(barKey, customButtons)
             local canClick = hasAct or self.showingGrid or isQuickKeybind or isEditMode
             if barKey == "stance" then
                 canClick = true
+                local numForms = _G.GetNumShapeshiftForms and _G.GetNumShapeshiftForms() or 0
+                hasAct = (i <= numForms)
             end
             if not inCombat then
                 if btn.EnableMouse then btn:EnableMouse(canClick) end
@@ -619,20 +697,12 @@ function AB:SetupBars()
 
     local function HandleButtonUpdate(btn)
         if not btn then return end
-        local barKey = GetFrameState(btn).barKey or btn.barKey
-        if not barKey then
-            local bName = btn.GetName and btn:GetName() or ""
-            for k, cfg in pairs(BAR_CONFIGS) do
-                if cfg.prefix and bName:find("^" .. cfg.prefix) then
-                    barKey = k
-                    GetFrameState(btn).barKey = k
-                    break
-                end
-            end
-        end
+        local barKey = ResolveButtonOwnerBarKey(btn)
         if barKey then
             if self:IsHideEmpty(barKey) then
-                self:UpdateEmptyButtons(barKey, { btn })
+                singleButtonScratch[1] = btn
+                self:UpdateEmptyButtons(barKey, singleButtonScratch)
+                singleButtonScratch[1] = nil
             end
         end
         self:UpdateButtonRange(btn)
@@ -690,13 +760,13 @@ function AB:SetupBars()
         if _G.ActionButtonSpellAlertManager and _G.ActionButtonSpellAlertManager.ShowAlert then
             hooksecurefunc(_G.ActionButtonSpellAlertManager, "ShowAlert", function(_, actionButton)
                 if (not self.IsEnabled or self:IsEnabled()) and actionButton and actionButton.SpellActivationAlert then
-                    local w, h = actionButton:GetSize()
-                    if w and h and w > 0 and h > 0 then
-                        actionButton.SpellActivationAlert:SetSize(w * 1.4, h * 1.4)
-                        if actionButton.SpellActivationAlert.ClearAllPoints and actionButton.SpellActivationAlert.SetPoint then
-                            actionButton.SpellActivationAlert:ClearAllPoints()
-                            actionButton.SpellActivationAlert:SetPoint("CENTER", actionButton, "CENTER", 0, 0)
-                        end
+                    local barKey = ResolveButtonOwnerBarKey(actionButton)
+                    if not barKey then return end
+                    local w = GetSafeButtonSize(actionButton, barKey, 36)
+                    actionButton.SpellActivationAlert:SetSize(w * 1.4, w * 1.4)
+                    if actionButton.SpellActivationAlert.ClearAllPoints and actionButton.SpellActivationAlert.SetPoint then
+                        actionButton.SpellActivationAlert:ClearAllPoints()
+                        actionButton.SpellActivationAlert:SetPoint("CENTER", actionButton, "CENTER", 0, 0)
                     end
                     if actionButton.SpellActivationAlert.SetFrameLevel and actionButton.GetFrameLevel then
                         actionButton.SpellActivationAlert:SetFrameLevel(actionButton:GetFrameLevel() + 5)
@@ -889,6 +959,9 @@ end
 function AB:UpdateOverlayContainment(button)
     if not button or (self.IsEnabled and not self:IsEnabled()) then return end
 
+    local barKey = ResolveButtonOwnerBarKey(button)
+    if not barKey then return end
+
     -- 1. Inset and contain Icon
     local icon = button.icon or _G[button.GetName and button:GetName() and (button:GetName() .. "Icon") or ""]
     if icon then
@@ -996,7 +1069,8 @@ function AB:UpdateOverlayContainment(button)
         end
     end
 
-    for _, hlTex in ipairs({ button.SpellHighlightTexture, button.NewActionTexture }) do
+    for _, hlKey in ipairs(HIGHLIGHT_TEX_KEYS) do
+        local hlTex = button[hlKey]
         if hlTex then
             if hlTex.ClearAllPoints and hlTex.SetPoint then
                 hlTex:ClearAllPoints()
@@ -1009,16 +1083,11 @@ function AB:UpdateOverlayContainment(button)
         end
     end
 
-    local btnW = (button.GetWidth and button:GetWidth()) or 36
-    local fxScale = (btnW and btnW > 0) and (btnW / 45) or 1
+    local btnW = GetSafeButtonSize(button, barKey, 36)
+    local fxScale = (btnW > 0) and (btnW / 45) or 1
 
-    local centeredFXFrames = {
-        button.SpellCastAnimFrame,
-        button.TargetReticleAnimFrame,
-        button.InterruptDisplay,
-        button.CooldownFlash,
-    }
-    for _, fxFrame in ipairs(centeredFXFrames) do
+    for _, fxKey in ipairs(CENTERED_FX_KEYS) do
+        local fxFrame = button[fxKey]
         if fxFrame then
             if fxFrame.ClearAllPoints and fxFrame.SetPoint then
                 fxFrame:ClearAllPoints()
@@ -1059,7 +1128,7 @@ function AB:UpdateOverlayContainment(button)
             acr:ClearAllPoints()
             acr:SetPoint("CENTER", button, "CENTER", 0, 0)
         end
-        if acr.SetSize and btnW and btnW > 0 then
+        if acr.SetSize and btnW > 0 then
             acr:SetSize(btnW * 1.4, btnW * 1.4)
         end
         if acr.EnableMouse then acr:EnableMouse(false) end
@@ -1422,7 +1491,7 @@ function AB:StyleButton(button, explicitBarKey)
         end
         if cdFS then
             local cdFont = (barDb and barDb.font) or self.db.cooldownFont or self.db.font or "Roithi Thick"
-            local btnW = (button.GetWidth and button:GetWidth()) or (barDb and barDb.buttonSize) or 36
+            local btnW = GetSafeButtonSize(button, barKey, (barDb and barDb.buttonSize) or 36)
             local cdFontSize = self.db.cooldownFontSize or math.max(11, math.floor(btnW * 0.38 + 0.5))
             local cdFontOutline = (barDb and barDb.fontOutline) or self.db.cooldownFontOutline or self.db.fontOutline or "OUTLINE"
             local cdFontShadow = (self.db.cooldownFontShadow == true) or (self.db.showFontShadow == true)
@@ -1482,6 +1551,7 @@ function AB:StyleButton(button, explicitBarKey)
         if btnSt.backdrop and btnSt.backdrop.Hide then btnSt.backdrop:Hide() end
         if button.HotKey and button.HotKey.SetAlpha then button.HotKey:SetAlpha(0) end
     else
+        if button.SetAlpha then button:SetAlpha(1) end
         if btnSt.backdrop and btnSt.backdrop.Show then btnSt.backdrop:Show() end
         if button.HotKey and button.HotKey.SetAlpha then button.HotKey:SetAlpha(1) end
     end
@@ -1739,9 +1809,11 @@ function AB:LayoutBarInternal(barKey)
                     table.insert(bSt.originalPoints, { point = pt, relTo = relTo, relPt = relPt, x = x, y = y })
                 end
                 if btn.GetSize then
-                    local w, h = btn:GetSize()
-                    bSt.originalWidth = w
-                    bSt.originalHeight = h
+                    local ok, w, h = pcall(btn.GetSize, btn)
+                    if ok and IsSecretSafeNumber(w) and IsSecretSafeNumber(h) then
+                        bSt.originalWidth = w
+                        bSt.originalHeight = h
+                    end
                 end
             end
             if btn.SetParent then

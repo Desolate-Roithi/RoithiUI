@@ -11,7 +11,7 @@ local WOW_PROJECT_MAINLINE = _G.WOW_PROJECT_MAINLINE
 
 local interfaceVersion = GetBuildInfo and select(4, GetBuildInfo())
 ns.InterfaceVersion = tonumber(interfaceVersion) or 0
-ns.IsForever = (ns.InterfaceVersion == 16001) or (cGameRules and cGameRules.IsForever and cGameRules.IsForever() or false)
+ns.IsForever = (ns.InterfaceVersion >= 16000 and ns.InterfaceVersion < 20000) or (cGameRules and cGameRules.IsForever and cGameRules.IsForever() or false)
 ns.IsRetail = not ns.IsForever and (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 
 -- -------------------------------------------------------------------------
@@ -41,6 +41,14 @@ function ns.Utils.MergeTable(target, source)
         end
     end
     return target
+end
+
+function ns.Utils.IsSecret(val)
+    if val == nil then return false end
+    if _G.issecretvalue and _G.issecretvalue(val) then return true end
+    if _G.canaccessvalue and not _G.canaccessvalue(val) then return true end
+    if type(val) == "userdata" then return true end
+    return false
 end
 
 function ns.Utils.NormalizeFontFlags(outline)
@@ -75,7 +83,7 @@ function ns.Utils.ApplyTypography(fontString, fontName, fontSize, fontOutline, f
 
     local fontPath = ns.Utils.ResolveFontPath(fontName, fallbackFont or "Expressway")
     local flags = ns.Utils.NormalizeFontFlags(fontOutline)
-    fontString:SetFont(fontPath, fontSize or 12, flags)
+    pcall(fontString.SetFont, fontString, fontPath, fontSize or 12, flags)
 
     if fontString.SetShadowOffset then
         if fontShadow == true then
@@ -88,8 +96,8 @@ function ns.Utils.ApplyTypography(fontString, fontName, fontSize, fontOutline, f
 
     if fontString.GetText and fontString.SetText then
         local ok, txt = pcall(fontString.GetText, fontString)
-        if ok and txt ~= nil and type(txt) ~= "userdata" and not (_G.issecretvalue and _G.issecretvalue(txt)) then pcall(fontString.SetText, fontString, txt) end
-        -- Skip GetText/SetText round-trip when text is Midnight Secret userdata
+        if ok and txt ~= nil and not ns.Utils.IsSecret(txt) then pcall(fontString.SetText, fontString, txt) end
+        -- Skip GetText/SetText round-trip when text is a Midnight Secret value
     end
 end
 
@@ -238,7 +246,7 @@ function ns.Utils.ClampFrameToScreen(frame, padding)
     local bottom = frame.GetBottom and frame:GetBottom()
 
     if not left or not right or not top or not bottom then return end
-    if (_G.issecretvalue and (_G.issecretvalue(left) or _G.issecretvalue(right) or _G.issecretvalue(top) or _G.issecretvalue(bottom))) then return end
+    if ns.Utils.IsSecret(left) or ns.Utils.IsSecret(right) or ns.Utils.IsSecret(top) or ns.Utils.IsSecret(bottom) then return end
 
     local shiftX = 0
     local shiftY = 0
@@ -269,7 +277,8 @@ end
 -- String & Media Helpers
 -- -------------------------------------------------------------------------
 function ns.Utils.FormatHotkey(text)
-    if not text or text == "" then return "" end
+    if not text then return "" end
+    if ns.Utils.IsSecret(text) or type(text) ~= "string" or text == "" then return "" end
     if (_G.RANGE_INDICATOR and text == _G.RANGE_INDICATOR)
         or text == "·"
         or text == "•"

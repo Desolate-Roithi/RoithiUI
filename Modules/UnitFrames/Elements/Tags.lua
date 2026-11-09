@@ -45,27 +45,45 @@ UF.TagManager = TM
 
 
 
+-- Helper: IsSecret predicate (delegates to centralized ns.Utils.IsSecret with local fallback)
+local function IsSecret(v)
+    if ns.Utils and ns.Utils.IsSecret then
+        return ns.Utils.IsSecret(v)
+    end
+    if v == nil then return false end
+    local fn = _G.issecretvalue or issecretvalue
+    if type(fn) == "function" and fn(v) then return true end
+    local ca = _G.canaccessvalue or canaccessvalue
+    if type(ca) == "function" and not ca(v) then return true end
+    return type(v) == "userdata"
+end
+
 -- Helper: Shorten Number (12.0.1 Style K/M/B)
 local function AbbreviateNumber(value)
     if value == nil then return "" end
 
-    local isSecret = (issecretvalue and issecretvalue(value)) or (canaccessvalue and not canaccessvalue(value))
-    if isSecret then
-        if AbbreviateLargeNumbers then
-            local success, result = pcall(AbbreviateLargeNumbers, value)
-            if success and result then return result end
+    if IsSecret(value) then
+        local abbrev = _G.AbbreviateLargeNumbers or AbbreviateLargeNumbers
+        if abbrev then
+            local success, result = pcall(abbrev, value)
+            if success and result ~= nil then return result end
         end
         return value
     end
 
-    if AbbreviateLargeNumbers then
-        local success, result = pcall(AbbreviateLargeNumbers, value)
-        if success and result then
+    local abbrev = _G.AbbreviateLargeNumbers or AbbreviateLargeNumbers
+    if abbrev then
+        local success, result = pcall(abbrev, value)
+        if success and result ~= nil then
             return result
         end
     end
 
-    return tostring(value)
+    if type(value) == "number" then
+        local ok, str = pcall(tostring, value)
+        if ok and str then return str end
+    end
+    return value
 end
 
 -- ----------------------------------------------------------------------------
@@ -82,45 +100,66 @@ TM.Methods = {
     ["health.maximum"] = function(unit) return UnitHealthMax(unit) end,
     ["health.missing"] = function(unit)
         local cur, max = UnitHealth(unit), UnitHealthMax(unit)
-        local isActuallySecret = type(issecretvalue) == "function" and (issecretvalue(cur) or issecretvalue(max))
+        local isActuallySecret = IsSecret(cur) or IsSecret(max)
 
         if isActuallySecret then
-            if UnitHealthDeficit then
-                return UnitHealthDeficit(unit)
-            elseif UnitHealthMissing then
-                return UnitHealthMissing(unit)
+            local fn = _G.UnitHealthDeficit or UnitHealthDeficit
+            if fn then
+                local ok, def = pcall(fn, unit)
+                if ok and def then
+                    local abbrev = _G.AbbreviateLargeNumbers or AbbreviateLargeNumbers
+                    if abbrev then
+                        local ok2, res = pcall(abbrev, def)
+                        if ok2 and res ~= nil then return res end
+                    end
+                    return def
+                end
+            end
+            local fnMissing = _G.UnitHealthMissing or UnitHealthMissing
+            if fnMissing then
+                local okM, mVal = pcall(fnMissing, unit)
+                if okM and mVal then return mVal end
             end
             return ""
         end
 
-        local missing = max - cur
+        local missing = (max or 0) - (cur or 0)
         if missing > 0 then return missing end
         return ""
     end,
     ["health.percent"] = function(unit)
         local cur, max = UnitHealth(unit), UnitHealthMax(unit)
-        local isActuallySecret = type(issecretvalue) == "function" and (issecretvalue(cur) or issecretvalue(max))
+        local isActuallySecret = IsSecret(cur) or IsSecret(max)
 
         if isActuallySecret then
-            -- 12.0.1 Native Approach: Use UnitHealthPercent with Scaling Curve
-            -- This returns a secret value already scaled to 0-100 for formatting.
-            local curve = (CurveConstants and CurveConstants.ScaleTo100) or 0
-            local success, result = pcall(function()
-                local pct = UnitHealthPercent(unit, false, curve)
-                -- format automatically handles secret scaling
-                return string.format("%.2f%%", pct)
-            end)
-
-            if success and result then return result end
+            -- Secondary Fallback: UnitHealthPercent with curve
+            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or 0
+            local fnHealthPercent = _G.UnitHealthPercent or UnitHealthPercent
+            if fnHealthPercent then
+                local success, result = pcall(function()
+                    local pct = fnHealthPercent(unit, false, curve)
+                    if not IsSecret(pct) and type(pct) == "number" then
+                        return string.format("%.2f%%", pct)
+                    end
+                    if _G.FormatPercentage then
+                        local ok, formatted = pcall(_G.FormatPercentage, pct)
+                        if ok and formatted then return formatted end
+                    end
+                    return pct
+                end)
+                if success and result then return result end
+            end
 
             -- Fallback to official text API
-            local success2, result2 = pcall(function() return C_UnitHealth.GetHealthPercentText(unit) end)
-            if success2 and result2 and result2 ~= "" then return result2 end
+            local success2, result2 = pcall(function()
+                return C_UnitHealth and C_UnitHealth.GetHealthPercentText and C_UnitHealth.GetHealthPercentText(unit)
+            end)
+            if success2 and result2 then return result2 end
 
             return ""
         end
 
-        if max == 0 then return "0.00%" end
+        if not max or max == 0 then return "0.00%" end
         return string.format("%.2f%%", (cur / max) * 100)
     end,
 
@@ -129,32 +168,43 @@ TM.Methods = {
     ["power.maximum"] = function(unit) return UnitPowerMax(unit) end,
     ["power.percent"] = function(unit)
         local cur, max = UnitPower(unit), UnitPowerMax(unit)
-        local isActuallySecret = type(issecretvalue) == "function" and (issecretvalue(cur) or issecretvalue(max))
+        local isActuallySecret = IsSecret(cur) or IsSecret(max)
 
         if isActuallySecret then
-            -- 12.0.1 Power Approach
-            local curve = (CurveConstants and CurveConstants.ScaleTo100) or 0
-            local success, result = pcall(function()
-                local pType = UnitPowerType(unit)
-                local pct = UnitPowerPercent(unit, pType, false, curve)
-                return string.format("%.2f%%", pct)
+            -- Secondary Fallback: UnitPowerPercent with curve
+            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or 0
+            local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
+            if fnPowerPercent and _G.UnitPowerType then
+                local success, result = pcall(function()
+                    local pType = _G.UnitPowerType(unit)
+                    local pct = fnPowerPercent(unit, pType, false, curve)
+                    if not IsSecret(pct) and type(pct) == "number" then
+                        return string.format("%.2f%%", pct)
+                    end
+                    if _G.FormatPercentage then
+                        local ok, formatted = pcall(_G.FormatPercentage, pct)
+                        if ok and formatted then return formatted end
+                    end
+                    return pct
+                end)
+                if success and result then return result end
+            end
+
+            local success2, result2 = pcall(function()
+                return C_UnitPower and C_UnitPower.GetPowerPercentText and C_UnitPower.GetPowerPercentText(unit)
             end)
-
-            if success and result then return result end
-
-            local success2, result2 = pcall(function() return C_UnitPower.GetPowerPercentText(unit) end)
             if success2 and result2 then return result2 end
 
             return ""
         end
 
-        if max == 0 then return "0.00%" end
+        if not max or max == 0 then return "0.00%" end
         return string.format("%.2f%%", (cur / max) * 100)
     end,
 
     ["power.missing"] = function(unit)
         local cur, max = UnitPower(unit), UnitPowerMax(unit)
-        local isActuallySecret = type(issecretvalue) == "function" and (issecretvalue(cur) or issecretvalue(max))
+        local isActuallySecret = IsSecret(cur) or IsSecret(max)
 
         if isActuallySecret then
             -- Note: No native UnitPowerMissing exists for secrets usually,
@@ -196,7 +246,7 @@ TM.Methods = {
             if config.requireAura and not aura then return "" end
 
             local apps = aura and aura.applications or 0
-            if issecretvalue and issecretvalue(apps) then return "" end
+            if IsSecret(apps) then return "" end
             return apps
         elseif config.mode == "POWER" then
             return UnitPower("player", config.type)
@@ -229,13 +279,17 @@ TM.Methods = {
 
             if config.requireAura and not aura then return "" end
 
-            if aura and aura.maxStack and aura.maxStack > 0 then
-                max = aura.maxStack
-                if class == "SHAMAN" then max = 5 end
+            if aura and aura.maxStack then
+                if IsSecret(aura.maxStack) then return aura.maxStack end
+                if aura.maxStack > 0 then
+                    max = aura.maxStack
+                    if class == "SHAMAN" then max = 5 end
+                end
             end
             return max
         elseif config.mode == "POWER" then
             local pMax = UnitPowerMax("player", config.type)
+            if IsSecret(pMax) then return pMax end
             if pMax and pMax > 0 then max = pMax end
             return max
         end
@@ -268,29 +322,39 @@ TM.Methods = {
             if config.requireAura and not aura then return "" end
 
             local apps = aura and aura.applications or 0
-            if issecretvalue and issecretvalue(apps) then
+            if IsSecret(apps) then
                 cur = 0
             else
                 cur = apps
             end
-            if aura and aura.maxStack and aura.maxStack > 0 then
+            if aura and aura.maxStack and not IsSecret(aura.maxStack) and aura.maxStack > 0 then
                 max = aura.maxStack
                 if class == "SHAMAN" then max = 5 end
             end
         elseif config.mode == "POWER" then
             cur = UnitPower("player", config.type)
             local pMax = UnitPowerMax("player", config.type)
-            if pMax and pMax > 0 then max = pMax end
+            if IsSecret(pMax) then
+                max = pMax
+            elseif pMax and pMax > 0 then
+                max = pMax
+            end
         end
 
-        if issecretvalue and (issecretvalue(cur) or issecretvalue(max)) then
+        if IsSecret(cur) or IsSecret(max) then
             local curve = (CurveConstants and CurveConstants.ScaleTo100) or 0
             local success, result = pcall(function()
                 -- 12.0.1: Native Class Power Percent usually via UnitPowerPercent
-                -- but we need to know the type. Prototype check:
                 local pType = config.type
                 local pct = UnitPowerPercent(unit, pType, false, curve)
-                return string.format("%.0f%%", pct)
+                if not IsSecret(pct) and type(pct) == "number" then
+                    return string.format("%.0f%%", pct)
+                end
+                if _G.FormatPercentage then
+                    local ok, formatted = pcall(_G.FormatPercentage, pct)
+                    if ok and formatted then return formatted end
+                end
+                return pct
             end)
             if success and result then return result end
             return ""
@@ -307,7 +371,7 @@ TM.Methods = {
         local cur = UnitPower(unit, 0)
         local max = UnitPowerMax(unit, 0)
         -- Secret Safety
-        if issecretvalue and (issecretvalue(cur) or issecretvalue(max)) then return cur end
+        if IsSecret(cur) or IsSecret(max) then return cur end
         if not max or max == 0 then return "" end
 
         return cur
@@ -318,7 +382,7 @@ TM.Methods = {
 
         local max = UnitPowerMax(unit, 0)
         -- Secret Safety
-        if issecretvalue and issecretvalue(max) then return max end
+        if IsSecret(max) then return max end
         if not max or max == 0 then return "" end
 
         return max
@@ -331,12 +395,19 @@ TM.Methods = {
         local max = UnitPowerMax(unit, 0)
 
         -- Handle Secrets via Helper API
-        if issecretvalue and (issecretvalue(cur) or issecretvalue(max)) then
+        if IsSecret(cur) or IsSecret(max) then
             local curve = (CurveConstants and CurveConstants.ScaleTo100) or 0
             local success, result = pcall(function()
                 -- Explicitly request percent for MANA (0)
                 local pct = UnitPowerPercent(unit, 0, false, curve)
-                if pct then return string.format("%.0f%%", pct) end
+                if not IsSecret(pct) and type(pct) == "number" then
+                    return string.format("%.0f%%", pct)
+                end
+                if _G.FormatPercentage then
+                    local ok, formatted = pcall(_G.FormatPercentage, pct)
+                    if ok and formatted then return formatted end
+                end
+                return pct
             end)
             if success and result then return result end
             return ""
@@ -352,7 +423,7 @@ TM.Methods = {
         local cur = UnitPower(unit, 0)
         local max = UnitPowerMax(unit, 0)
 
-        if issecretvalue and (issecretvalue(cur) or issecretvalue(max)) then return "" end
+        if IsSecret(cur) or IsSecret(max) then return "" end
         if not max or max == 0 then return "" end
 
         local missing = max - cur
@@ -363,19 +434,22 @@ TM.Methods = {
     -- Monk Stagger
     ["power.stagger"] = function(unit)
         local stagger = UnitStagger and UnitStagger(unit)
-        if not stagger or stagger == 0 then return "" end
-        if issecretvalue and issecretvalue(stagger) then return stagger end
+        if not stagger then return "" end
+        if IsSecret(stagger) then return stagger end
+        if stagger == 0 then return "" end
         return stagger
     end,
 
     ["power.stagger.percent"] = function(unit)
         local stagger = UnitStagger and UnitStagger(unit)
-        if not stagger or stagger == 0 then return "" end
+        if not stagger then return "" end
+        if IsSecret(stagger) then return "" end
+        if stagger == 0 then return "" end
 
         local healthMax = UnitHealthMax(unit)
-        if not healthMax or healthMax == 0 then return "" end
-
-        if issecretvalue and (issecretvalue(stagger) or issecretvalue(healthMax)) then return "" end
+        if not healthMax then return "" end
+        if IsSecret(healthMax) then return "" end
+        if healthMax == 0 then return "" end
 
         return string.format("%.0f%%", (stagger / healthMax) * 100)
     end,
@@ -383,7 +457,7 @@ TM.Methods = {
     -- Absorb
     ["absorb"] = function(unit)
         local absorb = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
-        if issecretvalue and issecretvalue(absorb) then return absorb end
+        if IsSecret(absorb) then return absorb end
 
         -- Safe check for > 0 using pcall to avoid crash if comparison fails
         local isPositive = false
@@ -396,7 +470,7 @@ TM.Methods = {
     ["healabsorb"] = function(unit)
         local healAbsorb = 0
         if UnitGetTotalHealAbsorbs then healAbsorb = UnitGetTotalHealAbsorbs(unit) or 0 end
-        if type(issecretvalue) == "function" and issecretvalue(healAbsorb) then return healAbsorb end
+        if IsSecret(healAbsorb) then return healAbsorb end
 
         local isPositive = false
         pcall(function() if healAbsorb > 0 then isPositive = true end end)
@@ -690,7 +764,7 @@ function UF:UpdateTagFrame(tagFrame)
         fs:ClearAllPoints()
 
         -- 12.0.1 Secret Zero-Hiding for specific tags
-        local isSecret = (issecretvalue and issecretvalue(segment.text)) or (canaccessvalue and not canaccessvalue(segment.text))
+        local isSecret = IsSecret(segment.text)
         if segment.isTag and (segment.tag == "absorb" or segment.tag == "healabsorb") then
             if isSecret then
                 if SetShownFromSecret then
@@ -698,7 +772,7 @@ function UF:UpdateTagFrame(tagFrame)
                 else
                     fs:Show()
                 end
-            elseif segment.text == 0 or segment.text == "0" or segment.text == "" then
+            elseif segment.text == 0 or segment.text == "0" or segment.text == "" or segment.text == nil then
                 fs:Hide()
             else
                 fs:Show()
@@ -774,7 +848,7 @@ function UF:EnableTags(frame)
         -- Use UnitIsUnit to handle dynamic units (e.g., targettarget == player)
         local effectiveUnit = GetEffectiveTagUnit(frame.unit)
         local match = unit and frame.unit and (unit == frame.unit or unit == effectiveUnit or UnitIsUnit(unit, frame.unit))
-        if (issecretvalue and issecretvalue(match)) or match then
+        if IsSecret(match) or match then
             if event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
                 C_Timer.After(0.1, function()
                     if frame.UpdateTags then frame.UpdateTags() else UpdateTags() end

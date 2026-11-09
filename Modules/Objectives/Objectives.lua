@@ -78,6 +78,12 @@ objState.SUB_TRACKERS = SUB_TRACKERS
 
 -- Headless testing loader fallback (where XML includes are not evaluated by standalone Lua)
 if _G.loadfile then
+    if not ns.Utils then
+        local uChunk = _G.loadfile("Core/Utils.lua")
+        if uChunk then
+            uChunk(addonName, ns)
+        end
+    end
     local basePath = "Modules/Objectives/"
     local subFiles = { "Defaults.lua", "Skinning.lua", "Quests.lua", "Scenario.lua" }
     for _, f in ipairs(subFiles) do
@@ -103,18 +109,6 @@ local function NormalizeFontFlags(flags)
     return flags
 end
 
-local function ApplyFontStringShadow(fontString, showShadow)
-    if not fontString or not fontString.SetShadowOffset then return end
-    if showShadow then
-        fontString:SetShadowOffset(1, -1)
-        if fontString.SetShadowColor then
-            fontString:SetShadowColor(0, 0, 0, 0.8)
-        end
-    else
-        fontString:SetShadowOffset(0, 0)
-    end
-end
-
 function ObjectivesMod:GetFontOutline(tierKey)
     local val = (tierKey and self.db and self.db[tierKey])
     if not val or val == "" then
@@ -132,6 +126,20 @@ end
 
 function ObjectivesMod:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Objectives or self.defaultSettings
+    if self.db then
+        if self.db.autoCollapseCombat ~= nil then
+            if self.db.autoCollapseCombat == true then
+                self.db.hideInCombat = true
+            end
+            self.db.autoCollapseCombat = nil
+        end
+        if self.db.autoCollapseInstance ~= nil then
+            if self.db.autoCollapseInstance == true then
+                self.db.hideInInstance = true
+            end
+            self.db.autoCollapseInstance = nil
+        end
+    end
     if self.db and self.defaultSettings then
         for k, v in pairs(self.defaultSettings) do
             if self.db[k] == nil then
@@ -156,7 +164,7 @@ function ObjectivesMod:OnEnable()
     self:HookAllTrackers()
     self:SkinAllExisting()
 
-    self:RegisterEvent("PLAYER_REGEN_DISABLED", "CheckAutoCollapse")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "UpdateTrackerVisibility")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
     self:RegisterEvent("ZONE_CHANGED", "OnZoneChanged")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChanged")
@@ -174,8 +182,7 @@ function ObjectivesMod:OnEnable()
     self:RegisterEvent("UPDATE_UI_WIDGET", "OnScenarioUpdate")
     self:RegisterEvent("UPDATE_ALL_UI_WIDGETS", "OnScenarioUpdate")
     self:HookBelowMinimapWidget()
-    self:CheckMythicPlusVisibility()
-    self:CheckAutoCollapse()
+    self:UpdateTrackerVisibility()
 end
 
 function ObjectivesMod:OnScenarioUpdate()
@@ -201,19 +208,11 @@ function ObjectivesMod:OnScenarioUpdate()
 end
 
 function ObjectivesMod:OnRegenEnabled()
-    if self.pendingCombatUpdate then
-        self.pendingCombatUpdate = nil
-        local otf = _G.ObjectiveTrackerFrame
-        if otf and otf.Update then
-            otf:Update()
-        end
-    end
     if self.db and self.db.enabled ~= false then
         self:ApplyPosition()
         self:ApplyScaleAndHeight()
     end
-    self:CheckMythicPlusVisibility()
-    self:CheckAutoCollapse()
+    self:UpdateTrackerVisibility()
     if self.pendingSuperTrackQuestID then
         local qid = self.pendingSuperTrackQuestID
         self.pendingSuperTrackQuestID = nil
@@ -237,16 +236,23 @@ end
 
 function ObjectivesMod:OnSuperTrackingChanged()
     for block in pairs(skinnedBlocks) do
-        if type(block) == "table" and self.ApplyQuestLevelToTitle then
-            self:ApplyQuestLevelToTitle(block)
+        if type(block) == "table" and block.used ~= false and (block.IsShown and block:IsShown()) then
+            if self.ApplyQuestLevelToTitle then
+                pcall(self.ApplyQuestLevelToTitle, self, block)
+            end
         end
     end
 end
 
 function ObjectivesMod:OnQuestLogUpdate()
+    if self.UpdateQuestLogData then
+        pcall(self.UpdateQuestLogData, self)
+    end
     for block in pairs(skinnedBlocks) do
-        if type(block) == "table" and self.ApplyQuestLevelToTitle then
-            self:ApplyQuestLevelToTitle(block)
+        if type(block) == "table" and block.used ~= false and (block.IsShown and block:IsShown()) then
+            if self.ApplyQuestLevelToTitle then
+                pcall(self.ApplyQuestLevelToTitle, self, block)
+            end
         end
     end
 end
@@ -254,17 +260,21 @@ end
 function ObjectivesMod:RefreshTrackers()
     local offsetX = (self.db and self.db.blockOffsetX) or 4
     for block in pairs(skinnedBlocks) do
-        if type(block) == "table" then
+        if type(block) == "table" and block.used ~= false and (block.IsShown and block:IsShown()) then
             if block.SetPoint then
-                block:SetPoint("LEFT", offsetX, 0)
+                local parent = (block.GetParent and block:GetParent())
+                if parent then
+                    block:SetPoint("LEFT", parent, "LEFT", offsetX, 0)
+                else
+                    block:SetPoint("LEFT", offsetX, 0)
+                end
             end
             if self.ApplyQuestLevelToTitle then
-                self:ApplyQuestLevelToTitle(block)
+                pcall(self.ApplyQuestLevelToTitle, self, block)
             end
             local titleFS = self.GetBlockTitleFS and self:GetBlockTitleFS(block)
-            if titleFS and titleFS.SetFont then
-                pcall(titleFS.SetFont, titleFS, self:GetFontPath("titleFont"), self.db.titleFontSize or 12, self:GetFontOutline("titleFontOutline"))
-                ApplyFontStringShadow(titleFS, self:GetFontShadow("titleFontShadow"))
+            if titleFS and ns.Utils and ns.Utils.ApplyTypography then
+                ns.Utils.ApplyTypography(titleFS, self:GetFontPath("titleFont"), self.db.titleFontSize or 12, self:GetFontOutline("titleFontOutline"), self:GetFontShadow("titleFontShadow"))
             end
             if self.ForEachBlockLine then
                 self.ForEachBlockLine(block, function(line)
@@ -291,8 +301,7 @@ function ObjectivesMod:OnZoneChanged()
     if self.UpdateQuestLogData then
         self:UpdateQuestLogData()
     end
-    self:CheckMythicPlusVisibility()
-    self:CheckAutoCollapse()
+    self:UpdateTrackerVisibility()
 end
 
 function ObjectivesMod:RestoreDefaultView()
@@ -310,6 +319,10 @@ function ObjectivesMod:RestoreDefaultView()
         if otf.Header then otf.Header:Show() end
         if otf.HeaderMenu then otf.HeaderMenu:Show() end
         if otf.SetScale then otf:SetScale(1.0) end
+        if self.trackerHiddenByAddon and otf.SetAlpha then
+            otf:SetAlpha(1)
+            self.trackerHiddenByAddon = nil
+        end
     end
 
     for bar in pairs(skinnedBars) do
@@ -343,44 +356,38 @@ function ObjectivesMod:OnDisable()
     self:UnhookAll()
 end
 
-function ObjectivesMod:CheckMythicPlusVisibility()
+function ObjectivesMod:UpdateTrackerVisibility()
+    if not self.db or self.db.enabled == false then return end
     local otf = _G.ObjectiveTrackerFrame
-    if not otf or not self.db or not self.db.enabled then return end
+    if not otf or not otf.SetAlpha then return end
 
-    local isMPlusActive = _G.C_ChallengeMode and _G.C_ChallengeMode.IsChallengeModeActive and _G.C_ChallengeMode.IsChallengeModeActive()
-    if self.db.hideInMythicPlus then
-        if isMPlusActive then
-            if otf.SetAlpha then otf:SetAlpha(0) end
-        else
-            if otf.SetAlpha then otf:SetAlpha(1) end
-        end
+    local hideMPlus = self.db.hideInMythicPlus == true
+    local hideCombat = self.db.hideInCombat == true
+    local hideInstance = self.db.hideInInstance == true
+
+    if not hideMPlus and not hideCombat and not hideInstance and not self.trackerHiddenByAddon then
+        return
     end
+
+    local isMPlusActive = hideMPlus and _G.C_ChallengeMode and _G.C_ChallengeMode.IsChallengeModeActive and _G.C_ChallengeMode.IsChallengeModeActive()
+    local inCombat = hideCombat and _G.InCombatLockdown and _G.InCombatLockdown()
+    local inInstance = hideInstance and _G.IsInInstance and _G.IsInInstance()
+
+    if isMPlusActive or inCombat or inInstance then
+        otf:SetAlpha(0)
+        self.trackerHiddenByAddon = true
+    elseif self.trackerHiddenByAddon then
+        otf:SetAlpha(1)
+        self.trackerHiddenByAddon = nil
+    end
+end
+
+function ObjectivesMod:CheckMythicPlusVisibility()
+    return self:UpdateTrackerVisibility()
 end
 
 function ObjectivesMod:OnChallengeModeChanged()
-    self:CheckMythicPlusVisibility()
-    self:CheckAutoCollapse()
-end
-
-function ObjectivesMod:CheckAutoCollapse()
-    local otf = _G.ObjectiveTrackerFrame
-    if not otf or not self.db or not self.db.enabled then return end
-
-    local shouldCollapse = false
-    local inCombat = _G.InCombatLockdown and _G.InCombatLockdown()
-    if self.db.autoCollapseCombat and inCombat then
-        shouldCollapse = true
-    elseif self.db.autoCollapseInstance and _G.IsInInstance and _G.IsInInstance() then
-        shouldCollapse = true
-    end
-
-    if shouldCollapse and not (otf.IsCollapsed and otf:IsCollapsed()) then
-        if inCombat then
-            self.pendingCombatUpdate = true
-        elseif otf.SetCollapsed then
-            otf:SetCollapsed(true)
-        end
-    end
+    self:UpdateTrackerVisibility()
 end
 
 function ObjectivesMod:GetMinimapAnchorTarget()
@@ -660,7 +667,7 @@ function ObjectivesMod:OnPlayerEnteringWorld()
         self:SkinAllExisting()
         self:ApplyScaleAndHeight()
         self:ApplyPosition()
-        self:CheckAutoCollapse()
+        self:UpdateTrackerVisibility()
         self:RefreshTrackers()
     end)
     -- Second pass: Blizzard re-lays out blocks from QUEST_LOG_UPDATE after our first pass.
@@ -800,21 +807,23 @@ function ObjectivesMod:HookTracker(tracker)
 
     if tracker.SetCollapsed and not self:IsHooked(tracker, "SetCollapsed") then
         self:SecureHook(tracker, "SetCollapsed", function()
-            self:UpdateAllDividers()
+            pcall(self.UpdateAllDividers, self)
         end)
     end
 
     if tracker.EndLayout and not self:IsHooked(tracker, "EndLayout") then
         self:SecureHook(tracker, "EndLayout", function()
-            ForEachTrackerBlock(tracker, function(block)
-                if self.UpdateBlockHoverObjectives then
-                    local isHovered = (block.IsMouseOver and block:IsMouseOver()) or (block.HeaderButton and block.HeaderButton.IsMouseOver and block.HeaderButton:IsMouseOver())
-                    self:UpdateBlockHoverObjectives(block, isHovered or false)
+            pcall(function()
+                ForEachTrackerBlock(tracker, function(block)
+                    if self.UpdateBlockHoverObjectives then
+                        local isHovered = (block.IsMouseOver and block:IsMouseOver()) or (block.HeaderButton and block.HeaderButton.IsMouseOver and block.HeaderButton:IsMouseOver())
+                        self:UpdateBlockHoverObjectives(block, isHovered or false)
+                    end
+                end)
+                if self.TrimTrackerGap then
+                    self:TrimTrackerGap(tracker)
                 end
             end)
-            if self.TrimTrackerGap then
-                self:TrimTrackerGap(tracker)
-            end
         end)
     end
 
@@ -822,88 +831,90 @@ function ObjectivesMod:HookTracker(tracker)
         self:SkinHeader(tracker.Header)
         if tracker.Header.SetCollapsed and not self:IsHooked(tracker.Header, "SetCollapsed") then
             self:SecureHook(tracker.Header, "SetCollapsed", function()
-                self:UpdateAllDividers()
+                pcall(self.UpdateAllDividers, self)
             end)
         end
     end
 
     if tracker.AnchorBlock and not self:IsHooked(tracker, "AnchorBlock") then
         self:SecureHook(tracker, "AnchorBlock", function(t, block)
-            if block and block.SetPoint then
-                local offsetX = (self.db and self.db.blockOffsetX) or 4
-                local parent = (block.GetParent and block:GetParent()) or t
-                block:SetPoint("LEFT", parent, "LEFT", offsetX, 0)
-            end
+            pcall(function()
+                if block and block.SetPoint then
+                    local offsetX = (self.db and self.db.blockOffsetX) or 4
+                    local parent = (block.GetParent and block:GetParent()) or t
+                    block:SetPoint("LEFT", parent, "LEFT", offsetX, 0)
+                end
+            end)
         end)
     end
 
     if tracker.GetProgressBar and not self:IsHooked(tracker, "GetProgressBar") then
         self:SecureHook(tracker, "GetProgressBar", function(t, line, _)
-            local bar = (t and t.usedProgressBars and t.usedProgressBars[line]) or (line and line.progressBar)
-            if bar then
-                self:SkinProgressBar(bar)
-            end
+            pcall(function()
+                local bar = (t and t.usedProgressBars and t.usedProgressBars[line]) or (line and line.progressBar)
+                if bar then
+                    self:SkinProgressBar(bar)
+                end
+            end)
         end)
     end
 
     if tracker.AddBlock and not self:IsHooked(tracker, "AddBlock") then
         self:SecureHook(tracker, "AddBlock", function(_, block)
-            if block then
-                self:SkinBlock(block)
-            end
+            pcall(function()
+                if block then
+                    self:SkinBlock(block)
+                end
+            end)
         end)
     end
 
     if tracker.LayoutContents and not self:IsHooked(tracker, "LayoutContents") then
         self:SecureHook(tracker, "LayoutContents", function()
-            local font = self:GetFontPath("objectiveFont")
-            local objSize = self.db.objectiveFontSize or 11
-            local outline = self:GetFontOutline("objectiveFontOutline")
-            local useShadow = self:GetFontShadow("objectiveFontShadow")
+            pcall(function()
+                local font = self:GetFontPath("objectiveFont")
+                local objSize = self.db.objectiveFontSize or 11
+                local outline = self:GetFontOutline("objectiveFontOutline")
+                local useShadow = self:GetFontShadow("objectiveFontShadow")
+                local applyTypo = ns.Utils and ns.Utils.ApplyTypography
 
-            -- Collect the blocks to re-skin / re-update so we can defer
-            -- the height correction to the next frame. Blizzard's own
-            -- LayoutContents continues after this hook and resets block
-            -- heights; a C_Timer.After(0) deferred call wins the race.
-            local pendingBlocks = {}
-            ForEachTrackerBlock(tracker, function(block)
-                local itemBtn = block and (block.itemButton or block.ItemButton or (block.GetItemButton and block:GetItemButton()))
-                if itemBtn and self.SkinQuestItemButton then
-                    self:SkinQuestItemButton(block, itemBtn)
-                end
-                if not skinnedBlocks[block] then
-                    self:SkinBlock(block)
-                else
-                    if self.ApplyQuestLevelToTitle then
-                        self:ApplyQuestLevelToTitle(block)
-                    end
-                    local formatLine = function(line)
-                        if line then
-                            if line.Dash and line.Dash.SetFont then
-                                pcall(line.Dash.SetFont, line.Dash, font, objSize, outline)
-                                ApplyFontStringShadow(line.Dash, useShadow)
-                            end
-                            if line.Text and line.Text.SetFont then
-                                pcall(line.Text.SetFont, line.Text, font, objSize, outline)
-                                ApplyFontStringShadow(line.Text, useShadow)
-                            end
+                local function formatLine(line)
+                    if line and applyTypo then
+                        if line.Dash then
+                            applyTypo(line.Dash, font, objSize, outline, useShadow)
+                        end
+                        if line.Text then
+                            applyTypo(line.Text, font, objSize, outline, useShadow)
                         end
                     end
-                    if self.ForEachBlockLine then
-                        self.ForEachBlockLine(block, formatLine)
-                    elseif block.usedLines then
-                        for _, line in pairs(block.usedLines) do formatLine(line) end
-                    end
-                    pendingBlocks[#pendingBlocks + 1] = block
                 end
-            end)
 
-            if tracker.usedProgressBars then
-                for _, bar in pairs(tracker.usedProgressBars) do
-                    self:SkinProgressBar(bar)
+                ForEachTrackerBlock(tracker, function(block)
+                    local itemBtn = block and (block.itemButton or block.ItemButton or (block.GetItemButton and block:GetItemButton()))
+                    if itemBtn and self.SkinQuestItemButton then
+                        pcall(self.SkinQuestItemButton, self, block, itemBtn)
+                    end
+                    if not skinnedBlocks[block] then
+                        pcall(self.SkinBlock, self, block)
+                    else
+                        if self.ApplyQuestLevelToTitle then
+                            pcall(self.ApplyQuestLevelToTitle, self, block)
+                        end
+                        if self.ForEachBlockLine then
+                            self.ForEachBlockLine(block, formatLine)
+                        elseif block.usedLines then
+                            for _, line in pairs(block.usedLines) do formatLine(line) end
+                        end
+                    end
+                end)
+
+                if tracker.usedProgressBars then
+                    for _, bar in pairs(tracker.usedProgressBars) do
+                        pcall(self.SkinProgressBar, self, bar)
+                    end
                 end
-            end
-            self:UpdateAllDividers()
+                self:UpdateAllDividers()
+            end)
         end)
     end
 end
@@ -915,6 +926,5 @@ function ObjectivesMod:RefreshSettings()
     self:ApplyMasterHeaderVisibility()
     self:UpdateFonts()
     self:SkinAllExisting()
-    self:CheckMythicPlusVisibility()
-    self:CheckAutoCollapse()
+    self:UpdateTrackerVisibility()
 end

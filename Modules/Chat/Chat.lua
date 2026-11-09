@@ -21,6 +21,7 @@ local tabTextures = setmetatable({}, { __mode = "k" })
 local editBoxBackdrops = setmetatable({}, { __mode = "k" })
 local editBoxShowHooked = setmetatable({}, { __mode = "k" })
 local editBoxFocusHooked = setmetatable({}, { __mode = "k" })
+local editBoxDeactivateHooked = setmetatable({}, { __mode = "k" })
 local wheelHookedFrames = setmetatable({}, { __mode = "k" })
 local frameBaseY = setmetatable({}, { __mode = "k" })
 local frameBaseHeight = setmetatable({}, { __mode = "k" })
@@ -28,6 +29,9 @@ local frameBasePoint = setmetatable({}, { __mode = "k" })
 local editModeSelectionHooked = setmetatable({}, { __mode = "k" })
 local editModeRegistered = setmetatable({}, { __mode = "k" })
 local editModePositionHooked = setmetatable({}, { __mode = "k" })
+local editModeSysChangeHooked = setmetatable({}, { __mode = "k" })
+local editModeManagerHooked = setmetatable({}, { __mode = "k" })
+local editModeResetHooked = setmetatable({}, { __mode = "k" })
 local clampHookedFrames = setmetatable({}, { __mode = "k" })
 local sizeHookedFrames = setmetatable({}, { __mode = "k" })
 local addMessageHooked = setmetatable({}, { __mode = "k" })
@@ -45,6 +49,22 @@ function ChatMod:GetButtonState(btn)
     return btn and blizzFrameState[btn] or nil
 end
 local isDisplacing = false
+local isApplyingChatPosition = false
+
+local function IsUserEditingChat(chatMod)
+    if isApplyingChatPosition or isDisplacing then return false end
+    local em = _G.EditModeManagerFrame
+    if em then
+        if em.layoutApplyInProgress then return false end
+        local isShown = em.IsShown and em:IsShown()
+        local isActive = (em.IsEditModeActive and em:IsEditModeActive()) or (em.editModeActive == true)
+        if not isShown and not isActive then
+            return false
+        end
+        return true
+    end
+    return chatMod and chatMod.isEditModeActive == true
+end
 
 function ChatMod:GetFontPath()
     local f = (self.db and self.db.font)
@@ -60,7 +80,10 @@ function ChatMod:GetFontPath()
 end
 
 local function NormalizeFontFlags(outline)
-    if not outline or outline == "NONE" or outline == "" then
+    if ns.Utils and ns.Utils.NormalizeFontFlags then
+        return ns.Utils.NormalizeFontFlags(outline)
+    end
+    if not outline or outline == "NONE" or outline == "None" or outline == "none" or outline == "" then
         return ""
     end
     return outline
@@ -499,14 +522,15 @@ function ChatMod:OnEnable()
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.editModeHooked then
         self.editModeHooked = true
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
+            self.isEditModeActive = true
             self:ApplyScreenClamping()
             if self.UpdateEditModeSelection then
                 self:UpdateEditModeSelection()
             end
         end, self)
         _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
+            self.isEditModeActive = false
             self:ApplyScreenClamping()
-            self:SyncChatPositionFromFrame()
             self:ApplyChatPosition()
             self:UpdateBackgroundPosition()
         end, self)
@@ -526,6 +550,7 @@ function ChatMod:OnEnable()
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
     -- Re-apply timestamp CVar after Blizzard has fully initialized all CVars
     self:RegisterEvent("PLAYER_LOGIN", "OnPlayerLogin")
+    self:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
     self:RegisterEvent("UPDATE_CHAT_WINDOWS")
     self:RegisterEvent("UPDATE_FLOATING_CHAT_WINDOWS", "UPDATE_CHAT_WINDOWS")
     self:ApplyWhisperMode()
@@ -549,35 +574,31 @@ function ChatMod:OnEnable()
     end
     if _G.FCFDock_UpdateTabs and not self:IsHooked("FCFDock_UpdateTabs") then
         self:SecureHook("FCFDock_UpdateTabs", function(dock)
-            if self.AutoFitChatTabs then
-                self:AutoFitChatTabs(dock)
-            end
-            if self.UpdateButtonsDock then
-                self:UpdateButtonsDock()
-            end
+            if self.IsEnabled and not self:IsEnabled() then return end
+            if self.pendingTabAutoFit then return end
+            self.pendingTabAutoFit = true
+            C_Timer.After(0.05, function()
+                self.pendingTabAutoFit = nil
+                if self.IsEnabled and not self:IsEnabled() then return end
+                if self.AutoFitChatTabs and dock then
+                    self:AutoFitChatTabs(dock)
+                end
+                if self.UpdateButtonsDock then
+                    self:UpdateButtonsDock()
+                end
+            end)
         end)
     end
     if _G.FCFDock_ScrollToSelectedTab and not self:IsHooked("FCFDock_ScrollToSelectedTab") then
-        self:RawHook("FCFDock_ScrollToSelectedTab", function(dock)
+        self:SecureHook("FCFDock_ScrollToSelectedTab", function(dock)
             if self.ScrollToSelectedTab then
-                return self:ScrollToSelectedTab(dock)
-            end
-        end, true)
-    end
-    if _G.FCF_OpenNewWindow and not self:IsHooked("FCF_OpenNewWindow") then
-        self:SecureHook("FCF_OpenNewWindow", function()
-            if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
-                self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
+                self:ScrollToSelectedTab(dock)
             end
         end)
     end
-    if _G.FCF_OpenTemporaryWindow and not self:IsHooked("FCF_OpenTemporaryWindow") then
-        self:SecureHook("FCF_OpenTemporaryWindow", function()
-            if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
-                self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
-            end
-        end)
-    end
+    -- NOTE: FCF_OpenTemporaryWindow must NEVER be hooked; dynamic whisper windows
+    -- are skinned and auto-fitted asynchronously via OnWhisperEvent below to prevent
+    -- tainting FloatingChatFrameManager_OnEvent and crashing HistoryKeeper.lua in combat.
 
     if _G.ChatFrame_AddMessageEventFilter and not self.filterRegistered then
         for _, ev in ipairs(CHAT_FILTER_EVENTS) do
@@ -643,8 +664,21 @@ function ChatMod:OnDisable()
     self:UnhookAll()
 end
 
+function ChatMod:EDIT_MODE_LAYOUTS_UPDATED()
+    if self.db and self.db.enabled == false then return end
+    self:RegisterWithEditMode()
+    if not IsUserEditingChat(self) then
+        self:ApplyChatPosition()
+        self:UpdateBackgroundPosition()
+    end
+end
+
 function ChatMod:UPDATE_CHAT_WINDOWS()
     if not self.db or self.db.enabled ~= false then
+        if not IsUserEditingChat(self) then
+            self:ApplyChatPosition()
+            self:UpdateBackgroundPosition()
+        end
         self:UpdateChatFonts()
         self:UpdateAllChatTabFonts()
     end
@@ -711,6 +745,9 @@ function ChatMod:OnWhisperEvent()
         if self.SkinAllChatFrames then
             self:SkinAllChatFrames()
         end
+        if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
+            self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
+        end
     end)
 end
 
@@ -775,10 +812,11 @@ function ChatMod:SetChatEditBoxDisplacement(cf, isShown)
     local ebHeight = self.db.editBoxHeight or 24
     local displaceY = ebHeight + 4
 
-    local baseX = (cf == _G.ChatFrame1 and (self.baseX or self.db.x or 0)) or select(4, cf:GetPoint(1)) or 0
-    local baseY = (cf == _G.ChatFrame1 and (self.baseY or self.db.y or 0)) or frameBaseY[cf] or select(5, cf:GetPoint(1)) or 0
-    local baseW = (cf == _G.ChatFrame1 and (self.db.width or 460)) or (cf.GetWidth and cf:GetWidth()) or 460
-    local baseH = (cf == _G.ChatFrame1 and (self.db.height or 200)) or frameBaseHeight[cf] or (cf.GetHeight and cf:GetHeight()) or 200
+    local isDocked = (cf == _G.ChatFrame1) or (cf.isDocked == true)
+    local baseX = (isDocked and (self.baseX or self.db.x or 0)) or select(4, cf:GetPoint(1)) or 0
+    local baseY = (isDocked and (self.baseY or self.db.y or 0)) or frameBaseY[cf] or select(5, cf:GetPoint(1)) or 0
+    local baseW = (isDocked and (self.db.width or 460)) or (cf.GetWidth and cf:GetWidth()) or 460
+    local baseH = (isDocked and (self.db.height or 200)) or frameBaseHeight[cf] or (cf.GetHeight and cf:GetHeight()) or 200
 
     isDisplacing = true
     if isShown then
@@ -867,7 +905,7 @@ function ChatMod:UpdateChatSelectionBounds(cf)
     end
 end
 
-function ChatMod:ApplyChatPosition()
+function ChatMod:ApplyChatPosition(forceInEditMode)
     local cf1 = _G.ChatFrame1
     if not cf1 then return end
     if _G.InCombatLockdown and _G.InCombatLockdown() then
@@ -878,8 +916,8 @@ function ChatMod:ApplyChatPosition()
         return
     end
 
-    -- Do not override position while Blizzard Edit Mode is actively shown
-    if _G.EditModeManagerFrame and _G.EditModeManagerFrame:IsShown() then
+    -- Do not override position while Blizzard Edit Mode is actively shown unless explicitly resetting
+    if not forceInEditMode and _G.EditModeManagerFrame and _G.EditModeManagerFrame:IsShown() then
         return
     end
 
@@ -899,6 +937,7 @@ function ChatMod:ApplyChatPosition()
     local h = self.db.height or 200
 
     -- Unlock size constraints
+    isApplyingChatPosition = true
     if cf1.SetResizeBounds then
         cf1:SetResizeBounds(100, 50, 2500, 2500)
     elseif cf1.SetMinResize and cf1.SetMaxResize then
@@ -940,6 +979,7 @@ function ChatMod:ApplyChatPosition()
     if _G.FCFDock_ForceReanchoring and _G.GENERAL_CHAT_DOCK then
         _G.FCFDock_ForceReanchoring(_G.GENERAL_CHAT_DOCK)
     end
+    isApplyingChatPosition = false
 
     self:UpdateBackgroundPosition()
     if self.UpdateButtonsDock then
@@ -1004,8 +1044,7 @@ end
 
 function ChatMod:RegisterWithEditMode()
     local cf1 = _G.ChatFrame1
-    if not cf1 or not LEM or editModeRegistered[cf1] then return end
-    editModeRegistered[cf1] = true
+    if not cf1 then return end
 
     if cf1.SetMovable then cf1:SetMovable(true) end
     if cf1.SetClampedToScreen then cf1:SetClampedToScreen(self.db.clampToScreen == true) end
@@ -1018,45 +1057,98 @@ function ChatMod:RegisterWithEditMode()
         self:UpdateBackgroundPosition()
     end
 
+    local function HandleSystemPositionChange()
+        if self.IsEnabled and not self:IsEnabled() then return end
+        if isApplyingChatPosition or isDisplacing then return end
+        if IsUserEditingChat(self) then
+            self:SyncChatPositionFromFrame()
+            self:UpdateBackgroundPosition()
+        else
+            local em = _G.EditModeManagerFrame
+            if em and em.layoutApplyInProgress then
+                if _G.C_Timer and _G.C_Timer.After then
+                    _G.C_Timer.After(0, function()
+                        if self.IsEnabled and not self:IsEnabled() then return end
+                        if not IsUserEditingChat(self) then
+                            self:ApplyChatPosition()
+                        end
+                    end)
+                end
+            else
+                self:ApplyChatPosition()
+            end
+        end
+    end
+
     -- Hook Blizzard AnchorSelectionFrame to ensure Selection tightly hugs RoithiUI chat bounds
     if cf1.AnchorSelectionFrame and hooksecurefunc and not editModeSelectionHooked[cf1] then
         editModeSelectionHooked[cf1] = true
         hooksecurefunc(cf1, "AnchorSelectionFrame", function(frame)
+            if self.IsEnabled and not self:IsEnabled() then return end
             self:UpdateChatSelectionBounds(frame)
         end)
     end
     self:UpdateChatSelectionBounds(cf1)
 
     -- Synchronize Blizzard native Edit Mode movements
-    if not editModePositionHooked[cf1] then
+    if not editModePositionHooked[cf1] and cf1.HookScript then
         editModePositionHooked[cf1] = true
-        if cf1.HookScript then
-            cf1:HookScript("OnDragStop", function()
-                self:SyncChatPositionFromFrame()
-                self:UpdateBackgroundPosition()
-            end)
-        end
-        if cf1.OnSystemPositionChange and hooksecurefunc then
-            hooksecurefunc(cf1, "OnSystemPositionChange", function()
-                self:SyncChatPositionFromFrame()
-                self:UpdateBackgroundPosition()
-            end)
-        end
-        if _G.EditModeManagerFrame and hooksecurefunc then
-            hooksecurefunc(_G.EditModeManagerFrame, "OnSystemPositionChange", function(_, systemFrame)
-                if systemFrame == cf1 then
-                    self:SyncChatPositionFromFrame()
-                    self:UpdateBackgroundPosition()
-                end
-            end)
-        end
-        if _G.EventRegistry and _G.EventRegistry.RegisterCallback then
-            _G.EventRegistry:RegisterCallback("EditMode.SavedLayouts", function()
-                self:SyncChatPositionFromFrame()
-                self:UpdateBackgroundPosition()
-            end, self)
-        end
+        cf1:HookScript("OnDragStop", function()
+            if self.IsEnabled and not self:IsEnabled() then return end
+            self:SyncChatPositionFromFrame()
+            self:UpdateBackgroundPosition()
+        end)
     end
+
+    if cf1.OnSystemPositionChange and hooksecurefunc and not editModeSysChangeHooked[cf1] then
+        editModeSysChangeHooked[cf1] = true
+        hooksecurefunc(cf1, "OnSystemPositionChange", function()
+            HandleSystemPositionChange()
+        end)
+    end
+
+    local em = _G.EditModeManagerFrame
+    if em and em.OnSystemPositionChange and hooksecurefunc and not editModeManagerHooked[em] then
+        editModeManagerHooked[em] = true
+        hooksecurefunc(em, "OnSystemPositionChange", function(_, systemFrame)
+            if systemFrame == _G.ChatFrame1 then
+                HandleSystemPositionChange()
+            end
+        end)
+    end
+
+    if cf1.ResetToDefaultPosition and hooksecurefunc and not editModeResetHooked[cf1] then
+        editModeResetHooked[cf1] = true
+        hooksecurefunc(cf1, "ResetToDefaultPosition", function()
+            if self.IsEnabled and not self:IsEnabled() then return end
+            local def = self.defaultSettings or ns.ChatDefaults or {}
+            self.db.point = def.point or "BOTTOMLEFT"
+            self.db.x = def.x or 0
+            self.db.y = def.y or 0
+            self.db.width = def.width or 460
+            self.db.height = def.height or 200
+            self.baseX = self.db.x
+            self.baseY = self.db.y
+            self:ApplyChatPosition(true)
+            if LEM and LEM.RefreshFrameSettings then
+                LEM:RefreshFrameSettings(cf1)
+            end
+        end)
+    end
+
+    if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.savedLayoutsHooked then
+        self.savedLayoutsHooked = true
+        _G.EventRegistry:RegisterCallback("EditMode.SavedLayouts", function()
+            if self.IsEnabled and not self:IsEnabled() then return end
+            if IsUserEditingChat(self) then
+                self:SyncChatPositionFromFrame()
+                self:UpdateBackgroundPosition()
+            end
+        end, self)
+    end
+
+    if not LEM or editModeRegistered[cf1] then return end
+    editModeRegistered[cf1] = true
 
     if _G.Enum and _G.Enum.EditModeSystem and _G.Enum.EditModeSystem.ChatFrame and LEM.AddSystemSettings and self.GetLEMFrameSettings then
         LEM:AddSystemSettings(_G.Enum.EditModeSystem.ChatFrame, self:GetLEMFrameSettings())
@@ -1113,20 +1205,22 @@ function ChatMod:UpdateChatFonts()
     local showShadow = (self.db.showFontShadow == true)
     local inCombat = _G.InCombatLockdown and _G.InCombatLockdown()
 
+    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+
     -- 1. Synchronize Blizzard Global Font Objects
-    if _G.ChatFontNormal and _G.ChatFontNormal.SetFont then
-        pcall(_G.ChatFontNormal.SetFont, _G.ChatFontNormal, font, size, outline)
+    if _G.ChatFontNormal and utils and utils.ApplyTypography then
+        utils.ApplyTypography(_G.ChatFontNormal, font, size, outline, showShadow)
     end
-    if _G.ChatFontSmall and _G.ChatFontSmall.SetFont then
-        pcall(_G.ChatFontSmall.SetFont, _G.ChatFontSmall, font, math.max(8, size - 2), outline)
+    if _G.ChatFontSmall and utils and utils.ApplyTypography then
+        utils.ApplyTypography(_G.ChatFontSmall, font, math.max(8, size - 2), outline, showShadow)
     end
 
     -- 2. Synchronize all Chat Frames & EditBoxes
     for i = 1, 20 do
         local cf = _G["ChatFrame" .. i]
         if cf then
-            if cf.SetFont then
-                pcall(cf.SetFont, cf, font, size, outline)
+            if utils and utils.ApplyTypography then
+                utils.ApplyTypography(cf, font, size, outline, showShadow)
             end
             if not inCombat and cf.GetID then
                 local id = cf:GetID()
@@ -1138,28 +1232,19 @@ function ChatMod:UpdateChatFonts()
                     end
                 end
             end
-            if cf.SetShadowOffset then
-                if showShadow then
-                    cf:SetShadowOffset(1, -1)
-                    if cf.SetShadowColor then cf:SetShadowColor(0, 0, 0, 1) end
-                else
-                    cf:SetShadowOffset(0, 0)
-                    if cf.SetShadowColor then cf:SetShadowColor(0, 0, 0, 0) end
-                end
+            if not showShadow and cf.SetShadowColor then
+                cf:SetShadowColor(0, 0, 0, 0)
             end
         end
 
         local eb = _G["ChatFrame" .. i .. "EditBox"]
-        if eb then
-            local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
-            if utils and utils.ApplyTypography then utils.ApplyTypography(eb, font, size, outline, showShadow)
-                -- handled via ApplyTypography
+        if eb and utils and utils.ApplyTypography then
+            utils.ApplyTypography(eb, font, size, outline, showShadow)
+            if eb.header then
+                utils.ApplyTypography(eb.header, font, size, outline, showShadow)
             end
-            if eb.header and utils and utils.ApplyTypography then utils.ApplyTypography(eb.header, font, size, outline, showShadow)
-                -- handled via ApplyTypography
-            end
-            if eb.headerSuffix and utils and utils.ApplyTypography then utils.ApplyTypography(eb.headerSuffix, font, size, outline, showShadow)
-                -- handled via ApplyTypography
+            if eb.headerSuffix then
+                utils.ApplyTypography(eb.headerSuffix, font, size, outline, showShadow)
             end
         end
     end
@@ -1429,7 +1514,11 @@ function ChatMod:SkinChatFrame(cf, idx)
         local font = self:GetFontPath()
         local size = self.db.fontSize or 12
         local outline = self.db.fontOutline or "OUTLINE"
-        pcall(cf.SetFont, cf, font, size, outline)
+        local showShadow = (self.db.showFontShadow == true)
+        local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+        if utils and utils.ApplyTypography then
+            utils.ApplyTypography(cf, font, size, outline, showShadow)
+        end
         if cf.GetID and not (_G.InCombatLockdown and _G.InCombatLockdown()) then
             local id = cf:GetID()
             if id and id > 0 then
@@ -1440,14 +1529,8 @@ function ChatMod:SkinChatFrame(cf, idx)
                 end
             end
         end
-        if cf.SetShadowOffset then
-            if self.db.showFontShadow then
-                cf:SetShadowOffset(1, -1)
-                if cf.SetShadowColor then cf:SetShadowColor(0, 0, 0, 1) end
-            else
-                cf:SetShadowOffset(0, 0)
-                if cf.SetShadowColor then cf:SetShadowColor(0, 0, 0, 0) end
-            end
+        if not showShadow and cf.SetShadowColor then
+            cf:SetShadowColor(0, 0, 0, 0)
         end
     end
 
@@ -1567,7 +1650,9 @@ function ChatMod:GetEditBoxBackdrop(eb)
 end
 
 function ChatMod:RepositionEditBox(eb, cf)
-    if not eb or not cf then return end
+    if not eb then return end
+    cf = cf or eb.chatFrame or (eb.GetParent and eb:GetParent()) or _G.ChatFrame1
+    if not cf then return end
 
     local ebHeight = self.db.editBoxHeight or 24
     local isTop = (self.db.editBoxPosition == "TOP")
@@ -1575,7 +1660,8 @@ function ChatMod:RepositionEditBox(eb, cf)
     local padX = (self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or 4
     local padY = (self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or 4
 
-    local anchorFrame = (cf == _G.ChatFrame1 and self.bgPanel and self.db.showBackground) and self.bgPanel or cf
+    local isDocked = (cf == _G.ChatFrame1) or (cf.isDocked == true)
+    local anchorFrame = (isDocked and self.bgPanel and self.db.showBackground) and self.bgPanel or cf
 
     eb:ClearAllPoints()
     if isTop then
@@ -1591,8 +1677,9 @@ function ChatMod:RepositionEditBox(eb, cf)
             eb:SetPoint("BOTTOMLEFT", anchorFrame, "BOTTOMLEFT", padX, padY)
             eb:SetPoint("BOTTOMRIGHT", anchorFrame, "BOTTOMRIGHT", -padX, padY)
         else
-            eb:SetPoint("BOTTOMLEFT", cf, "BOTTOMLEFT", 0, 0)
-            eb:SetPoint("BOTTOMRIGHT", cf, "BOTTOMRIGHT", 0, 0)
+            local displaceOffset = (frameBaseY[cf] ~= nil) and (ebHeight + 4) or 0
+            eb:SetPoint("BOTTOMLEFT", cf, "BOTTOMLEFT", 0, -displaceOffset)
+            eb:SetPoint("BOTTOMRIGHT", cf, "BOTTOMRIGHT", 0, -displaceOffset)
         end
     else
         -- Classic BOTTOM mode
@@ -1600,8 +1687,9 @@ function ChatMod:RepositionEditBox(eb, cf)
             eb:SetPoint("BOTTOMLEFT", anchorFrame, "BOTTOMLEFT", padX, padY)
             eb:SetPoint("BOTTOMRIGHT", anchorFrame, "BOTTOMRIGHT", -padX, padY)
         else
-            eb:SetPoint("TOPLEFT", cf, "BOTTOMLEFT", -padX, -6)
-            eb:SetPoint("TOPRIGHT", cf, "BOTTOMRIGHT", padX, -6)
+            local displaceOffset = (frameBaseY[cf] ~= nil) and (ebHeight + 4) or 0
+            eb:SetPoint("TOPLEFT", cf, "BOTTOMLEFT", -padX, -6 - displaceOffset)
+            eb:SetPoint("TOPRIGHT", cf, "BOTTOMRIGHT", padX, -6 - displaceOffset)
         end
     end
     eb:SetHeight(ebHeight)
@@ -1638,10 +1726,15 @@ function ChatMod:SkinEditBox(eb, cf, idx)
         self:RepositionEditBox(eb, cf)
         self:UpdateEditBoxStyle(eb)
         local isInside = (self.db.editBoxPosition == "INSIDE" or self.db.editBoxPosition == nil)
+        local bg = editBoxBackdrops[eb]
         if isInside and not (eb.HasFocus and eb:HasFocus()) then
-            local bg = editBoxBackdrops[eb]
             if bg then bg:Hide() end
+            if eb.EnableMouse then eb:EnableMouse(false) end
             eb:SetAlpha(0)
+        elseif not isInside then
+            if bg then bg:Show() end
+            if eb.EnableMouse then eb:EnableMouse(true) end
+            eb:SetAlpha(1.0)
         end
         return
     end
@@ -1689,6 +1782,7 @@ function ChatMod:SkinEditBox(eb, cf, idx)
             if not self.IsEnabled or self:IsEnabled() then
                 local b = editBoxBackdrops[editBox]
                 if b then b:Show() end
+                if editBox.EnableMouse then editBox:EnableMouse(true) end
                 editBox:SetAlpha(1.0)
                 if self.RepositionEditBox then
                     self:RepositionEditBox(editBox, cf)
@@ -1702,6 +1796,7 @@ function ChatMod:SkinEditBox(eb, cf, idx)
                 if isInside then
                     local b = editBoxBackdrops[editBox]
                     if b then b:Hide() end
+                    if editBox.EnableMouse then editBox:EnableMouse(false) end
                     editBox:SetAlpha(0)
                 end
                 self:SetChatEditBoxDisplacement(cf, false)
@@ -1727,10 +1822,30 @@ function ChatMod:SkinEditBox(eb, cf, idx)
         end)
     end
 
+    if eb.Deactivate and hooksecurefunc and not editBoxDeactivateHooked[eb] then
+        editBoxDeactivateHooked[eb] = true
+        hooksecurefunc(eb, "Deactivate", function(editBox)
+            if not self.IsEnabled or self:IsEnabled() then
+                local isInside = (self.db.editBoxPosition == "INSIDE" or self.db.editBoxPosition == nil)
+                if isInside then
+                    local b = editBoxBackdrops[editBox]
+                    if b then b:Hide() end
+                    if editBox.EnableMouse then editBox:EnableMouse(false) end
+                    editBox:SetAlpha(0)
+                end
+            end
+        end)
+    end
+
     local isInside = (self.db.editBoxPosition == "INSIDE" or self.db.editBoxPosition == nil)
     if isInside and not (eb.HasFocus and eb:HasFocus()) then
         bg:Hide()
+        if eb.EnableMouse then eb:EnableMouse(false) end
         eb:SetAlpha(0)
+    elseif not isInside then
+        bg:Show()
+        if eb.EnableMouse then eb:EnableMouse(true) end
+        eb:SetAlpha(1.0)
     end
 
     -- Font & insets
@@ -2906,6 +3021,8 @@ end
 
 function ChatMod:SanitizeChatTextForCopy(text)
     if not text then return "" end
+    local isSecret = (_G.issecretvalue and _G.issecretvalue(text)) or (_G.canaccessvalue and not _G.canaccessvalue(text))
+    if isSecret then return "" end
     local clean = tostring(text)
     -- 1. Unwrap hyperlinks to display text
     clean = clean:gsub("|H.-|h(.-)|h", "%1")

@@ -2,6 +2,7 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local ObjectivesMod = RoithiUI:GetModule("Objectives")
+local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
 local objState = ns.Objectives or {}
 ns.Objectives = objState
 
@@ -17,6 +18,19 @@ objState.barBackdrops = barBackdrops
 local questZoneCache = {}
 local questTitleCache = {}
 
+local function IsSecret(val)
+    if ns.Utils and ns.Utils.IsSecret then
+        return ns.Utils.IsSecret(val)
+    end
+    if val == nil then return false end
+    local fn = _G.issecretvalue
+    if type(fn) == "function" and fn(val) then return true end
+    local ca = _G.canaccessvalue
+    if type(ca) == "function" and not ca(val) then return true end
+    return type(val) == "userdata"
+end
+objState.IsSecret = IsSecret
+
 local function WipeTable(tbl)
     if _G.wipe then
         _G.wipe(tbl)
@@ -29,7 +43,7 @@ local function WipeTable(tbl)
 end
 
 local function SafeTrim(str)
-    if not str then return "" end
+    if not str or IsSecret(str) or type(str) ~= "string" then return "" end
     return (str:match("^%s*(.-)%s*$") or str)
 end
 
@@ -461,7 +475,7 @@ end
 local function GetCleanQuestTitle(block, questID, curText)
     if _G.C_QuestLog and _G.C_QuestLog.GetTitleForQuestID then
         local t = _G.C_QuestLog.GetTitleForQuestID(questID)
-        if t and t ~= "" then
+        if t and not IsSecret(t) and type(t) == "string" and t ~= "" then
             if block then
                 blockBaseTitles[block] = t
                 blockQuestIDs[block] = questID
@@ -471,6 +485,9 @@ local function GetCleanQuestTitle(block, questID, curText)
     end
     if block and blockBaseTitles[block] and blockQuestIDs[block] == questID then
         return blockBaseTitles[block]
+    end
+    if not curText or IsSecret(curText) or type(curText) ~= "string" then
+        return ""
     end
     local clean = curText:gsub("^%s*|c%x%x%x%x%x%x%x%x%[[^%]]+%]%|r%s*", "")
     clean = clean:gsub("^%s*%[[^%]]+%]%s*", "")
@@ -493,6 +510,9 @@ end
 
 function ObjectivesMod:ApplyQuestLevelToTitle(block)
     if not block or not self.db then return end
+    if block.used == false then return end
+    if block.IsShown and not block:IsShown() then return end
+
     local questID = self:GetBlockQuestID(block)
     if not questID or type(questID) ~= "number" then return end
 
@@ -500,7 +520,7 @@ function ObjectivesMod:ApplyQuestLevelToTitle(block)
     if not (titleFS and titleFS.GetText and titleFS.SetText) then return end
 
     local curText = titleFS:GetText()
-    if not curText or curText == "" then return end
+    if not curText or IsSecret(curText) or type(curText) ~= "string" or curText == "" then return end
 
     local lvl = GetQuestLevel(questID)
 
@@ -511,7 +531,7 @@ function ObjectivesMod:ApplyQuestLevelToTitle(block)
             colorCode = string.format("|cff%02x%02x%02x", math.floor((diff.r or 1) * 255 + 0.5), math.floor((diff.g or 1) * 255 + 0.5), math.floor((diff.b or 1) * 255 + 0.5))
         end
     end
-    if not colorCode then
+    if not colorCode and not IsSecret(curText) and type(curText) == "string" then
         colorCode = curText:match("^(|c%x%x%x%x%x%x%x%x)")
     end
 
@@ -543,6 +563,7 @@ function ObjectivesMod:ApplyQuestLevelToTitle(block)
     end
 
     local baseText = GetCleanQuestTitle(block, questID, curText)
+    if not baseText or IsSecret(baseText) or type(baseText) ~= "string" or baseText == "" then return end
 
     local fc = self.db.foreverColor or (self.defaultSettings and self.defaultSettings.foreverColor) or { r = 0.22, g = 0.74, b = 0.97 }
     local infR = math.floor((fc.r or 0.22) * 255 + 0.5)
@@ -573,7 +594,8 @@ function ObjectivesMod:ApplyQuestLevelToTitle(block)
         end
     end
 
-    if titleFS:GetText() ~= newText then
+    local oldText = titleFS:GetText()
+    if not IsSecret(oldText) and oldText ~= newText then
         titleFS:SetText(newText)
     end
 end
@@ -784,20 +806,23 @@ function ObjectivesMod:ShowQuestTooltip(block)
     tooltip:SetPoint("TOPRIGHT", block, "TOPLEFT", -8, 0)
 
     local title = (block.HeaderText and block.HeaderText.GetText and block.HeaderText:GetText())
-    if not title or title == "" then
+    if not title or IsSecret(title) or type(title) ~= "string" or title == "" then
         if _G.C_QuestLog and _G.C_QuestLog.GetTitleForQuestID then
-            title = _G.C_QuestLog.GetTitleForQuestID(qid)
+            local t = _G.C_QuestLog.GetTitleForQuestID(qid)
+            if t and not IsSecret(t) and type(t) == "string" and t ~= "" then
+                title = t
+            end
         end
     end
-    if not title or title == "" then
-        title = "Quest"
+    local cleanTitle = L["Quest"] or "Quest"
+    if title and not IsSecret(title) and type(title) == "string" and title ~= "" then
+        cleanTitle = title:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
     end
-    local cleanTitle = title:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
 
     tooltip:AddLine(cleanTitle, 1, 0.85, 0.35, true)
 
     local zone = GetQuestZone(qid)
-    if zone and zone ~= "" then
+    if zone and not IsSecret(zone) and type(zone) == "string" and zone ~= "" then
         tooltip:AddLine(zone, 0.6, 0.6, 0.6)
     end
 
@@ -806,7 +831,7 @@ function ObjectivesMod:ShowQuestTooltip(block)
         if ok and objs and #objs > 0 then
             tooltip:AddLine(" ")
             for _, obj in ipairs(objs) do
-                if obj.text and obj.text ~= "" then
+                if obj.text and not IsSecret(obj.text) and type(obj.text) == "string" and obj.text ~= "" then
                     local r, g, b = 0.85, 0.85, 0.85
                     local prefix = " • "
                     if obj.finished then
@@ -861,7 +886,7 @@ function ObjectivesMod:TrimTrackerGap(tracker)
     local forEachBlock = objState.ForEachTrackerBlock or self.ForEachTrackerBlock
     if forEachBlock then
         forEachBlock(tracker, function(block)
-            if block and (block.IsShown == nil or block:IsShown()) then
+            if block and block.used ~= false and (block.IsShown == nil or block:IsShown()) then
                 local bh = (block.GetHeight and block:GetHeight()) or 0
                 if bh > 0 then
                     activeBlockCount = activeBlockCount + 1
@@ -883,7 +908,7 @@ function ObjectivesMod:TrimTrackerGap(tracker)
     local lowest = nil
     if forEachBlock and type(top) == "number" then
         forEachBlock(tracker, function(block)
-            if block and (block.IsShown == nil or block:IsShown()) and block.GetBottom then
+            if block and block.used ~= false and (block.IsShown == nil or block:IsShown()) and block.GetBottom then
                 local b = block:GetBottom()
                 if b and (not lowest or b < lowest) then
                     lowest = b

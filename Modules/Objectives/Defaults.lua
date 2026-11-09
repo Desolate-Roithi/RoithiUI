@@ -4,8 +4,8 @@ local RoithiUI = _G.RoithiUI
 
 local defaultSettings = {
     attachedToMinimap = true,
-    autoCollapseCombat = false,
-    autoCollapseInstance = false,
+    hideInCombat = false,
+    hideInInstance = false,
     blockOffsetX = 4,
     hideInMythicPlus = true,
     collapseDelay = 0.25,

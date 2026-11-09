@@ -50,9 +50,15 @@ local function UnitIsDeadOrGhost(u)
     return fn and fn(u)
 end
 local function IsSecret(v)
-    return (type(issecretvalue) == "function" and issecretvalue(v))
-        or (type(canaccessvalue) == "function" and not canaccessvalue(v))
-        or (type(v) == "userdata")
+    if ns.Utils and ns.Utils.IsSecret then
+        return ns.Utils.IsSecret(v)
+    end
+    if v == nil then return false end
+    local fn = _G.issecretvalue or issecretvalue
+    if type(fn) == "function" and fn(v) then return true end
+    local ca = _G.canaccessvalue or canaccessvalue
+    if type(ca) == "function" and not ca(v) then return true end
+    return type(v) == "userdata"
 end
 
 local function IsSpellInResetList(spellId)
@@ -147,20 +153,32 @@ function SwingTimer:SyncNativeProgress(hand, frame, value)
     if showTimer then
         local label = frame.GetTimeLabel and frame:GetTimeLabel()
         local txt = label and label:GetText()
-        if txt and txt ~= "" then
-            bar.timeText:SetText(txt)
+        if IsSecret(txt) then
+            pcall(bar.timeText.SetText, bar.timeText, "")
+        elseif txt and type(txt) == "string" and txt ~= "" then
+            pcall(bar.timeText.SetText, bar.timeText, txt)
         else
-            local dur = maxVal or 2.0
-            local val = value or 0
-            bar.timeText:SetText(string.format("%.1fs", math.max(0, dur - val)))
+            if not IsSecret(maxVal) and not IsSecret(value) and type(maxVal) == "number" and type(value) == "number" then
+                local dur = maxVal or 2.0
+                local val = value or 0
+                pcall(bar.timeText.SetText, bar.timeText, string.format("%.1fs", math.max(0, dur - val)))
+            else
+                pcall(bar.timeText.SetText, bar.timeText, "")
+            end
         end
     end
 
-    if bar.spark and maxVal and maxVal > 0 then
-        local w = bar:GetWidth() or 200
-        local prog = math.min(1, math.max(0, (value or 0) / maxVal))
-        bar.spark:ClearAllPoints()
-        bar.spark:SetPoint("CENTER", bar, "LEFT", prog * w, 0)
+    if bar.spark then
+        if not IsSecret(maxVal) and not IsSecret(value) and type(maxVal) == "number" and maxVal > 0 then
+            local w = bar:GetWidth() or 200
+            local val = (type(value) == "number") and value or 0
+            local prog = math.min(1, math.max(0, val / maxVal))
+            bar.spark:ClearAllPoints()
+            bar.spark:SetPoint("CENTER", bar, "LEFT", prog * w, 0)
+            bar.spark:Show()
+        else
+            bar.spark:Hide()
+        end
     end
 
     bar:Show()
@@ -194,22 +212,95 @@ function SwingTimer:SyncNativeClear(hand, _)
 end
 
 local selectionHooked = setmetatable({}, { __mode = "k" })
+local settingAlpha = setmetatable({}, { __mode = "k" })
+local nativeAlphaHooked = setmetatable({}, { __mode = "k" })
+local nativeOnShowHooked = setmetatable({}, { __mode = "k" })
+local nativeOpacityHooked = setmetatable({}, { __mode = "k" })
+local nativeStatusBarHooked = setmetatable({}, { __mode = "k" })
+local nativeResetHooked = setmetatable({}, { __mode = "k" })
+local nativeClearHooked = setmetatable({}, { __mode = "k" })
+
+local function SetClickthrough(frame, clickthrough)
+    if not frame then return end
+    local enableMouse = not clickthrough
+    if frame.EnableMouse then frame:EnableMouse(enableMouse) end
+    if frame.SetMouseClickEnabled then frame:SetMouseClickEnabled(enableMouse) end
+    if frame.SetMouseMotionEnabled then frame:SetMouseMotionEnabled(enableMouse) end
+end
+
+local function IsModuleActive(mod)
+    if not mod then return true end
+    if mod.enabledState ~= nil and not mod.enabledState then return false end
+    if mod.IsEnabled and not mod:IsEnabled() then return false end
+    if mod.db and mod.db.enabled == false then return false end
+    return true
+end
+
+local function ShouldSuppressNativeSwingFrames(mod)
+    if not IsModuleActive(mod) then return false end
+    if mod and mod.db and mod.db.player and mod.db.player.enabled == false then
+        return false
+    end
+    return true
+end
 
 local function SuppressNativeSelection(targetFrame)
     if not targetFrame then return end
     if targetFrame.Selection then
-        targetFrame.Selection:Hide()
+        if ShouldSuppressNativeSwingFrames(SwingTimer) then
+            targetFrame.Selection:Hide()
+        end
         if not selectionHooked[targetFrame] and hooksecurefunc then
             hooksecurefunc(targetFrame.Selection, "Show", function(sel)
-                sel:Hide()
+                if ShouldSuppressNativeSwingFrames(SwingTimer) then
+                    sel:Hide()
+                end
             end)
             selectionHooked[targetFrame] = true
         end
     end
 end
 
+local NATIVE_SWING_FRAME_NAMES = {
+    "SwingTimerMainHandFrame",
+    "SwingTimerOffHandFrame",
+    "SwingTimerRangedFrame",
+}
+
+function SwingTimer:UpdateNativeSwingFramesVisibility()
+    local suppress = ShouldSuppressNativeSwingFrames(self)
+    local inLockdown = _G.InCombatLockdown and _G.InCombatLockdown()
+    for _, frameName in ipairs(NATIVE_SWING_FRAME_NAMES) do
+        local f = _G[frameName]
+        if f then
+            if suppress then
+                SuppressNativeSelection(f)
+                if not inLockdown then
+                    SetClickthrough(f, true)
+                end
+                local curAlpha = f.GetAlpha and f:GetAlpha()
+                if f.SetAlpha and (curAlpha == nil or IsSecret(curAlpha) or curAlpha ~= 0) and not settingAlpha[f] then
+                    settingAlpha[f] = true
+                    f:SetAlpha(0)
+                    settingAlpha[f] = nil
+                end
+            else
+                if not inLockdown then
+                    SetClickthrough(f, false)
+                end
+                local curAlpha = f.GetAlpha and f:GetAlpha()
+                if f.SetAlpha and (curAlpha == nil or (not IsSecret(curAlpha) and curAlpha == 0)) and not settingAlpha[f] then
+                    settingAlpha[f] = true
+                    f:SetAlpha(1)
+                    settingAlpha[f] = nil
+                end
+            end
+        end
+    end
+end
+
 function SwingTimer:BindNativeSwingFrames()
-    self.nativeFramesBound = self.nativeFramesBound or {}
+    self.nativeFramesBound = self.nativeFramesBound or setmetatable({}, { __mode = "k" })
     local anyBound = false
 
     if _G.C_AddOns and _G.C_AddOns.LoadAddOn and not _G.SwingTimerMainHandFrame then
@@ -231,27 +322,57 @@ function SwingTimer:BindNativeSwingFrames()
 
             SuppressNativeSelection(frame)
 
-            if frame.SetAlpha then frame:SetAlpha(0) end
-            if frame.UpdateSystemSettingOpacity and hooksecurefunc then
+            if frame.SetAlpha and not nativeAlphaHooked[frame] and hooksecurefunc then
+                nativeAlphaHooked[frame] = true
+                hooksecurefunc(frame, "SetAlpha", function(f, alpha)
+                    if ShouldSuppressNativeSwingFrames(self) and (IsSecret(alpha) or alpha ~= 0) and not settingAlpha[f] then
+                        settingAlpha[f] = true
+                        f:SetAlpha(0)
+                        settingAlpha[f] = nil
+                    end
+                end)
+            end
+
+            if not nativeOnShowHooked[frame] and frame.HookScript then
+                nativeOnShowHooked[frame] = true
+                frame:HookScript("OnShow", function(f)
+                    local curAlpha = f.GetAlpha and f:GetAlpha()
+                    if ShouldSuppressNativeSwingFrames(self) and f.SetAlpha and (IsSecret(curAlpha) or curAlpha ~= 0) and not settingAlpha[f] then
+                        settingAlpha[f] = true
+                        f:SetAlpha(0)
+                        settingAlpha[f] = nil
+                    end
+                end)
+            end
+
+            if frame.UpdateSystemSettingOpacity and not nativeOpacityHooked[frame] and hooksecurefunc then
+                nativeOpacityHooked[frame] = true
                 hooksecurefunc(frame, "UpdateSystemSettingOpacity", function()
-                    frame:SetAlpha(0)
+                    if ShouldSuppressNativeSwingFrames(self) and frame.SetAlpha and not settingAlpha[frame] then
+                        settingAlpha[frame] = true
+                        frame:SetAlpha(0)
+                        settingAlpha[frame] = nil
+                    end
                 end)
             end
 
             local statusBar = frame.GetStatusBar and frame:GetStatusBar()
-            if statusBar and hooksecurefunc then
+            if statusBar and not nativeStatusBarHooked[statusBar] and hooksecurefunc then
+                nativeStatusBarHooked[statusBar] = true
                 hooksecurefunc(statusBar, "SetValue", function(_, value)
                     self:SyncNativeProgress(hand, frame, value)
                 end)
             end
 
-            if frame.ResetSwingTimer and hooksecurefunc then
+            if frame.ResetSwingTimer and not nativeResetHooked[frame] and hooksecurefunc then
+                nativeResetHooked[frame] = true
                 hooksecurefunc(frame, "ResetSwingTimer", function()
                     self:SyncNativeReset(hand, frame)
                 end)
             end
 
-            if frame.ClearSwingTimer and hooksecurefunc then
+            if frame.ClearSwingTimer and not nativeClearHooked[frame] and hooksecurefunc then
+                nativeClearHooked[frame] = true
                 hooksecurefunc(frame, "ClearSwingTimer", function()
                     self:SyncNativeClear(hand, frame)
                 end)
@@ -259,6 +380,26 @@ function SwingTimer:BindNativeSwingFrames()
         elseif frame then
             SuppressNativeSelection(frame)
         end
+    end
+
+    self:UpdateNativeSwingFramesVisibility()
+
+    if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.topLevelParentEventRegistered then
+        self.topLevelParentEventRegistered = true
+        _G.EventRegistry:RegisterCallback("UI.TopLevelParentShown", function()
+            if ShouldSuppressNativeSwingFrames(self) then
+                self:UpdateNativeSwingFramesVisibility()
+            end
+        end, self)
+    end
+
+    if _G.UIParent and _G.UIParent.HookScript and not self.uiParentHooked then
+        self.uiParentHooked = true
+        _G.UIParent:HookScript("OnShow", function()
+            if ShouldSuppressNativeSwingFrames(self) then
+                self:UpdateNativeSwingFramesVisibility()
+            end
+        end)
     end
 
     if anyBound or _G.SwingTimerMainHandFrame then
@@ -272,7 +413,7 @@ function SwingTimer:SetupEventFrame()
     local f = CreateFrame("Frame")
     self.eventFrame = f
     f:SetScript("OnEvent", function(_, event, ...)
-        if not self:IsEnabled() or (self.db and self.db.enabled == false) then return end
+        if not IsModuleActive(self) then return end
         if event == "ADDON_LOADED" then
             local loadedAddon = ...
             if loadedAddon == "Blizzard_SwingTimer" then
@@ -282,9 +423,11 @@ function SwingTimer:SetupEventFrame()
             local cvarName = ...
             if cvarName == SHOW_SWING_TIMER_CVAR then
                 self:EnsureBlizzardTimerEnabled()
+                self:UpdateNativeSwingFramesVisibility()
             end
-        elseif event == "PLAYER_ENTERING_WORLD" then
+        elseif event == "PLAYER_ENTERING_WORLD" or event == "EDIT_MODE_LAYOUTS_UPDATED" then
             self:BindNativeSwingFrames()
+            self:UpdateNativeSwingFramesVisibility()
         elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
             self:OnCombatLog(event, ...)
         elseif event == "UNIT_COMBAT" then
@@ -329,6 +472,8 @@ function SwingTimer:SetupEventFrame()
             self:OnEnterCombat()
         elseif event == "PLAYER_LEAVE_COMBAT" or event == "PLAYER_REGEN_ENABLED" then
             self:OnLeaveCombat()
+            self:EnsureBlizzardTimerEnabled()
+            self:UpdateNativeSwingFramesVisibility()
             if self.queuedEnable then
                 self.queuedEnable = false
                 self:OnEnable()
@@ -337,6 +482,7 @@ function SwingTimer:SetupEventFrame()
     end)
     f:RegisterEvent("PLAYER_REGEN_ENABLED")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
+    f:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
     f:RegisterEvent("ADDON_LOADED")
     f:RegisterEvent("CVAR_UPDATE")
 end
@@ -447,19 +593,12 @@ function SwingTimer:OnDisable()
     end
     if self.playerFrame then self.playerFrame:Hide() end
     if self.targetFrame then self.targetFrame:Hide() end
+    self:UpdateNativeSwingFramesVisibility()
 end
 
 -- ----------------------------------------------------------------------------
 -- Frame Creation & Styling
 -- ----------------------------------------------------------------------------
-
-local function SetClickthrough(frame, clickthrough)
-    if not frame then return end
-    local enableMouse = not clickthrough
-    if frame.EnableMouse then frame:EnableMouse(enableMouse) end
-    if frame.SetMouseClickEnabled then frame:SetMouseClickEnabled(enableMouse) end
-    if frame.SetMouseMotionEnabled then frame:SetMouseMotionEnabled(enableMouse) end
-end
 
 local function CreateBarWidget(parent, name)
     local bar = CreateFrame("StatusBar", name, parent, "BackdropTemplate")
@@ -657,9 +796,10 @@ function SwingTimer:SetupEditMode()
 
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.eventRegistryRegistered then
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
-            SuppressNativeSelection(_G.SwingTimerMainHandFrame)
-            SuppressNativeSelection(_G.SwingTimerOffHandFrame)
-            SuppressNativeSelection(_G.SwingTimerRangedFrame)
+            self:UpdateNativeSwingFramesVisibility()
+        end, self)
+        _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
+            self:UpdateNativeSwingFramesVisibility()
         end, self)
         self.eventRegistryRegistered = true
     end
@@ -687,9 +827,7 @@ function SwingTimer:SetupEditMode()
                     if sel.Show then sel:Show() end
                 end
             end
-            SuppressNativeSelection(_G.SwingTimerMainHandFrame)
-            SuppressNativeSelection(_G.SwingTimerOffHandFrame)
-            SuppressNativeSelection(_G.SwingTimerRangedFrame)
+            self:UpdateNativeSwingFramesVisibility()
             self:ShowSampleBars(true)
         end)
         LEM:RegisterCallback("exit", function()
@@ -698,6 +836,7 @@ function SwingTimer:SetupEditMode()
             if self.targetFrame then self.targetFrame:SetMovable(false) end
             SetClickthrough(self.playerFrame, true)
             SetClickthrough(self.targetFrame, true)
+            self:UpdateNativeSwingFramesVisibility()
             self:ShowSampleBars(false)
         end)
         self.lemCallbackRegistered = true
@@ -859,6 +998,8 @@ function SwingTimer:UpdateLayout()
     tb:SetStatusBarColor(tc.r, tc.g, tc.b, tc.a or 1.0)
     tb.labelText:SetText(L["Target"] or "Target")
     ConfigureBarText(tb, tCfg)
+
+    self:UpdateNativeSwingFramesVisibility()
 end
 
 -- ----------------------------------------------------------------------------
