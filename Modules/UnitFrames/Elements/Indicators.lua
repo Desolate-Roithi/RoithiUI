@@ -336,12 +336,22 @@ function UF:CreateIndicators(frame)
         -- PvP
         local pvpFFA = UnitIsPVPFreeForAll and UnitIsPVPFreeForAll(unit)
         local isPVP = UnitIsPVP and UnitIsPVP(unit)
-        local isSecretPvP = (issecretvalue and (issecretvalue(pvpFFA) or issecretvalue(isPVP))) or (canaccessvalue and (not canaccessvalue(pvpFFA) or not canaccessvalue(isPVP)))
+        local isSecretFFA = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(pvpFFA)) or (issecretvalue and issecretvalue(pvpFFA)) or (canaccessvalue and not canaccessvalue(pvpFFA))
+        local isSecretPVP = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(isPVP)) or (issecretvalue and issecretvalue(isPVP)) or (canaccessvalue and not canaccessvalue(isPVP))
+        local isSecretPvP = isSecretFFA or isSecretPVP
 
         if IsEnabled("pvp") then
             if isSecretPvP then
                 if _G.SetShownFromSecret then
-                    _G.SetShownFromSecret(pvp, isPVP or pvpFFA)
+                    local pvpFlag
+                    if isSecretPVP then
+                        pvpFlag = isPVP
+                    elseif isSecretFFA then
+                        pvpFlag = pvpFFA
+                    else
+                        pvpFlag = false
+                    end
+                    _G.SetShownFromSecret(pvp, pvpFlag)
                     pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
                 else
                     pvp:Hide()

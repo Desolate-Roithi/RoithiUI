@@ -215,14 +215,24 @@ local speakerCount = 0
 local MAX_SPEAKERS = 2000
 local playerNameToGuid = {}
 
+local function IsSecret(v)
+    if ns and ns.Utils and ns.Utils.IsSecret then
+        return ns.Utils.IsSecret(v)
+    end
+    if v == nil then return false end
+    if _G.issecretvalue and _G.issecretvalue(v) then return true end
+    if _G.canaccessvalue and not _G.canaccessvalue(v) then return true end
+    return type(v) == "userdata"
+end
+
 local function GetSpeakerInfo(guid)
-    if not guid or guid == "" then return nil end
+    if not guid or IsSecret(guid) or type(guid) ~= "string" or guid == "" then return nil end
     if speakers[guid] then return speakers[guid] end
     local getInfo = _G.GetPlayerInfoByGUID
     if not getInfo then return nil end
 
     local ok, _, class, _, race, sex = pcall(getInfo, guid)
-    if not ok or (not class and not race) then return nil end
+    if not ok or (not class and not race) or IsSecret(class) or IsSecret(race) then return nil end
 
     speakerCount = speakerCount + 1
     if speakerCount > MAX_SPEAKERS then
@@ -251,7 +261,7 @@ local function GetFormatBracketText(formatName, defaultText)
 end
 
 function ChatMod:GetSpeakerIcons(guid)
-    if not guid or guid == "" then return nil end
+    if not guid or IsSecret(guid) or type(guid) ~= "string" or guid == "" then return nil end
     local showClass = self.db and self.db.showClassIcons ~= false
     local showRace = self.db and self.db.showRaceIcons ~= false
     if not (showClass or showRace) then return nil end

@@ -168,21 +168,44 @@ local lastNumRows = nil
 local lastFinalX = nil
 local lastCollapseWidth = nil
 
+local function SafeIsShown(frame)
+    if not frame or not frame.IsShown then return false, false end
+    local ok, shown = pcall(frame.IsShown, frame)
+    if not ok then return false, false end
+    local isSecret = (AT and AT.Utils and AT.Utils.IsSecret and AT.Utils.IsSecret(shown))
+        or (issecretvalue and issecretvalue(shown))
+    if isSecret then
+        return false, true
+    end
+    return shown == true, false
+end
+
 local function GetNumVisibleBuffRows()
     local buffFrame = _G.BuffFrame
-    if not buffFrame or not buffFrame:IsShown() then return 0 end
+    if not buffFrame then return 0 end
+    local isShown, isSecret = SafeIsShown(buffFrame)
+    if isSecret then return lastNumRows or 1 end
+    if not isShown then return 0 end
     if buffFrame.isExpanded == false then return 1 end
 
     local count = 0
     if buffFrame.auraFrames then
         for _, btn in ipairs(buffFrame.auraFrames) do
-            if btn:IsShown() then
+            local bShown, bSecret = SafeIsShown(btn)
+            if bSecret then
+                return lastNumRows or 1
+            elseif bShown then
                 count = count + 1
             end
         end
     end
-    if buffFrame.ConsolidatedBuffs and buffFrame.ConsolidatedBuffs:IsShown() then
-        count = count + 1
+    if buffFrame.ConsolidatedBuffs then
+        local cShown, cSecret = SafeIsShown(buffFrame.ConsolidatedBuffs)
+        if cSecret then
+            return lastNumRows or 1
+        elseif cShown then
+            count = count + 1
+        end
     end
     if count == 0 then return 0 end
 
@@ -194,6 +217,11 @@ local function GetNumVisibleBuffRows()
 end
 
 function MinimapMod:UpdateBuffFrameDisplacement(force)
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.queuedBuffDisplacement = true
+        return
+    end
+
     local anchorTarget = self.container or _G.Minimap
     if not anchorTarget then return end
 

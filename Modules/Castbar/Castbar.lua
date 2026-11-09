@@ -2,6 +2,8 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local LSM = LibStub("LibSharedMedia-3.0")
+local localeLib = LibStub and LibStub("AceLocale-3.0", true)
+local L = (localeLib and type(localeLib.GetLocale) == "function" and localeLib:GetLocale("RoithiUI", true)) or setmetatable({}, { __index = function(_, k) return k end })
 
 function ns.GetCastbarFontInfo(unit)
     local profile = RoithiUI and RoithiUI.db and RoithiUI.db.profile
@@ -633,7 +635,7 @@ function ns.HandleInterrupt(bar)
     if bar.isEmpower then ns.StopEmpower(bar) end
 
     -- 1. Visual Updates FIRST (Ensure Text/Color always apply)
-    bar.Text:SetText("INTERRUPTED"); bar.Spark:Hide()
+    bar.Text:SetText(L["INTERRUPTED"] or "INTERRUPTED"); bar.Spark:Hide()
 
     local c = RoithiUI.db.profile.Castbar[bar.unit].colors.interrupted
     if bar.Background and c then

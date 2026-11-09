@@ -7,8 +7,12 @@ local oUF = ns.oUF
 --   insideAlpha: 1.0 (Active)
 --   outsideAlpha: 0.4 (Inactive)
 
-local function Update(self, _)
+local function Update(self, event)
     -- 1. Check Combat
+    if ns.Utils and ns.Utils.IsPlayerInCombat and ns.Utils.IsPlayerInCombat(event) then
+        self:SetAlpha(1)
+        return
+    end
     local isCombat = UnitAffectingCombat("player")
     local isSecretCombat = (issecretvalue and issecretvalue(isCombat)) or (canaccessvalue and not canaccessvalue(isCombat))
     if not isSecretCombat and isCombat then

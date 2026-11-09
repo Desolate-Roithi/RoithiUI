@@ -153,9 +153,11 @@ function AB:OnEnable()
         self:ProtectOverrideActionBar()
     end
     self:SetupLEM()
+    self.inCombat = (ns.Utils and ns.Utils.IsPlayerInCombat and ns.Utils.IsPlayerInCombat()) or false
 end
 
 function AB:OnDisable()
+    self.inCombat = false
     self:UnregisterAllEvents()
     self:UnstyleAllBars()
     self:RestoreBlizzardBars()
@@ -165,10 +167,12 @@ function AB:OnDisable()
 end
 
 function AB:PLAYER_REGEN_DISABLED()
+    self.inCombat = true
     self:OnFaderEvent()
 end
 
 function AB:PLAYER_REGEN_ENABLED()
+    self.inCombat = false
     if _G.OverrideActionBar and _G.OverrideActionBar.IsShown and _G.OverrideActionBar:IsShown() then
         local hasSpecialBar = _G.C_ActionBar and (
             (_G.C_ActionBar.HasOverrideActionBar and _G.C_ActionBar.HasOverrideActionBar()) or
@@ -218,6 +222,9 @@ end
 
 function AB:OnShowGrid()
     self.showingGrid = true
+    if self.UpdateAllBarFaders then
+        self:UpdateAllBarFaders()
+    end
     if self.UpdateAllEmptyButtons then
         self:UpdateAllEmptyButtons()
     end
@@ -225,6 +232,9 @@ end
 
 function AB:OnHideGrid()
     self.showingGrid = false
+    if self.UpdateAllBarFaders then
+        self:UpdateAllBarFaders()
+    end
     if self.UpdateAllEmptyButtons then
         self:UpdateAllEmptyButtons()
     end

@@ -30,7 +30,7 @@ function UF:CreateAdditionalPower(frame)
 
     local function Update(_)
         -- Track previous state to trigger Castbar updates only on change
-        local wasShown = addPower:IsShown()
+        local wasShown = addPower.IsShown and addPower:IsShown()
 
         -- Check Logic: Is Enabled?
         local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
@@ -91,9 +91,15 @@ function UF:CreateAdditionalPower(frame)
     end
 
     addPower:SetScript("OnEvent", Update)
-    addPower:RegisterEvent("UNIT_POWER_UPDATE")
-    addPower:RegisterEvent("UNIT_MAXPOWER")
-    addPower:RegisterEvent("UNIT_DISPLAYPOWER")
+    if addPower.RegisterUnitEvent then
+        addPower:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
+        addPower:RegisterUnitEvent("UNIT_MAXPOWER", "player")
+        addPower:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player")
+    else
+        addPower:RegisterEvent("UNIT_POWER_UPDATE")
+        addPower:RegisterEvent("UNIT_MAXPOWER")
+        addPower:RegisterEvent("UNIT_DISPLAYPOWER")
+    end
     addPower:SetScript("OnShow", Update)
 
     Update()
@@ -184,11 +190,23 @@ function UF:CreateAdditionalPower(frame)
     end
 
     -- Hook updates
-    frame:HookScript("OnEvent", function(f, event)
-        if event == "UNIT_POWER_UPDATE" or event == "UNIT_DISPLAYPOWER" or event == "UPDATE_SHAPESHIFT_FORM" then
-            C_Timer.After(0.1, function() frame.UpdateAdditionalPowerLayout() end)
+    local function DelayedLayout()
+        if frame.UpdateAdditionalPowerLayout then
+            frame.UpdateAdditionalPowerLayout()
         end
-    end)
+    end
+
+    if frame.HookScript then
+        frame:HookScript("OnEvent", function(f, event)
+            if event == "UNIT_DISPLAYPOWER" or event == "UPDATE_SHAPESHIFT_FORM" then
+                if _G.C_Timer and _G.C_Timer.After then
+                    _G.C_Timer.After(0.1, DelayedLayout)
+                else
+                    DelayedLayout()
+                end
+            end
+        end)
+    end
 
     frame.UpdateAdditionalPowerSettings = Update -- Hook for Config
     frame.UpdateAdditionalPowerLayout()          -- Initial Layout Update

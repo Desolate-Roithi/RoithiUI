@@ -849,7 +849,9 @@ function ObjectivesMod:ShowQuestTooltip(block)
     end
 
     tooltip:AddLine(" ")
-    tooltip:AddDoubleLine("|cff9e9e9eAlt+Click:|r |cffffffffTrack|r", "|cff9e9e9eCtrl+Click:|r |cffffffffPin|r", 0.6, 0.6, 0.6, 0.6, 0.6, 0.6)
+    local trackHint = L["|cff9e9e9eAlt+Click:|r |cffffffffTrack|r"] or "|cff9e9e9eAlt+Click:|r |cffffffffTrack|r"
+    local pinHint = L["|cff9e9e9eCtrl+Click:|r |cffffffffPin|r"] or "|cff9e9e9eCtrl+Click:|r |cffffffffPin|r"
+    tooltip:AddDoubleLine(trackHint, pinHint, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6)
 
     tooltip:Show()
 end

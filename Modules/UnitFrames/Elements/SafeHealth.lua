@@ -6,6 +6,27 @@
 local _, ns = ...
 local oUF = ns.oUF or _G.oUF
 
+local smoothCurveCache = nil
+local function GetSmoothColorCurve(grad)
+    if smoothCurveCache then return smoothCurveCache end
+    if not (_G.C_CurveUtil and _G.C_CurveUtil.CreateColorCurve and _G.CreateColor) then
+        return nil
+    end
+    local ok, curve = pcall(function()
+        local c = _G.C_CurveUtil.CreateColorCurve()
+        local g = grad or { 1, 0, 0, 1, 1, 0, 0, 1, 0 }
+        c:AddPoint(0.0, _G.CreateColor(g[1] or 1, g[2] or 0, g[3] or 0))
+        c:AddPoint(0.5, _G.CreateColor(g[4] or 1, g[5] or 1, g[6] or 0))
+        c:AddPoint(1.0, _G.CreateColor(g[7] or 0, g[8] or 1, g[9] or 0))
+        return c
+    end)
+    if ok and curve then
+        smoothCurveCache = curve
+        return curve
+    end
+    return nil
+end
+
 local function Update(self, event, unit)
     if event == "PLAYER_TARGET_CHANGED" or (event == "UNIT_TARGET" and self.unit == "targettarget") or event == "ForceUpdate" then
         unit = self.unit
@@ -61,18 +82,23 @@ local function Update(self, event, unit)
         local _, class = UnitClass(unit)
         if not class and UnitGUID then
             local guid = UnitGUID(unit)
-            if guid and _G.GetPlayerInfoByGUID then
+            local isSecretGuid = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(guid)) or (issecretvalue and issecretvalue(guid))
+            if not isSecretGuid and guid and _G.GetPlayerInfoByGUID then
                 local _, guidClass = _G.GetPlayerInfoByGUID(guid)
                 class = guidClass
             end
         end
-        if not class and UnitIsUnit then
-            if UnitIsUnit(unit, "player") then
+        if not class and ns.Utils and ns.Utils.SafeUnitIsUnit then
+            local isPlayerMatch = ns.Utils.SafeUnitIsUnit(unit, "player")
+            if isPlayerMatch then
                 local _, pClass = UnitClass("player")
                 class = pClass
-            elseif UnitIsUnit(unit, "target") then
-                local _, tClass = UnitClass("target")
-                class = tClass
+            else
+                local isTargetMatch = ns.Utils.SafeUnitIsUnit(unit, "target")
+                if isTargetMatch then
+                    local _, tClass = UnitClass("target")
+                    class = tClass
+                end
             end
         end
 
@@ -95,8 +121,26 @@ local function Update(self, event, unit)
             end
         end
     elseif (element.safeColorSmooth or element.colorSmooth) then
-        local r, g, b = self:ColorGradient(per, 100, unpack(element.smoothGradient or self.colors.smooth))
-        element:SetStatusBarColor(r, g, b)
+        local isPerSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(per)) or (issecretvalue and issecretvalue(per))
+        if not isPerSecret and self.ColorGradient then
+            local r, g, b = self:ColorGradient(per, 100, unpack(element.smoothGradient or self.colors.smooth))
+            element:SetStatusBarColor(r, g, b)
+        else
+            local curve = GetSmoothColorCurve(element.smoothGradient or (self.colors and self.colors.smooth))
+            local colored = false
+            if curve and _G.UnitHealthPercent then
+                local ok, col = pcall(_G.UnitHealthPercent, unit, false, curve)
+                if ok and col and col.GetRGB then
+                    local cr, cg, cb = col:GetRGB()
+                    element:SetStatusBarColor(cr, cg, cb)
+                    colored = true
+                end
+            end
+            if not colored then
+                local fallback = (element.colors and element.colors.health) or { r = 0.2, g = 0.8, b = 0.2 }
+                element:SetStatusBarColor(fallback.r, fallback.g, fallback.b)
+            end
+        end
     elseif (element.colorHealth) then
         local t = element.colors.health
         element:SetStatusBarColor(t.r, t.g, t.b)

@@ -86,6 +86,43 @@ local function AbbreviateNumber(value)
     return value
 end
 
+-- Helper: Format Percentage with max 1 decimal place (e.g. 87.5% or 100%)
+local function FormatPercent(value)
+    if value == nil then return "" end
+    if IsSecret(value) then
+        local ok, formatted = pcall(string.format, "%.1f%%", value)
+        if ok and formatted ~= nil then return formatted end
+        local strUtil = _G.C_StringUtil
+        if strUtil and strUtil.RoundToNearestString and strUtil.WrapString then
+            local ok2, roundedStr = pcall(function()
+                return strUtil.WrapString(strUtil.RoundToNearestString(value), "", "%")
+            end)
+            if ok2 and roundedStr ~= nil then return roundedStr end
+        end
+        return value
+    end
+
+    if type(value) == "string" then
+        local num = tonumber(value:match("^([%d%.]+)"))
+        if num then
+            value = num
+        else
+            return value
+        end
+    end
+
+    if type(value) == "number" then
+        local rounded = math.floor(value * 10 + 0.5) / 10
+        if rounded % 1 == 0 then
+            return string.format("%.0f%%", rounded)
+        else
+            return string.format("%.1f%%", rounded)
+        end
+    end
+
+    return tostring(value)
+end
+
 -- ----------------------------------------------------------------------------
 -- 1. Tag Methods (Data Providers)
 -- ----------------------------------------------------------------------------
@@ -133,19 +170,12 @@ TM.Methods = {
 
         if isActuallySecret then
             -- Secondary Fallback: UnitHealthPercent with curve
-            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or 0
+            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
             local fnHealthPercent = _G.UnitHealthPercent or UnitHealthPercent
             if fnHealthPercent then
                 local success, result = pcall(function()
                     local pct = fnHealthPercent(unit, false, curve)
-                    if not IsSecret(pct) and type(pct) == "number" then
-                        return string.format("%.2f%%", pct)
-                    end
-                    if _G.FormatPercentage then
-                        local ok, formatted = pcall(_G.FormatPercentage, pct)
-                        if ok and formatted then return formatted end
-                    end
-                    return pct
+                    return FormatPercent(pct)
                 end)
                 if success and result then return result end
             end
@@ -154,13 +184,13 @@ TM.Methods = {
             local success2, result2 = pcall(function()
                 return C_UnitHealth and C_UnitHealth.GetHealthPercentText and C_UnitHealth.GetHealthPercentText(unit)
             end)
-            if success2 and result2 then return result2 end
+            if success2 and result2 then return FormatPercent(result2) end
 
             return ""
         end
 
-        if not max or max == 0 then return "0.00%" end
-        return string.format("%.2f%%", (cur / max) * 100)
+        if not max or max == 0 then return "0%" end
+        return FormatPercent((cur / max) * 100)
     end,
 
     -- Power
@@ -172,20 +202,13 @@ TM.Methods = {
 
         if isActuallySecret then
             -- Secondary Fallback: UnitPowerPercent with curve
-            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or 0
+            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
             local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
             if fnPowerPercent and _G.UnitPowerType then
                 local success, result = pcall(function()
                     local pType = _G.UnitPowerType(unit)
                     local pct = fnPowerPercent(unit, pType, false, curve)
-                    if not IsSecret(pct) and type(pct) == "number" then
-                        return string.format("%.2f%%", pct)
-                    end
-                    if _G.FormatPercentage then
-                        local ok, formatted = pcall(_G.FormatPercentage, pct)
-                        if ok and formatted then return formatted end
-                    end
-                    return pct
+                    return FormatPercent(pct)
                 end)
                 if success and result then return result end
             end
@@ -193,13 +216,13 @@ TM.Methods = {
             local success2, result2 = pcall(function()
                 return C_UnitPower and C_UnitPower.GetPowerPercentText and C_UnitPower.GetPowerPercentText(unit)
             end)
-            if success2 and result2 then return result2 end
+            if success2 and result2 then return FormatPercent(result2) end
 
             return ""
         end
 
-        if not max or max == 0 then return "0.00%" end
-        return string.format("%.2f%%", (cur / max) * 100)
+        if not max or max == 0 then return "0%" end
+        return FormatPercent((cur / max) * 100)
     end,
 
     ["power.missing"] = function(unit)
@@ -342,26 +365,22 @@ TM.Methods = {
         end
 
         if IsSecret(cur) or IsSecret(max) then
-            local curve = (CurveConstants and CurveConstants.ScaleTo100) or 0
-            local success, result = pcall(function()
-                -- 12.0.1: Native Class Power Percent usually via UnitPowerPercent
-                local pType = config.type
-                local pct = UnitPowerPercent(unit, pType, false, curve)
-                if not IsSecret(pct) and type(pct) == "number" then
-                    return string.format("%.0f%%", pct)
-                end
-                if _G.FormatPercentage then
-                    local ok, formatted = pcall(_G.FormatPercentage, pct)
-                    if ok and formatted then return formatted end
-                end
-                return pct
-            end)
-            if success and result then return result end
+            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
+            local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
+            if fnPowerPercent then
+                local success, result = pcall(function()
+                    -- 12.0.1: Native Class Power Percent usually via UnitPowerPercent
+                    local pType = config.type
+                    local pct = fnPowerPercent(unit, pType, false, curve)
+                    return FormatPercent(pct)
+                end)
+                if success and result then return result end
+            end
             return ""
         end
 
         if max == 0 then return "0%" end
-        return string.format("%.0f%%", (cur / max) * 100)
+        return FormatPercent((cur / max) * 100)
     end,
 
     -- Additional Power (Mana when in form)
@@ -396,25 +415,21 @@ TM.Methods = {
 
         -- Handle Secrets via Helper API
         if IsSecret(cur) or IsSecret(max) then
-            local curve = (CurveConstants and CurveConstants.ScaleTo100) or 0
-            local success, result = pcall(function()
-                -- Explicitly request percent for MANA (0)
-                local pct = UnitPowerPercent(unit, 0, false, curve)
-                if not IsSecret(pct) and type(pct) == "number" then
-                    return string.format("%.0f%%", pct)
-                end
-                if _G.FormatPercentage then
-                    local ok, formatted = pcall(_G.FormatPercentage, pct)
-                    if ok and formatted then return formatted end
-                end
-                return pct
-            end)
-            if success and result then return result end
+            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
+            local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
+            if fnPowerPercent then
+                local success, result = pcall(function()
+                    -- Explicitly request percent for MANA (0)
+                    local pct = fnPowerPercent(unit, 0, false, curve)
+                    return FormatPercent(pct)
+                end)
+                if success and result then return result end
+            end
             return ""
         end
 
         if not max or max == 0 then return "" end
-        return string.format("%.0f%%", (cur / max) * 100)
+        return FormatPercent((cur / max) * 100)
     end,
 
     ["power.add.missing"] = function(unit)
@@ -451,7 +466,7 @@ TM.Methods = {
         if IsSecret(healthMax) then return "" end
         if healthMax == 0 then return "" end
 
-        return string.format("%.0f%%", (stagger / healthMax) * 100)
+        return FormatPercent((stagger / healthMax) * 100)
     end,
 
     -- Absorb
@@ -518,15 +533,16 @@ function TM:GetSegments(formatString, unit)
     -- 1. Conditional Logic [type](format) for Power Type
     if formatString:find("%[") then
         local _, pToken = UnitPowerType(unit or "player")
-        if pToken then
+        if pToken and not IsSecret(pToken) then
+            local currentPower = pToken:upper()
             for cond, content in formatString:gmatch("%[([^%]]+)%]%(([^%)]+)%)") do
-                if cond:upper() == pToken then
+                if cond:upper() == currentPower then
                     return TM:GetSegments(content, unit)
                 end
             end
-            local stripped = formatString:gsub("%[([^%]]+)%]%(([^%)]+)%)%s?", "")
-            formatString = stripped
         end
+        local stripped = formatString:gsub("%[([^%]]+)%]%(([^%)]+)%)%s?", "")
+        formatString = stripped
     end
 
     -- 2. Conditional Logic {class:spec}(format)
@@ -553,23 +569,25 @@ function TM:GetSegments(formatString, unit)
             ["MONK"] = "MONK"
         }
 
-        -- Iterate all {cond}(content) blocks
-        for cond, content in formatString:gmatch("%{([^%}]+)%}%(([^%)]+)%)") do
-            local reqClass, reqSpec = strsplit(":", cond)
-            reqClass = reqClass and reqClass:upper()
+        if class and not IsSecret(class) then
+            -- Iterate all {cond}(content) blocks
+            for cond, content in formatString:gmatch("%{([^%}]+)%}%(([^%)]+)%)") do
+                local reqClass, reqSpec = strsplit(":", cond)
+                reqClass = reqClass and reqClass:upper()
 
-            -- Resolve Abbr
-            if classMap[reqClass] then reqClass = classMap[reqClass] end
+                -- Resolve Abbr
+                if classMap[reqClass] then reqClass = classMap[reqClass] end
 
-            local classMatch = (reqClass == class)
-            local specMatch = true
+                local classMatch = (reqClass == class)
+                local specMatch = true
 
-            if reqSpec then
-                if not spec or tonumber(reqSpec) ~= spec then specMatch = false end
-            end
+                if reqSpec then
+                    if not spec or IsSecret(spec) or tonumber(reqSpec) ~= spec then specMatch = false end
+                end
 
-            if classMatch and specMatch then
-                return TM:GetSegments(content, unit)
+                if classMatch and specMatch then
+                    return TM:GetSegments(content, unit)
+                end
             end
         end
 
@@ -837,30 +855,51 @@ function UF:UpdateCustomTags(frame)
     end
 end
 
+local function IsDirectUnitToken(u)
+    if not u or type(u) ~= "string" then return false end
+    return u == "player" or u == "target" or u == "focus" or u == "pet" or u:find("^boss%d+$") ~= nil
+end
+
 function UF:EnableTags(frame)
     if frame.RoithiTagsHooked then return end
 
     local function UpdateTags() self:UpdateCustomTags(frame) end
+    local function DelayedUpdateTags()
+        if frame.UpdateTags then frame.UpdateTags() else UpdateTags() end
+    end
 
     -- Unified Event Handler for oUF
     local function OnTagEvent(_, event, unit)
         -- Standard Unit Events
-        -- Use UnitIsUnit to handle dynamic units (e.g., targettarget == player)
+        -- Use SafeUnitIsUnit to handle dynamic units (e.g., targettarget == player)
         local effectiveUnit = GetEffectiveTagUnit(frame.unit)
-        local match = unit and frame.unit and (unit == frame.unit or unit == effectiveUnit or UnitIsUnit(unit, frame.unit))
-        if IsSecret(match) or match then
+        local match = false
+        if unit and frame.unit then
+            if unit == frame.unit or unit == effectiveUnit then
+                match = true
+            elseif ns.Utils and ns.Utils.SafeUnitIsUnit then
+                local isMatch = ns.Utils.SafeUnitIsUnit(unit, frame.unit)
+                match = isMatch
+            end
+        end
+
+        if match then
             if event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
-                C_Timer.After(0.1, function()
-                    if frame.UpdateTags then frame.UpdateTags() else UpdateTags() end
-                end)
+                if _G.C_Timer and _G.C_Timer.After then
+                    _G.C_Timer.After(0.1, DelayedUpdateTags)
+                else
+                    DelayedUpdateTags()
+                end
             else
                 UpdateTags()
             end
             -- Context Switch Events
         elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" or event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
-            C_Timer.After(0.1, function()
-                if frame.UpdateTags then frame.UpdateTags() else UpdateTags() end
-            end)
+            if _G.C_Timer and _G.C_Timer.After then
+                _G.C_Timer.After(0.1, DelayedUpdateTags)
+            else
+                DelayedUpdateTags()
+            end
         elseif event == "UNIT_TARGET" then
             UpdateTags()
         end
@@ -872,18 +911,33 @@ function UF:EnableTags(frame)
 
     -- Key events for stats
     if frame.unit then
-        listener:RegisterEvent("UNIT_HEALTH")
-        listener:RegisterEvent("UNIT_MAXHEALTH")
-        listener:RegisterEvent("UNIT_POWER_UPDATE")
-        listener:RegisterEvent("UNIT_MAXPOWER")
-        listener:RegisterEvent("UNIT_DISPLAYPOWER") -- For Additional Power toggling
-        listener:RegisterEvent("UNIT_NAME_UPDATE")
-        listener:RegisterEvent("UNIT_LEVEL")
-        listener:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
-        listener:RegisterEvent("UNIT_HEAL_ABSORB_AMOUNT_CHANGED")
-        listener:RegisterEvent("UNIT_AURA") -- Added for ClassPower Aura tags
-        listener:RegisterEvent("UNIT_ENTERED_VEHICLE")
-        listener:RegisterEvent("UNIT_EXITED_VEHICLE")
+        local STAT_EVENTS = {
+            "UNIT_HEALTH",
+            "UNIT_MAXHEALTH",
+            "UNIT_POWER_UPDATE",
+            "UNIT_MAXPOWER",
+            "UNIT_DISPLAYPOWER",
+            "UNIT_NAME_UPDATE",
+            "UNIT_LEVEL",
+            "UNIT_ABSORB_AMOUNT_CHANGED",
+            "UNIT_HEAL_ABSORB_AMOUNT_CHANGED",
+            "UNIT_AURA",
+            "UNIT_ENTERED_VEHICLE",
+            "UNIT_EXITED_VEHICLE",
+        }
+
+        local isDirect = IsDirectUnitToken(frame.unit)
+        for _, ev in ipairs(STAT_EVENTS) do
+            if isDirect and listener.RegisterUnitEvent then
+                if frame.unit == "player" then
+                    listener:RegisterUnitEvent(ev, "player", "vehicle")
+                else
+                    listener:RegisterUnitEvent(ev, frame.unit)
+                end
+            else
+                listener:RegisterEvent(ev)
+            end
+        end
     end
 
     -- Context events for target switching (Must be declared unitless)

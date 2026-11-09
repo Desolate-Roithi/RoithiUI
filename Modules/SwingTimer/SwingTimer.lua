@@ -244,16 +244,29 @@ local function ShouldSuppressNativeSwingFrames(mod)
     return true
 end
 
+local function SafeUnitBool(val)
+    if val == nil or IsSecret(val) then return false end
+    return val == true or val == 1
+end
+
 local function SuppressNativeSelection(targetFrame)
     if not targetFrame then return end
     if targetFrame.Selection then
         if ShouldSuppressNativeSwingFrames(SwingTimer) then
-            targetFrame.Selection:Hide()
+            if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+                targetFrame.Selection:Hide()
+            elseif targetFrame.Selection.SetAlpha then
+                targetFrame.Selection:SetAlpha(0)
+            end
         end
         if not selectionHooked[targetFrame] and hooksecurefunc then
             hooksecurefunc(targetFrame.Selection, "Show", function(sel)
                 if ShouldSuppressNativeSwingFrames(SwingTimer) then
-                    sel:Hide()
+                    if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+                        sel:Hide()
+                    elseif sel.SetAlpha then
+                        sel:SetAlpha(0)
+                    end
                 end
             end)
             selectionHooked[targetFrame] = true
@@ -1449,7 +1462,8 @@ end
 
 function SwingTimer:OnPlayerSwing(swingDuration, swingType)
     if self.isInEditMode or not self.playerFrame then return end
-    if type(swingDuration) ~= "number" or swingDuration <= 0 then return end
+    if not IsSecret(swingDuration) and (type(swingDuration) ~= "number" or swingDuration <= 0) then return end
+    if IsSecret(swingType) then swingType = 0 end
 
     -- Enum.PlayerSwingType: 0 = MainHand, 1 = OffHand, 2 = Ranged
     if swingType == 0 then
@@ -1463,7 +1477,11 @@ end
 
 function SwingTimer:OnPlayerSwingRangeUpdate(swingType, isInRange, checksRange)
     if not self.playerFrame then return end
-    local isOutOfRange = (checksRange == true and isInRange == false)
+    if IsSecret(swingType) then swingType = 0 end
+    local isOutOfRange = false
+    if not IsSecret(checksRange) and not IsSecret(isInRange) then
+        isOutOfRange = (checksRange == true and isInRange == false)
+    end
     local bar
     if swingType == 0 then
         bar = self.playerFrame.mainBar
@@ -1520,7 +1538,7 @@ function SwingTimer:OnTargetChanged()
         end
         self.targetFrame:Hide()
     end
-    if UnitExists("target") and not UnitIsDeadOrGhost("target") and (not _G.UnitCanAttack or UnitCanAttack("player", "target")) and (UnitAffectingCombat and UnitAffectingCombat("target")) then
+    if UnitExists("target") and not SafeUnitBool(UnitIsDeadOrGhost("target")) and (not _G.UnitCanAttack or SafeUnitBool(UnitCanAttack("player", "target"))) and (UnitAffectingCombat and SafeUnitBool(UnitAffectingCombat("target"))) then
         local targetSpeed = self:GetSafeAttackSpeed("target")
         self:StartSwing("target", "main", targetSpeed)
     end
@@ -1528,13 +1546,18 @@ end
 
 function SwingTimer:OnUnitCombat(unit, action)
     if unit == "player" then
-        if self.inCombat or (UnitAffectingCombat and UnitAffectingCombat("player")) then
+        if self.inCombat or (UnitAffectingCombat and SafeUnitBool(UnitAffectingCombat("player"))) then
             local mainSpeed = self:GetSafeAttackSpeed("player")
             self:StartSwing("player", "main", mainSpeed)
         end
-        if UnitExists("target") and not UnitIsDeadOrGhost("target") and UnitCanAttack("player", "target") then
+        if UnitExists("target") and not SafeUnitBool(UnitIsDeadOrGhost("target")) and SafeUnitBool(UnitCanAttack("player", "target")) then
             local isTargetAttackingPlayer = false
-            if UnitIsUnit then
+            if ns.Utils and ns.Utils.SafeUnitIsUnit then
+                local isMatch = ns.Utils.SafeUnitIsUnit("targettarget", "player")
+                if isMatch then
+                    isTargetAttackingPlayer = true
+                end
+            elseif UnitIsUnit then
                 local ok, isUnit = pcall(UnitIsUnit, "targettarget", "player")
                 if ok and not IsSecret(isUnit) and isUnit == true then
                     isTargetAttackingPlayer = true
@@ -1550,7 +1573,7 @@ function SwingTimer:OnUnitCombat(unit, action)
             self:ApplyParryHaste("player")
         end
     elseif unit == "target" then
-        if UnitIsDeadOrGhost("target") or not UnitCanAttack("player", "target") then
+        if SafeUnitBool(UnitIsDeadOrGhost("target")) or not SafeUnitBool(UnitCanAttack("player", "target")) then
             self.targetSwings.main.active = false
             if self.targetFrame and not self.isInEditMode then
                 if self.targetFrame.mainBar then
@@ -1563,7 +1586,7 @@ function SwingTimer:OnUnitCombat(unit, action)
         end
         if action == "PARRY" then
             self:ApplyParryHaste("target")
-        elseif not self.targetSwings.main.active and UnitExists("target") and UnitCanAttack("player", "target") and UnitAffectingCombat and UnitAffectingCombat("target") then
+        elseif not self.targetSwings.main.active and UnitExists("target") and SafeUnitBool(UnitCanAttack("player", "target")) and UnitAffectingCombat and SafeUnitBool(UnitAffectingCombat("target")) then
             local targetSpeed = self:GetSafeAttackSpeed("target")
             self:StartSwing("target", "main", targetSpeed)
         end
@@ -1602,18 +1625,28 @@ function SwingTimer:UpdateFonts()
     local fontName = (self.db and self.db.font)
         or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font)
         or "Roithi Thick"
+    local fontOutline = (self.db and self.db.fontOutline)
+        or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline)
+        or "OUTLINE"
     local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
-    local bars = { self.playerBars, self.targetBars }
-    for _, group in ipairs(bars) do
-        if group then
-            for _, bar in pairs(group) do
-                if bar and bar.labelText and utils and utils.ApplyTypography then
-                    utils.ApplyTypography(bar.labelText, fontName, 9, "OUTLINE", false, "Roithi Thick")
-                end
-                if bar and bar.timeText and utils and utils.ApplyTypography then
-                    utils.ApplyTypography(bar.timeText, fontName, 9, "OUTLINE", false, "Roithi Thick")
-                end
-            end
+    if not utils or not utils.ApplyTypography then return end
+
+    local bars = {}
+    if self.playerFrame then
+        if self.playerFrame.mainBar then table.insert(bars, self.playerFrame.mainBar) end
+        if self.playerFrame.offBar then table.insert(bars, self.playerFrame.offBar) end
+        if self.playerFrame.rangedBar then table.insert(bars, self.playerFrame.rangedBar) end
+    end
+    if self.targetFrame and self.targetFrame.mainBar then
+        table.insert(bars, self.targetFrame.mainBar)
+    end
+
+    for _, bar in ipairs(bars) do
+        if bar.labelText then
+            utils.ApplyTypography(bar.labelText, fontName, 9, fontOutline, false, "Roithi Thick")
+        end
+        if bar.timeText then
+            utils.ApplyTypography(bar.timeText, fontName, 9, fontOutline, false, "Roithi Thick")
         end
     end
 end

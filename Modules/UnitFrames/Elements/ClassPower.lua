@@ -235,7 +235,8 @@ function UF:CreateClassPower(frame)
             r.start = start
             r.duration = duration
             r.ready = runeReady
-            local isSecretRune = (issecretvalue and (issecretvalue(start) or issecretvalue(duration))) or (canaccessvalue and (not canaccessvalue(start) or not canaccessvalue(duration)))
+            local isSecretRune = (issecretvalue and (issecretvalue(start) or issecretvalue(duration) or issecretvalue(runeReady))) or (canaccessvalue and (not canaccessvalue(start) or not canaccessvalue(duration) or not canaccessvalue(runeReady)))
+            r.isSecret = isSecretRune
             if not isSecretRune and not runeReady and start and duration and duration > 0 then
                 r.remain = (start + duration) - now
                 anyCooldown = true
@@ -257,7 +258,15 @@ function UF:CreateClassPower(frame)
             local runeChanged = (point.lastRuneIndex ~= data.index)
             point.lastRuneIndex = data.index
 
-            if data.ready then
+            if data.isSecret then
+                point:SetMinMaxValues(0, 1)
+                point:SetValue(1)
+                point:SetAlpha(1)
+                if runeChanged or point.lastTenths ~= 0 then
+                    point.lastTenths = 0
+                    point.Timer:SetText("")
+                end
+            elseif data.ready then
                 point:SetMinMaxValues(0, 1)
                 point:SetValue(1)
                 point:SetAlpha(1)
@@ -389,21 +398,26 @@ function UF:CreateClassPower(frame)
 
             -- Strict Visibility: If max power is 0 (e.g. Druid in Bear/Caster), HIDE.
             -- 12.0.1: UnitPowerMax returns secret for player, so we skip numerical comparison if secret.
-            local isMaxSecret = issecretvalue and issecretvalue(pMax)
+            local isMaxSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(pMax)) or (issecretvalue and issecretvalue(pMax))
             if not pMax or (not isMaxSecret and pMax <= 0) then
                 element:Hide()
                 element:SetScript("OnUpdate", nil)
                 return
             end
 
-            max = pMax
+            if not isMaxSecret and type(pMax) == "number" and pMax > 0 then
+                element.lastSafeMax = pMax
+                max = pMax
+            else
+                max = element.lastSafeMax or (config and config.maxDisplay) or 5
+            end
 
             -- Fragment Logic (Generic)
-            local segMax = UnitPowerMax("player", config.type) -- logical max (5)
             modifier = UnitPowerDisplayMod(config.type) or 1
 
             -- Fallback if DisplayMod is 1 but TrueMax reveals fragments (some resources might behave this way)
-            if modifier == 1 then
+            if modifier == 1 and not isMaxSecret then
+                local segMax = UnitPowerMax("player", config.type) -- logical max (5)
                 local trueMax = UnitPowerMax("player", config.type, true)
                 if trueMax and segMax and segMax > 0 and trueMax > segMax then
                     modifier = trueMax / segMax
@@ -417,7 +431,10 @@ function UF:CreateClassPower(frame)
 
             if (config.type == ComboPointsType or (Enum and Enum.PowerType and config.type == Enum.PowerType.ComboPoints)) and (ns.IsForever or GetComboPoints) then
                 local cp = GetComboPoints and GetComboPoints("player", "target")
-                if cp and cp > 0 then
+                local isCpSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(cp)) or (issecretvalue and issecretvalue(cp))
+                if isCpSecret then
+                    curValue = cp
+                elseif cp and cp > 0 then
                     curValue = cp
                 else
                     curValue = UnitPower("player", config.type, true)
@@ -469,7 +486,8 @@ function UF:CreateClassPower(frame)
         UpdateLayout(pointsToRender)
 
         -- Marker Logic
-        if config.markers and config.style == "BAR" then
+        local isValOrMaxSecret = (ns.Utils and ns.Utils.IsSecret and (ns.Utils.IsSecret(max) or ns.Utils.IsSecret(curValue)))
+        if config.markers and config.style == "BAR" and not isValOrMaxSecret then
             local currentWidth = element.points[1]:GetWidth()
             for i, val in ipairs(config.markers) do
                 local m = element.markers[i]
@@ -513,12 +531,20 @@ function UF:CreateClassPower(frame)
                 if config.style == "BAR" then
                     -- Single Bar Mode
                     -- If we are using fragments, scaling applies to the whole bar
-                    local barMax = max * (modifier or 1)
+                    local isMaxSecretBar = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(max)) or (type(issecretvalue) == "function" and issecretvalue(max))
+                    local barMax
+                    if isMaxSecretBar then
+                        barMax = UnitPowerMax("player", config.type, true) or max
+                    else
+                        barMax = max * (modifier or 1)
+                    end
                     point:SetMinMaxValues(0, barMax)
                     point:SetValue(curValue)
                     point.cooldown:Hide()
 
-                    if config.overcapColor and not (type(issecretvalue) == "function" and issecretvalue(curValue)) and curValue >= barMax then
+                    local curIsSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(curValue)) or (type(issecretvalue) == "function" and issecretvalue(curValue))
+                    local isBarMaxSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(barMax)) or (type(issecretvalue) == "function" and issecretvalue(barMax))
+                    if config.overcapColor and not curIsSecret and not isBarMaxSecret and curValue >= barMax then
                         point.OvercapBar:SetStatusBarColor(config.overcapColor.r, config.overcapColor.g,
                             config.overcapColor.b, 0.5)
                         point.OvercapBar:SetMinMaxValues(0, 1)
@@ -540,7 +566,9 @@ function UF:CreateClassPower(frame)
                     point:SetMinMaxValues((i - 1) * mod, i * mod)
                     point:SetValue(curValue)
 
-                    if config.overcapColor then
+                    local curIsSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(curValue)) or (type(issecretvalue) == "function" and issecretvalue(curValue))
+                    local isMaxSecretPoints = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(max)) or (type(issecretvalue) == "function" and issecretvalue(max))
+                    if config.overcapColor and not curIsSecret and not isMaxSecretPoints then
                         -- WRAPPING LOGIC (New)
                         -- Calculate if this specific point should wrap (turn red)
                         -- Normalize current value to logical units for wrapping calculation

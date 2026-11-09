@@ -25,6 +25,18 @@ function AB:IsButtonOutOfRange(btn)
     return (st and st.isOutOfRange == true) or false
 end
 
+local function IsNonSecretOutOfRange(v)
+    if v == nil then return false end
+    if ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(v) then return false end
+    return v == false or v == 0
+end
+
+local function IsNonSecretTrue(v)
+    if v == nil then return false end
+    if ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(v) then return false end
+    return v == true or v == 1
+end
+
 local BAR_CONFIGS = {
     bar1 = { name = "RoithiActionBar1", prefix = "ActionButton", count = 12 },
     bar2 = { name = "RoithiActionBar2", prefix = "MultiBarBottomLeftButton", count = 12, actionPage = 6 },
@@ -335,11 +347,16 @@ function AB:IsBarMouseOver(barKey)
 end
 
 function AB:IsFaderActive(barKey)
+    if self.showingGrid then return true end
+    if self.inCombat or (ns.Utils and ns.Utils.IsPlayerInCombat and ns.Utils.IsPlayerInCombat()) then return true end
     if _G.InCombatLockdown and _G.InCombatLockdown() then return true end
     if _G.UnitExists and _G.UnitExists("target") then return true end
-    if _G.UnitCastingInfo and _G.UnitCastingInfo("player") then return true end
-    if _G.UnitChannelInfo and _G.UnitChannelInfo("player") then return true end
-    if _G.UnitEmpoweredChannelDuration and _G.UnitEmpoweredChannelDuration("player") then return true end
+    local isCasting = _G.UnitCastingInfo and _G.UnitCastingInfo("player")
+    if isCasting ~= nil then return true end
+    local isChanneling = _G.UnitChannelInfo and _G.UnitChannelInfo("player")
+    if isChanneling ~= nil then return true end
+    local isEmpowered = _G.UnitEmpoweredChannelDuration and _G.UnitEmpoweredChannelDuration("player")
+    if isEmpowered ~= nil then return true end
     if self:IsBarMouseOver(barKey) then return true end
     return false
 end
@@ -354,7 +371,9 @@ function AB:UpdateBarMouseover(barKey)
     end
 
     local alpha
-    if db.mouseover then
+    if self.showingGrid then
+        alpha = db.alpha or 1.0
+    elseif db.mouseover then
         alpha = (not self:IsBarMouseOver(barKey)) and (db.mouseoverAlpha or 0.0) or (db.alpha or 1.0)
     elseif self.db and self.db.enableFader then
         if self:IsFaderActive(barKey) then
@@ -423,18 +442,14 @@ function AB:UpdateEmptyButtons(barKey, customButtons)
     for i, btn in ipairs(buttons) do
         if i <= displayCount then
             local hasAct = ButtonHasAction(btn)
-            local canClick = hasAct or self.showingGrid or isQuickKeybind or isEditMode
             if barKey == "stance" then
-                canClick = true
                 local numForms = _G.GetNumShapeshiftForms and _G.GetNumShapeshiftForms() or 0
                 hasAct = (i <= numForms)
             end
             if not inCombat then
-                if btn.EnableMouse then btn:EnableMouse(canClick) end
-                if btn.SetMouseClickEnabled then btn:SetMouseClickEnabled(canClick) end
+                if btn.EnableMouse then btn:EnableMouse(true) end
+                if btn.SetMouseClickEnabled then btn:SetMouseClickEnabled(true) end
                 if btn.Show and not btn:IsShown() then btn:Show() end
-            else
-                self.queuedMouseUpdate = true
             end
 
             if hideEmpty then
@@ -780,11 +795,11 @@ function AB:SetupBars()
                     local hasTarget = _G.UnitExists and _G.UnitExists("target")
                     local isOutOfRange = false
 
-                    if hasTarget and checksRange and not inRange then
+                    if hasTarget and IsNonSecretTrue(checksRange) and not IsNonSecretTrue(inRange) then
                         if btn.action and _G.C_ActionBar and _G.C_ActionBar.IsActionInRange then
                             local ok, actionInRange = pcall(_G.C_ActionBar.IsActionInRange, btn.action)
                             if ok then
-                                if actionInRange == false or actionInRange == 0 then
+                                if IsNonSecretOutOfRange(actionInRange) then
                                     isOutOfRange = true
                                 end
                             else
@@ -832,7 +847,7 @@ function AB:SetupBars()
                     if _G.UnitExists and _G.UnitExists("target") then
                         if btn.action and _G.C_ActionBar and _G.C_ActionBar.IsActionInRange then
                             local ok, inRange = pcall(_G.C_ActionBar.IsActionInRange, btn.action)
-                            if ok and (inRange == false or inRange == 0) then
+                            if ok and IsNonSecretOutOfRange(inRange) then
                                 stillOutOfRange = true
                             end
                         else
@@ -876,6 +891,24 @@ function AB:SetupBars()
             end)
             self.cooldownNumberHiddenHooked = true
         end
+        if _G.ActionButton_HideGrid and not self.hideGridHooked then
+            hooksecurefunc("ActionButton_HideGrid", function(btn)
+                if (not self.IsEnabled or self:IsEnabled()) and btn and not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+                    HandleButtonUpdate(btn)
+                end
+            end)
+            self.hideGridHooked = true
+        end
+        if _G.ActionBarMixin and _G.ActionBarMixin.UpdateShownButtons and not self.updateShownButtonsHooked then
+            hooksecurefunc(_G.ActionBarMixin, "UpdateShownButtons", function(bar)
+                if (not self.IsEnabled or self:IsEnabled()) and bar and not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+                    if self.UpdateAllEmptyButtons then
+                        self:UpdateAllEmptyButtons()
+                    end
+                end
+            end)
+            self.updateShownButtonsHooked = true
+        end
         self.overlayHooksRegistered = true
     end
 end
@@ -889,12 +922,12 @@ function AB:UpdateButtonRange(btn)
     if hasTarget then
         if btn.action and _G.C_ActionBar and _G.C_ActionBar.IsActionInRange then
             local ok, inRange = pcall(_G.C_ActionBar.IsActionInRange, btn.action)
-            if ok and (inRange == false or inRange == 0) then
+            if ok and IsNonSecretOutOfRange(inRange) then
                 isOutOfRange = true
             end
         elseif btn.buttonType == "PET" and _G.GetPetActionInfo and btn.GetID and btn:GetID() then
             local _, _, _, _, _, _, _, petChecksRange, petInRange = _G.GetPetActionInfo(btn:GetID())
-            if petChecksRange and not petInRange then
+            if IsNonSecretTrue(petChecksRange) and not IsNonSecretTrue(petInRange) then
                 isOutOfRange = true
             end
         end
@@ -1038,7 +1071,9 @@ function AB:UpdateOverlayContainment(button)
         if cd.SetHideCountdownNumbers then
             cd:SetHideCountdownNumbers(false)
         end
-        cd.noCooldownCount = nil
+        if rawget(cd, "noCooldownCount") ~= nil then
+            cd.noCooldownCount = nil
+        end
     end
 
     for _, extraCd in ipairs({ button.chargeCooldown, button.lossOfControlCooldown }) do

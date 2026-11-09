@@ -288,9 +288,11 @@ local function Update(s)
                     max = (info.numTotalFrames or 1) * unitMax
                     min = 0
 
-                    local aura = C_UnitAuras.GetPlayerAuraBySpellID(1225598)
-                    if aura and aura.duration and aura.duration > 0 then
-                        max = aura.duration
+                    local aura = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID and C_UnitAuras.GetPlayerAuraBySpellID(1225598)
+                    local auraDur = aura and aura.duration
+                    local isDurSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(auraDur)) or (issecretvalue and issecretvalue(auraDur))
+                    if auraDur and not isDurSecret and auraDur > 0 then
+                        max = auraDur
                     end
                 else
                     min = 0
@@ -386,7 +388,12 @@ local function Update(s)
             end)
 
             if success and pct then
-                currentStr = string.format("%.0f%%", pct)
+                local fmtOk, fmtStr = pcall(string.format, "%.0f%%", pct)
+                if fmtOk then
+                    currentStr = fmtStr
+                else
+                    currentStr = "..."
+                end
             else
                 currentStr = "..."
             end
@@ -604,6 +611,6 @@ end
 EB.RefreshSettings = EB.RefreshProfile
 
 function EB:UpdateFonts()
-    if self.UpdateBarLayout then self:UpdateBarLayout() end
+    self:RefreshProfile()
 end
 

@@ -2,6 +2,27 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 
+-- Bare seconds numeric rule formatter cache (removes 's' suffix: "45", "2m", "1h")
+local bareSecondsFormatterCache = nil
+local function GetBareSecondsFormatter()
+    if bareSecondsFormatterCache ~= nil then return bareSecondsFormatterCache end
+    if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Enum and Enum.NumericRuleFormatRounding) then
+        bareSecondsFormatterCache = false
+        return false
+    end
+    local ok, fmt = pcall(function()
+        local down = Enum.NumericRuleFormatRounding.Down
+        local up   = Enum.NumericRuleFormatRounding.Up
+        local f = C_StringUtil.CreateNumericRuleFormatter()
+        f:AddBreakpoint({ threshold = 0, step = 1, rounding = up, min = 1, format = "%d" })
+        f:AddBreakpoint({ threshold = 60, step = 1, rounding = down, min = 1, format = "%dm", components = { { div = 60, rounding = up } } })
+        f:AddBreakpoint({ threshold = 3600, step = 1, rounding = down, min = 1, format = "%dh", components = { { div = 3600, rounding = up } } })
+        return f
+    end)
+    bareSecondsFormatterCache = (ok and fmt) or false
+    return bareSecondsFormatterCache
+end
+
 -------------------------------------------------------------------------------
 -- FormatAuraButton Callback for 12.1.0 AuraButtons
 -------------------------------------------------------------------------------
@@ -83,27 +104,6 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
             if auraButton.SetDurationCooldown then
                 pcall(auraButton.SetDurationCooldown, auraButton, cd)
             end
-        end
-
-        -- Bare seconds numeric rule formatter cache (removes 's' suffix: "45", "2m", "1h")
-        local bareSecondsFormatterCache = nil
-        local function GetBareSecondsFormatter()
-            if bareSecondsFormatterCache ~= nil then return bareSecondsFormatterCache end
-            if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Enum and Enum.NumericRuleFormatRounding) then
-                bareSecondsFormatterCache = false
-                return false
-            end
-            local ok, fmt = pcall(function()
-                local down = Enum.NumericRuleFormatRounding.Down
-                local up   = Enum.NumericRuleFormatRounding.Up
-                local f = C_StringUtil.CreateNumericRuleFormatter()
-                f:AddBreakpoint({ threshold = 0, step = 1, rounding = up, min = 1, format = "%d" })
-                f:AddBreakpoint({ threshold = 60, step = 1, rounding = down, min = 1, format = "%dm", components = { { div = 60, rounding = up } } })
-                f:AddBreakpoint({ threshold = 3600, step = 1, rounding = down, min = 1, format = "%dh", components = { { div = 3600, rounding = up } } })
-                return f
-            end)
-            bareSecondsFormatterCache = (ok and fmt) or false
-            return bareSecondsFormatterCache
         end
 
         -- Text Overlay Frame: High FrameLevel parented to auraButton so timer & stack text render ABOVE the swipe and never get hidden by dormant Cooldown frames

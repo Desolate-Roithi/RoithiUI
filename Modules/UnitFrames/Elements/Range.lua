@@ -7,6 +7,16 @@ if ns.skipLoad then return end
 local oUF = ns.oUF or _G.oUF
 local UF = RoithiUI:GetModule("UnitFrames")
 
+local function IsSecret(v)
+    if ns.Utils and ns.Utils.IsSecret then
+        return ns.Utils.IsSecret(v)
+    end
+    if v == nil then return false end
+    if _G.issecretvalue and _G.issecretvalue(v) then return true end
+    if _G.canaccessvalue and not _G.canaccessvalue(v) then return true end
+    return type(v) == "userdata"
+end
+
 function UF:CreateRange(frame)
     local element = {
         insideAlpha = 1,
@@ -23,12 +33,14 @@ local function Update(self, _)
 
     local inRange = true
 
-    if UnitIsConnected(unit) then
+    local isConnected = UnitIsConnected and UnitIsConnected(unit)
+    local isConnectedSecret = IsSecret(isConnected)
+    if (not isConnectedSecret and isConnected) or isConnectedSecret then
         -- LibRangeCheck usage is temporarily disabled due to 12.0.1 taint within library.
         -- Fallback to standard API.
         local rawInRange, rawCheckedRange = UnitInRange(unit)
         
-        if not issecretvalue(rawCheckedRange) then
+        if not IsSecret(rawCheckedRange) then
             if rawCheckedRange == false or rawCheckedRange == nil then
                 inRange = true
             else
@@ -39,20 +51,24 @@ local function Update(self, _)
         end
             
         -- specific self check
-        local isSelf = UnitIsUnit(unit, "player")
-        if not issecretvalue(isSelf) then
-            if isSelf then inRange = true end
+        if ns.Utils and ns.Utils.SafeUnitIsUnit then
+            local isSelf, isSelfSecret = ns.Utils.SafeUnitIsUnit(unit, "player")
+            if isSelf or (isSelfSecret and unit == "player") then
+                inRange = true
+            end
         elseif unit == "player" then
             inRange = true
         end
     end
 
     local alphaValue
-    if not issecretvalue(inRange) then
+    if not IsSecret(inRange) then
         alphaValue = (inRange == true) and element.insideAlpha or element.outsideAlpha
-    else
+    elseif _G.C_CurveUtil and _G.C_CurveUtil.EvaluateColorValueFromBoolean then
         -- 12.0.1 MIDNIGHT Fix: Use secret-safe evaluator for alpha updates
-        alphaValue = C_CurveUtil.EvaluateColorValueFromBoolean(inRange, element.insideAlpha, element.outsideAlpha)
+        alphaValue = _G.C_CurveUtil.EvaluateColorValueFromBoolean(inRange, element.insideAlpha, element.outsideAlpha)
+    else
+        alphaValue = element.insideAlpha
     end
     self:SetAlpha(alphaValue)
 

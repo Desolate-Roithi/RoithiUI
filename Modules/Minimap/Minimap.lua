@@ -57,6 +57,16 @@ function MinimapMod:OnInitialize()
     self:RegisterEvent("CHALLENGE_MODE_START")
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED")
     self:RegisterEvent("CHALLENGE_MODE_RESET")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
+
+function MinimapMod:PLAYER_REGEN_ENABLED()
+    if self.queuedBuffDisplacement then
+        self.queuedBuffDisplacement = nil
+        if self.UpdateBuffFrameDisplacement then
+            self:UpdateBuffFrameDisplacement(true)
+        end
+    end
 end
 
 function MinimapMod:ADDON_LOADED(event, name)

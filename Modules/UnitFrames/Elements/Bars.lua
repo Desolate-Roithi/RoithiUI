@@ -6,7 +6,6 @@ local LSM = LibStub("LibSharedMedia-3.0")
 
 ---@class UF : AceModule, AceAddon
 local UF = RoithiUI:GetModule("UnitFrames")
-local issecretvalue = _G.issecretvalue
 
 -- Default Power Colors (Fallback)
 local DefaultPowerColors = {
@@ -233,191 +232,7 @@ function UF:CreatePowerBar(frame)
     if UnitExists(frame.unit) then UpdatePower(power) end
 end
 
-function UF:CreateAdditionalPower(frame)
-    if frame.unit ~= "player" then return end
-    local power = CreateFrame("StatusBar", frame:GetName() .. "_AdditionalPower", frame)
-    -- Initial defaults
-    power:SetPoint("TOPLEFT", frame.Power, "BOTTOMLEFT", 0, -4)
-    power:SetPoint("TOPRIGHT", frame.Power, "BOTTOMRIGHT", 0, -4)
-    power:SetHeight(10)
-    power:SetStatusBarTexture(LSM:Fetch("statusbar", "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
-
-    LibRoithi.mixins:CreateBackdrop(power)
-
-    local bg = power:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetTexture(LSM:Fetch("statusbar", "Solid") or "Interface\\TargetingFrame\\UI-StatusBar")
-    bg:SetVertexColor(0.1, 0.1, 0.1)
-    power.bg = bg
-
-    -- Title for Edit Mode
-    power.Text = power:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    power.Text:SetPoint("CENTER")
-    power.Text:SetText("ADDITIONAL POWER")
-    power.Text:Hide()
-
-    frame.AdditionalPower = power
-
-    -- Edit Mode Registration
-    local LEM = LibStub("LibEditMode-Roithi", true)
-    if LEM then
-        frame.AdditionalPower.editModeName = (frame.editModeName or frame:GetName()) .. " Additional Power"
-
-        local defUnit = ns.Defaults.profile.UnitFrames[frame.unit] or ns.Defaults.profile.UnitFrames.player
-        local defaults = {
-            point = defUnit.additionalPowerPoint,
-            x = defUnit.additionalPowerX,
-            y = defUnit.additionalPowerY,
-        }
-
-        local function OnPosChanged(f, layoutName, point, x, y)
-            local unit = frame.unit
-            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
-            local frameType = "AdditionalPower"
-
-            if RoithiUI.db.profile.General.debugMode then
-                RoithiUI:Log("AL Debug: OnPosChanged Triggered for AddPower")
-            end
-
-            if not db or not db.additionalPowerDetached then
-                if frameType == "AdditionalPower" and RoithiUI.db.profile.General.debugMode then
-                    RoithiUI:Log("AL Debug: AddPower Attached -> Forcing UpdateLayout")
-                end
-                -- Force layout update to ensure SetMovable(false) is applied
-                if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
-                return
-            end
-
-            if db then
-                db.additionalPowerPoint = point
-                db.additionalPowerX = x
-                db.additionalPowerY = y
-            end
-            f:ClearAllPoints()
-            f:SetPoint(point, UIParent, point, x, y)
-
-            local AL = ns.AttachmentLogic
-            if AL then AL:GlobalLayoutRefresh(unit) end
-        end
-
-        LEM:AddFrame(power, OnPosChanged, defaults)
-
-        LEM:RegisterCallback('enter', function()
-            local unit = frame.unit
-            local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[unit]
-            if db and db.additionalPowerDetached then
-                power.isInEditMode = true
-                power:SetAlpha(1)
-                power:Show()
-            else
-                power.isInEditMode = false
-                -- Force layout update to ensure SetMovable(false) is applied
-                if frame.UpdateAdditionalPowerLayout then frame.UpdateAdditionalPowerLayout() end
-            end
-        end)
-
-        LEM:RegisterCallback('exit', function()
-            power.isInEditMode = false
-            -- Visibility handled by Update
-            local UnitExists = UnitExists(frame.unit)
-            if not UnitExists then power:Hide() end
-        end)
-    end
-
-    -- Layout Updater
-    local function UpdateLayout()
-        local AL = ns.AttachmentLogic
-        if AL then
-            AL:ApplyLayout(frame.unit, "AdditionalPower")
-        end
-
-        local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
-        local height = db and db.additionalPowerHeight or 10
-        local enabled = db and db.additionalPowerEnabled ~= false
-
-        if not enabled then power:Hide() else power:Show() end
-
-        -- Sync Edit Mode State
-        if frame.isInEditMode then
-            power.isInEditMode = true
-            power:SetAlpha(1)
-        end
-        power:SetHeight(height)
-    end
-    frame.UpdateAdditionalPowerLayout = UpdateLayout
-
-    -- Default Power Colors (Fallback) Moved to File Scope
-
-
-    local function UpdatePower(bar)
-        if bar.isInEditMode then
-            bar:SetMinMaxValues(0, 100)
-            bar:SetValue(100)
-            bar:SetStatusBarColor(0, 0, 1)
-            if power.Text then power.Text:Show() end
-            return
-        end
-        if power.Text then power.Text:Hide() end
-
-        local unit = frame.unit
-        if not UnitExists(unit) then return end
-
-        local pType = UnitPowerType(unit)
-
-        -- Visibility Rule:
-        -- Show only if current power is NOT Mana (0), AND we have Max Mana > 0.
-        -- This covers Druids in Form, Shamans/Priests/Paladins who have Mana but use other resources.
-
-        local show = false
-        if pType ~= 0 then -- Not Mana
-            local maxMana = UnitPowerMax(unit, 0)
-            -- 12.0.1 MIDNIGHT Fix: Guard comparison against secret unit power
-            if maxMana then
-                if issecretvalue and issecretvalue(maxMana) then
-                    show = true -- Assume valid if secret (conservative)
-                elseif maxMana > 0 then
-                    show = true
-                end
-            end
-        end
-
-        if not show then
-            power:Hide()
-            return
-        end
-        power:Show()
-
-        local cur = UnitPower(unit, 0) -- Always Mana (0)
-        local max = UnitPowerMax(unit, 0)
-        power:SetMinMaxValues(0, max)
-        power:SetValue(cur)
-
-        local pTypeIndex, pToken = UnitPowerType(unit)
-
-        -- Safe Color Lookup
-        local info = PowerBarColor and (PowerBarColor[pToken] or PowerBarColor[pTypeIndex])
-        if not info then
-            info = DefaultPowerColors[pToken] or DefaultPowerColors[pTypeIndex] or DefaultPowerColors["MANA"]
-        end
-
-        if info then
-            power:SetStatusBarColor(info.r, info.g, info.b)
-        else
-            power:SetStatusBarColor(0, 0, 1) -- Ultimate Fallback Blue
-        end
-    end
-
-    power:SetScript("OnEvent", UpdatePower)
-    power:RegisterEvent("UNIT_POWER_UPDATE")
-    power:RegisterEvent("UNIT_MAXPOWER")
-    power:RegisterEvent("UNIT_DISPLAYPOWER")
-    power:SetScript("OnShow", UpdatePower)
-
-    -- Initial
-    if UnitExists(frame.unit) then UpdatePower(power) end
-end
-
--- 12.0 Heal Prediction Implementation
+-- 12.0 Heal Prediction Implementation (Event-driven, COMBAT-FRAME-BUDGET compliant)
 function UF:CreateHealPrediction(frame)
     local health = frame.Health or frame.SafeHealth
     if not health then return end
@@ -470,7 +285,14 @@ function UF:CreateHealPrediction(frame)
         ---@diagnostic disable-next-line: undefined-global
         local calculator = CreateUnitHealPredictionCalculator()
 
+        local function SafeValOrZero(v)
+            if v == nil then return 0 end
+            if ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(v) then return v end
+            return v
+        end
+
         local function RunHealPredictionUpdate()
+            if not frame.unit or not UnitExists(frame.unit) then return end
             ---@diagnostic disable-next-line: undefined-global
             UnitGetDetailedHealPrediction(frame.unit, "player", calculator)
 
@@ -479,24 +301,18 @@ function UF:CreateHealPrediction(frame)
             calculator:GetDamageAbsorbs()
             local healAbsorbAmount = calculator:GetHealAbsorbs() or 0
 
-            -- Support Safe Rendering (Secret Values) using SetValue + Scaling
-            -- We want the bar to represent 0 -> 110% of Health
-            -- So we make the Frame 110% wide, and SetMinMax to 0 -> 110% MaxHealth
-
             local maxHealthVal = UnitHealthMax(frame.unit)
-            -- UnitHealthMax returns secret; comparison crashes. Safe to pass to SetMinMaxValues.
-
             local width = frame.Health:GetWidth()
             if width <= 0 then return end
 
             -- Heal Logic (SetValue + Stacked)
             myHeal:SetWidth(width)
             myHeal:SetMinMaxValues(0, maxHealthVal)
-            myHeal:SetValue(myIncomingHeal or 0)
+            myHeal:SetValue(SafeValOrZero(myIncomingHeal))
 
             otherHeal:SetWidth(width)
             otherHeal:SetMinMaxValues(0, maxHealthVal)
-            otherHeal:SetValue(otherIncomingHeal or 0)
+            otherHeal:SetValue(SafeValOrZero(otherIncomingHeal))
 
             local healthTex = frame.Health:GetStatusBarTexture()
             myHeal:ClearAllPoints()
@@ -520,7 +336,7 @@ function UF:CreateHealPrediction(frame)
 
             healAbsorb:SetWidth(width)
             healAbsorb:SetMinMaxValues(0, maxHealthVal)
-            healAbsorb:SetValue(healAbsorbAmount)
+            healAbsorb:SetValue(SafeValOrZero(healAbsorbAmount))
             healAbsorb:ClearAllPoints()
             if healthTex then
                 healAbsorb:SetPoint("TOPRIGHT", healthTex, "TOPRIGHT", 0, 0)
@@ -531,53 +347,64 @@ function UF:CreateHealPrediction(frame)
             end
             healAbsorb:Show()
 
-            -- Absorb Logic (Restricted Environment Safe Mode)
-            -- 1. We cannot check if values are <= 0 or nil (Comparison Crash)
-            -- 2. We cannot multiply maxHealth * 1.1 (Arithmetic Crash)
-            -- 3. We Must pass-through values directly to widgets.
-
             local totalAbsorb = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(frame.unit) or 0
 
             absorb:ClearAllPoints()
             absorb:SetPoint("TOPLEFT", frame.Health, "TOPLEFT", 0, 0)
             absorb:SetPoint("BOTTOMLEFT", frame.Health, "BOTTOMLEFT", 0, 0)
 
-            -- Width: 100% of Health Frame (Safe UI Value)
-            -- We cannot scale to 110% because we cannot multiply the MaxValue secret.
             absorb:SetWidth(width)
 
-            -- MinMax: Pass-through from Health Bar (Secret -> Secret)
-            -- We assume Health Bar has valid MinMax from its own secure update.
             local hMin, hMax = frame.Health:GetMinMaxValues()
             absorb:SetMinMaxValues(hMin, hMax)
-
-            -- Value: Direct Pass (Secret -> Secret)
-            absorb:SetValue(totalAbsorb or 0)
-
+            absorb:SetValue(SafeValOrZero(totalAbsorb))
             absorb:Show()
-
-            -- Color: Higher Visibility (Light Blue-Grey, Higher Alpha)
             absorb:SetStatusBarColor(0.6, 0.8, 1, 0.6)
-
-            -- Glow: Disabled (Cannot compare total > max)
             overAbsorbGlow:Hide()
         end
 
-        local healElapsed = 0
-        frame:HookScript("OnUpdate", function(_, dt)
-            healElapsed = healElapsed + (dt or 0.016)
-            if healElapsed < 0.05 then return end
-            healElapsed = 0
-
-            local status, err = pcall(RunHealPredictionUpdate)
-            if not status then
-                local t = GetTime()
-                if not frame.lastErr or (t - frame.lastErr > 3) then
-                    frame.lastErr = t
-                    RoithiUI:Log("Error: ", tostring(err))
+        local listener = CreateFrame("Frame", nil, clipFrame)
+        local function OnHealPredEvent(_, _, u)
+            if u and frame.unit then
+                if ns.Utils and ns.Utils.SafeUnitIsUnit then
+                    local isMatch, isSecret = ns.Utils.SafeUnitIsUnit(u, frame.unit)
+                    if not isMatch and not isSecret then return end
+                elseif u ~= frame.unit then
+                    return
                 end
             end
-        end)
+            pcall(RunHealPredictionUpdate)
+        end
+        listener:SetScript("OnEvent", OnHealPredEvent)
+
+        if frame.unit and listener.RegisterUnitEvent then
+            listener:RegisterUnitEvent("UNIT_HEAL_PREDICTION", frame.unit)
+            listener:RegisterUnitEvent("UNIT_ABSORB_AMOUNT_CHANGED", frame.unit)
+            listener:RegisterUnitEvent("UNIT_HEAL_ABSORB_AMOUNT_CHANGED", frame.unit)
+            listener:RegisterUnitEvent("UNIT_HEALTH", frame.unit)
+            listener:RegisterUnitEvent("UNIT_MAXHEALTH", frame.unit)
+        elseif frame.unit then
+            listener:RegisterEvent("UNIT_HEAL_PREDICTION")
+            listener:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
+            listener:RegisterEvent("UNIT_HEAL_ABSORB_AMOUNT_CHANGED")
+            listener:RegisterEvent("UNIT_HEALTH")
+            listener:RegisterEvent("UNIT_MAXHEALTH")
+        end
+
+        if frame.unit == "target" then
+            listener:RegisterEvent("PLAYER_TARGET_CHANGED")
+        elseif frame.unit == "focus" then
+            listener:RegisterEvent("PLAYER_FOCUS_CHANGED")
+        elseif frame.unit == "targettarget" or frame.unit == "focustarget" or frame.unit == "pettarget" then
+            listener:RegisterEvent("UNIT_TARGET")
+        end
+
+        frame:HookScript("OnShow", function() pcall(RunHealPredictionUpdate) end)
+        if frame.Health and frame.Health.HookScript then
+            frame.Health:HookScript("OnSizeChanged", function() pcall(RunHealPredictionUpdate) end)
+        end
+
+        pcall(RunHealPredictionUpdate)
     end
 end
 

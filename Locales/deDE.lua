@@ -1130,4 +1130,7 @@ L["Configure custom text tags for unit frames. You can add as many tags as you l
 L["Active Sub-Filter: %s"] = "Aktiver Unterfilter: %s"
 L["<Left-Click to reset to All>"] = "<Links-Klick: Auf Alle zurücksetzen>"
 L["<Right-Click for Sub-Filters>"] = "<Rechts-Klick: Unterfilter anzeigen>"
+L["INTERRUPTED"] = "UNTERBROCHEN"
+L["|cff9e9e9eAlt+Click:|r |cffffffffTrack|r"] = "|cff9e9e9eAlt+Klick:|r |cffffffffVerfolgen|r"
+L["|cff9e9e9eCtrl+Click:|r |cffffffffPin|r"] = "|cff9e9e9eStrg+Klick:|r |cffffffffAnheften|r"
 

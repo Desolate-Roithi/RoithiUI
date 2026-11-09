@@ -212,7 +212,7 @@ function ObjectivesMod:OnRegenEnabled()
         self:ApplyPosition()
         self:ApplyScaleAndHeight()
     end
-    self:UpdateTrackerVisibility()
+    self:UpdateTrackerVisibility("PLAYER_REGEN_ENABLED")
     if self.pendingSuperTrackQuestID then
         local qid = self.pendingSuperTrackQuestID
         self.pendingSuperTrackQuestID = nil
@@ -356,7 +356,7 @@ function ObjectivesMod:OnDisable()
     self:UnhookAll()
 end
 
-function ObjectivesMod:UpdateTrackerVisibility()
+function ObjectivesMod:UpdateTrackerVisibility(event)
     if not self.db or self.db.enabled == false then return end
     local otf = _G.ObjectiveTrackerFrame
     if not otf or not otf.SetAlpha then return end
@@ -370,7 +370,7 @@ function ObjectivesMod:UpdateTrackerVisibility()
     end
 
     local isMPlusActive = hideMPlus and _G.C_ChallengeMode and _G.C_ChallengeMode.IsChallengeModeActive and _G.C_ChallengeMode.IsChallengeModeActive()
-    local inCombat = hideCombat and _G.InCombatLockdown and _G.InCombatLockdown()
+    local inCombat = hideCombat and ((ns.Utils and ns.Utils.IsPlayerInCombat and ns.Utils.IsPlayerInCombat(event)) or (_G.InCombatLockdown and _G.InCombatLockdown()))
     local inInstance = hideInstance and _G.IsInInstance and _G.IsInInstance()
 
     if isMPlusActive or inCombat or inInstance then

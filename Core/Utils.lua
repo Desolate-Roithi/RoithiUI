@@ -51,6 +51,40 @@ function ns.Utils.IsSecret(val)
     return false
 end
 
+function ns.Utils.SafeUnitIsUnit(unitA, unitB)
+    if not unitA or not unitB then return false, false end
+    if not ns.Utils.IsSecret(unitA) and not ns.Utils.IsSecret(unitB) and unitA == unitB then
+        return true, false
+    end
+    local unitIsUnit = _G.UnitIsUnit
+    if not unitIsUnit then return false, false end
+    local ok, res = pcall(unitIsUnit, unitA, unitB)
+    if not ok then return false, false end
+    if ns.Utils.IsSecret(res) then
+        return false, true
+    end
+    return res == true, false
+end
+
+function ns.Utils.IsPlayerInCombat(event)
+    if event == "PLAYER_REGEN_DISABLED" then
+        return true
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        return false
+    end
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        return true
+    end
+    local uac = _G.UnitAffectingCombat
+    if uac then
+        local ok, inCombat = pcall(uac, "player")
+        if ok and not ns.Utils.IsSecret(inCombat) and inCombat == true then
+            return true
+        end
+    end
+    return false
+end
+
 function ns.Utils.NormalizeFontFlags(outline)
     if not outline or outline == "NONE" or outline == "None" or outline == "none" or outline == "" then
         return ""
