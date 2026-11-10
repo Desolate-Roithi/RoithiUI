@@ -153,10 +153,10 @@ function ns.Utils.Serialize(tbl, indent)
     for _, k in ipairs(keys) do
         local v = tbl[k]
         local keyStr
-        if type(k) == "string" and k:match("^[a_][%w_]*$") then
+        if type(k) == "string" and k:match("^[%a_][%w_]*$") then
             keyStr = k
         else
-            keyStr = "[" .. (type(k) == "string" and string.format("%q", k) or k) .. "]"
+            keyStr = "[" .. (type(k) == "string" and string.format("%q", k) or tostring(k)) .. "]"
         end
 
         local valStr
@@ -203,7 +203,8 @@ function ns.Utils.ShowExportWindow(exportString)
         f.Close = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
         f.Close:SetPoint("BOTTOM", 0, 10)
         f.Close:SetSize(100, 25)
-        f.Close:SetText("Close")
+        local L = LibStub and LibStub("AceLocale-3.0", true) and LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
+        f.Close:SetText(L and L["Close"] or "Close")
         f.Close:SetScript("OnClick", function() f:Hide() end)
     end
 
@@ -658,7 +659,17 @@ function ns.Utils.GetFrameScreenCoordinates(frame, parent, anchorPoint)
     end
     local fL, fR, fB, fT = frame:GetLeft(), frame:GetRight(), frame:GetBottom(), frame:GetTop()
     if not fL or not fR or not fB or not fT then return 0, 0 end
+    if ns.Utils and ns.Utils.IsSecret then
+        if ns.Utils.IsSecret(fL) or ns.Utils.IsSecret(fR) or ns.Utils.IsSecret(fB) or ns.Utils.IsSecret(fT) then
+            return 0, 0
+        end
+    end
     local pW, pH = parent:GetWidth() or 0, parent:GetHeight() or 0
+    if ns.Utils and ns.Utils.IsSecret then
+        if ns.Utils.IsSecret(pW) or ns.Utils.IsSecret(pH) then
+            return 0, 0
+        end
+    end
     local fW, fH = fR - fL, fT - fB
 
     local x, y

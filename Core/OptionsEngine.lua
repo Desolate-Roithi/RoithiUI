@@ -65,46 +65,61 @@ function OptionsEngine:CompileAceConfig()
 end
 
 --- Traverse an options table recursively to collect LEM setting objects
-local function CollectLEMOptions(argsTable, settings, LEM, frame, parentGroup)
+local function CollectLEMOptions(argsTable, settings, LEM, frame, parentGroup, rootArgsTable)
     if not argsTable then return end
-    for _, opt in pairs(argsTable) do
+    rootArgsTable = rootArgsTable or argsTable
+
+    local sortedList = {}
+    for k, opt in pairs(argsTable) do
         if type(opt) == "table" then
-            local scope = opt.scope or "both"
-            if scope == "lem" or scope == "both" then
-                local settingName = opt.lemName or opt.name or "Setting"
-                local getter = opt.lemGet or opt.get
-                local setter = opt.lemSet or opt.set
+            table.insert(sortedList, { key = k, opt = opt })
+        end
+    end
+    table.sort(sortedList, function(a, b)
+        local orderA = (type(a.opt.order) == "number") and a.opt.order or 100
+        local orderB = (type(b.opt.order) == "number") and b.opt.order or 100
+        if orderA ~= orderB then return orderA < orderB end
+        return tostring(a.key) < tostring(b.key)
+    end)
 
-                local isHidden = function()
-                    if parentGroup and parentGroup.expanded == false then return true end
-                    if opt.hidden then
-                        if type(opt.hidden) == "function" then return opt.hidden() end
-                        return opt.hidden
-                    end
-                    return false
+    for _, item in ipairs(sortedList) do
+        local opt = item.opt
+        local scope = opt.scope or "both"
+        if scope == "lem" or scope == "both" then
+            local settingName = opt.lemName or opt.name or "Setting"
+            local getter = opt.lemGet or opt.get
+            local setter = opt.lemSet or opt.set
+
+            local isHidden = function()
+                if parentGroup and parentGroup.expanded == false then return true end
+                if opt.hidden then
+                    if type(opt.hidden) == "function" then return opt.hidden() end
+                    return opt.hidden
                 end
+                return false
+            end
 
-                if opt.type == "group" and opt.args then
-                    if opt.name then
-                        local group = opt
-                        local headerKind = opt.lemKind or (LEM.SettingType and LEM.SettingType.CollapsibleHeader) or "expander"
-                        table.insert(settings, {
-                            kind = headerKind,
-                            name = settingName,
-                            get = function() return group.expanded ~= false end,
-                            set = function(_, v)
-                                group.expanded = v
-                                if frame then
-                                    local freshSettings = {}
-                                    CollectLEMOptions(argsTable, freshSettings, LEM, frame)
-                                    if LEM.AddFrameSettings then LEM:AddFrameSettings(frame, freshSettings) end
-                                    if LEM.RefreshFrameSettings then LEM:RefreshFrameSettings(frame) end
-                                end
-                            end,
-                        })
-                    end
-                    CollectLEMOptions(opt.args, settings, LEM, frame, opt)
-                elseif opt.type == "toggle" then
+            if opt.type == "group" and opt.args then
+                if opt.name then
+                    local group = opt
+                    local headerKind = opt.lemKind or (LEM.SettingType and LEM.SettingType.CollapsibleHeader) or "expander"
+                    table.insert(settings, {
+                        kind = headerKind,
+                        name = settingName,
+                        get = function() return group.expanded ~= false end,
+                        set = function(_, v)
+                            group.expanded = v
+                            if frame then
+                                local freshSettings = {}
+                                CollectLEMOptions(rootArgsTable, freshSettings, LEM, frame, nil, rootArgsTable)
+                                if LEM.AddFrameSettings then LEM:AddFrameSettings(frame, freshSettings) end
+                                if LEM.RefreshFrameSettings then LEM:RefreshFrameSettings(frame) end
+                            end
+                        end,
+                    })
+                end
+                CollectLEMOptions(opt.args, settings, LEM, frame, opt, rootArgsTable)
+            elseif opt.type == "toggle" then
                     table.insert(settings, {
                         name = settingName,
                         kind = opt.lemKind or (LEM.SettingType and LEM.SettingType.Checkbox) or "checkbox",
@@ -157,7 +172,6 @@ local function CollectLEMOptions(argsTable, settings, LEM, frame, parentGroup)
             end
         end
     end
-end
 
 --- Register LibEditMode extra settings for a frame using a registered module schema
 ---@param frame table Frame registered in LibEditMode

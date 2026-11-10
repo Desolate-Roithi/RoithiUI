@@ -154,7 +154,7 @@ end
 function BagsMod:PrewarmItemSlots()
     if _G.InCombatLockdown and _G.InCombatLockdown() then return end
     self:CreateMainBagFrame()
-    for i = 1, 160 do
+    for i = 1, 212 do
         local slot = self:AcquireItemSlot(i)
         if slot then
             local parent = slot.slotParent or slot
@@ -164,9 +164,16 @@ function BagsMod:PrewarmItemSlots()
 end
 
 function BagsMod:OnRegenEnabled()
+    if self.OnPlayerRegenEnabledBagBar then
+        self:OnPlayerRegenEnabledBagBar()
+    end
     if self.pendingKillBlizzBags then
         self.pendingKillBlizzBags = nil
         self:KillBlizzardBags()
+    end
+    if self.pendingRestoreBlizzardBags then
+        self.pendingRestoreBlizzardBags = nil
+        self:RestoreBlizzardBags()
     end
     if self.pendingCombatRelogBagUpdate then
         self.pendingCombatRelogBagUpdate = nil
@@ -181,7 +188,10 @@ function BagsMod:OnRegenEnabled()
 end
 
 function BagsMod:RestoreBlizzardBags()
-    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.pendingRestoreBlizzardBags = true
+        return
+    end
     if _G.BagUpdaterFrame and _G.BagUpdaterFrame.SetParent then
         _G.BagUpdaterFrame:SetParent(UIParent)
     end
@@ -415,6 +425,15 @@ function BagsMod:HasActiveTradeTimer(bag, slot, customTooltipData)
         local entry = self.tradeTimerCache[slotKey]
         if (now - entry.time) < 30 then
             return entry.hasTimer
+        end
+    end
+
+    if not customTooltipData and _G.C_Container and _G.C_Container.GetContainerItemInfo then
+        local itemInfo = _G.C_Container.GetContainerItemInfo(bag, slot)
+        if itemInfo and itemInfo.quality and itemInfo.quality < 2 then
+            if not self.tradeTimerCache then self.tradeTimerCache = {} end
+            self.tradeTimerCache[slotKey] = { time = now, hasTimer = false }
+            return false
         end
     end
 
@@ -685,7 +704,7 @@ function BagsMod:HookTooltipShortcuts()
     self.tooltipShortcutsHooked = true
 end
 
-function BagsMod:ScanInventoryOnce(isInitial)
+function BagsMod:ScanInventoryOnce(isInitial) -- code_smell_audit: suppress arrow-code
     self.knownSlots = self.knownSlots or {}
     self.knownSlotCounts = self.knownSlotCounts or {}
     self.newSlots = self.newSlots or {}
@@ -1152,7 +1171,7 @@ function BagsMod:CreateHeaderBar()
         elseif LibStub and LibStub("AceConfigDialog-3.0", true) then
             local ACD = LibStub("AceConfigDialog-3.0", true)
             pcall(function() ACD:Open("RoithiUI") end)
-            pcall(function() ACD:SelectGroup("RoithiUI", "general", "bags") end)
+            pcall(function() ACD:SelectGroup("RoithiUI", "interface_group", "bags") end)
         end
     end)
     self.settingsBtn = settingsBtn
@@ -2985,12 +3004,35 @@ function BagsMod:AcquireItemSlot(index)
         end
     end
 
+    local hasNativeOnClick = (slot.GetScript and slot:GetScript("OnClick") ~= nil) or false
+
     if slot.HookScript then
         slot:HookScript("PreClick", function(s, button)
             if button == "RightButton" then
                 if _G.IsShiftKeyDown and _G.IsShiftKeyDown() and s.itemData and s.itemData.itemID then
+                    if hasNativeOnClick and s.SetID then s:SetID(0) end
+                    if _G.StackSplitFrame and _G.StackSplitFrame.Hide then
+                        _G.StackSplitFrame:Hide()
+                    end
                     self:OpenItemCategoryMenu(s, s.itemData)
                 elseif _G.IsAltKeyDown and _G.IsAltKeyDown() and s.itemData and s.itemData.itemID then
+                    if hasNativeOnClick and s.SetID then
+                        s:SetID(0)
+                    else
+                        self.db.favorites = self.db.favorites or {}
+                        self.db.favorites[s.itemData.itemID] = not self.db.favorites[s.itemData.itemID]
+                        self:UpdateInventory()
+                    end
+                end
+            end
+        end)
+        slot:HookScript("PostClick", function(s, button)
+            if button == "RightButton" and s.slot and s.GetID and s:GetID() == 0 then
+                if s.SetID then s:SetID(s.slot) end
+                if _G.StackSplitFrame and _G.StackSplitFrame.Hide then
+                    _G.StackSplitFrame:Hide()
+                end
+                if _G.IsAltKeyDown and _G.IsAltKeyDown() and s.itemData and s.itemData.itemID then
                     self.db.favorites = self.db.favorites or {}
                     self.db.favorites[s.itemData.itemID] = not self.db.favorites[s.itemData.itemID]
                     self:UpdateInventory()
@@ -3002,7 +3044,7 @@ function BagsMod:AcquireItemSlot(index)
         end)
     end
 
-    if not slot:GetScript("OnClick") then
+    if not hasNativeOnClick then
         slot:SetScript("OnClick", function(s, button)
             if button == "LeftButton" then
                 HandlePickup(s, true)
@@ -3013,13 +3055,11 @@ function BagsMod:AcquireItemSlot(index)
                     self.db.favorites = self.db.favorites or {}
                     self.db.favorites[s.itemData.itemID] = not self.db.favorites[s.itemData.itemID]
                     self:UpdateInventory()
-                else
-                    if s.bag and s.slot then
-                        if _G.C_Container and _G.C_Container.UseContainerItem then
-                            pcall(_G.C_Container.UseContainerItem, s.bag, s.slot)
-                        elseif _G.UseContainerItem then
-                            pcall(_G.UseContainerItem, s.bag, s.slot)
-                        end
+                elseif s.bag and s.slot then
+                    if _G.C_Container and _G.C_Container.UseContainerItem then
+                        pcall(_G.C_Container.UseContainerItem, s.bag, s.slot)
+                    elseif _G.UseContainerItem then
+                        pcall(_G.UseContainerItem, s.bag, s.slot)
                     end
                 end
             end
@@ -3519,6 +3559,9 @@ function BagsMod:UpdateInventory()
 
             if not parent:IsShown() then parent:Show() end
             if not slotFrame:IsShown() then slotFrame:Show() end
+            if slotFrame.roithiBorder and slotFrame.roithiBorder.Show and not slotFrame.roithiBorder:IsShown() then
+                slotFrame.roithiBorder:Show()
+            end
 
             slotFrame:SetID(entry.slot or 0)
             if slotFrame.slotParent then
@@ -3887,15 +3930,15 @@ function BagsMod:RefreshProfile()
         self:UpdateBagBarLayout()
     end
     if self.mainFrame and self.mainFrame.ClearAllPoints and self.mainFrame.SetPoint then
-        local pos = self.db.mainBagPosition
+        local pos = (self.db and (self.db.bagWindow or self.db.mainBagPosition)) or (self.defaultSettings and (self.defaultSettings.bagWindow or self.defaultSettings.mainBagPosition))
         if pos and pos.point then
             self.mainFrame:ClearAllPoints()
             self.mainFrame:SetPoint(pos.point, UIParent, pos.point, pos.x or 0, pos.y or 0)
         end
     end
     local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
-    if LEM and LEM.RefreshFrameSettings and self.bagBar then
-        LEM:RefreshFrameSettings(self.bagBar)
+    if LEM and LEM.RefreshFrameSettings and self.bagBarFrame then
+        LEM:RefreshFrameSettings(self.bagBarFrame)
     end
 end
 BagsMod.RefreshSettings = BagsMod.RefreshProfile

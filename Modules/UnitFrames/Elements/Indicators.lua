@@ -169,9 +169,8 @@ function UF:CreateIndicators(frame)
     end
 
     local function UpdateLayout()
-        local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit] and
-            RoithiUI.db.profile.UnitFrames[frame.unit].indicators
-        if not db then return end
+        local db = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit] and
+            RoithiUI.db.profile.UnitFrames[frame.unit].indicators) or {}
 
         local anchorParent = frame.Health or frame
 
@@ -369,12 +368,17 @@ function UF:CreateIndicators(frame)
                 if pvpFFA then
                     pvpType = "FFA"
                 elseif isPVP then
-                    pvpType = UnitFactionGroup(unit) or "Neutral"
+                    local rawFaction = UnitFactionGroup(unit)
+                    local isSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(rawFaction)) or (_G.issecretvalue and _G.issecretvalue(rawFaction))
+                    if isSecret then
+                        pvpType = "Secret"
+                    else
+                        pvpType = rawFaction or "Neutral"
+                    end
                 end
 
-                if pvpType or inTestMode then
-                    local isSecretFaction = _G.issecretvalue and _G.issecretvalue(pvpType)
-                    if isSecretFaction then
+                if inTestMode or (pvpType and pvpType ~= "") then
+                    if pvpType == "Secret" then
                         pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
                     else
                         local faction = pvpType or (UnitFactionGroup("player") or "Neutral")

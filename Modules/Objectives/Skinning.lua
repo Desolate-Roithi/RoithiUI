@@ -55,26 +55,7 @@ function ObjectivesMod:GetFontPath(fontKey)
     return "Interface\\AddOns\\RoithiUI\\Media\\Fonts\\Expressway.ttf"
 end
 
-function ObjectivesMod:GetFontOutline(tierKey)
-    local val = (tierKey and self.db and self.db[tierKey])
-    if not val or val == "" then
-        val = (self.db and self.db.fontOutline) or "OUTLINE"
-    end
-    if ns.Utils and ns.Utils.NormalizeFontFlags then
-        return ns.Utils.NormalizeFontFlags(val)
-    end
-    if not val or val == "NONE" or val == "None" or val == "none" or val == "" then
-        return ""
-    end
-    return val
-end
-
-function ObjectivesMod:GetFontShadow(tierKey)
-    if tierKey and self.db and self.db[tierKey] ~= nil then
-        return self.db[tierKey] == true
-    end
-    return (self.db and self.db.showFontShadow) == true
-end
+local itemButtonOwnerBlock = setmetatable({}, { __mode = "k" })
 
 function ObjectivesMod:SkinHeader(header)
     if not header then return end
@@ -350,24 +331,28 @@ function ObjectivesMod:SkinQuestItemButton(block, itemBtn)
         end
     end
 
+    itemButtonOwnerBlock[itemBtn] = block
+
     if not skinnedItemButtons[itemBtn] then
         skinnedItemButtons[itemBtn] = true
         if itemBtn.HookScript then
             itemBtn:HookScript("OnEnter", function()
-                if block then
+                local b = itemButtonOwnerBlock[itemBtn]
+                if b then
                     if self.HandleBlockEnter then
-                        self:HandleBlockEnter(block)
+                        self:HandleBlockEnter(b)
                     elseif self.UpdateBlockHoverObjectives then
-                        self:UpdateBlockHoverObjectives(block, true)
+                        self:UpdateBlockHoverObjectives(b, true)
                     end
                 end
             end)
             itemBtn:HookScript("OnLeave", function()
-                if block then
+                local b = itemButtonOwnerBlock[itemBtn]
+                if b then
                     if self.HandleBlockLeave then
-                        self:HandleBlockLeave(block)
+                        self:HandleBlockLeave(b)
                     elseif self.UpdateBlockHoverObjectives then
-                        self:UpdateBlockHoverObjectives(block, false)
+                        self:UpdateBlockHoverObjectives(b, false)
                     end
                 end
             end)
@@ -397,7 +382,16 @@ function ObjectivesMod:SkinBlock(block)
         end)
     end
 
-    if skinnedBlocks[block] then return end
+    if skinnedBlocks[block] then
+        if self.ApplyQuestLevelToTitle then
+            pcall(self.ApplyQuestLevelToTitle, self, block)
+        end
+        if self.UpdateBlockHoverObjectives then
+            local isHovered = self.IsMouseOverBlock and self:IsMouseOverBlock(block)
+            self:UpdateBlockHoverObjectives(block, isHovered or false)
+        end
+        return
+    end
     skinnedBlocks[block] = true
 
     local font = self:GetFontPath("titleFont")
@@ -461,10 +455,28 @@ function ObjectivesMod:SkinBlock(block)
         end)
     end
 
+    if block.SetHeader and not self:IsHooked(block, "SetHeader") then
+        self:SecureHook(block, "SetHeader", function(b)
+            pcall(function()
+                if b and self.ApplyQuestLevelToTitle then
+                    self:ApplyQuestLevelToTitle(b)
+                end
+            end)
+        end)
+    end
+
     if block.UpdateHighlight and not self:IsHooked(block, "UpdateHighlight") then
         self:SecureHook(block, "UpdateHighlight", function(b)
             pcall(function()
                 if not b or b.used == false then return end
+                local tFS = (self.GetBlockTitleFS and self:GetBlockTitleFS(b)) or titleFSCache[b]
+                if tFS and tFS.SetTextColor then
+                    local titleC = self.db.titleColor or (self.defaultSettings and self.defaultSettings.titleColor) or { r = 1, g = 0.85, b = 0.35 }
+                    tFS:SetTextColor(titleC.r or 1.0, titleC.g or 0.85, titleC.b or 0.35, 1.0)
+                end
+                if self.ApplyQuestLevelToTitle then
+                    self:ApplyQuestLevelToTitle(b)
+                end
                 local oc = self.db.objectiveColor or (self.defaultSettings and self.defaultSettings.objectiveColor) or { r = 1, g = 1, b = 1 }
                 local lines = b.usedLines or b.lines
                 if lines then
@@ -540,11 +552,6 @@ function ObjectivesMod:SkinBlock(block)
                 end
             end
         end
-    end
-
-    itemBtn = block.itemButton or block.ItemButton or (block.GetItemButton and block:GetItemButton())
-    if itemBtn then
-        self:SkinQuestItemButton(block, itemBtn)
     end
 
     if self.UpdateBlockHoverObjectives then
@@ -1005,9 +1012,10 @@ function ObjectivesMod:SkinScenarioLine(line)
 
         if line.Text.SetTextColor then
             if isComp then
-                line.Text:SetTextColor(0.35, 0.88, 0.45, 1.0)
+                local cc = (self.db and self.db.completedColor) or (self.defaultSettings and self.defaultSettings.completedColor) or { r = 0.25, g = 1, b = 0.35, a = 1.0 }
+                line.Text:SetTextColor(cc.r or 0.25, cc.g or 1.0, cc.b or 0.35, cc.a or 1.0)
             else
-                line.Text:SetTextColor(oc.r or 0.92, oc.g or 0.92, oc.b or 0.92, 1.0)
+                line.Text:SetTextColor(oc.r or 0.92, oc.g or 0.92, oc.b or 0.92, oc.a or 1.0)
             end
         end
 

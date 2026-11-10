@@ -279,8 +279,23 @@ function MinimapMod:SnapAddonBarToEdge()
     end
 end
 
+local buttonOrigState = setmetatable({}, { __mode = "k" })
+local protectedButtons = setmetatable({}, { __mode = "k" })
+local buttonHooked = setmetatable({}, { __mode = "k" })
+local aligningButtons = setmetatable({}, { __mode = "k" })
+
+local function GetButtonOriginalParent(btn)
+    if not btn then return nil end
+    return (buttonOrigState[btn] and buttonOrigState[btn].originalParent) or rawget(btn, "originalParent")
+end
+
+local function GetButtonOriginalPoints(btn)
+    if not btn then return nil end
+    return (buttonOrigState[btn] and buttonOrigState[btn].originalPoints) or rawget(btn, "originalPoints")
+end
+
 local function ProtectButton(button)
-    if not button or not IsSafeFrame(button) or button.isProtected then return end
+    if not button or not IsSafeFrame(button) or protectedButtons[button] or rawget(button, "isProtected") then return end
     local name = SafeGetName(button)
     if name and (name:find("Pin") or name:find("POI") or name:find("Expansion") or name:find("Garrison") or name:find("MapLink") or name:find("^Blizzard_")) then
         return
@@ -289,54 +304,43 @@ local function ProtectButton(button)
         return
     end
 
-    button.originalParent = button:GetParent()
-    button.originalPoints = {}
-    for i = 1, button:GetNumPoints() do
-        button.originalPoints[i] = { button:GetPoint(i) }
+    local origParent = button:GetParent()
+    local origPoints = {}
+    for i = 1, (button.GetNumPoints and button:GetNumPoints() or 0) do
+        origPoints[i] = { button:GetPoint(i) }
     end
 
-    local oldSetPoint = button.SetPoint
-    button.oldSetPoint = oldSetPoint
-    button.SetPoint = function(self, ...)
-        if self.isAligning or (MinimapMod.db and MinimapMod.db.showAddonBar == false) then
-            oldSetPoint(self, ...)
-        end
+    buttonOrigState[button] = {
+        originalParent = origParent,
+        originalPoints = origPoints,
+    }
+
+    if not buttonHooked[button] and hooksecurefunc and button.SetPoint then
+        buttonHooked[button] = true
+        hooksecurefunc(button, "SetPoint", function(self)
+            if protectedButtons[self] and not aligningButtons[self] and (MinimapMod.db and MinimapMod.db.showAddonBar ~= false) then
+                if MinimapMod.UpdateAddonBarLayout and not MinimapMod.isUpdatingLayout then
+                    MinimapMod:UpdateAddonBarLayout()
+                end
+            end
+        end)
     end
 
-    local oldSetParent = button.SetParent
-    button.oldSetParent = oldSetParent
-    button.SetParent = function(self, p)
-        if self.isAligning or (MinimapMod.db and MinimapMod.db.showAddonBar == false) then
-            oldSetParent(self, p)
-        end
+    protectedButtons[button] = true
+    if ns and ns.isTestEnvironment then
+        rawset(button, "isProtected", true)
+        rawset(button, "originalParent", origParent)
+        rawset(button, "originalPoints", origPoints)
     end
-
-    local oldClearAllPoints = button.ClearAllPoints
-    button.oldClearAllPoints = oldClearAllPoints
-    button.ClearAllPoints = function(self)
-        if self.isAligning or (MinimapMod.db and MinimapMod.db.showAddonBar == false) then
-            oldClearAllPoints(self)
-        end
-    end
-
-    button.isProtected = true
 end
 
 local function UnprotectButton(button)
-    if not button or not button.isProtected then return end
-    if button.oldSetPoint then
-        button.SetPoint = button.oldSetPoint
-        button.oldSetPoint = nil
+    if not button or not (protectedButtons[button] or rawget(button, "isProtected")) then return end
+    protectedButtons[button] = nil
+    buttonOrigState[button] = nil
+    if rawget(button, "isProtected") ~= nil then
+        rawset(button, "isProtected", nil)
     end
-    if button.oldSetParent then
-        button.SetParent = button.oldSetParent
-        button.oldSetParent = nil
-    end
-    if button.oldClearAllPoints then
-        button.ClearAllPoints = button.oldClearAllPoints
-        button.oldClearAllPoints = nil
-    end
-    button.isProtected = nil
 end
 
 function MinimapMod:UpdateAddonBarAutohide()
@@ -710,19 +714,17 @@ end
 function MinimapMod:ReleaseAllAddonButtons()
     if not self.scannedButtons then return end
     for name, btn in pairs(self.scannedButtons) do
-        btn.isAligning = true
-        if btn.originalParent then
-            btn:SetParent(btn.originalParent)
-        else
-            btn:SetParent(Minimap)
-        end
+        aligningButtons[btn] = true
+        local origParent = GetButtonOriginalParent(btn) or Minimap
+        btn:SetParent(origParent)
         btn:ClearAllPoints()
-        for _, pt in ipairs(btn.originalPoints or {}) do
+        local origPts = GetButtonOriginalPoints(btn) or {}
+        for _, pt in ipairs(origPts) do
             btn:SetPoint(unpack(pt))
         end
         btn:SetAlpha(1)
         btn:Show()
-        btn.isAligning = nil
+        aligningButtons[btn] = nil
 
         if self.customButtons and self.customButtons[name] then
             self.customButtons[name]:Hide()
@@ -958,19 +960,17 @@ function MinimapMod:UpdateAddonBarVisibility()
         self.addonBar:SetShown(inEditMode)
 
         for name, btn in pairs(self.scannedButtons) do
-            btn.isAligning = true
-            if btn.originalParent then
-                btn:SetParent(btn.originalParent)
-            else
-                btn:SetParent(Minimap)
-            end
+            aligningButtons[btn] = true
+            local origParent = GetButtonOriginalParent(btn) or Minimap
+            btn:SetParent(origParent)
             btn:ClearAllPoints()
-            for _, pt in ipairs(btn.originalPoints or {}) do
+            local origPts = GetButtonOriginalPoints(btn) or {}
+            for _, pt in ipairs(origPts) do
                 btn:SetPoint(unpack(pt))
             end
             btn:SetAlpha(1)
             btn:Show()
-            btn.isAligning = nil
+            aligningButtons[btn] = nil
 
             if self.customButtons and self.customButtons[name] then
                 self.customButtons[name]:Hide()
@@ -1059,11 +1059,12 @@ function MinimapMod:ScanAddonButtons()
         if IsIgnoredButton(sBtn) then
             if sBtn and UnprotectButton then
                 UnprotectButton(sBtn)
-                local origParent = sBtn.originalParent or Minimap
+                local origParent = GetButtonOriginalParent(sBtn) or Minimap
                 if sBtn.SetParent then pcall(sBtn.SetParent, sBtn, origParent) end
-                if sBtn.originalPoints and #sBtn.originalPoints > 0 and sBtn.ClearAllPoints and sBtn.SetPoint then
+                local origPts = GetButtonOriginalPoints(sBtn)
+                if origPts and #origPts > 0 and sBtn.ClearAllPoints and sBtn.SetPoint then
                     pcall(sBtn.ClearAllPoints, sBtn)
-                    for _, pt in ipairs(sBtn.originalPoints) do
+                    for _, pt in ipairs(origPts) do
                         pcall(sBtn.SetPoint, sBtn, unpack(pt))
                     end
                 end
@@ -1259,7 +1260,8 @@ function MinimapMod:GetAddonBarExpandedWidth()
 end
 
 function MinimapMod:UpdateAddonBarLayout()
-    if not self.addonBar then return end
+    if not self.addonBar or self.isUpdatingLayout then return end
+    self.isUpdatingLayout = true
 
     if self.db.showAddonBar == false then
         if self.addonBar then self.addonBar:Hide() end
@@ -1267,24 +1269,25 @@ function MinimapMod:UpdateAddonBarLayout()
         if self.flyoutTrigger then self.flyoutTrigger:Hide() end
         for _, btn in pairs(self.scannedButtons or {}) do
             UnprotectButton(btn)
-            btn.isAligning = true
-            if btn.originalParent and btn.SetParent then
-                btn:SetParent(btn.originalParent)
-            elseif Minimap and btn.SetParent then
-                btn:SetParent(Minimap)
+            aligningButtons[btn] = true
+            local origParent = GetButtonOriginalParent(btn) or Minimap
+            if btn.SetParent then
+                btn:SetParent(origParent)
             end
-            if btn.originalPoints and #btn.originalPoints > 0 and btn.ClearAllPoints and btn.SetPoint then
+            local origPts = GetButtonOriginalPoints(btn)
+            if origPts and #origPts > 0 and btn.ClearAllPoints and btn.SetPoint then
                 btn:ClearAllPoints()
-                for _, pt in ipairs(btn.originalPoints) do
+                for _, pt in ipairs(origPts) do
                     btn:SetPoint(unpack(pt))
                 end
             end
             if btn.VisualContainer and btn.VisualContainer.BaseTexture then
                 btn.VisualContainer.BaseTexture:SetSize(64, 64)
             end
-            btn.isAligning = nil
             if btn.Show then btn:Show() end
+            aligningButtons[btn] = nil
         end
+        self.isUpdatingLayout = false
         return
     end
 
@@ -1416,7 +1419,7 @@ function MinimapMod:UpdateAddonBarLayout()
             end
             custom:EnableMouse(false)
 
-            btn.isAligning = true
+            aligningButtons[btn] = true
             btn:SetParent(custom)
             if btn.SetFixedFrameStrata then
                 btn:SetFixedFrameStrata(false)
@@ -1439,14 +1442,14 @@ function MinimapMod:UpdateAddonBarLayout()
             end
             if btn.SetAlpha then btn:SetAlpha(1) end
             if btn.Show then btn:Show() end
-            btn.isAligning = nil
+            aligningButtons[btn] = nil
 
             table.insert(self.activeButtons, custom)
         else
-            btn.isAligning = true
+            aligningButtons[btn] = true
             if btn.SetParent then btn:SetParent(self.hiddenFrame or Minimap) end
             if btn.Hide then btn:Hide() end
-            btn.isAligning = nil
+            aligningButtons[btn] = nil
 
             if self.customButtons[name] then
                 self.customButtons[name]:Hide()
@@ -1483,6 +1486,7 @@ function MinimapMod:UpdateAddonBarLayout()
         if self.flyoutTrigger then self.flyoutTrigger:Hide() end
         self.addonBar:SetSize(40, 40)
         self.addonBar:SetAlpha(LEM and LEM.IsInEditMode and LEM:IsInEditMode() and 1 or 0)
+        self.isUpdatingLayout = false
         return
     end
 
@@ -1723,12 +1727,16 @@ function MinimapMod:UpdateAddonBarLayout()
                 customBtn:SetPoint("TOPLEFT", self.addonBar, "TOPLEFT", x, y)
                 customBtn:Show()
                 if customBtn.button then
+                    aligningButtons[customBtn.button] = true
                     customBtn.button:Show()
+                    aligningButtons[customBtn.button] = nil
                 end
             else
                 customBtn:Hide()
                 if customBtn.button then
+                    aligningButtons[customBtn.button] = true
                     customBtn.button:Hide()
+                    aligningButtons[customBtn.button] = nil
                 end
             end
         end
@@ -1763,6 +1771,7 @@ function MinimapMod:UpdateAddonBarLayout()
     if self.UpdateBuffFrameDisplacement then
         self:UpdateBuffFrameDisplacement()
     end
+    self.isUpdatingLayout = false
 end
 
 function MinimapMod:GetAddonBarOptions()

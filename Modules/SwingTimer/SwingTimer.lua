@@ -29,26 +29,7 @@ local SWING_RESET_SPELLS = {
 
 local issecretvalue = _G.issecretvalue
 local canaccessvalue = _G.canaccessvalue
-local function UnitCanAttack(a, b)
-    local fn = _G.UnitCanAttack
-    return fn and fn(a, b)
-end
-local function UnitAffectingCombat(u)
-    local fn = _G.UnitAffectingCombat
-    return fn and fn(u)
-end
-local function UnitIsUnit(a, b)
-    local fn = _G.UnitIsUnit
-    return fn and fn(a, b)
-end
-local function UnitExists(u)
-    local fn = _G.UnitExists
-    return fn and fn(u)
-end
-local function UnitIsDeadOrGhost(u)
-    local fn = _G.UnitIsDeadOrGhost or _G.UnitIsDead
-    return fn and fn(u)
-end
+
 local function IsSecret(v)
     if ns.Utils and ns.Utils.IsSecret then
         return ns.Utils.IsSecret(v)
@@ -59,6 +40,46 @@ local function IsSecret(v)
     local ca = _G.canaccessvalue or canaccessvalue
     if type(ca) == "function" and not ca(v) then return true end
     return type(v) == "userdata"
+end
+
+local function SafeUnitBool(val)
+    if val == nil then return false end
+    if IsSecret(val) then return false end
+    return val == true or val == 1
+end
+
+local function UnitCanAttack(a, b)
+    local fn = _G.UnitCanAttack
+    if not fn then return true end
+    local ok, res = pcall(fn, a, b)
+    if not ok or res == nil then return false end
+    return SafeUnitBool(res)
+end
+
+local function UnitAffectingCombat(u)
+    local fn = _G.UnitAffectingCombat
+    if not fn then return false end
+    local ok, res = pcall(fn, u)
+    if not ok or res == nil then return false end
+    return SafeUnitBool(res)
+end
+
+local function UnitIsUnit(a, b)
+    local fn = _G.UnitIsUnit
+    return fn and fn(a, b)
+end
+
+local function UnitExists(u)
+    local fn = _G.UnitExists
+    return fn and fn(u)
+end
+
+local function UnitIsDeadOrGhost(u)
+    local fn = _G.UnitIsDeadOrGhost or _G.UnitIsDead
+    if not fn then return false end
+    local ok, res = pcall(fn, u)
+    if not ok or res == nil then return false end
+    return SafeUnitBool(res)
 end
 
 local function IsSpellInResetList(spellId)
@@ -242,11 +263,6 @@ local function ShouldSuppressNativeSwingFrames(mod)
         return false
     end
     return true
-end
-
-local function SafeUnitBool(val)
-    if val == nil or IsSecret(val) then return false end
-    return val == true or val == 1
 end
 
 local function SuppressNativeSelection(targetFrame)
@@ -683,6 +699,7 @@ function SwingTimer:CreateFrames()
     pFrame:SetScript("OnUpdate", function(_, elapsed)
         self:OnUpdatePlayer(elapsed)
     end)
+    pFrame:Hide()
     self.playerFrame = pFrame
 
     -- Target Container Frame
@@ -699,6 +716,7 @@ function SwingTimer:CreateFrames()
     tFrame:SetScript("OnUpdate", function(_, elapsed)
         self:OnUpdateTarget(elapsed)
     end)
+    tFrame:Hide()
     self.targetFrame = tFrame
 end
 
@@ -710,14 +728,15 @@ function SwingTimer:SetupEditMode()
         self.playerFrame:SetMovable(true)
         local pCfg = self.db.player or self.defaultSettings.player
         local defPlayer = ns.Defaults.profile.SwingTimer.player
-        local defaultPlayerPos = { point = defPlayer.point, x = defPlayer.x, y = defPlayer.y }
+        local defaultPlayerPos = (ns.Utils and ns.Utils.CopyTable) and ns.Utils.CopyTable(defPlayer) or { point = defPlayer.point, x = defPlayer.x, y = defPlayer.y }
         LEM:AddFrame(self.playerFrame, function(f, _, newPoint, newX, newY)
-            pCfg.point = newPoint
-            pCfg.x = math.floor(newX * 100 + 0.5) / 100
-            pCfg.y = math.floor(newY * 100 + 0.5) / 100
+            local pDb = (self.db and self.db.player) or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.SwingTimer and RoithiUI.db.profile.SwingTimer.player) or pCfg
+            pDb.point = newPoint
+            pDb.x = math.floor(newX * 100 + 0.5) / 100
+            pDb.y = math.floor(newY * 100 + 0.5) / 100
             if f and f.ClearAllPoints and f.SetPoint then
                 f:ClearAllPoints()
-                f:SetPoint(newPoint, UIParent, newPoint, pCfg.x, pCfg.y)
+                f:SetPoint(newPoint, UIParent, newPoint, pDb.x, pDb.y)
             end
             self:UpdateLayout()
             if self.isInEditMode then self:ShowSampleBars(true) end
@@ -761,14 +780,15 @@ function SwingTimer:SetupEditMode()
         self.targetFrame:SetMovable(true)
         local tCfg = self.db.target or self.defaultSettings.target
         local defTarget = ns.Defaults.profile.SwingTimer.target
-        local defaultTargetPos = { point = defTarget.point, x = defTarget.x, y = defTarget.y }
+        local defaultTargetPos = (ns.Utils and ns.Utils.CopyTable) and ns.Utils.CopyTable(defTarget) or { point = defTarget.point, x = defTarget.x, y = defTarget.y }
         LEM:AddFrame(self.targetFrame, function(f, _, newPoint, newX, newY)
-            tCfg.point = newPoint
-            tCfg.x = math.floor(newX * 100 + 0.5) / 100
-            tCfg.y = math.floor(newY * 100 + 0.5) / 100
+            local tDb = (self.db and self.db.target) or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.SwingTimer and RoithiUI.db.profile.SwingTimer.target) or tCfg
+            tDb.point = newPoint
+            tDb.x = math.floor(newX * 100 + 0.5) / 100
+            tDb.y = math.floor(newY * 100 + 0.5) / 100
             if f and f.ClearAllPoints and f.SetPoint then
                 f:ClearAllPoints()
-                f:SetPoint(newPoint, UIParent, newPoint, tCfg.x, tCfg.y)
+                f:SetPoint(newPoint, UIParent, newPoint, tDb.x, tDb.y)
             end
             self:UpdateLayout()
             if self.isInEditMode then self:ShowSampleBars(true) end
@@ -1545,18 +1565,12 @@ function SwingTimer:OnTargetChanged()
 end
 
 function SwingTimer:OnUnitCombat(unit, action)
+    local isSafeAction = not IsSecret(action)
     if unit == "player" then
-        if self.inCombat or (UnitAffectingCombat and SafeUnitBool(UnitAffectingCombat("player"))) then
-            local mainSpeed = self:GetSafeAttackSpeed("player")
-            self:StartSwing("player", "main", mainSpeed)
-        end
         if UnitExists("target") and not SafeUnitBool(UnitIsDeadOrGhost("target")) and SafeUnitBool(UnitCanAttack("player", "target")) then
             local isTargetAttackingPlayer = false
             if ns.Utils and ns.Utils.SafeUnitIsUnit then
-                local isMatch = ns.Utils.SafeUnitIsUnit("targettarget", "player")
-                if isMatch then
-                    isTargetAttackingPlayer = true
-                end
+                isTargetAttackingPlayer = ns.Utils.SafeUnitIsUnit("targettarget", "player")
             elseif UnitIsUnit then
                 local ok, isUnit = pcall(UnitIsUnit, "targettarget", "player")
                 if ok and not IsSecret(isUnit) and isUnit == true then
@@ -1569,7 +1583,7 @@ function SwingTimer:OnUnitCombat(unit, action)
                 self:StartSwing("target", "main", targetSpeed)
             end
         end
-        if action == "PARRY" then
+        if isSafeAction and action == "PARRY" then
             self:ApplyParryHaste("player")
         end
     elseif unit == "target" then
@@ -1584,11 +1598,8 @@ function SwingTimer:OnUnitCombat(unit, action)
             end
             return
         end
-        if action == "PARRY" then
+        if isSafeAction and action == "PARRY" then
             self:ApplyParryHaste("target")
-        elseif not self.targetSwings.main.active and UnitExists("target") and SafeUnitBool(UnitCanAttack("player", "target")) and UnitAffectingCombat and SafeUnitBool(UnitAffectingCombat("target")) then
-            local targetSpeed = self:GetSafeAttackSpeed("target")
-            self:StartSwing("target", "main", targetSpeed)
         end
     end
 end
@@ -1614,6 +1625,7 @@ end
 function SwingTimer:RefreshProfile()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.SwingTimer or self.defaultSettings
     self:UpdateLayout()
+    self:UpdateFonts()
     if LEM and LEM.RefreshFrameSettings then
         if self.playerFrame then LEM:RefreshFrameSettings(self.playerFrame) end
         if self.targetFrame then LEM:RefreshFrameSettings(self.targetFrame) end

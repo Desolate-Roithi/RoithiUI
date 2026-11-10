@@ -50,11 +50,11 @@ function UF:InitializeBossFrames()
         if bDb then
             if bDb.aurasEnabled == nil then bDb.aurasEnabled = true end
             if bDb.auraDetached == nil then bDb.auraDetached = false end
-            bDb.auraSize = 30
-            bDb.aurasPerRow = 10
-            bDb.maxAuras = 10
-            bDb.auraAnchor = "TOPRIGHT"
-            bDb.auraGrowDirection = "RIGHT_DOWN"
+            if bDb.auraSize == nil then bDb.auraSize = 30 end
+            if bDb.aurasPerRow == nil then bDb.aurasPerRow = 10 end
+            if bDb.maxAuras == nil then bDb.maxAuras = 10 end
+            if bDb.auraAnchor == nil then bDb.auraAnchor = "TOPRIGHT" end
+            if bDb.auraGrowDirection == nil then bDb.auraGrowDirection = "RIGHT_DOWN" end
             bDb.auraX = bDb.auraX or 0
             bDb.auraY = bDb.auraY or 0
         end
@@ -74,6 +74,7 @@ function UF:InitializeBossFrames()
                 ov:SetColorTexture(0, 0.8, 1, 0.3)
                 ov:Hide()
                 overlays[i] = ov
+                f.EditModeOverlay = ov
             end
         end
         -- Backwards compatibility if something looks for .EditModeOverlay on Driver
@@ -192,6 +193,7 @@ function UF:InitializeBossFrames()
 end
 
 function UF:RefreshBossEditMode()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
     local driver = self.units and self.units["boss1"]
     if not driver then return end
 
@@ -255,6 +257,10 @@ function UF:RefreshBossEditMode()
 end
 
 function UF:UpdateBossAnchors()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.pendingBossAnchors = true
+        return
+    end
     local db = RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames["boss1"]
     local spacing = db and db.spacing or 30
 
@@ -273,6 +279,10 @@ function UF:UpdateBossAnchors()
 end
 
 function UF:ToggleBossTestMode()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        RoithiUI:Log("Cannot toggle boss test mode during combat.")
+        return
+    end
     self.BossTestMode = not self.BossTestMode
 
     if self.BossTestMode then

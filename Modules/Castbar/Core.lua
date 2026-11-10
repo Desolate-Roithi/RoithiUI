@@ -206,7 +206,9 @@ function ns.UpdateBlizzardVisibility()
                     end
                 end
             end
-            frame:Show()
+            if frame.casting or frame.channeling then
+                frame:Show()
+            end
         end
     end
 
@@ -381,11 +383,16 @@ function Castbar:OnEnable()
             elseif event == "UNIT_PET" then
                 ns.UpdateCast(ns.bars["pet"])
                 -- Sync attachment on pet change
-                local cbDB = RoithiUI.db.profile.Castbar["pet"]
-                local isDetached = cbDB and cbDB.detached
-                ns.SetCastbarAttachment("pet", not isDetached)
+                if not (InCombatLockdown and InCombatLockdown()) then
+                    local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar["pet"]
+                    local isDetached = cbDB and cbDB.detached
+                    if ns.SetCastbarAttachment then
+                        ns.SetCastbarAttachment("pet", not isDetached)
+                    end
+                end
             elseif event == "SPELL_UPDATE_COOLDOWN" then
-                if ns.bars then
+                local cbColors = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar.colors
+                if cbColors and cbColors.colorOnInterruptCD and ns.bars then
                     for u, bar in pairs(ns.bars) do
                         if u ~= "player" and bar:IsShown() and (bar.casting or bar.channeling) then
                             ns.UpdateCast(bar, u)
@@ -436,20 +443,37 @@ function Castbar:OnEnable()
     if f.UnregisterAllEvents then
         f:UnregisterAllEvents()
     end
-    f:RegisterEvent("UNIT_SPELLCAST_START")
-    f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
-    f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
-    f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_UPDATE")
-    f:RegisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
-    f:RegisterEvent("UNIT_SPELLCAST_NOT_INTERRUPTIBLE")
-    f:RegisterEvent("UNIT_SPELLCAST_DELAYED")
-    f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE")
-    f:RegisterEvent("UNIT_SPELLCAST_STOP")
-    f:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
-    f:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
-    f:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+    -- Register unit-isolated spellcast events for vehicle transitions (individual bars handle their own units)
+    local vehicleEvents = {
+        "UNIT_SPELLCAST_START",
+        "UNIT_SPELLCAST_CHANNEL_START",
+        "UNIT_SPELLCAST_EMPOWER_START",
+        "UNIT_SPELLCAST_EMPOWER_UPDATE",
+        "UNIT_SPELLCAST_INTERRUPTIBLE",
+        "UNIT_SPELLCAST_NOT_INTERRUPTIBLE",
+        "UNIT_SPELLCAST_DELAYED",
+        "UNIT_SPELLCAST_CHANNEL_UPDATE",
+        "UNIT_SPELLCAST_STOP",
+        "UNIT_SPELLCAST_CHANNEL_STOP",
+        "UNIT_SPELLCAST_EMPOWER_STOP",
+        "UNIT_SPELLCAST_INTERRUPTED",
+    }
+    for _, ev in ipairs(vehicleEvents) do
+        if f.RegisterUnitEvent then
+            f:RegisterUnitEvent(ev, "vehicle")
+        else
+            f:RegisterEvent(ev)
+        end
+    end
     f:RegisterEvent("PLAYER_TARGET_CHANGED")
     f:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    if f.RegisterUnitEvent then
+        f:RegisterUnitEvent("UNIT_TARGET", "target", "focus")
+        f:RegisterUnitEvent("UNIT_PET", "player")
+    else
+        f:RegisterEvent("UNIT_TARGET")
+        f:RegisterEvent("UNIT_PET")
+    end
     f:RegisterEvent("SPELL_UPDATE_COOLDOWN")
     f:RegisterEvent("SPELLS_CHANGED")
     f:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")

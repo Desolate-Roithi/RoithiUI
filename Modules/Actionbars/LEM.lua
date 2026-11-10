@@ -21,6 +21,7 @@ local BAR_DISPLAY_NAMES = {
 }
 
 function AB:SetupLEM()
+    if InCombatLockdown and InCombatLockdown() then return end
     if not LEM then return end
 
     for barKey, container in pairs(self.bars) do

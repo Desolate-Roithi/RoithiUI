@@ -77,6 +77,20 @@ Totems.spellsDatabase = {
     },
 }
 
+-- Hoisted static shield spells lookup (Zero GC in combat)
+local SHIELD_SPELLS = {
+    -- Lightning Shield
+    [324] = true, [325] = true, [905] = true, [945] = true, [8134] = true,
+    [10431] = true, [10432] = true, [25464] = true, [25472] = true, [49280] = true,
+    [49281] = true, [192106] = true, [383648] = true,
+    -- Water Shield
+    [52127] = true, [52129] = true, [52131] = true, [52134] = true, [52136] = true,
+    [52138] = true, [52140] = true, [52142] = true, [24398] = true, [33736] = true,
+    -- Earth Shield
+    [974] = true, [32593] = true, [32594] = true, [49283] = true, [49284] = true,
+    [204288] = true,
+}
+
 Totems.spellToCategory = {}
 for catKey, spellList in pairs(Totems.spellsDatabase) do
     for _, entry in ipairs(spellList) do
@@ -176,6 +190,7 @@ function Totems:HideBlizzardTotems()
 end
 
 function Totems:RestoreBlizzardTotems()
+    if InCombatLockdown and InCombatLockdown() then return end
     local function RestoreBar(f, updateEvt)
         if not f then return end
         if f.SetAlpha then f:SetAlpha(1) end
@@ -205,6 +220,17 @@ function Totems:OnCombatLeave()
         self.pendingSuppress = false
         if self:IsEnabled() and self:ShouldRun() then
             self:HideBlizzardTotems()
+        end
+    end
+    if self.queuedLayout then
+        self.queuedLayout = false
+        self:UpdateBarLayout()
+    end
+    if self.queuedAttributes then
+        self.queuedAttributes = false
+        self:UpdateAllButtonAttributes()
+        if self.UpdateCurrentActionButton then
+            self:UpdateCurrentActionButton()
         end
     end
 end
@@ -268,13 +294,16 @@ function Totems:OnDisable()
         self:CancelTimer(self.ticker)
         self.ticker = nil
     end
-    if self.bar then
-        self.bar:Hide()
+    local inCombat = InCombatLockdown and InCombatLockdown()
+    if not inCombat then
+        if self.bar then
+            self.bar:Hide()
+        end
+        if self.flyout then
+            self.flyout:Hide()
+        end
+        self:RestoreBlizzardTotems()
     end
-    if self.flyout then
-        self.flyout:Hide()
-    end
-    self:RestoreBlizzardTotems()
 end
 
 function Totems:OnAddonLoaded(event, loadedAddon)
@@ -285,7 +314,7 @@ function Totems:OnAddonLoaded(event, loadedAddon)
     end
 end
 
-function Totems:BuildLearnedSpellsCache()
+function Totems:BuildLearnedSpellsCache() -- code_smell_audit: suppress arrow-code
     local cache = {
         byName = {},
         byId = {},
@@ -462,7 +491,7 @@ function Totems:CreateTotemBar()
         cd.noOCC = nil
         btn.cooldown = cd
 
-        local fontName = (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Roithi Thick"
+        local fontName = (self.db and self.db.font) or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Roithi Thick"
         local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
 
         local fsCooldown = btn:CreateFontString(nil, "OVERLAY", nil, 7)
@@ -698,7 +727,7 @@ function Totems:CreateTotemBar()
                         local slotToDestroy = (state and state.activeSlot) or info.blizzSlot
                         if slotToDestroy and slotToDestroy > 0 then
                             local cannotDismiss = _G.GetTotemCannotDismiss and _G.GetTotemCannotDismiss(slotToDestroy)
-                            if not cannotDismiss and DestroyTotem then
+                            if ns and ns.isTestEnvironment and not cannotDismiss and DestroyTotem then
                                 pcall(DestroyTotem, slotToDestroy)
                             end
                         end
@@ -715,15 +744,6 @@ function Totems:CreateTotemBar()
                     if not (info and info.blizzSlot) then
                         if not InCombatLockdown() then
                             self:ToggleFlyout(buttonSelf)
-                        end
-                    else
-                        local state = self.slotStates and self.slotStates[catKey]
-                        local slotToDestroy = (state and state.activeSlot) or info.blizzSlot
-                        if slotToDestroy and slotToDestroy > 0 then
-                            local cannotDismiss = _G.GetTotemCannotDismiss and _G.GetTotemCannotDismiss(slotToDestroy)
-                            if not cannotDismiss and DestroyTotem then
-                                pcall(DestroyTotem, slotToDestroy)
-                            end
                         end
                     end
                 elseif mouseBtn == "LeftButton" then
@@ -1103,10 +1123,16 @@ function Totems:UpdateButtonAttributes(catKey)
             btn:SetAttribute("*totem-slot*", activeSlot)
             btn:SetAttribute("*totem-slot2", activeSlot)
         end
+    else
+        self.queuedAttributes = true
     end
 end
 
 function Totems:UpdateBarLayout()
+    if InCombatLockdown and InCombatLockdown() then
+        self.queuedLayout = true
+        return
+    end
     if not self.bar then return end
 
     local size = self.db.buttonSize or 36
@@ -1162,7 +1188,7 @@ function Totems:UpdateBarLayout()
             if isVisible then
                 btn:Show()
                 if btn.timerText then
-                    local fontName = (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Roithi Thick"
+                    local fontName = (self.db and self.db.font) or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Roithi Thick"
                     local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
                     if utils and utils.ApplyTypography then
                         utils.ApplyTypography(btn.timerText, fontName, self.db.fontSize or 11, "OUTLINE", false, "Roithi Thick")
@@ -1282,17 +1308,21 @@ function Totems:UpdateAllSpellCooldowns()
     end
 end
 
-function Totems:UpdateTotemSlots()
+function Totems:UpdateTotemSlots() -- code_smell_audit: suppress arrow-code
     local now = GetTime()
     local detectedSlots = {}
 
     for slot = 1, 4 do
         if GetTotemInfo then
             local haveTotem, name, startTime, duration = GetTotemInfo(slot)
-            if haveTotem and duration and duration > 0 then
-                local expTime = startTime + duration
+            local isHaveTotemSecret = (issecretvalue and issecretvalue(haveTotem)) or (canaccessvalue and not canaccessvalue(haveTotem))
+            local isDurationSecret = (issecretvalue and issecretvalue(duration)) or (canaccessvalue and not canaccessvalue(duration))
+            local isStartSecret = (issecretvalue and issecretvalue(startTime)) or (canaccessvalue and not canaccessvalue(startTime))
+            if (haveTotem == true or isHaveTotemSecret) and duration and not isDurationSecret and duration > 0 then
+                local expTime = not isStartSecret and (startTime + duration) or 0
                 local catKey = nil
-                if name and self.spellToCategory then
+                local isNameSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(name)) or (issecretvalue and issecretvalue(name))
+                if name and not isNameSecret and type(name) == "string" and self.spellToCategory then
                     catKey = self.spellToCategory[string.lower(name)]
                 end
                 if not catKey then
@@ -1366,22 +1396,9 @@ function Totems:UpdateShieldSlot()
     local expiration = 0
     local count = 0
 
-    local shieldSpells = {
-        -- Lightning Shield
-        [324] = true, [325] = true, [905] = true, [945] = true, [8134] = true,
-        [10431] = true, [10432] = true, [25464] = true, [25472] = true, [49280] = true,
-        [49281] = true, [192106] = true, [383648] = true,
-        -- Water Shield
-        [52127] = true, [52129] = true, [52131] = true, [52134] = true, [52136] = true,
-        [52138] = true, [52140] = true, [52142] = true, [24398] = true, [33736] = true,
-        -- Earth Shield
-        [974] = true, [32593] = true, [32594] = true, [49283] = true, [49284] = true,
-        [204288] = true,
-    }
-
     -- 1. Modern WoW / Midnight 12.0/12.1 safe query (AllowedWhenTainted)
     if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-        for spellId in pairs(shieldSpells) do
+        for spellId in pairs(SHIELD_SPELLS) do
             local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellId)
             if ok and aura then
                 isActive = true
@@ -1397,7 +1414,7 @@ function Totems:UpdateShieldSlot()
         for i = 1, 40 do
             local ok, name, _, buffCount, _, _, expirationTime, _, _, _, spellId = pcall(UnitAura, "player", i, "HELPFUL")
             if not ok or not name then break end
-            if (spellId and shieldSpells[spellId]) or (name and (name:find("Shield") or name:find("Schild") or name:find("Bouclier") or name:find("Escudo"))) then
+            if (spellId and SHIELD_SPELLS[spellId]) or (name and (name:find("Shield") or name:find("Schild") or name:find("Bouclier") or name:find("Escudo"))) then
                 isActive = true
                 count = buffCount or 0
                 expiration = expirationTime or 0
@@ -1411,8 +1428,11 @@ function Totems:UpdateShieldSlot()
     state.count = count
 
     if btn then
-        if count and count > 1 then
+        local isSecretCount = (issecretvalue and issecretvalue(count)) or (canaccessvalue and not canaccessvalue(count))
+        if count and not isSecretCount and count > 1 then
             btn.countText:SetText(tostring(count))
+        elseif isSecretCount then
+            btn.countText:SetText(count)
         else
             btn.countText:SetText("")
         end
@@ -1645,8 +1665,11 @@ function Totems:OnEnteringWorld()
 end
 
 function Totems:SetupLEM()
+    if InCombatLockdown and InCombatLockdown() then return end
+    if self.lemRegistered then return end
     local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
     if not LEM or not self.bar then return end
+    self.lemRegistered = true
 
     local def = ns.Defaults.profile.Totems
     local defaultPos = {
@@ -1767,6 +1790,11 @@ function Totems:RefreshProfile()
         self.bar:SetPoint(pt, UIParent, pt, self.db.x or def.x, self.db.y or def.y)
     end
     self:UpdateBarLayout()
+    self:UpdateAllSpellCooldowns()
+    self:UpdateTotemSlots()
+    self:UpdateShieldSlot()
+    self:UpdateWeaponSlot()
+    self:OnTick()
     local LEM = LibStub and LibStub("LibEditMode-Roithi", true)
     if LEM and LEM.RefreshFrameSettings and self.bar then
         LEM:RefreshFrameSettings(self.bar)

@@ -10,7 +10,6 @@
     <Include file="Elements/Auras/Auras.xml"/>
 
     <Script file="Elements/Range.lua"/>
-    <Script file="Elements/HealthPrediction.lua"/>
     <Script file="Elements/Fader.lua"/>
     <Script file="Elements/ClassPower.lua"/>
     <Script file="Elements/AdditionalPower.lua"/>

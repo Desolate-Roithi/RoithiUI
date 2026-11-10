@@ -99,53 +99,70 @@ local function GetQuestZone(questID)
     return ""
 end
 
+local cachedSubzoneNames = {}
+local cachedZoneNames = {}
+local cachedZoneKeySub = nil
+local cachedZoneKeyReal = nil
+local cachedZoneKeyZone = nil
+local cachedZoneKeyMapID = nil
+local cachedParentMapID = nil
+
 local function GetCurrentZoneHierarchy()
-    local subzoneNames = {}
-    local zoneNames = {}
-    local subZone = _G.GetSubZoneText and _G.GetSubZoneText()
-    if subZone and subZone ~= "" then
-        subzoneNames[string.lower(SafeTrim(subZone))] = true
-    end
-
-    local realZone = _G.GetRealZoneText and _G.GetRealZoneText()
-    if realZone and realZone ~= "" then
-        zoneNames[string.lower(SafeTrim(realZone))] = true
-    end
-    local zone = _G.GetZoneText and _G.GetZoneText()
-    if zone and zone ~= "" then
-        zoneNames[string.lower(SafeTrim(zone))] = true
-    end
-
+    local subZone = (_G.GetSubZoneText and _G.GetSubZoneText()) or ""
+    local realZone = (_G.GetRealZoneText and _G.GetRealZoneText()) or ""
+    local zone = (_G.GetZoneText and _G.GetZoneText()) or ""
     local currentMapID = _G.C_Map and _G.C_Map.GetBestMapForUnit and _G.C_Map.GetBestMapForUnit("player")
-    local parentMapID = nil
+
+    if subZone == cachedZoneKeySub and realZone == cachedZoneKeyReal and zone == cachedZoneKeyZone and currentMapID == cachedZoneKeyMapID then
+        return cachedSubzoneNames, cachedZoneNames, currentMapID, cachedParentMapID
+    end
+
+    cachedZoneKeySub = subZone
+    cachedZoneKeyReal = realZone
+    cachedZoneKeyZone = zone
+    cachedZoneKeyMapID = currentMapID
+    cachedParentMapID = nil
+    WipeTable(cachedSubzoneNames)
+    WipeTable(cachedZoneNames)
+
+    if subZone ~= "" then
+        cachedSubzoneNames[string.lower(SafeTrim(subZone))] = true
+    end
+    if realZone ~= "" then
+        cachedZoneNames[string.lower(SafeTrim(realZone))] = true
+    end
+    if zone ~= "" then
+        cachedZoneNames[string.lower(SafeTrim(zone))] = true
+    end
+
     if currentMapID and _G.C_Map and _G.C_Map.GetMapInfo then
         local mapInfo = _G.C_Map.GetMapInfo(currentMapID)
         if mapInfo then
             if mapInfo.name and mapInfo.name ~= "" then
-                subzoneNames[string.lower(SafeTrim(mapInfo.name))] = true
+                cachedSubzoneNames[string.lower(SafeTrim(mapInfo.name))] = true
             end
             if mapInfo.parentMapID and mapInfo.parentMapID > 0 then
-                parentMapID = mapInfo.parentMapID
-                local parentInfo = _G.C_Map.GetMapInfo(parentMapID)
+                cachedParentMapID = mapInfo.parentMapID
+                local parentInfo = _G.C_Map.GetMapInfo(cachedParentMapID)
                 if parentInfo and parentInfo.name and parentInfo.name ~= "" then
-                    zoneNames[string.lower(SafeTrim(parentInfo.name))] = true
+                    cachedZoneNames[string.lower(SafeTrim(parentInfo.name))] = true
                 end
             end
         end
     end
 
-    return subzoneNames, zoneNames, currentMapID, parentMapID
+    return cachedSubzoneNames, cachedZoneNames, currentMapID, cachedParentMapID
 end
 
 local function GetQuestMapID(questID)
     if not questID then return nil end
+    if _G.GetQuestUiMapID then
+        local uMap = _G.GetQuestUiMapID(questID)
+        if uMap and uMap > 0 then return uMap end
+    end
     if _G.C_TaskQuest and _G.C_TaskQuest.GetQuestZoneID then
         local qMap = _G.C_TaskQuest.GetQuestZoneID(questID)
         if qMap and qMap > 0 then return qMap end
-    end
-    if _G.C_QuestLog and _G.C_QuestLog.GetMapForQuestPOIs then
-        local pMap = _G.C_QuestLog.GetMapForQuestPOIs(questID)
-        if pMap and pMap > 0 then return pMap end
     end
     if _G.C_QuestLog and _G.C_QuestLog.GetQuestTagInfo then
         local tag = _G.C_QuestLog.GetQuestTagInfo(questID)
@@ -210,67 +227,79 @@ local function GetQuestLevel(questID)
     return 0
 end
 
+local sortMetaPool = {}
+local sortMetaByItem = setmetatable({}, { __mode = "k" })
+
+local function CompareQuestInfosByZone(a, b)
+    local mA = sortMetaByItem[a]
+    local mB = sortMetaByItem[b]
+    if not mA or not mB then
+        return (a.index or 0) < (b.index or 0)
+    end
+
+    if mA.tier ~= mB.tier then
+        return mA.tier < mB.tier
+    end
+
+    if mA.level ~= mB.level then
+        if mA.level == 0 then return false end
+        if mB.level == 0 then return true end
+        return mA.level < mB.level
+    end
+
+    if mA.tier >= 5 and mA.zoneLower ~= mB.zoneLower then
+        if mA.zoneLower == "" then return false end
+        if mB.zoneLower == "" then return true end
+        return mA.zoneLower < mB.zoneLower
+    end
+
+    if mA.titleLower ~= mB.titleLower and mA.titleLower ~= "" and mB.titleLower ~= "" then
+        return mA.titleLower < mB.titleLower
+    end
+
+    if mA.index ~= mB.index then
+        return mA.index < mB.index
+    end
+
+    local qidA = a.questID or (a.quest and a.quest.questID) or 0
+    local qidB = b.questID or (b.quest and b.quest.questID) or 0
+    return qidA < qidB
+end
+
 local function SortInfosByCurrentZone(infos)
     if not infos or #infos <= 1 then return infos end
 
-    UpdateQuestLogData()
+    if not next(questZoneCache) then
+        UpdateQuestLogData()
+    end
     local subzoneNames, zoneNames, currentMapID, parentMapID = GetCurrentZoneHierarchy()
 
-    local meta = {}
+    WipeTable(sortMetaByItem)
     for index, item in ipairs(infos) do
         local qObj = item.quest
         local qID = (type(qObj) == "table" and (qObj.questID or qObj.id))
             or (type(item) == "table" and (item.questID or item.id))
-        local zName = GetQuestZone(qID)
+        local zName = GetQuestZone(qID) or ""
         local tier = GetQuestSortTier(qID, zName, qObj, subzoneNames, zoneNames, currentMapID, parentMapID)
-        local title = GetQuestSortTitle(qID, qObj)
+        local title = GetQuestSortTitle(qID, qObj) or ""
         local level = GetQuestLevel(qID)
-        meta[item] = {
-            tier = tier,
-            level = level,
-            zone = zName or "",
-            title = title or "",
-            index = item.index or index,
-        }
+        local m = sortMetaPool[index]
+        if not m then
+            m = {}
+            sortMetaPool[index] = m
+        end
+        m.tier = tier
+        m.level = level
+        m.zone = zName
+        m.zoneLower = (tier >= 5 and zName ~= "") and string.lower(zName) or ""
+        m.title = title
+        m.titleLower = (title ~= "") and string.lower(title) or ""
+        m.index = item.index or index
+        sortMetaByItem[item] = m
     end
 
-    table.sort(infos, function(a, b)
-        local mA = meta[a]
-        local mB = meta[b]
-        if not mA or not mB then
-            return (a.index or 0) < (b.index or 0)
-        end
-
-        if mA.tier ~= mB.tier then
-            return mA.tier < mB.tier
-        end
-
-        if mA.level ~= mB.level then
-            if mA.level == 0 then return false end
-            if mB.level == 0 then return true end
-            return mA.level < mB.level
-        end
-
-        if mA.tier >= 5 and mA.zone ~= mB.zone then
-            if mA.zone == "" then return false end
-            if mB.zone == "" then return true end
-            local lowerZoneA = string.lower(mA.zone)
-            local lowerZoneB = string.lower(mB.zone)
-            if lowerZoneA ~= lowerZoneB then
-                return lowerZoneA < lowerZoneB
-            end
-        end
-
-        if mA.title ~= mB.title and mA.title ~= "" and mB.title ~= "" then
-            local lowerTitleA = string.lower(mA.title)
-            local lowerTitleB = string.lower(mB.title)
-            if lowerTitleA ~= lowerTitleB then
-                return lowerTitleA < lowerTitleB
-            end
-        end
-
-        return mA.index < mB.index
-    end)
+    table.sort(infos, CompareQuestInfosByZone)
+    WipeTable(sortMetaByItem)
 
     return infos
 end
@@ -286,6 +315,7 @@ ObjectivesMod.GetQuestZone = GetQuestZone
 ObjectivesMod.IsQuestInCurrentZone = IsQuestInCurrentZone
 ObjectivesMod.SortInfosByCurrentZone = SortInfosByCurrentZone
 ObjectivesMod.UpdateQuestLogData = UpdateQuestLogData
+objState.SortInfosByCurrentZone = SortInfosByCurrentZone
 
 local function GetBlockHeaderHeight(b)
     if not b or not b.HeaderText then return 16 end
@@ -510,8 +540,6 @@ end
 
 function ObjectivesMod:ApplyQuestLevelToTitle(block)
     if not block or not self.db then return end
-    if block.used == false then return end
-    if block.IsShown and not block:IsShown() then return end
 
     local questID = self:GetBlockQuestID(block)
     if not questID or type(questID) ~= "number" then return end
@@ -560,6 +588,10 @@ function ObjectivesMod:ApplyQuestLevelToTitle(block)
     end
     if isComplete then
         prefix = prefix .. "|TInterface\\RaidFrame\\ReadyCheck-Ready:12:12:0:0|t "
+    end
+
+    if showLevel and lvl and curText:match("^|c%x%x%x%x%x%x%x%x%[" .. tostring(lvl) .. "%]|r") and not showInfinity and prefix == "" and not isComplete then
+        return
     end
 
     local baseText = GetCleanQuestTitle(block, questID, curText)
@@ -863,20 +895,130 @@ function ObjectivesMod:HideQuestTooltip(block)
     end
 end
 
+local sortPrefixBlocks = {}
+local sortQuestEntries = {}
+local sortQuestEntryPool = {}
+local sortEntryCount = 0
+local sortActiveSelf = nil
+local sortAnchorParent = nil
+local sortAnchorFromHeader = -4
+local sortAnchorFromBlock = -2
+local sortAnchorDefaultOffsetX = 4
+local sortAnchorPrev = nil
+
+local function SortQuestEntriesByIndex(a, b)
+    return (a.index or 0) < (b.index or 0)
+end
+
+local function CollectTrackerSortBlock(block)
+    if block and block.used ~= false and (block.IsShown == nil or block:IsShown()) then
+        local isPopup = (block.popUpType ~= nil) or (type(block.id) == "string") or (block.template == "AutoQuestPopUpBlockTemplate")
+        local mod = sortActiveSelf or ObjectivesMod
+        local qID = (not isPopup and mod and mod.GetBlockQuestID) and mod:GetBlockQuestID(block) or nil
+        if qID and not IsSecret(qID) and type(qID) == "number" and qID > 0 then
+            local watchIdx = 0
+            if _G.C_QuestLog and _G.C_QuestLog.GetQuestWatchIndex then
+                local idx = _G.C_QuestLog.GetQuestWatchIndex(qID)
+                if idx and not IsSecret(idx) and type(idx) == "number" and idx > 0 then watchIdx = idx end
+            end
+            sortEntryCount = sortEntryCount + 1
+            local entry = sortQuestEntryPool[sortEntryCount]
+            if not entry then
+                entry = {}
+                sortQuestEntryPool[sortEntryCount] = entry
+            end
+            entry.block = block
+            entry.questID = qID
+            entry.index = watchIdx
+            entry.quest = block.quest
+            sortQuestEntries[sortEntryCount] = entry
+        else
+            table.insert(sortPrefixBlocks, block)
+        end
+    end
+end
+
+local function AnchorOneSortedBlock(block)
+    if not block or not block.ClearAllPoints or not block.SetPoint then return end
+    block:ClearAllPoints()
+    if not sortAnchorPrev then
+        block:SetPoint("TOP", sortAnchorParent, "TOP", 0, sortAnchorFromHeader)
+    else
+        block:SetPoint("TOP", sortAnchorPrev, "BOTTOM", 0, sortAnchorFromBlock)
+    end
+    local p = (block.GetParent and block:GetParent()) or sortAnchorParent
+    local modDb = sortActiveSelf and sortActiveSelf.db
+    local blockOffsetX = (modDb and modDb.blockOffsetX) or block.offsetX or sortAnchorDefaultOffsetX
+    block:SetPoint("LEFT", p, "LEFT", blockOffsetX, 0)
+    if not block.fixedWidth then
+        block:SetPoint("RIGHT", p, "RIGHT", 0, 0)
+    end
+    sortAnchorPrev = block
+end
+
+function ObjectivesMod:SortTrackerBlocks(tracker)
+    if self.IsEnabled and not self:IsEnabled() then return end
+    if not self.db or self.db.enabled == false then return end
+    if not tracker or not (tracker.IsShown and tracker:IsShown()) then return end
+    if tracker ~= _G.QuestObjectiveTracker and tracker ~= _G.CampaignQuestObjectiveTracker then
+        return
+    end
+
+    local forEachBlock = objState.ForEachTrackerBlock or self.ForEachTrackerBlock
+    if not forEachBlock then return end
+
+    for i = #sortPrefixBlocks, 1, -1 do sortPrefixBlocks[i] = nil end
+    for i = #sortQuestEntries, 1, -1 do sortQuestEntries[i] = nil end
+    sortEntryCount = 0
+    sortActiveSelf = self
+
+    forEachBlock(tracker, CollectTrackerSortBlock)
+
+    if #sortQuestEntries <= 1 and #sortPrefixBlocks == 0 then
+        sortActiveSelf = nil
+        return
+    end
+
+    if self.db and self.db.sortQuestsByZone ~= false then
+        local sortFunc = self.SortInfosByCurrentZone or (objState and objState.SortInfosByCurrentZone) or SortInfosByCurrentZone
+        if sortFunc then
+            sortFunc(sortQuestEntries)
+        end
+    else
+        table.sort(sortQuestEntries, SortQuestEntriesByIndex)
+    end
+
+    sortAnchorParent = tracker.ContentsFrame or tracker
+    sortAnchorFromHeader = tracker.fromHeaderOffsetY or -4
+    sortAnchorFromBlock = tracker.fromBlockOffsetY or -2
+    sortAnchorDefaultOffsetX = (self.db and self.db.blockOffsetX) or tracker.blockOffsetX or 4
+    sortAnchorPrev = nil
+
+    for _, pBlock in ipairs(sortPrefixBlocks) do
+        AnchorOneSortedBlock(pBlock)
+    end
+    for _, entry in ipairs(sortQuestEntries) do
+        AnchorOneSortedBlock(entry.block)
+    end
+    sortActiveSelf = nil
+end
+
 function ObjectivesMod:TrimTrackerGap(tracker)
-    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
     if not tracker or not tracker.SetHeight then return end
     if not (tracker.IsShown and tracker:IsShown()) then return end
 
     if tracker.IsCollapsed and tracker:IsCollapsed() then
-        local collapsedH = (tracker.Header and tracker.Header:GetHeight()) or tracker.headerHeight or 24
-        if tracker.GetHeight and math.abs(tracker:GetHeight() - collapsedH) > 0.5 then
+        local rawCollapsedH = (tracker.Header and tracker.Header:GetHeight()) or tracker.headerHeight or 24
+        local collapsedH = (not IsSecret(rawCollapsedH) and type(rawCollapsedH) == "number") and rawCollapsedH or 24
+        local curCollapsedH = tracker.GetHeight and tracker:GetHeight()
+        if not curCollapsedH or (not IsSecret(curCollapsedH) and type(curCollapsedH) == "number" and math.abs(curCollapsedH - collapsedH) > 0.5) then
             tracker:SetHeight(collapsedH)
         end
         return
     end
 
-    local headerH = (tracker.Header and tracker.Header:IsShown() and tracker.Header:GetHeight()) or tracker.headerHeight or 20
+    local rawHeaderH = (tracker.Header and tracker.Header:IsShown() and tracker.Header:GetHeight()) or tracker.headerHeight or 20
+    local headerH = (not IsSecret(rawHeaderH) and type(rawHeaderH) == "number") and rawHeaderH or 20
     local fromHeader = math.abs(tracker.fromHeaderOffsetY or 4)
     local fromBlock = math.abs(tracker.fromBlockOffsetY or 2)
     -- Compensate for Blizzard's hardcoded container moduleSpacing (10px) to tighten inter-module gaps
@@ -890,7 +1032,7 @@ function ObjectivesMod:TrimTrackerGap(tracker)
         forEachBlock(tracker, function(block)
             if block and block.used ~= false and (block.IsShown == nil or block:IsShown()) then
                 local bh = (block.GetHeight and block:GetHeight()) or 0
-                if bh > 0 then
+                if not IsSecret(bh) and type(bh) == "number" and bh > 0 then
                     activeBlockCount = activeBlockCount + 1
                     if activeBlockCount == 1 then
                         mathHeight = mathHeight + fromHeader + bh
@@ -908,29 +1050,33 @@ function ObjectivesMod:TrimTrackerGap(tracker)
 
     local top = tracker.GetTop and tracker:GetTop()
     local lowest = nil
-    if forEachBlock and type(top) == "number" then
+    if forEachBlock and not IsSecret(top) and type(top) == "number" then
         forEachBlock(tracker, function(block)
             if block and block.used ~= false and (block.IsShown == nil or block:IsShown()) and block.GetBottom then
                 local b = block:GetBottom()
-                if b and (not lowest or b < lowest) then
+                if b and not IsSecret(b) and type(b) == "number" and (not lowest or b < lowest) then
                     lowest = b
                 end
             end
         end)
     end
     if not lowest and tracker.Header and tracker.Header.IsShown and tracker.Header:IsShown() and tracker.Header.GetBottom then
-        lowest = tracker.Header:GetBottom()
+        local hb = tracker.Header:GetBottom()
+        if hb and not IsSecret(hb) and type(hb) == "number" then
+            lowest = hb
+        end
     end
 
     local desired = mathHeight
-    if type(top) == "number" and type(lowest) == "number" and top > lowest then
+    if not IsSecret(top) and not IsSecret(lowest) and type(top) == "number" and type(lowest) == "number" and top > lowest then
         local geoDesired = math.floor(top - lowest + bottomPad + 0.5)
         if geoDesired > 0 then
             desired = geoDesired
         end
     end
 
-    local current = (tracker.GetHeight and tracker:GetHeight()) or 0
+    local rawCurrent = (tracker.GetHeight and tracker:GetHeight()) or 0
+    local current = (not IsSecret(rawCurrent) and type(rawCurrent) == "number") and rawCurrent or 0
     if desired > 0 and math.abs(desired - current) > 0.5 then
         tracker:SetHeight(desired)
     end

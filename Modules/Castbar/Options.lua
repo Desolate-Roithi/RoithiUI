@@ -52,6 +52,9 @@ local function BuildCastbarGroup(uKey, orderIdx)
                 set = function(_, v)
                     GetCastbarDB(uKey).enabled = v
                     UpdateCastbar(uKey)
+                    if ns.UpdateBlizzardVisibility then
+                        ns.UpdateBlizzardVisibility()
+                    end
                 end,
             },
             detached = {
@@ -368,7 +371,7 @@ local function BuildCastbarGroup(uKey, orderIdx)
                         type = "execute",
                         name = L["> Unit Frames"],
                         order = 1,
-                        func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", uKey) end,
+                        func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "unitframes", uKey) end,
                     },
                     auras = {
                         type = "execute",
@@ -377,9 +380,9 @@ local function BuildCastbarGroup(uKey, orderIdx)
                         func = function()
                             local isBoss = uKey:match("^boss%d$")
                             if isBoss then
-                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", "bossFrames", uKey)
+                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "auras", "units", "bossFrames", uKey)
                             else
-                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", uKey)
+                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "auras", "units", uKey)
                             end
                         end,
                     },

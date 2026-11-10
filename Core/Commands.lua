@@ -183,6 +183,9 @@ commandHandlers = {
     ["secrets"] = function(self) self:Print("Use /rs or /roithisecrets for secrets tests.") end,
     ["debug"] = function(self)
         self.debug = not self.debug
+        if self.db and self.db.profile and self.db.profile.General then
+            self.db.profile.General.debugMode = self.debug
+        end
         self:Print("Debug: " .. (self.debug and "|cff00ff00Enabled|r" or "|cffff0000Disabled|r"))
     end,
     ["rd"] = function(self) commandHandlers["debug"](self) end,

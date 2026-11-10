@@ -4,7 +4,17 @@
 -- Uses `UnitHealthPercent` for logic and `StatusBar:SetValue` for display.
 
 local _, ns = ...
+if ns.skipLoad then return end
 local oUF = ns.oUF or _G.oUF
+local issecretvalue = _G.issecretvalue
+local canaccessvalue = _G.canaccessvalue
+
+local function SafeBool(val)
+    if val == nil then return false end
+    if issecretvalue and issecretvalue(val) then return false end
+    if canaccessvalue and not canaccessvalue(val) then return false end
+    return val == true or val == 1
+end
 
 local smoothCurveCache = nil
 local function GetSmoothColorCurve(grad)
@@ -58,7 +68,7 @@ local function Update(self, event, unit)
         local rawIsPlayer = UnitIsPlayer(unit)
         local isSecretPlayer = (issecretvalue and issecretvalue(rawIsPlayer)) or (canaccessvalue and not canaccessvalue(rawIsPlayer))
         if isSecretPlayer then
-            isPlayer = (UnitPlayerControlled and UnitPlayerControlled(unit)) or false
+            isPlayer = (UnitPlayerControlled and SafeBool(UnitPlayerControlled(unit))) or false
         else
             isPlayer = (rawIsPlayer == true or rawIsPlayer == 1)
         end
@@ -72,13 +82,18 @@ local function Update(self, event, unit)
         end
     end
 
-    if ((element.safeColorTapping or element.colorTapping) and not UnitPlayerControlled(unit) and UnitIsTapDenied(unit)) then
+    local isControlled = UnitPlayerControlled and SafeBool(UnitPlayerControlled(unit))
+    local isTapDenied = UnitIsTapDenied and SafeBool(UnitIsTapDenied(unit))
+    local isConnected = UnitIsConnected and SafeBool(UnitIsConnected(unit))
+    local hasVehicle = UnitHasVehicleUI and SafeBool(UnitHasVehicleUI(unit))
+
+    if ((element.safeColorTapping or element.colorTapping) and not isControlled and isTapDenied) then
         local t = element.colors.tapped
         element:SetStatusBarColor(t.r, t.g, t.b)
-    elseif ((element.safeColorDisconnected or element.colorDisconnected) and not UnitIsConnected(unit)) then
+    elseif ((element.safeColorDisconnected or element.colorDisconnected) and not isConnected) then
         local t = element.colors.disconnected
         element:SetStatusBarColor(t.r, t.g, t.b)
-    elseif ((element.safeColorClass or element.colorClass) and isPlayer and not UnitHasVehicleUI(unit)) then
+    elseif ((element.safeColorClass or element.colorClass) and isPlayer and not hasVehicle) then
         local _, class = UnitClass(unit)
         if not class and UnitGUID then
             local guid = UnitGUID(unit)
@@ -111,7 +126,7 @@ local function Update(self, event, unit)
             local fallback = (element.colors and element.colors.health) or { r = 0.2, g = 0.8, b = 0.2 }
             element:SetStatusBarColor(fallback.r, fallback.g, fallback.b)
         end
-    elseif ((element.safeColorReaction or element.colorReaction) and (not isPlayer or UnitHasVehicleUI(unit))) then
+    elseif ((element.safeColorReaction or element.colorReaction) and (not isPlayer or hasVehicle)) then
         local reaction = UnitReaction(unit, "player")
         local isReactionSecret = (issecretvalue and issecretvalue(reaction)) or (canaccessvalue and not canaccessvalue(reaction))
         if not isReactionSecret and reaction and element.colors and element.colors.reaction then
@@ -174,9 +189,12 @@ local function Enable(self)
         if self.unit == "targettarget" then
             self:RegisterEvent("UNIT_TARGET", Path)
             self:RegisterEvent("PLAYER_TARGET_CHANGED", Path)
+        elseif self.unit == "focustarget" then
+            self:RegisterEvent("UNIT_TARGET", Path)
+            self:RegisterEvent("PLAYER_FOCUS_CHANGED", Path)
         end
 
-        if (element.colorSmooth) then
+        if (element.safeColorSmooth or element.colorSmooth) then
             element.smoothGradient = {
                 1, 0, 0, -- R, G, B for 0
                 1, 1, 0, -- R, G, B for 50
@@ -200,6 +218,9 @@ local function Disable(self)
         if self.unit == "targettarget" then
             self:UnregisterEvent("UNIT_TARGET", Path)
             self:UnregisterEvent("PLAYER_TARGET_CHANGED", Path)
+        elseif self.unit == "focustarget" then
+            self:UnregisterEvent("UNIT_TARGET", Path)
+            self:UnregisterEvent("PLAYER_FOCUS_CHANGED", Path)
         end
     end
 end

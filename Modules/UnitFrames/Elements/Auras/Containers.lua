@@ -473,7 +473,7 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
     local parentIsShown = parent and (parent == UIParent or (parent.IsShown and parent:IsShown()) or isDetached)
     local isEditMode = parentIsShown and ((parent and (parent.isInEditMode or parent.forceShowEditMode or parent.forceShowTest))
                     or (_G.EditModeManagerFrame and _G.EditModeManagerFrame.IsShown and _G.EditModeManagerFrame:IsShown())
-                    or (LEM and LEM.isEditMode))
+                    or (LEM and ((LEM.IsInEditMode and LEM:IsInEditMode()) or LEM.isEditMode)))
 
     local sampleDisplayCount = isCombined and math.min(maxCount, 10) or math.min(maxCount, 5)
     local currentCount = isEditMode and sampleDisplayCount or (activeFrameCount > 0 and activeFrameCount or 1)

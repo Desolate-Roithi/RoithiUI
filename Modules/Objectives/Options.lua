@@ -268,6 +268,8 @@ function ObjectivesMod:GetOptions()
                 self.db.point = self.defaultSettings.point or "TOPRIGHT"
                 self.db.x = self.defaultSettings.x or -50
                 self.db.y = self.defaultSettings.y or -200
+                self.db.detachedX = nil
+                self.db.detachedY = nil
                 self:ApplyPosition()
             end,
         },

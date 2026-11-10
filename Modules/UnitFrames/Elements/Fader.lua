@@ -1,4 +1,5 @@
 local _, ns = ...
+if ns.skipLoad then return end
 local oUF = ns.oUF
 
 -- Combat Fader

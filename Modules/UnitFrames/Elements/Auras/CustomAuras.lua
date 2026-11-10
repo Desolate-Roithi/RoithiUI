@@ -366,7 +366,7 @@ function UF:UpdateCustomAura(id)
     local LEM = LibStub("LibEditMode-Roithi", true)
     local isEditMode = (_G.EditModeManagerFrame and _G.EditModeManagerFrame.IsShown and _G.EditModeManagerFrame:IsShown())
                     or (LibRoithi and LibRoithi.isEditMode)
-                    or (LEM and LEM.isEditMode)
+                    or (LEM and ((LEM.IsInEditMode and LEM:IsInEditMode()) or LEM.isEditMode))
 
     container:SetSize(math.max(16, lineSizeVal), math.max(16, size))
 

@@ -267,7 +267,9 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.bagBar = self.db.bagBar or {}
                             self.db.bagBar.enabled = val
-                            if self.bagBarFrame then
+                            if self.UpdateBagBarLayout then
+                                self:UpdateBagBarLayout()
+                            elseif self.bagBarFrame then
                                 self.bagBarFrame:SetShown(val)
                             end
                         end,

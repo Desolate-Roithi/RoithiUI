@@ -281,9 +281,15 @@ local function IsZoneActionActive()
 end
 AB.IsZoneActionActive = IsZoneActionActive
 
+local cachedBarButtons = {}
+
 function AB:GetBarButtons(barKey)
     local cfg = BAR_CONFIGS[barKey]
     if not cfg then return {} end
+
+    if barKey ~= "zoneAction" and cachedBarButtons[barKey] and #cachedBarButtons[barKey] == cfg.count then
+        return cachedBarButtons[barKey]
+    end
 
     if barKey == "zoneAction" then
         local buttons = {}
@@ -314,6 +320,9 @@ function AB:GetBarButtons(barKey)
             GetFrameState(btn).barKey = barKey
             table.insert(buttons, btn)
         end
+    end
+    if #buttons == cfg.count then
+        cachedBarButtons[barKey] = buttons
     end
     return buttons
 end
@@ -366,7 +375,9 @@ function AB:UpdateBarMouseover(barKey)
     if not container then return end
     local db = self.db and self.db[barKey] or {}
     if db.enabled == false then
-        if container.Hide then container:Hide() end
+        if not (InCombatLockdown and InCombatLockdown()) and container.Hide then
+            container:Hide()
+        end
         return
     end
 
@@ -558,6 +569,7 @@ end
 
 
 function AB:SetupBars()
+    if InCombatLockdown and InCombatLockdown() then return end
     for barKey, cfg in pairs(BAR_CONFIGS) do
         if not self.bars[barKey] then
             local f = CreateFrame("Frame", cfg.name, UIParent)
@@ -671,27 +683,11 @@ function AB:SetupBars()
         self.mainActionBarHooked = true
     end
 
-    self:ProtectOverrideActionBar()
-
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.editModeRegistered then
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
             self:OnEditModeEnter()
-            for _, bFrames in pairs(BLIZZARD_BAR_FRAMES) do
-                for _, fname in ipairs(bFrames) do
-                    local bf = _G[fname]
-                    if bf then
-                        if bf.Selection then
-                            if not GetFrameState(bf).selectionHooked and hooksecurefunc then
-                                GetFrameState(bf).selectionHooked = true
-                                hooksecurefunc(bf.Selection, "Show", function(sel)
-                                    sel:Hide()
-                                end)
-                            end
-                            bf.Selection:Hide()
-                            if bf.Selection.EnableMouse then bf.Selection:EnableMouse(false) end
-                        end
-                    end
-                end
+            if self.SuppressBlizzardBarSelections then
+                self:SuppressBlizzardBarSelections(true)
             end
         end, self)
         _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
@@ -1071,21 +1067,27 @@ function AB:UpdateOverlayContainment(button)
         if cd.SetHideCountdownNumbers then
             cd:SetHideCountdownNumbers(false)
         end
-        if rawget(cd, "noCooldownCount") ~= nil then
-            cd.noCooldownCount = nil
-        end
     end
 
-    for _, extraCd in ipairs({ button.chargeCooldown, button.lossOfControlCooldown }) do
-        if extraCd then
-            if extraCd.ClearAllPoints and extraCd.SetPoint then
-                extraCd:ClearAllPoints()
-                extraCd:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
-                extraCd:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
-            end
-            if extraCd.SetDrawEdge then extraCd:SetDrawEdge(false) end
-            if extraCd.SetDrawBling then extraCd:SetDrawBling(false) end
+    local cCd = button.chargeCooldown
+    if cCd then
+        if cCd.ClearAllPoints and cCd.SetPoint then
+            cCd:ClearAllPoints()
+            cCd:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+            cCd:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
         end
+        if cCd.SetDrawEdge then cCd:SetDrawEdge(false) end
+        if cCd.SetDrawBling then cCd:SetDrawBling(false) end
+    end
+    local locCd = button.lossOfControlCooldown
+    if locCd then
+        if locCd.ClearAllPoints and locCd.SetPoint then
+            locCd:ClearAllPoints()
+            locCd:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+            locCd:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        end
+        if locCd.SetDrawEdge then locCd:SetDrawEdge(false) end
+        if locCd.SetDrawBling then locCd:SetDrawBling(false) end
     end
 
     -- 3. Constrain overlays (Flash, SpellHighlight, NewAction, AutoCast, SpellFX)
@@ -1204,9 +1206,8 @@ function AB:UpdateOverlayContainment(button)
         end
 
         local rawChecked = button.GetChecked and button:GetChecked()
-        local isChecked = (rawChecked == true or rawChecked == 1)
 
-        if isEquipped or isChecked then
+        if IsNonSecretTrue(isEquipped) or IsNonSecretTrue(rawChecked) then
             -- Crisp 1px green border for equipped items and active stances/auras, perfectly fitting the frame
             btnBg:SetBackdropBorderColor(0.2, 0.9, 0.2, 1.0)
         else
@@ -1323,7 +1324,7 @@ function AB:StyleButton(button, explicitBarKey)
     self:UpdateOverlayContainment(button)
 
     -- 5. Keybind Hotkey Styling
-    local barKey = explicitBarKey or button.barKey
+    local barKey = explicitBarKey or btnSt.barKey or ResolveButtonOwnerBarKey(button)
     local barDb = (barKey and self.db and self.db[barKey]) or {}
 
     -- 5. HotKey Styling
@@ -1620,7 +1621,7 @@ function AB:StyleAllBars()
     for barKey in pairs(BAR_CONFIGS) do
         local buttons = self:GetBarButtons(barKey)
         for _, btn in ipairs(buttons) do
-            self:StyleButton(btn)
+            self:StyleButton(btn, barKey)
         end
     end
 end
@@ -1687,7 +1688,10 @@ function AB:LayoutBarInternal(barKey)
                         if not GetFrameState(bf).selectionHooked and hooksecurefunc then
                             GetFrameState(bf).selectionHooked = true
                             hooksecurefunc(bf.Selection, "Show", function(sel)
-                                sel:Hide()
+                                if (AB.IsEnabled and not AB:IsEnabled()) or (AB.db and AB.db.enabled == false) then return end
+                                if not (_G.InCombatLockdown and _G.InCombatLockdown()) and sel.Hide then
+                                    sel:Hide()
+                                end
                             end)
                         end
                         if bf.Selection.Hide and bf.Selection:IsShown() then bf.Selection:Hide() end
@@ -1904,6 +1908,7 @@ function AB:LayoutAllBars()
 end
 
 function AB:RestoreBlizzardBars()
+    if InCombatLockdown and InCombatLockdown() then return end
     for barKey, container in pairs(self.bars) do
         if container.Hide then container:Hide() end
         local buttons = self:GetBarButtons(barKey)
@@ -1969,8 +1974,9 @@ end
 
 AB.UpdateBarLayout = AB.LayoutBar
 
-function AB:SuppressBlizzardBarSelections()
-    if self.blizzardSelectionsSuppressed then return end
+function AB:SuppressBlizzardBarSelections(forceResuppress)
+    if InCombatLockdown and InCombatLockdown() then return end
+    if self.blizzardSelectionsSuppressed and not forceResuppress then return end
     self.blizzardSelectionsSuppressed = true
     for _, bFrames in pairs(BLIZZARD_BAR_FRAMES) do
         for _, fname in ipairs(bFrames) do
@@ -1980,10 +1986,15 @@ function AB:SuppressBlizzardBarSelections()
                     if not GetFrameState(bf).selectionHooked and hooksecurefunc then
                         GetFrameState(bf).selectionHooked = true
                         hooksecurefunc(bf.Selection, "Show", function(sel)
-                            sel:Hide()
+                            if (AB.IsEnabled and not AB:IsEnabled()) or (AB.db and AB.db.enabled == false) then return end
+                            if not (_G.InCombatLockdown and _G.InCombatLockdown()) and sel.Hide then
+                                sel:Hide()
+                            end
                         end)
                     end
-                    bf.Selection:Hide()
+                    if not (_G.InCombatLockdown and _G.InCombatLockdown()) and bf.Selection.Hide then
+                        bf.Selection:Hide()
+                    end
                     if bf.Selection.EnableMouse then bf.Selection:EnableMouse(false) end
                 end
             end
@@ -2021,13 +2032,11 @@ function AB:DisableActionPageSwitching()
     end
 end
 
-function AB:ProtectOverrideActionBar()
-    -- No-op: Do not stop or intercept Blizzard's OverrideActionBar.slideOut animation in combat.
-    -- Stopping slideOut blocks the native <OnFinished> transition, leaving vehicle/sarcophagus
-    -- (e.g. King's Rest Entomb) shaking UI stuck on screen after being freed.
-end
-
 function AB:SyncBar1Page()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.queuedPageSync = true
+        return
+    end
     local bar1 = self.bars and self.bars.bar1
     local page
     if _G.MainActionBar and _G.MainActionBar.GetAttribute then

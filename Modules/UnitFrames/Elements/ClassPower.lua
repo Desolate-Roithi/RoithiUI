@@ -19,6 +19,13 @@ local SoulShardsType = PowerType.SoulShards or 7
 local ArcaneChargesType = PowerType.ArcaneCharges or 16
 local EssenceType = PowerType.Essence or 19
 
+-- Hoisted static color tables (Zero GC in combat)
+local DEFAULT_CP_CYAN = { r = 0, g = 1, b = 1 }
+local DEFAULT_CP_YELLOW = { r = 1, g = 1, b = 0 }
+local STAGGER_RED = { r = 1.0, g = 0.42, b = 0.42 }
+local STAGGER_YELLOW = { r = 1.0, g = 0.98, b = 0.72 }
+local STAGGER_GREEN = { r = 0.52, g = 1.0, b = 0.52 }
+
 -- Configuration for Class Power
 local ClassPowerConfig = {
     ["ROGUE"] = { mode = "POWER", type = ComboPointsType },
@@ -306,6 +313,10 @@ function UF:CreateClassPower(frame)
                 end
             end
         end
+
+        if not anyCooldown then
+            sf:SetScript("OnUpdate", nil)
+        end
     end
 
     local function Update()
@@ -363,7 +374,7 @@ function UF:CreateClassPower(frame)
         end
 
         local max = config.maxDisplay or 5
-        local color = config.color or (config.mode == "AURA" and { r = 0, g = 1, b = 1 } or { r = 1, g = 1, b = 0 })
+        local color = config.color or (config.mode == "AURA" and DEFAULT_CP_CYAN or DEFAULT_CP_YELLOW)
 
         local curValue = 0
         local modifier = 1
@@ -382,11 +393,7 @@ function UF:CreateClassPower(frame)
             end
 
             local apps = aura and aura.applications or 0
-            if issecretvalue and issecretvalue(apps) then
-                curValue = 0
-            else
-                curValue = apps
-            end
+            curValue = apps
 
             ---@diagnostic disable-next-line: undefined-field
             if aura and config.maxDisplay then
@@ -446,27 +453,32 @@ function UF:CreateClassPower(frame)
             curValue = UnitStagger("player") or 0
             local hpMax = UnitHealthMax("player")
             local isHpMaxSecret = type(issecretvalue) == "function" and issecretvalue(hpMax)
-            if hpMax and not isHpMaxSecret and hpMax > 0 then max = hpMax end
+            if hpMax and not isHpMaxSecret and hpMax > 0 then
+                max = hpMax
+            elseif isHpMaxSecret then
+                max = hpMax
+            end
 
             -- Dynamic Coloring
-            local isSecret = type(issecretvalue) == "function" and issecretvalue(curValue)
+            local isSecret = (type(issecretvalue) == "function" and (issecretvalue(curValue) or issecretvalue(max)))
+                or (ns.Utils and ns.Utils.IsSecret and (ns.Utils.IsSecret(curValue) or ns.Utils.IsSecret(max)))
             if isSecret then
                 -- Secure Aura Fallback for Stagger Levels (Secret limits math operations)
                 if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(124273) then
-                    color = { r = 1.0, g = 0.42, b = 0.42 } -- Red (Heavy)
+                    color = STAGGER_RED
                 elseif C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(124274) then
-                    color = { r = 1.0, g = 0.98, b = 0.72 } -- Yellow (Moderate)
+                    color = STAGGER_YELLOW
                 else
-                    color = { r = 0.52, g = 1.0, b = 0.52 } -- Green (Light/Default)
+                    color = STAGGER_GREEN
                 end
             else
-                local pct = max > 0 and ((curValue / max) * 100) or 0
+                local pct = (max and max > 0) and ((curValue / max) * 100) or 0
                 if pct >= 60 then
-                    color = { r = 1.0, g = 0.42, b = 0.42 } -- Red (Heavy)
+                    color = STAGGER_RED
                 elseif pct >= 30 then
-                    color = { r = 1.0, g = 0.98, b = 0.72 } -- Yellow (Moderate)
+                    color = STAGGER_YELLOW
                 else
-                    color = { r = 0.52, g = 1.0, b = 0.52 } -- Green (Light)
+                    color = STAGGER_GREEN
                 end
             end
 
@@ -534,9 +546,13 @@ function UF:CreateClassPower(frame)
                     local isMaxSecretBar = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(max)) or (type(issecretvalue) == "function" and issecretvalue(max))
                     local barMax
                     if isMaxSecretBar then
-                        barMax = UnitPowerMax("player", config.type, true) or max
+                        if config.mode == "STAGGER" then
+                            barMax = max
+                        else
+                            barMax = UnitPowerMax("player", config.type, true) or max
+                        end
                     else
-                        barMax = max * (modifier or 1)
+                        barMax = (config.mode == "STAGGER") and max or (max * (modifier or 1))
                     end
                     point:SetMinMaxValues(0, barMax)
                     point:SetValue(curValue)
@@ -595,24 +611,26 @@ function UF:CreateClassPower(frame)
         element:Show()
     end
 
-    frame:HookScript("OnEvent", function(f, event, unit)
-        if (unit and unit ~= "player") then return end
-        Update()
-    end)
-
-    frame:RegisterEvent("PLAYER_REGEN_ENABLED", Update, true)
-    frame:RegisterEvent("PLAYER_ENTERING_WORLD", Update, true)
-    frame:RegisterEvent("SPELLS_CHANGED", Update, true)
-    local _, pclass = UnitClass("player")
-    if pclass == "ROGUE" or pclass == "DRUID" then frame:RegisterEvent("PLAYER_TARGET_CHANGED", Update, true) end
-    if pclass == "DRUID" then frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM", Update, true) end
-    if pclass == "DEATHKNIGHT" then frame:RegisterEvent("RUNE_POWER_UPDATE", Update, true) end
-    frame:RegisterEvent("UNIT_POWER_UPDATE", Update)
-    frame:RegisterEvent("UNIT_DISPLAYPOWER", Update)
-    if pclass == "SHAMAN" or pclass == "DEMONHUNTER" then frame:RegisterEvent("UNIT_AURA", Update) end
-    if pclass == "MONK" then
-        frame:RegisterEvent("UNIT_HEALTH", Update)
-        frame:RegisterEvent("UNIT_MAXHEALTH", Update)
+    if frame.RegisterEvent then
+        frame:RegisterEvent("PLAYER_REGEN_ENABLED", Update, true)
+        frame:RegisterEvent("PLAYER_ENTERING_WORLD", Update, true)
+        frame:RegisterEvent("SPELLS_CHANGED", Update, true)
+        local _, pclass = UnitClass("player")
+        if pclass == "ROGUE" or pclass == "DRUID" then frame:RegisterEvent("PLAYER_TARGET_CHANGED", Update, true) end
+        if pclass == "DRUID" then frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM", Update, true) end
+        if pclass == "DEATHKNIGHT" then frame:RegisterEvent("RUNE_POWER_UPDATE", Update, true) end
+        frame:RegisterEvent("UNIT_POWER_UPDATE", Update)
+        frame:RegisterEvent("UNIT_DISPLAYPOWER", Update)
+        if pclass == "SHAMAN" or pclass == "DEMONHUNTER" then frame:RegisterEvent("UNIT_AURA", Update) end
+        if pclass == "MONK" then
+            frame:RegisterEvent("UNIT_HEALTH", Update)
+            frame:RegisterEvent("UNIT_MAXHEALTH", Update)
+        end
+    elseif frame.HookScript then
+        frame:HookScript("OnEvent", function(f, event, unit)
+            if (unit and unit ~= "player") then return end
+            Update()
+        end)
     end
 
     -- ------------------------------------------------------------------------

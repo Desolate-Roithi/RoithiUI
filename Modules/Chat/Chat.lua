@@ -21,7 +21,9 @@ local tabTextures = setmetatable({}, { __mode = "k" })
 local editBoxBackdrops = setmetatable({}, { __mode = "k" })
 local editBoxShowHooked = setmetatable({}, { __mode = "k" })
 local editBoxFocusHooked = setmetatable({}, { __mode = "k" })
+local editBoxSetFocusHooked = setmetatable({}, { __mode = "k" })
 local editBoxDeactivateHooked = setmetatable({}, { __mode = "k" })
+local tabHoverHooked = setmetatable({}, { __mode = "k" })
 local wheelHookedFrames = setmetatable({}, { __mode = "k" })
 local frameBaseY = setmetatable({}, { __mode = "k" })
 local frameBaseHeight = setmetatable({}, { __mode = "k" })
@@ -298,6 +300,22 @@ local function IsSecretString(str)
     return false
 end
 
+local cachedNoticeGlobals = nil
+local function GetNoticeGlobals()
+    if not cachedNoticeGlobals then
+        cachedNoticeGlobals = {
+            _G.CHAT_YOU_JOINED_NOTICE,
+            _G.CHAT_YOU_JOINED_NOTICE_BN,
+            _G.CHAT_YOU_LEFT_NOTICE,
+            _G.CHAT_YOU_LEFT_NOTICE_BN,
+            _G.CHAT_YOU_CHANGED_NOTICE,
+            _G.CHAT_YOU_CHANGED_NOTICE_BN,
+            _G.CHAT_SUSPENDED_NOTICE,
+        }
+    end
+    return cachedNoticeGlobals
+end
+
 local function IsChannelNoticeMessage(text, eventArgs)
     if not text or type(text) ~= "string" then return false end
     if eventArgs then
@@ -308,15 +326,7 @@ local function IsChannelNoticeMessage(text, eventArgs)
             return true
         end
     end
-    local noticeGlobals = {
-        _G.CHAT_YOU_JOINED_NOTICE,
-        _G.CHAT_YOU_JOINED_NOTICE_BN,
-        _G.CHAT_YOU_LEFT_NOTICE,
-        _G.CHAT_YOU_LEFT_NOTICE_BN,
-        _G.CHAT_YOU_CHANGED_NOTICE,
-        _G.CHAT_YOU_CHANGED_NOTICE_BN,
-        _G.CHAT_SUSPENDED_NOTICE,
-    }
+    local noticeGlobals = GetNoticeGlobals()
     for _, gStr in ipairs(noticeGlobals) do
         if gStr and gStr ~= "" then
             local prefix = gStr:match("^([^|]+)")
@@ -447,10 +457,13 @@ function ChatMod:FormatChatMessage(frame, text, eventArgs)
 end
 
 local function ShortenChannelFilter(frame, event, msg, sender, ...)
+    if ns.Utils.IsSecret(msg) or ns.Utils.IsSecret(sender) then
+        return false, msg, sender, ...
+    end
     -- GUID is at offset 9 of ... (after msg+sender consumed: lang=1, chanStr=2,
     -- target=3, flags=4, unk=5, chanNum=6, chanName=7, lineID=8, guid=9)
     local guid = select(9, ...)
-    if sender and guid and type(sender) == "string" and type(guid) == "string" then
+    if sender and guid and type(sender) == "string" and type(guid) == "string" and not ns.Utils.IsSecret(guid) then
         playerNameToGuid[sender] = guid
     end
     if ChatMod.db and ChatMod.db.linkURLs and msg and type(msg) == "string" then
@@ -535,8 +548,8 @@ function ChatMod:OnEnable()
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
             self.isEditModeActive = true
             self:ApplyScreenClamping()
-            if self.UpdateEditModeSelection then
-                self:UpdateEditModeSelection()
+            if self.UpdateChatSelectionBounds then
+                self:UpdateChatSelectionBounds(_G.ChatFrame1)
             end
         end, self)
         _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
@@ -586,23 +599,29 @@ function ChatMod:OnEnable()
     if _G.FCFDock_UpdateTabs and not self:IsHooked("FCFDock_UpdateTabs") then
         self:SecureHook("FCFDock_UpdateTabs", function(dock)
             if self.IsEnabled and not self:IsEnabled() then return end
-            if self.pendingTabAutoFit then return end
-            self.pendingTabAutoFit = true
-            C_Timer.After(0.05, function()
-                self.pendingTabAutoFit = nil
-                if self.IsEnabled and not self:IsEnabled() then return end
-                if self.AutoFitChatTabs and dock then
-                    self:AutoFitChatTabs(dock)
-                end
-                if self.UpdateButtonsDock then
-                    self:UpdateButtonsDock()
-                end
-            end)
+            if self.isUpdatingTabs then return end
+            self.isUpdatingTabs = true
+            if self.AutoFitChatTabs and dock then
+                self:AutoFitChatTabs(dock)
+            end
+            if self.UpdateButtonsDock then
+                self:UpdateButtonsDock()
+            end
+            self.isUpdatingTabs = nil
         end)
     end
     if _G.FCFDock_ScrollToSelectedTab and not self:IsHooked("FCFDock_ScrollToSelectedTab") then
         self:SecureHook("FCFDock_ScrollToSelectedTab", function(dock)
             if self.ScrollToSelectedTab then
+                self:ScrollToSelectedTab(dock)
+            end
+        end)
+    end
+    if _G.FCFDockScrollFrame_JumpToTab and not self:IsHooked("FCFDockScrollFrame_JumpToTab") then
+        self:SecureHook("FCFDockScrollFrame_JumpToTab", function(scrollFrame)
+            if self.IsEnabled and not self:IsEnabled() then return end
+            local dock = (scrollFrame and scrollFrame.GetParent and scrollFrame:GetParent()) or _G.GENERAL_CHAT_DOCK
+            if self.ScrollToSelectedTab and dock then
                 self:ScrollToSelectedTab(dock)
             end
         end)
@@ -835,7 +854,6 @@ function ChatMod:SetChatEditBoxDisplacement(cf, isShown)
         frameBaseHeight[cf] = baseH
         local newH = math.max(60, baseH - displaceY)
         if cf.SetSize then cf:SetSize(baseW, newH) end
-        if cf.SetHeight then cf:SetHeight(newH) end
         cf:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", baseX, baseY + displaceY)
         if cf.ScrollToBottom then pcall(cf.ScrollToBottom, cf) end
     else
@@ -843,7 +861,6 @@ function ChatMod:SetChatEditBoxDisplacement(cf, isShown)
             frameBaseY[cf] = nil
             frameBaseHeight[cf] = nil
             if cf.SetSize then cf:SetSize(baseW, baseH) end
-            if cf.SetHeight then cf:SetHeight(baseH) end
             cf:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", baseX, baseY)
             if cf.ScrollToBottom then pcall(cf.ScrollToBottom, cf) end
         end
@@ -891,7 +908,7 @@ end
 
 function ChatMod:UpdateChatSelectionBounds(cf)
     cf = cf or _G.ChatFrame1
-    if not cf or not cf.Selection or cf.isDragging then return end
+    if not cf or not cf.Selection or cf.isDragging or (_G.InCombatLockdown and _G.InCombatLockdown()) then return end
 
     local padX = (self.db and self.db.showBackground and self.db.backgroundPaddingX ~= nil) and self.db.backgroundPaddingX or (self.db and self.db.showBackground and 4 or 0)
     local padY = (self.db and self.db.showBackground and self.db.backgroundPaddingY ~= nil) and self.db.backgroundPaddingY or (self.db and self.db.showBackground and 4 or 0)
@@ -987,8 +1004,8 @@ function ChatMod:ApplyChatPosition(forceInEditMode)
     end
 
     -- Force re-anchoring of docked frames
-    if _G.FCFDock_ForceReanchoring and _G.GENERAL_CHAT_DOCK then
-        _G.FCFDock_ForceReanchoring(_G.GENERAL_CHAT_DOCK)
+    if self.AutoFitChatTabs and _G.GENERAL_CHAT_DOCK then
+        self:AutoFitChatTabs(_G.GENERAL_CHAT_DOCK)
     end
     isApplyingChatPosition = false
 
@@ -1722,7 +1739,7 @@ function ChatMod:UpdateEditBoxStyle(eb)
     local font = self:GetFontPath()
     local size = self.db.fontSize or 12
     local outline = NormalizeFontFlags(self.db.fontOutline)
-    local showShadow = (self.db.fontShadow == true)
+    local showShadow = (self.db.showFontShadow == true or self.db.fontShadow == true)
     local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
     if utils and utils.ApplyTypography then
         utils.ApplyTypography(eb, font, size, outline, showShadow)
@@ -1863,7 +1880,7 @@ function ChatMod:SkinEditBox(eb, cf, idx)
     local font = self:GetFontPath()
     local size = self.db.fontSize or 12
     local outline = NormalizeFontFlags(self.db.fontOutline)
-    local showShadow = (self.db.fontShadow == true)
+    local showShadow = (self.db.showFontShadow == true or self.db.fontShadow == true)
     local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
     if utils and utils.ApplyTypography then
         utils.ApplyTypography(eb, font, size, outline, showShadow)
@@ -1911,13 +1928,13 @@ function ChatMod:SkinEditBox(eb, cf, idx)
         end
     end
 
-    if idx <= 10 and not editBoxFocusHooked[eb] and hooksecurefunc then
-        editBoxFocusHooked[eb] = true
+    if idx <= 10 and not editBoxSetFocusHooked[eb] and hooksecurefunc then
+        editBoxSetFocusHooked[eb] = true
         hooksecurefunc(eb, "SetFocus", function()
             local f = self:GetFontPath()
             local sz = self.db.fontSize or 12
             local out = NormalizeFontFlags(self.db.fontOutline)
-            local sh = (self.db.fontShadow == true)
+            local sh = (self.db.showFontShadow == true or self.db.fontShadow == true)
             local u = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
             if eb.header and u and u.ApplyTypography then
                 u.ApplyTypography(eb.header, f, sz, out, sh)
@@ -1995,7 +2012,7 @@ function ChatMod:UpdateTabFont(tab)
         local font = self:GetFontPath()
         local size = self.db.tabFontSize or 11
         local outline = NormalizeFontFlags(self.db.fontOutline)
-        local showShadow = (self.db.fontShadow == true)
+        local showShadow = (self.db.showFontShadow == true or self.db.fontShadow == true)
         local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
         if utils and utils.ApplyTypography then
             utils.ApplyTypography(tabText, font, size, outline, showShadow)
@@ -2084,8 +2101,9 @@ function ChatMod:SkinTab(tab, cf, idx)
     -- Apply font and tab height
     self:UpdateTabFont(tab)
 
-    -- Tab hover hooks
-    if tab.HookScript then
+    -- Tab hover hooks (idempotent per-tab guard)
+    if tab.HookScript and not tabHoverHooked[tab] then
+        tabHoverHooked[tab] = true
         tab:HookScript("OnEnter", function()
             self:UpdateTabVisuals(tab, true)
         end)
@@ -2139,12 +2157,15 @@ function ChatMod:OnTabMouseWheel(delta)
     local scrollChild = scrollFrame.GetScrollChild and scrollFrame:GetScrollChild()
     if not scrollChild then return end
 
+    local isSecretFn = ns.Utils and ns.Utils.IsSecret
     local visibleWidth = (scrollFrame.GetWidth and scrollFrame:GetWidth()) or 0
     local totalWidth = (scrollChild.GetWidth and scrollChild:GetWidth()) or 0
+    if isSecretFn and (isSecretFn(visibleWidth) or isSecretFn(totalWidth)) then return end
     local maxScroll = math.max(0, totalWidth - visibleWidth)
     if maxScroll <= 0 then return end
 
     local curScroll = (scrollFrame.GetHorizontalScroll and scrollFrame:GetHorizontalScroll()) or 0
+    if isSecretFn and isSecretFn(curScroll) then return end
     local step = 35
 
     local newScroll
@@ -2168,28 +2189,50 @@ function ChatMod:ScrollToSelectedTab(dock)
     local scrollChild = scrollFrame.GetScrollChild and scrollFrame:GetScrollChild()
     if not scrollChild then return end
 
+    local isSecretFn = ns.Utils and ns.Utils.IsSecret
+    local childWidth = (scrollChild.GetWidth and scrollChild:GetWidth()) or 0
+    local frameWidth = (scrollFrame.GetWidth and scrollFrame:GetWidth()) or 0
+    local curScroll = (scrollFrame.GetHorizontalScroll and scrollFrame:GetHorizontalScroll()) or 0
+    if isSecretFn and (isSecretFn(childWidth) or isSecretFn(frameWidth) or isSecretFn(curScroll)) then return end
+    local maxScroll = math.max(0, childWidth - frameWidth)
+
     local selFrame = (_G.FCFDock_GetSelectedWindow and _G.FCFDock_GetSelectedWindow(dock)) or dock.selected
-    if not selFrame then return end
+    if not selFrame then
+        if curScroll > maxScroll and scrollFrame.SetHorizontalScroll then
+            scrollFrame:SetHorizontalScroll(maxScroll)
+        end
+        return
+    end
 
     local cfName = selFrame.GetName and selFrame:GetName()
     local selTab = cfName and _G[cfName .. "Tab"]
-    if not selTab or not selTab:IsShown() then return end
+    if not selTab or not selTab:IsShown() then
+        if curScroll > maxScroll and scrollFrame.SetHorizontalScroll then
+            scrollFrame:SetHorizontalScroll(maxScroll)
+        end
+        return
+    end
 
     local tabLeft = selTab.GetLeft and selTab:GetLeft()
     local tabRight = selTab.GetRight and selTab:GetRight()
     local frameLeft = scrollFrame.GetLeft and scrollFrame:GetLeft()
     local frameRight = scrollFrame.GetRight and scrollFrame:GetRight()
+    if isSecretFn and (isSecretFn(tabLeft) or isSecretFn(tabRight) or isSecretFn(frameLeft) or isSecretFn(frameRight)) then
+        return
+    end
 
-    if tabLeft and frameLeft and tabRight and frameRight then
-        local curScroll = (scrollFrame.GetHorizontalScroll and scrollFrame:GetHorizontalScroll()) or 0
+    if tabLeft and frameLeft and tabRight and frameRight and scrollFrame.SetHorizontalScroll then
         if tabLeft < frameLeft then
             local diff = frameLeft - tabLeft
             scrollFrame:SetHorizontalScroll(math.max(0, curScroll - diff))
         elseif tabRight > frameRight then
             local diff = tabRight - frameRight
-            local maxScroll = math.max(0, ((scrollChild.GetWidth and scrollChild:GetWidth()) or 0) - ((scrollFrame.GetWidth and scrollFrame:GetWidth()) or 0))
             scrollFrame:SetHorizontalScroll(math.min(maxScroll, curScroll + diff))
+        elseif curScroll > maxScroll then
+            scrollFrame:SetHorizontalScroll(maxScroll)
         end
+    elseif curScroll > maxScroll and scrollFrame.SetHorizontalScroll then
+        scrollFrame:SetHorizontalScroll(maxScroll)
     end
 end
 
@@ -2336,31 +2379,45 @@ function ChatMod:AutoFitChatTabs(dock)
     local lastDynamicTab = nil
     local totalDynamicWidth = 0
 
+    local inCombat = _G.InCombatLockdown and _G.InCombatLockdown()
+    local isSecretFn = ns.Utils and ns.Utils.IsSecret
+
     for idx, chatFrame in ipairs(dock.DOCKED_CHAT_FRAMES) do
         local cfName = chatFrame.GetName and chatFrame:GetName()
         local chatTab = cfName and _G[cfName .. "Tab"]
 
-        -- On-demand skinning for newly created or unskinned tabs/frames
-        if chatTab and not skinnedTabs[chatTab] then
-            self:SkinTab(chatTab, chatFrame, idx)
-        end
-        if chatFrame and not skinnedFrames[chatFrame] then
-            self:SkinChatFrame(chatFrame, idx)
+        -- On-demand skinning for newly created or unskinned tabs/frames (deferred in combat to avoid FCF_OpenTemporaryWindow taint)
+        if not inCombat then
+            if chatTab and not skinnedTabs[chatTab] then
+                self:SkinTab(chatTab, chatFrame, idx)
+            end
+            if chatFrame and not skinnedFrames[chatFrame] then
+                self:SkinChatFrame(chatFrame, idx)
+            end
         end
 
         if chatTab then
+            local fullWidth = 80
             local tabText = chatTab.Text or (cfName and _G[cfName .. "TabText"])
             if tabText then
                 if tabText.SetWidth then
                     tabText:SetWidth(0)
                 end
                 local strWidth = (tabText.GetStringWidth and tabText:GetStringWidth()) or 0
-                local fullWidth = math.max(36, math.ceil(strWidth) + 12)
+                local isSecretWidth = (isSecretFn and isSecretFn(strWidth)) or type(strWidth) ~= "number"
+                if isSecretWidth then
+                    fullWidth = 80
+                    if tabText.SetWidth then
+                        tabText:SetWidth(68)
+                    end
+                else
+                    fullWidth = math.max(36, math.ceil(strWidth) + 12)
+                    if tabText.SetWidth then
+                        tabText:SetWidth(strWidth + 2)
+                    end
+                end
                 if chatTab.SetWidth then
                     chatTab:SetWidth(fullWidth)
-                end
-                if tabText.SetWidth then
-                    tabText:SetWidth(strWidth + 2)
                 end
                 if tabText.ClearAllPoints and tabText.SetPoint then
                     tabText:ClearAllPoints()
@@ -2398,7 +2455,12 @@ function ChatMod:AutoFitChatTabs(dock)
                     chatTab:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", 0, 0)
                 end
                 lastDynamicTab = chatTab
-                totalDynamicWidth = totalDynamicWidth + (chatTab.GetWidth and chatTab:GetWidth() or 36)
+                local curTabW = chatTab.GetWidth and chatTab:GetWidth()
+                if curTabW and not (isSecretFn and isSecretFn(curTabW)) and type(curTabW) == "number" then
+                    totalDynamicWidth = totalDynamicWidth + curTabW
+                else
+                    totalDynamicWidth = totalDynamicWidth + fullWidth
+                end
             end
         end
     end
@@ -2487,6 +2549,9 @@ function ChatMod:UpdateButtonsDock()
     if pos == "HIDDEN" or not self.db.enabled then
         if self.buttonDock then
             self.buttonDock:Hide()
+        end
+        if self.HideBlizzardChrome then
+            self:HideBlizzardChrome()
         end
         return
     end

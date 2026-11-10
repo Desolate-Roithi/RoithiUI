@@ -132,13 +132,16 @@ local function ProtectFrameBounds(frameObj)
         if type(frameObj[method]) == "function" then
             local origMethod = frameObj[method]
             frameObj[method] = function(s, ...)
-                local results = { origMethod(s, ...) }
+                local r1, r2, r3, r4 = origMethod(s, ...)
                 local isSec = false
-                for _, v in ipairs(results) do
-                    if (issecretvalue and issecretvalue(v)) or (type(v) == "userdata") then
-                        isSec = true
-                        break
-                    end
+                if r1 ~= nil and ((issecretvalue and issecretvalue(r1)) or type(r1) == "userdata") then
+                    isSec = true
+                elseif r2 ~= nil and ((issecretvalue and issecretvalue(r2)) or type(r2) == "userdata") then
+                    isSec = true
+                elseif r3 ~= nil and ((issecretvalue and issecretvalue(r3)) or type(r3) == "userdata") then
+                    isSec = true
+                elseif r4 ~= nil and ((issecretvalue and issecretvalue(r4)) or type(r4) == "userdata") then
+                    isSec = true
                 end
 
                 if isSec then
@@ -168,7 +171,7 @@ local function ProtectFrameBounds(frameObj)
                     if method == "GetRect" then return left, bottom, fw, fh end
                 end
 
-                return unpack(results)
+                return r1, r2, r3, r4
             end
         end
     end

@@ -70,14 +70,13 @@ local function SafeDurationIsActive(durObj)
     if durObj.IsZero then
         local ok, isZero = pcall(durObj.IsZero, durObj)
         if ok and isZero ~= nil then
-            if _G.issecretvalue and _G.issecretvalue(isZero) then return false end
+            if (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(isZero)) or (_G.issecretvalue and _G.issecretvalue(isZero)) then return false end
             if _G.canaccessvalue and not _G.canaccessvalue(isZero) then return false end
 
-            local cmpOk, res = pcall(function() return isZero == false end)
-            if cmpOk and res == true then
+            if SafeEquals(isZero, false) then
                 return true
             end
-            if isZero == true then
+            if SafeEquals(isZero, true) then
                 return false
             end
         end
@@ -396,7 +395,7 @@ function CDM:MoveSpellInCustomBar(barIndex, slotIndex, direction)
     local cfg = list[barIndex]
     if not cfg or not cfg.spells then return end
     local targetIndex = slotIndex + direction
-    if targetIndex < 1 or targetIndex > (cfg.maxIcons or 8) then return end
+    if targetIndex < 1 or targetIndex > #cfg.spells then return end
     local temp = cfg.spells[slotIndex]
     cfg.spells[slotIndex] = cfg.spells[targetIndex]
     cfg.spells[targetIndex] = temp
@@ -472,7 +471,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                 elseif _G.GetItemCooldown then
                     start, dur, enable = _G.GetItemCooldown(itemID)
                 end
-                local isEnabled = (enable == true or SafeEquals(enable, 1))
+                local isEnabled = (SafeEquals(enable, true) or SafeEquals(enable, 1))
                 if isEnabled and SafeIsGreaterThanZero(dur) then
                     pcall(cd.SetCooldown, cd, start, dur)
                     if SafeIsGreaterThan(dur, 1.5) then
@@ -551,12 +550,10 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
 
         local cdInfo = _G.C_Spell and _G.C_Spell.GetSpellCooldown and _G.C_Spell.GetSpellCooldown(spellID)
         if cdInfo and cdInfo.isActive ~= nil then
-            local okActive, isActive = pcall(function() return cdInfo.isActive == true end)
-            local okGCD, isOnGCD = pcall(function() return cdInfo.isOnGCD == true end)
-            if okActive and isActive then
-                if not (okGCD and isOnGCD) then
-                    isOnCD = true
-                end
+            local isActive = SafeEquals(cdInfo.isActive, true)
+            local isOnGCD = SafeEquals(cdInfo.isOnGCD, true)
+            if isActive and not isOnGCD then
+                isOnCD = true
             end
         end
 
@@ -574,8 +571,8 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
         end
 
         if not cdApplied and cd.SetCooldown then
-            if cdInfo and cdInfo.startTime and cdInfo.duration and cdInfo.isEnabled then
-                local isEnabled = cdInfo.isEnabled == true or SafeEquals(cdInfo.isEnabled, 1)
+            if cdInfo and cdInfo.startTime and cdInfo.duration and cdInfo.isEnabled ~= nil then
+                local isEnabled = SafeEquals(cdInfo.isEnabled, true) or SafeEquals(cdInfo.isEnabled, 1)
                 if isEnabled then
                     pcall(cd.SetCooldown, cd, cdInfo.startTime, cdInfo.duration, cdInfo.modRate or 1)
                     cdApplied = true
@@ -589,7 +586,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                 end
             elseif _G.GetSpellCooldown then
                 local start, dur, enable, modRate = _G.GetSpellCooldown(spellID)
-                local isEnabled = enable == true or SafeEquals(enable, 1)
+                local isEnabled = SafeEquals(enable, true) or SafeEquals(enable, 1)
                 if start and dur and isEnabled then
                     pcall(cd.SetCooldown, cd, start, dur, modRate or 1)
                     cdApplied = true
@@ -604,7 +601,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
             end
         end
 
-        if not cdApplied or (durObj and SafeDurationIsZero(durObj)) or (cdInfo and cdInfo.isActive == false) then
+        if not cdApplied or (durObj and SafeDurationIsZero(durObj)) or (cdInfo and SafeEquals(cdInfo.isActive, false)) then
             if cd.Clear then
                 cd:Clear()
             elseif cd.SetCooldown then
@@ -630,15 +627,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
             chargeFS:Hide()
         else
             chargeFS:Show()
-            local isMultiCharge = false
-            local ok, multi = pcall(function()
-                return chargeInfo and chargeInfo.maxCharges and chargeInfo.maxCharges > 1
-            end)
-            if ok and multi then
-                isMultiCharge = true
-            end
-
-            if isMultiCharge and chargeInfo and chargeInfo.currentCharges then
+            if chargeInfo and chargeInfo.currentCharges then
                 chargeFS:SetText(chargeInfo.currentCharges)
                 if chargeFS.SetTextColor then
                     chargeFS:SetTextColor(1, 1, 1, 1)
@@ -790,6 +779,7 @@ function CDM:InitializeCustomBar(index)
     frame:ClearAllPoints()
     frame:SetPoint(targetPoint, UIParent, "CENTER", cfg.x or 0, cfg.y or 0)
     frame.editModeName = cfg.name or ("Custom Bar " .. index)
+    frame.barKey = "CustomBar_" .. index
 
     -- Register with LibEditMode if available
     if LEM and LEM.AddFrame and not frame.lemRegistered then
@@ -1195,7 +1185,14 @@ function CDM:InitializeCustomBar(index)
             local isOverridden = (cfg.overrideGlobal == true)
             local anchor = isOverridden and (cfg.stackAnchor or "BOTTOMRIGHT") or (CDM.db and CDM.db.stackAnchor or "BOTTOMRIGHT")
             chargeFS:ClearAllPoints()
-            local defOx, defOy, defJustifyH = (ns.Utils and ns.Utils.GetDefaultAnchorOffsets) and ns.Utils.GetDefaultAnchorOffsets(anchor, 2) or (anchor:find("RIGHT") and -2 or (anchor:find("LEFT") and 2 or 0)), (anchor:find("TOP") and -2 or (anchor:find("BOTTOM") and 2 or 0)), "CENTER"
+            local defOx, defOy, defJustifyH
+            if ns.Utils and ns.Utils.GetDefaultAnchorOffsets then
+                defOx, defOy, defJustifyH = ns.Utils.GetDefaultAnchorOffsets(anchor, 2)
+            else
+                defOx = anchor:find("RIGHT") and -2 or (anchor:find("LEFT") and 2 or 0)
+                defOy = anchor:find("TOP") and -2 or (anchor:find("BOTTOM") and 2 or 0)
+                defJustifyH = "CENTER"
+            end
             local ox = isOverridden and (cfg.stackOffsetX or defOx) or (CDM.db and CDM.db.stackOffsetX or defOx)
             local oy = isOverridden and (cfg.stackOffsetY or defOy) or (CDM.db and CDM.db.stackOffsetY or defOy)
             if chargeFS.SetJustifyH then
@@ -1234,34 +1231,6 @@ function CDM:InitializeAllCustomBars()
         end
     end
 end
-
--- Event listener for live custom cooldown updates and accessibility changes
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-eventFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
-eventFrame:RegisterEvent("SPELL_UPDATE_USABLE")
-eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
-eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-eventFrame:RegisterEvent("SPELLS_CHANGED")
-eventFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
-eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-eventFrame:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_ENTERING_WORLD" or
-       event == "PLAYER_EQUIPMENT_CHANGED" or
-       event == "BAG_UPDATE_DELAYED" or
-       event == "SPELLS_CHANGED" or
-       event == "TRAIT_CONFIG_UPDATED" or
-       event == "PLAYER_SPECIALIZATION_CHANGED" then
-        if CDM and CDM.InitializeAllCustomBars then
-            CDM:InitializeAllCustomBars()
-        end
-    end
-    if CDM and CDM.UpdateAllCustomBarCooldowns then
-        CDM:UpdateAllCustomBarCooldowns()
-    end
-end)
 
 if LEM and LEM.RegisterCallback and not CDM.roithiCustomBarsLEMHooked then
     LEM:RegisterCallback("enter", function()

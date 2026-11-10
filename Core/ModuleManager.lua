@@ -1,4 +1,5 @@
 local _, ns = ...
+if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 
 local ModuleManager = {}
@@ -6,6 +7,9 @@ ns.ModuleManager = ModuleManager
 RoithiUI.ModuleManager = ModuleManager
 
 local function MergeMissingDefaults(target, source)
+    if ns.Utils and ns.Utils.MergeTable then
+        return ns.Utils.MergeTable(target, source)
+    end
     for k, v in pairs(source) do
         if target[k] == nil then
             if type(v) == "table" then

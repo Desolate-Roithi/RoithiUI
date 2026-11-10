@@ -42,7 +42,7 @@ local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
 
 --- Safe number parser for secret values
 local SafeNum = function(val, default)
-    if val == nil or (issecretvalue and issecretvalue(val)) then
+    if val == nil or (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(val)) or (issecretvalue and issecretvalue(val)) then
         return default or 0
     end
     local num = tonumber(val)

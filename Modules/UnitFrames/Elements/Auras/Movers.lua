@@ -202,7 +202,7 @@ local function GetOrCreateAuraMover(container, unit, containerSuffix)
                 if AL and AL.ApplyLayout then AL:ApplyLayout(u, suf) end
 
                 if LEM and LEM.RefreshFrameSettings then
-                    LEM:RefreshFrameSettings()
+                    LEM:RefreshFrameSettings(mover)
                 end
             end, defaults, mover.editModeName)
 
@@ -507,7 +507,7 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
                 if isDebuffs then return db and db.debuffDetached == true end
                 return db and db.auraDetached == true
             end,
-            set = function(_, v)
+            set = function(f, v)
                 local db = GetUnitDB(unit)
                 if db then
                     if isBuffs then
@@ -559,7 +559,7 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
                 end
                 RefreshAuraSettings(unit)
                 if LEM and LEM.RefreshFrameSettings then
-                    LEM:RefreshFrameSettings()
+                    LEM:RefreshFrameSettings(f)
                 end
             end,
         },
@@ -590,16 +590,22 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
             name = L["Icons Per Row"],
             get = function()
                 local db = GetUnitDB(unit)
-                if isBuffs then return (db and db.buffsPerRow) or 8 end
-                if isDebuffs then return (db and db.debuffsPerRow) or 8 end
+                if isBuffs then return (db and (db.buffsPerRow or db.aurasPerRow)) or 8 end
+                if isDebuffs then return (db and (db.debuffsPerRow or db.aurasPerRow)) or 8 end
                 return (db and db.aurasPerRow) or 8
             end,
             set = function(_, v)
                 local db = GetUnitDB(unit)
                 if db then
-                    if isBuffs then db.buffsPerRow = v
-                    elseif isDebuffs then db.debuffsPerRow = v
-                    else db.aurasPerRow = v end
+                    if isBuffs then
+                        db.buffsPerRow = v
+                        db.aurasPerRow = v
+                    elseif isDebuffs then
+                        db.debuffsPerRow = v
+                        db.aurasPerRow = v
+                    else
+                        db.aurasPerRow = v
+                    end
                 end
                 RefreshAuraSettings(unit)
             end,
@@ -612,16 +618,22 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
             name = L["Max Auras"],
             get = function()
                 local db = GetUnitDB(unit)
-                if isBuffs then return (db and db.maxBuffs) or 16 end
-                if isDebuffs then return (db and db.maxDebuffs) or 16 end
+                if isBuffs then return (db and (db.buffMaxAuras or db.maxBuffs)) or 16 end
+                if isDebuffs then return (db and (db.debuffMaxAuras or db.maxDebuffs)) or 16 end
                 return (db and db.maxAuras) or 16
             end,
             set = function(_, v)
                 local db = GetUnitDB(unit)
                 if db then
-                    if isBuffs then db.maxBuffs = v
-                    elseif isDebuffs then db.maxDebuffs = v
-                    else db.maxAuras = v end
+                    if isBuffs then
+                        db.maxBuffs = v
+                        db.buffMaxAuras = v
+                    elseif isDebuffs then
+                        db.maxDebuffs = v
+                        db.debuffMaxAuras = v
+                    else
+                        db.maxAuras = v
+                    end
                 end
                 RefreshAuraSettings(unit)
             end,
@@ -708,9 +720,9 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
                              or db.auraScreenX
                     return tonumber(val) or 0
                 else
-                    local val = isBuffs and db.buffX
-                             or isDebuffs and db.debuffX
-                             or db.auraX
+                    local val = isBuffs and (db.buffX or db.buffXOffset)
+                             or isDebuffs and (db.debuffX or db.debuffXOffset)
+                             or (db.auraX or db.auraXOffset)
                     return tonumber(val) or 0
                 end
             end,
@@ -725,9 +737,16 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
                         elseif isDebuffs then db.debuffScreenX = v
                         else db.auraScreenX = v end
                     else
-                        if isBuffs then db.buffX = v
-                        elseif isDebuffs then db.debuffX = v
-                        else db.auraX = v end
+                        if isBuffs then
+                            db.buffX = v
+                            db.buffXOffset = v
+                        elseif isDebuffs then
+                            db.debuffX = v
+                            db.debuffXOffset = v
+                        else
+                            db.auraX = v
+                            db.auraXOffset = v
+                        end
                     end
                 end
                 RefreshAuraSettings(unit)
@@ -752,9 +771,9 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
                              or db.auraScreenY
                     return tonumber(val) or 0
                 else
-                    local val = isBuffs and db.buffY
-                             or isDebuffs and db.debuffY
-                             or db.auraY
+                    local val = isBuffs and (db.buffY or db.buffYOffset)
+                             or isDebuffs and (db.debuffY or db.debuffYOffset)
+                             or (db.auraY or db.auraYOffset)
                     return tonumber(val) or 4
                 end
             end,
@@ -769,9 +788,16 @@ function ns.GetSettingsForAuras(unit, containerSuffix)
                         elseif isDebuffs then db.debuffScreenY = v
                         else db.auraScreenY = v end
                     else
-                        if isBuffs then db.buffY = v
-                        elseif isDebuffs then db.debuffY = v
-                        else db.auraY = v end
+                        if isBuffs then
+                            db.buffY = v
+                            db.buffYOffset = v
+                        elseif isDebuffs then
+                            db.debuffY = v
+                            db.debuffYOffset = v
+                        else
+                            db.auraY = v
+                            db.auraYOffset = v
+                        end
                     end
                 end
                 RefreshAuraSettings(unit)

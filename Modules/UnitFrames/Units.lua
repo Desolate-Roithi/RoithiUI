@@ -163,19 +163,24 @@ function UF:UpdateFrameFromSettings(unit)
     local height = (db and db.height and db.height > 0) and db.height or defH
     local scale = (db and db.scale and db.scale > 0) and db.scale or 1.0
 
-    frame:SetWidth(width)
-    frame:SetHeight(height)
-    frame:SetScale(scale)
-
-    -- Update position (SKIP for boss 2-5, managed by Boss.lua)
+    -- Update position and dimensions (SKIP during combat to protect secure buttons)
     local inCombat = (_G.InCombatLockdown and _G.InCombatLockdown()) or false
-    if not inCombat and not string.match(unit, "^boss[2-5]$") then
-        local point = (db and db.point) or (string.match(unit, "boss") and "RIGHT" or "CENTER")
-        local x = (db and db.x) or (string.match(unit, "boss") and -250 or 0)
-        local y = (db and db.y) or 0
+    if inCombat then
+        self.pendingSettings = self.pendingSettings or {}
+        self.pendingSettings[unit] = true
+    else
+        frame:SetWidth(width)
+        frame:SetHeight(height)
+        frame:SetScale(scale)
 
-        frame:ClearAllPoints()
-        frame:SetPoint(point, UIParent, point, x, y)
+        if not string.match(unit, "^boss[2-5]$") then
+            local point = (db and db.point) or (string.match(unit, "boss") and "RIGHT" or "CENTER")
+            local x = (db and db.x) or (string.match(unit, "boss") and -250 or 0)
+            local y = (db and db.y) or 0
+
+            frame:ClearAllPoints()
+            frame:SetPoint(point, UIParent, point, x, y)
+        end
     end
 
     -- Update Elements Live
@@ -186,6 +191,7 @@ function UF:UpdateFrameFromSettings(unit)
     if self.UpdateIndicators then self:UpdateIndicators(frame) end
     if self.UpdateAuras then self:UpdateAuras(frame) end
     if self.UpdateAuraLayout then self.UpdateAuraLayout(frame) end -- Hook for initial layout
+    if frame.UpdateAuraLayout then frame.UpdateAuraLayout() end
     if self.UpdateAdditionalPowerSettings then self:UpdateAdditionalPowerSettings(frame) end
 end
 
@@ -202,6 +208,7 @@ end
 
 -- Helper for Restoration
 function UF:RestoreBlizzardFrame(unit)
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
     local blizzFrame
     if unit == "player" then
         blizzFrame = PlayerFrame
@@ -232,6 +239,11 @@ function UF:RestoreBlizzardFrame(unit)
 end
 
 function UF:ToggleFrame(unit, enabled)
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.pendingToggles = self.pendingToggles or {}
+        self.pendingToggles[unit] = enabled
+        return
+    end
     local frame = self.units[unit]
 
     local isEditMode = false
@@ -357,10 +369,7 @@ function UF:InitializeUnits()
     self:InitializeBossFrames()
 end
 
--- Hook OnEnable and OnDisable to run lifecycle management
-local baseEnable = UF.OnEnable
-function UF:OnEnable()
-    if baseEnable then baseEnable(self) end
+function UF:EnableUnits()
     if not self.units or not next(self.units) then
         self:InitializeUnits()
     else

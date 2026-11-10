@@ -36,8 +36,10 @@ function CDM:OnEnable()
     self:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED", "OnSpecOrTalentsChanged")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnSpecOrTalentsChanged")
     self:RegisterEvent("SPELLS_CHANGED", "OnSpecOrTalentsChanged")
+    self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnSpecOrTalentsChanged")
     self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "UpdateAllCustomBarCooldowns")
     self:RegisterEvent("SPELL_UPDATE_CHARGES", "UpdateAllCustomBarCooldowns")
+    self:RegisterEvent("SPELL_UPDATE_USABLE", "UpdateAllCustomBarCooldowns")
     self:RegisterEvent("BAG_UPDATE_COOLDOWN", "UpdateAllCustomBarCooldowns")
     self:RegisterEvent("BAG_UPDATE", "UpdateAllCustomBarCooldowns")
     self:RegisterEvent("ITEM_DATA_LOAD_RESULT", "OnItemDataLoadResult")
@@ -198,7 +200,9 @@ function CDM:HookItemMixins()
         self.dataChangedCallbackRegistered = true
     end
 
-    self.itemMixinsHooked = true
+    if _G.CooldownViewerEssentialItemMixin then
+        self.itemMixinsHooked = true
+    end
 end
 
 
@@ -296,7 +300,7 @@ function CDM:PopulateSettingsPanel(panel)
     panel.SetModernButtonActive = SetModernButtonActive
 
     -- Row 1: Native Blizzard Viewers Navigation (positioned cleanly on black background)
-    local nativeTabButtons = {}
+    local nativeCategoryButtons = {}
     local nativeTabs = {
         { key = "Essential", text = L["Essential"] or "Essential", width = 78 },
         { key = "Utility", text = L["Utility"] or "Utility", width = 78 },
@@ -1033,7 +1037,7 @@ function CDM:PopulateSettingsPanel(panel)
                 sText:SetPoint("LEFT", sIcon, "RIGHT", 6, 0)
                 sText:SetWidth(180)
                 sText:SetJustifyH("LEFT")
-                sText:SetText(string.format("%s (|cff888888%d|r)", sData.name or "Unknown", sData.spellID))
+                sText:SetText(string.format("%s (|cff888888%s|r)", sData.name or "Unknown", tostring(sData.spellID or sData.itemID or 0)))
 
                 if slotI > 1 then
                     local btnUp = CreateFrame("Button", nil, slotRow, "UIPanelButtonTemplate")
@@ -1367,11 +1371,11 @@ function CDM:PopulateSettingsPanel(panel)
 
     RebuildTabs = function()
         -- Rebuild Row 1 Native Tabs
-        for _, b in ipairs(nativeTabButtons) do
+        for _, b in ipairs(nativeCategoryButtons) do
             b:Hide()
             b:SetParent(nil)
         end
-        nativeTabButtons = {}
+        nativeCategoryButtons = {}
 
         local xNative = 0
         for _, tabInfo in ipairs(nativeTabs) do
@@ -1387,7 +1391,7 @@ function CDM:PopulateSettingsPanel(panel)
                 RebuildTabs()
                 RenderBarSettings()
             end)
-            table.insert(nativeTabButtons, btn)
+            table.insert(nativeCategoryButtons, btn)
             xNative = xNative + tabInfo.width + 4
         end
 
@@ -1517,16 +1521,12 @@ function CDM:HookCooldownViewerSettings()
     if not groupBuffsTab then return end
 
     local lastTab = parent.GroupBuffsTab or parent.AurasTab or parent.SpellsTab
-    local tab = CreateFrame("Button", "RoithiUI_CDM_SettingsTab", parent, "LargeSideTabButtonTemplate")
-    if not tab then
-        tab = CreateFrame("Button", "RoithiUI_CDM_SettingsTab", parent, "CooldownViewerSettingsTabTemplate")
+    if not self.settingsTabHolder then
+        self.settingsTabHolder = CreateFrame("Frame", "RoithiUI_CDM_SettingsTabHolder", parent)
     end
-    if parent.TabButtons then
-        for idx = #parent.TabButtons, 1, -1 do
-            if parent.TabButtons[idx] == tab then
-                table.remove(parent.TabButtons, idx)
-            end
-        end
+    local tab = CreateFrame("Button", "RoithiUI_CDM_SettingsTab", self.settingsTabHolder, "LargeSideTabButtonTemplate")
+    if not tab then
+        tab = CreateFrame("Button", "RoithiUI_CDM_SettingsTab", self.settingsTabHolder, "CooldownViewerSettingsTabTemplate")
     end
     tab:SetFrameStrata("HIGH")
     tab:ClearAllPoints()

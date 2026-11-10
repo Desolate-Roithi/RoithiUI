@@ -2,6 +2,7 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 local LibRoithi = LibStub("LibRoithi-1.0")
+local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
 
 -- Config Logic
 -- ============================================================================
@@ -17,7 +18,11 @@ function Config:CreateDashboard()
     -- Main Container
     local f = CreateFrame("Frame", "RoithiUIDashboard", UIParent, "BackdropTemplate")
     f:SetSize(220, 80) -- Initial size
-    f:SetPoint("TOPLEFT", EditModeManagerFrame, "TOPRIGHT", 2, 0)
+    if EditModeManagerFrame then
+        f:SetPoint("TOPLEFT", EditModeManagerFrame, "TOPRIGHT", 2, 0)
+    else
+        f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    end
 
     LibRoithi.mixins:CreateBackdrop(f)
 
@@ -29,7 +34,10 @@ function Config:CreateDashboard()
 
     local title = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     title:SetPoint("CENTER", header, "CENTER", 0, 0)
-    title:SetText("RoithiUI Dashboard")
+    title:SetText(L["RoithiUI Dashboard"] or "RoithiUI Dashboard")
+    if ns.Utils and ns.Utils.ApplyTypography then
+        ns.Utils.ApplyTypography(title, nil, 13, "OUTLINE", false)
+    end
 
     -- Content Container
     local content = CreateFrame("Frame", nil, f)
@@ -41,7 +49,7 @@ function Config:CreateDashboard()
     local settingsBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
     settingsBtn:SetPoint("CENTER", 0, 0)
     settingsBtn:SetSize(160, 30)
-    settingsBtn:SetText("Open Full Settings")
+    settingsBtn:SetText(L["Open Full Settings"] or "Open Full Settings")
     settingsBtn:SetScript("OnClick", function()
         -- Open AceConfig Dialog
         if LibStub("AceConfigDialog-3.0") then
@@ -52,7 +60,6 @@ function Config:CreateDashboard()
     end)
 
     if EditModeManagerFrame then
-        f:SetPoint("TOPLEFT", EditModeManagerFrame, "TOPRIGHT", 2, 0)
         local LEM = LibStub("LibEditMode-Roithi", true)
         if LEM then
             LEM:RegisterCallback('enter', function() f:Show() end)

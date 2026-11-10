@@ -11,6 +11,7 @@ local function GetCastbarColors(extra)
         empower3 = { 0.2, 0.7, 0.2, 1 },
         empower4 = { 0.3, 0.65, 1, 1 },
         interrupted = { 1, 0, 0, 1 },
+        interruptOnCD = { 0.8, 0.4, 0.1, 1 },
         shield = { 0.5, 0.5, 0.5, 1 },
     }
     if extra then

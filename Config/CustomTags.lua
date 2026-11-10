@@ -92,7 +92,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
                 type = "execute",
                 name = "> " .. L["Unit Frames"],
                 order = order,
-                func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", ufUnit) end,
+                func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "unitframes", ufUnit) end,
             }
             order = order + 1
             if not unit:match("^boss%d$") then
@@ -100,7 +100,7 @@ function RoithiUI.Config.GetCustomTagsOptions()
                     type = "execute",
                     name = "> " .. L["Castbars"],
                     order = order,
-                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "castbars", unit) end,
+                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "castbars", unit) end,
                 }
                 order = order + 1
             end
@@ -111,9 +111,9 @@ function RoithiUI.Config.GetCustomTagsOptions()
                 order = order,
                 func = function()
                     if isBoss then
-                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", "bossFrames", unit)
+                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "auras", "units", "bossFrames", unit)
                     else
-                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", unit)
+                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "auras", "units", unit)
                     end
                 end,
             }

@@ -11,6 +11,15 @@ local FLASH_WIDTH = 6
 local TICK_WIDTH = 2
 local TICK_COLOR = { 0, 0, 0, 1 }
 
+local issecretvalue = _G.issecretvalue
+local canaccessvalue = _G.canaccessvalue
+
+-- Hoisted static color tables (Zero GC in combat)
+local COLOR_GREY_HALF = { 0.5, 0.5, 0.5, 0.5 }
+local COLOR_GREY_ONE = { 0.5, 0.5, 0.5, 1 }
+local COLOR_YELLOW = { 1, 1, 0, 1 }
+local COLOR_BLUE = { 0, 0, 1, 1 }
+
 -- ----------------------------------------------------------------------------
 -- Helper: Duration Object Extraction
 -- ----------------------------------------------------------------------------
@@ -20,11 +29,31 @@ local function GetSecondsFromObject(obj)
 
     -- 12.0.1 DurationObject Methods
     -- If Secret, return 0 to be safe (layout effectively collapses)
+    if issecretvalue and issecretvalue(obj) then return 0 end
+    if canaccessvalue and not canaccessvalue(obj) then return 0 end
     if obj.HasSecretValues and obj:HasSecretValues() then return 0 end
 
-    if obj.GetTotalDuration then return obj:GetTotalDuration() end
-    if obj.GetSeconds then return obj:GetSeconds() end
-    if obj.GetMilliseconds then return obj:GetMilliseconds() / 1000 end
+    if obj.GetTotalDuration then
+        local dur = obj:GetTotalDuration()
+        if dur and not ((issecretvalue and issecretvalue(dur)) or (canaccessvalue and not canaccessvalue(dur))) then
+            return dur
+        end
+        return 0
+    end
+    if obj.GetSeconds then
+        local sec = obj:GetSeconds()
+        if sec and not ((issecretvalue and issecretvalue(sec)) or (canaccessvalue and not canaccessvalue(sec))) then
+            return sec
+        end
+        return 0
+    end
+    if obj.GetMilliseconds then
+        local ms = obj:GetMilliseconds()
+        if ms and not ((issecretvalue and issecretvalue(ms)) or (canaccessvalue and not canaccessvalue(ms))) then
+            return ms / 1000
+        end
+        return 0
+    end
 
     return 0
 end
@@ -41,7 +70,10 @@ local function BuildEmpowerTimeline(unit)
     end
 
     local totalDuration = GetSecondsFromObject(totalObj)
-    local isSecretDuration = totalObj and totalObj.HasSecretValues and totalObj:HasSecretValues()
+    local isSecretDuration = (totalObj and totalObj.HasSecretValues and totalObj:HasSecretValues())
+        or (ns.Utils and ns.Utils.IsSecret and (ns.Utils.IsSecret(totalObj) or ns.Utils.IsSecret(totalDuration)))
+        or (issecretvalue and (issecretvalue(totalObj) or issecretvalue(totalDuration)))
+        or (type(totalDuration) == "userdata" or type(totalObj) == "userdata")
 
     -- 2. FETCH STAGE DATA (SSOT)
     local stageObjs = nil
@@ -62,8 +94,9 @@ local function BuildEmpowerTimeline(unit)
         totalStages = #stagePcts
         local accum = 0
         for i, pct in ipairs(stagePcts) do
+            local isPctSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(pct)) or (issecretvalue and issecretvalue(pct))
             -- Convert to 0-1 ratio safely in case the API provides 0-100 integers
-            if pct > 1.0 and totalStages > 1 then
+            if not isPctSecret and pct > 1.0 and totalStages > 1 then
                 pct = pct / 100.0
             end
             
@@ -188,7 +221,7 @@ local function LayoutEmpower(bar)
         -- Determine Zone Color (Static Map)
         local db = RoithiUI.db.profile.Castbar[bar.unit]
         local colors = db and db.colors
-        local c = { 0.5, 0.5, 0.5, 0.5 } -- Default greyish background
+        local c = COLOR_GREY_HALF -- Default greyish background
 
         -- STRICT USER MAPPING:
         -- 0 -> 1 = Grey
@@ -197,7 +230,7 @@ local function LayoutEmpower(bar)
         -- 3 -> 4 = empower3 (Only applies if >3 stages)
 
         if i == 1 then
-            c = { 0.5, 0.5, 0.5, 1 } -- Stage 1 is always Grey
+            c = COLOR_GREY_ONE -- Stage 1 is always Grey
         elseif i == 2 and colors.empower1 then
             c = colors.empower1
         elseif i == 3 and colors.empower2 then
@@ -291,7 +324,8 @@ function ns.OnEmpowerUpdate(bar)
         -- Fallback
         if bar.GetValue then
             local elapsed = bar:GetValue()
-            if total > 0 then progressRatio = elapsed / total end
+            local isElapsedSecret = (issecretvalue and issecretvalue(elapsed)) or (canaccessvalue and not canaccessvalue(elapsed))
+            if not isElapsedSecret and total > 0 then progressRatio = elapsed / total end
         end
     end
 
@@ -352,7 +386,7 @@ function ns.OnEmpowerUpdate(bar)
     -- Color Logic (Progressive)
     local db = RoithiUI.db.profile.Castbar[bar.unit]
     local colors = db and db.colors
-    local c = { 1, 1, 0, 1 }
+    local c = COLOR_YELLOW
 
     if currentStage > tl.totalStages then
         -- HOLD PHASE (Matches Final Charge Level)
@@ -372,7 +406,7 @@ function ns.OnEmpowerUpdate(bar)
             -- Fallback if mapped color missing or unexpected >4
             c = colors.empowerHold
         else
-            c = { 0, 0, 1, 1 } -- Blue default
+            c = COLOR_BLUE -- Blue default
         end
     else
         -- CHARGE PHASE (Filling Up)
@@ -381,7 +415,7 @@ function ns.OnEmpowerUpdate(bar)
         -- 2->3: emp2
         -- 3->4: emp3
         if currentStage == 1 then
-            c = { 0.5, 0.5, 0.5, 1 } -- Grey
+            c = COLOR_GREY_ONE -- Grey
         elseif currentStage == 2 and colors.empower1 then
             c = colors.empower1
         elseif currentStage == 3 and colors.empower2 then

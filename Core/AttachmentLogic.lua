@@ -5,7 +5,7 @@ local RoithiUI = _G.RoithiUI
 local function SafeVal(val, default)
     if val == nil then return default end
     if type(val) == "table" and val.val ~= nil then val = val.val end
-    if _G.issecretvalue and _G.issecretvalue(val) then return default end
+    if (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(val)) or (_G.issecretvalue and _G.issecretvalue(val)) then return default end
     if default == 0 then
         local num = tonumber(val)
         return num or 0
@@ -107,12 +107,14 @@ function AL:IsDetached(unit, frameType)
     local db = self:GetElementDB(unit, frameType)
     if not db then return false end
 
-    if frameType == "Auras" then
+    if frameType == "Auras" or frameType == "Combined" then
         if db.separateAuras then
             return db.buffDetached == true
         end
         return db.auraDetached or false
-    elseif frameType == "RoithiAuras_Debuffs" then
+    elseif frameType == "Buffs" then
+        return db.buffDetached == true
+    elseif frameType == "Debuffs" or frameType == "RoithiAuras_Debuffs" then
         return db.debuffDetached == true
     elseif frameType == "Castbar" then
         return db.detached == true
@@ -352,7 +354,8 @@ function AL:ApplyLayout(unit, frameType)
             local iconSize = (db.showIcon ~= false) and ((db.height or 20) * (db.iconScale or 1.0)) or 0
             frame:SetClampRectInsets(-iconSize - 5, 0, 0, 0)
         end
-        if frameType ~= "Auras" and not frameType:match("^CustomAura_") then frame:SetWidth(width) end -- Auras manage their own width/growth
+        local isAuraFrame = frameType == "Auras" or frameType == "Buffs" or frameType == "Debuffs" or frameType == "Combined" or frameType:match("^RoithiAuras_") or frameType:match("^CustomAura_")
+        if not isAuraFrame then frame:SetWidth(width) end -- Auras manage their own width/growth
     else
         -- ATTACHED: Anchor to valid parent
         frame:SetMovable(false)
@@ -363,10 +366,11 @@ function AL:ApplyLayout(unit, frameType)
             else
                 frame:SetParent(anchor)
             end
-            if frameType == "Auras" or frameType:match("^RoithiAuras_") or frameType:match("^CustomAura_") then
+            local isAuraFrame = frameType == "Auras" or frameType == "Buffs" or frameType == "Debuffs" or frameType == "Combined" or frameType:match("^RoithiAuras_") or frameType:match("^CustomAura_")
+            if isAuraFrame then
                 -- SATELLITE MODE: Respect configured relative offsets
                 local anchorPt, anchorX, anchorY
-                if frameType == "Auras" then
+                if frameType == "Auras" or frameType == "Combined" then
                     if db.separateAuras then
                         anchorPt = db.buffAnchor or "BOTTOM"
                         anchorX = db.buffXOffset or 0
@@ -376,7 +380,11 @@ function AL:ApplyLayout(unit, frameType)
                         anchorX = db.auraX or 0
                         anchorY = db.auraY or 0
                     end
-                elseif frameType == "RoithiAuras_Debuffs" then
+                elseif frameType == "Buffs" then
+                    anchorPt = db.buffAnchor or db.auraAnchor or "BOTTOM"
+                    anchorX = db.buffXOffset or db.auraX or 0
+                    anchorY = db.buffYOffset or db.auraY or 0
+                elseif frameType == "Debuffs" or frameType == "RoithiAuras_Debuffs" then
                     anchorPt = db.debuffAnchor or db.auraAnchor or "BOTTOM"
                     anchorX = db.debuffXOffset or db.auraX or 0
                     anchorY = db.debuffYOffset or db.auraY or 0
@@ -402,8 +410,15 @@ function AL:ApplyLayout(unit, frameType)
             else
                 -- STACKED MODE (Bars)
                 local parentW = anchor:GetWidth()
-                if not parentW or parentW <= 0 or (issecretvalue and issecretvalue(parentW)) then
-                    parentW = (uFrame and uFrame.GetWidth and uFrame:GetWidth()) or 200
+                local isSecretW = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(parentW)) or (issecretvalue and issecretvalue(parentW))
+                if not parentW or isSecretW or parentW <= 0 then
+                    local fallbackW = uFrame and uFrame.GetWidth and uFrame:GetWidth()
+                    local isSecretFallbackW = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(fallbackW)) or (issecretvalue and issecretvalue(fallbackW))
+                    if fallbackW and not isSecretFallbackW and fallbackW > 0 then
+                        parentW = fallbackW
+                    else
+                        parentW = 200
+                    end
                 end
 
                 frame:SetPoint("TOP", anchor, "BOTTOM", 0, -1)

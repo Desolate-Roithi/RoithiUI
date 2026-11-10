@@ -70,9 +70,15 @@ local selectionHooked = setmetatable({}, { __mode = "k" })
 function MenuMod:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Menu or self.defaultSettings
     self.microButtons = {}
-    self.backdrops = {}
-    self.hookedButtons = {}
-    self.btnPointHooked = {}
+    self.backdrops = setmetatable({}, { __mode = "k" })
+    self.hookedButtons = setmetatable({}, { __mode = "k" })
+    self.btnPointHooked = setmetatable({}, { __mode = "k" })
+    self.btnHooks = setmetatable({}, { __mode = "k" })
+    self.settingAlpha = setmetatable({}, { __mode = "k" })
+    self.settingAtlas = setmetatable({}, { __mode = "k" })
+    self.settingTex = setmetatable({}, { __mode = "k" })
+    self.settingDesat = setmetatable({}, { __mode = "k" })
+    self.settingColor = setmetatable({}, { __mode = "k" })
 end
 
 function MenuMod:GetBackdrop(btn)
@@ -98,13 +104,18 @@ end
 
 function MenuMod:RefreshProfile()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Menu or self.defaultSettings
-    if self.container then
+    if self.container and not (_G.InCombatLockdown and _G.InCombatLockdown()) then
         local pt = self.db.point or "BOTTOMLEFT"
-        self.container:ClearAllPoints()
-        self.container:SetPoint(pt, UIParent, pt, self.db.x or 4, self.db.y or 235)
+        if self.container.ClearAllPoints then self.container:ClearAllPoints() end
+        if self.container.SetPoint then
+            self.container:SetPoint(pt, UIParent, pt, self.db.x or 2, self.db.y or 285)
+        end
     end
     self:StyleAllMicroButtons()
-    self:QueueLayoutMicroMenu()
+    self:LayoutMicroMenu()
+    if LEM and LEM.RefreshFrameSettings and self.container then
+        LEM:RefreshFrameSettings(self.container)
+    end
 end
 MenuMod.RefreshSettings = MenuMod.RefreshProfile
 
@@ -190,11 +201,16 @@ function MenuMod:SetupMicroMenu()
                     if not selectionHooked[f.Selection] and hooksecurefunc then
                         selectionHooked[f.Selection] = true
                         hooksecurefunc(f.Selection, "Show", function(sel)
-                            sel:Hide()
+                            if (MenuMod.IsEnabled and not MenuMod:IsEnabled()) or not (MenuMod.db and MenuMod.db.styleMicroMenu) then return end
+                            if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+                                sel:Hide()
+                            end
                         end)
                     end
-                    f.Selection:Hide()
-                    if f.Selection.EnableMouse then f.Selection:EnableMouse(false) end
+                    if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+                        f.Selection:Hide()
+                        if f.Selection.EnableMouse then f.Selection:EnableMouse(false) end
+                    end
                 end
             end
         end
@@ -294,7 +310,9 @@ function MenuMod:SetupMicroMenu()
             if self.isUpdatingMicroButtons then return end
             self.isUpdatingMicroButtons = true
             if self.db and self.db.enabled ~= false and self.db.styleMicroMenu ~= false then
-                self:StyleAllMicroButtons()
+                if not (InCombatLockdown and InCombatLockdown()) then
+                    self:StyleAllMicroButtons()
+                end
                 self:QueueLayoutMicroMenu()
             end
             self.isUpdatingMicroButtons = false
@@ -615,6 +633,7 @@ function MenuMod:StyleMicroButton(btn)
     if btn.UpdateTabard and not tabardHooked[btn] and hooksecurefunc then
         tabardHooked[btn] = true
         hooksecurefunc(btn, "UpdateTabard", function()
+            if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
             if self.isUpdatingTabard then return end
             self.isUpdatingTabard = true
             local bW = (btn.GetWidth and btn:GetWidth()) or 28
@@ -642,7 +661,7 @@ function MenuMod:StyleMicroButton(btn)
     if not bg then
         local parentFrame = self.container or (btn.GetParent and btn:GetParent()) or UIParent
         bg = CreateFrame("Frame", nil, parentFrame, "BackdropTemplate")
-        if bg.SetFrameStrata then bg:SetFrameStrata("BACKGROUND") end
+        if bg.SetFrameStrata then bg.SetFrameStrata(bg, "BACKGROUND") end
         if bg.EnableMouse then bg:EnableMouse(false) end
         if bg.ClearAllPoints then bg:ClearAllPoints() end
         if bg.SetAllPoints then bg:SetAllPoints(btn) end
@@ -657,7 +676,8 @@ function MenuMod:StyleMicroButton(btn)
             })
             local bgColor = (self.db and self.db.backgroundColor) or { r = 0.05, g = 0.05, b = 0.05, a = 0.85 }
             bg:SetBackdropColor(bgColor.r, bgColor.g, bgColor.b, bgColor.a or 0.85)
-            bg:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
+            local borderColor = (self.db and self.db.borderColor) or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
+            bg:SetBackdropBorderColor(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1.0)
         end
         self.backdrops[btn] = bg
     else
@@ -675,6 +695,7 @@ function MenuMod:StyleMicroButton(btn)
     self.hookedButtons = self.hookedButtons or {}
     if not self.hookedButtons[btn] and btn.HookScript then
         btn:HookScript("OnEnter", function()
+            if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
             self:OnContainerEnter()
             local b = self:GetBackdrop(btn)
             if b and self.db and self.db.showBackground and b.SetBackdropBorderColor then
@@ -694,10 +715,12 @@ function MenuMod:StyleMicroButton(btn)
             if h and h.SetAlpha then h:SetAlpha(0) end
         end)
         btn:HookScript("OnLeave", function()
+            if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
             self:OnContainerLeave()
             local b = self:GetBackdrop(btn)
             if b and self.db and self.db.showBackground and b.SetBackdropBorderColor then
-                b:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
+                local borderColor = (self.db and self.db.borderColor) or { r = 0.2, g = 0.2, b = 0.2, a = 1.0 }
+                b:SetBackdropBorderColor(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1.0)
             end
             local n = btn.GetNormalTexture and btn:GetNormalTexture()
             if n then
@@ -714,15 +737,16 @@ function MenuMod:StyleMicroButton(btn)
     end
 
     -- Enforce full alpha and hook SetAlpha / SetNormalAtlas / SetDisabledAtlas to prevent Blizzard dimming
-    self.btnHooks = self.btnHooks or {}
-    self.settingAlpha = self.settingAlpha or {}
-    self.settingAtlas = self.settingAtlas or {}
-    self.settingTex = self.settingTex or {}
-    self.settingDesat = self.settingDesat or {}
-    self.settingColor = self.settingColor or {}
+    self.btnHooks = self.btnHooks or setmetatable({}, { __mode = "k" })
+    self.settingAlpha = self.settingAlpha or setmetatable({}, { __mode = "k" })
+    self.settingAtlas = self.settingAtlas or setmetatable({}, { __mode = "k" })
+    self.settingTex = self.settingTex or setmetatable({}, { __mode = "k" })
+    self.settingDesat = self.settingDesat or setmetatable({}, { __mode = "k" })
+    self.settingColor = self.settingColor or setmetatable({}, { __mode = "k" })
     if not self.btnHooks[btn] and hooksecurefunc then
         if btn.SetAlpha then
             hooksecurefunc(btn, "SetAlpha", function(b, a)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
                 if a < 1 and not self.settingAlpha[b] then
                     self.settingAlpha[b] = true
                     b:SetAlpha(1)
@@ -732,6 +756,7 @@ function MenuMod:StyleMicroButton(btn)
         end
         if btn.SetNormalAtlas then
             hooksecurefunc(btn, "SetNormalAtlas", function(b, atlasName)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
                 if atlasName and not self.settingAtlas[b] and not self.isUpdatingTabard then
                     if (b == _G.GuildMicroButton) or atlasName:find("GuildColor") or atlasName:find("GuildCommunities%-GuildColor") then
                         return
@@ -746,6 +771,7 @@ function MenuMod:StyleMicroButton(btn)
         end
         if btn.SetDisabledAtlas then
             hooksecurefunc(btn, "SetDisabledAtlas", function(b, atlas)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
                 if atlas and not self.settingAtlas[b] and not self.isUpdatingTabard then
                     if (b == _G.GuildMicroButton) or atlas:find("GuildColor") or atlas:find("GuildCommunities%-GuildColor") then
                         return
@@ -760,6 +786,7 @@ function MenuMod:StyleMicroButton(btn)
         end
         if btn.SetDisabledTexture then
             hooksecurefunc(btn, "SetDisabledTexture", function(b, tex)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
                 if type(tex) == "string" and tex:find("Disabled") and not self.settingTex[b] and not self.isUpdatingTabard then
                     self.settingTex[b] = true
                     b:SetDisabledTexture(tex:gsub("Disabled", "Up"))
@@ -769,6 +796,7 @@ function MenuMod:StyleMicroButton(btn)
         end
         if btn.SetButtonState then
             hooksecurefunc(btn, "SetButtonState", function(b)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
                 local n = b.GetNormalTexture and b:GetNormalTexture()
                 if n then
                     local isTabard = (b == _G.GuildMicroButton or (b.GetName and b:GetName() == "GuildMicroButton")) and (
@@ -787,6 +815,8 @@ function MenuMod:StyleMicroButton(btn)
         end
         if btn.SetNormal and (btn.Portrait or (btn == _G.CharacterMicroButton) or (btn.GetName and btn:GetName() == "CharacterMicroButton")) then
             hooksecurefunc(btn, "SetNormal", function(b)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
+                if _G.InCombatLockdown and _G.InCombatLockdown() then return end
                 local p = b.Portrait or _G.MicroButtonPortrait
                 if p then
                     p:ClearAllPoints()
@@ -808,6 +838,8 @@ function MenuMod:StyleMicroButton(btn)
         end
         if btn.SetPushed and (btn.Portrait or (btn == _G.CharacterMicroButton) or (btn.GetName and btn:GetName() == "CharacterMicroButton")) then
             hooksecurefunc(btn, "SetPushed", function(b)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
+                if _G.InCombatLockdown and _G.InCombatLockdown() then return end
                 local p = b.Portrait or _G.MicroButtonPortrait
                 if p then
                     p:ClearAllPoints()
@@ -833,6 +865,7 @@ function MenuMod:StyleMicroButton(btn)
         self.btnHooks[norm] = true
         if norm.SetAtlas then
             hooksecurefunc(norm, "SetAtlas", function(t, atlasName)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
                 if atlasName and not self.settingAtlas[t] and not self.isUpdatingTabard then
                     if (btn == _G.GuildMicroButton) or atlasName:find("GuildColor") or atlasName:find("GuildCommunities%-GuildColor") then
                         return
@@ -847,6 +880,7 @@ function MenuMod:StyleMicroButton(btn)
         end
         if norm.SetDesaturated then
             hooksecurefunc(norm, "SetDesaturated", function(t, desat)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
                 if desat and not self.settingDesat[t] then
                     self.settingDesat[t] = true
                     t:SetDesaturated(false)
@@ -856,6 +890,7 @@ function MenuMod:StyleMicroButton(btn)
         end
         if norm.SetVertexColor then
             hooksecurefunc(norm, "SetVertexColor", function(t, r, g, b, a)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
                 local isTabard = self:IsGuildTabard(btn)
                 if not isTabard and (r < (NORMAL_ICON_COLOR - 0.1) or g < (NORMAL_ICON_COLOR - 0.1) or b < (NORMAL_ICON_COLOR - 0.1)) and not self.settingColor[t] then
                     self.settingColor[t] = true
@@ -869,6 +904,7 @@ function MenuMod:StyleMicroButton(btn)
         self.btnHooks[btn.Portrait] = true
         if btn.Portrait.SetDesaturated then
             hooksecurefunc(btn.Portrait, "SetDesaturated", function(t, desat)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
                 if desat and not self.settingDesat[t] then
                     self.settingDesat[t] = true
                     t:SetDesaturated(false)
@@ -878,6 +914,7 @@ function MenuMod:StyleMicroButton(btn)
         end
         if btn.Portrait.SetVertexColor then
             hooksecurefunc(btn.Portrait, "SetVertexColor", function(t, r, g, b, a)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
                 if (r < (NORMAL_ICON_COLOR - 0.1) or g < (NORMAL_ICON_COLOR - 0.1) or b < (NORMAL_ICON_COLOR - 0.1)) and not self.settingColor[t] then
                     self.settingColor[t] = true
                     t:SetVertexColor(NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, NORMAL_ICON_COLOR, a or 1)
@@ -966,9 +1003,10 @@ function MenuMod:LayoutMicroMenu()
             btn:SetPoint("TOPLEFT", self.container, "TOPLEFT", x, y)
         end
 
-        self.btnPointHooked = self.btnPointHooked or {}
+        self.btnPointHooked = self.btnPointHooked or setmetatable({}, { __mode = "k" })
         if not self.btnPointHooked[btn] and hooksecurefunc and btn.SetPoint then
             hooksecurefunc(btn, "SetPoint", function(b)
+                if (self.IsEnabled and not self:IsEnabled()) or not (self.db and self.db.styleMicroMenu) then return end
                 if self.isLayoutingMicroMenu then return end
                 if _G.InCombatLockdown and _G.InCombatLockdown() then return end
                 local _, relTo = b:GetPoint(1)
@@ -1069,20 +1107,3 @@ function MenuMod:OnContainerLeave()
         end)
     end
 end
-
-function MenuMod:RefreshSettings()
-    self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Menu or self.defaultSettings
-    if self.container then
-        local pt = self.db.point or "BOTTOMRIGHT"
-        if self.container.ClearAllPoints then self.container:ClearAllPoints() end
-        if self.container.SetPoint then
-            self.container:SetPoint(pt, UIParent, pt, self.db.x or -280, self.db.y or 0)
-        end
-    end
-    self:StyleAllMicroButtons()
-    self:LayoutMicroMenu()
-    if LEM and LEM.RefreshFrameSettings and self.container then
-        LEM:RefreshFrameSettings(self.container)
-    end
-end
-MenuMod.RefreshProfile = MenuMod.RefreshSettings

@@ -82,25 +82,25 @@ function ObjectivesMod:GetStageBlockWidgetHeight(stageBlock)
                 if wf.Frame and wf.Frame.GetHeight then
                     hasFrameTexture = true
                     local fh = wf.Frame:GetHeight() or 0
-                    if fh > measuredHeight then measuredHeight = fh end
+                    if not ns.Utils.IsSecret(fh) and type(fh) == "number" and fh > measuredHeight then measuredHeight = fh end
                 end
                 if wf.Frame and wf.Frame.GetWidth then
                     local fw = wf.Frame:GetWidth() or 0
-                    if fw > measuredWidth then measuredWidth = fw end
+                    if not ns.Utils.IsSecret(fw) and type(fw) == "number" and fw > measuredWidth then measuredWidth = fw end
                 elseif wf.GetWidth then
                     local w = wf:GetWidth() or 0
-                    if w > measuredWidth then measuredWidth = w end
+                    if not ns.Utils.IsSecret(w) and type(w) == "number" and w > measuredWidth then measuredWidth = w end
                 end
 
                 local b = (wf.Text and wf.Text.IsShown and wf.Text:IsShown() and wf.Text.GetBottom and wf.Text:GetBottom())
                     or (wf.GetBottom and wf:GetBottom())
-                if b and type(b) == "number" and (not lowestBottom or b < lowestBottom) then
+                if b and not ns.Utils.IsSecret(b) and type(b) == "number" and (not lowestBottom or b < lowestBottom) then
                     lowestBottom = b
                 end
 
                 if wf.CurrencyContainer and wf.CurrencyContainer.IsShown and wf.CurrencyContainer:IsShown() and wf.CurrencyContainer.GetBottom then
                     local cb = wf.CurrencyContainer:GetBottom()
-                    if cb and type(cb) == "number" and (not lowestBottom or cb < lowestBottom) then
+                    if cb and not ns.Utils.IsSecret(cb) and type(cb) == "number" and (not lowestBottom or cb < lowestBottom) then
                         lowestBottom = cb
                     end
                 end
@@ -112,7 +112,7 @@ function ObjectivesMod:GetStageBlockWidgetHeight(stageBlock)
         lowestBottom = wc:GetBottom()
     end
 
-    if sbTop and lowestBottom and type(sbTop) == "number" and type(lowestBottom) == "number" and sbTop > lowestBottom then
+    if sbTop and lowestBottom and not ns.Utils.IsSecret(sbTop) and not ns.Utils.IsSecret(lowestBottom) and type(sbTop) == "number" and type(lowestBottom) == "number" and sbTop > lowestBottom then
         local screenExt = math.floor(sbTop - lowestBottom + 0.5)
         if hasFrameTexture then
             screenExt = screenExt + 4
@@ -248,7 +248,9 @@ function ObjectivesMod:AlignScenarioElements()
             local textOnlyX = 4
             xOffset = textOnlyX + stageXOff
         end
-        local desiredH = isTextOnly and 16 or (isDelveWidget and (widgetH or ((self.db and self.db.scenarioStageWidgetHeight) or 83))) or (hasWidget and (widgetH or ((self.db and self.db.scenarioStageWidgetHeight) or 83)) or 63)
+        local defaultStageH = (self.db and self.db.scenarioStageHeight) or 63
+        local defaultWidgetH = (self.db and self.db.scenarioStageWidgetHeight) or 83
+        local desiredH = isTextOnly and 16 or (isDelveWidget and (widgetH or defaultWidgetH)) or (hasWidget and (widgetH or defaultWidgetH) or defaultStageH)
         local yOffset = -10
 
         local relTo = sot.Header and sot.Header:IsShown() and sot.Header or (sot.ContentsFrame or sot)

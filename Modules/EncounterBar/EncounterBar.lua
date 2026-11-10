@@ -37,6 +37,7 @@ local WIDGET_BLACKLIST = {
 local showHooked = false
 
 local function ToggleBlizzard(enableCustom)
+    if InCombatLockdown and InCombatLockdown() then return end
     if not PlayerPowerBarAlt then return end
 
     if enableCustom then
@@ -70,13 +71,15 @@ end
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Toggle Function (External Access)
 -- ─────────────────────────────────────────────────────────────────────────────
-function EB:Toggle(enabled)
+function EB:Toggle(enabled, skipPersist)
     if not RoithiUI.db.profile.EncounterResource then
         RoithiUI.db.profile.EncounterResource = CopyTable(self.defaultSettings)
     end
 
     local db = RoithiUI.db.profile.EncounterResource
-    db.enabled = enabled
+    if not skipPersist then
+        db.enabled = enabled
+    end
 
     local encounterBar = _G.RoithiEncounterResource
 
@@ -309,8 +312,10 @@ local function Update(s)
             s:SetValue(val)
 
             -- Keep the text updated with percentage if it was set by widget
-            if s.Text:GetText() and s.Text:GetText():find(":") then
-                local prefix = s.Text:GetText():match("^(.-):")
+            local rawText = s.Text:GetText()
+            local isSecretRaw = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(rawText)) or (issecretvalue and issecretvalue(rawText))
+            if rawText and not isSecretRaw and rawText:find(":") then
+                local prefix = rawText:match("^(.-):")
                 s.Text:SetText(string.format("%s: %.0f%%", prefix, pct))
             end
             return
@@ -383,9 +388,7 @@ local function Update(s)
 
         if isSecret and _G.UnitPowerPercent then
             local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or 0
-            local success, pct = pcall(function()
-                return _G.UnitPowerPercent("player", ALTERNATE_POWER_INDEX, false, curve)
-            end)
+            local success, pct = pcall(_G.UnitPowerPercent, "player", ALTERNATE_POWER_INDEX, false, curve)
 
             if success and pct then
                 local fmtOk, fmtStr = pcall(string.format, "%.0f%%", pct)
@@ -401,7 +404,8 @@ local function Update(s)
             currentStr = LibRoithi.mixins:SafeFormat("%d / %d", current, max)
         end
 
-        if barName and barName ~= "" then
+        local isSecretBarName = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(barName)) or (issecretvalue and issecretvalue(barName))
+        if barName and not isSecretBarName and barName ~= "" then
             s.Text:SetText(barName .. ": " .. (currentStr or ""))
         else
             s.Text:SetText(currentStr or "")
@@ -416,7 +420,8 @@ local function Update(s)
 
     -- Final Safety: If we have no data and no text, don't show an empty bar
     local currentText = s.Text:GetText()
-    if (not currentText or currentText == "") then
+    local isSecretCurrentText = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(currentText)) or (issecretvalue and issecretvalue(currentText))
+    if not isSecretCurrentText and (not currentText or currentText == "") then
         s:Hide()
     end
 end
@@ -550,7 +555,7 @@ function EB:OnEnable()
 end
 
 function EB:OnDisable()
-    self:Toggle(false)
+    self:Toggle(false, true)
 end
 
 function EB:ChatCommand(input)
@@ -609,6 +614,7 @@ function EB:RefreshProfile()
     end
 end
 EB.RefreshSettings = EB.RefreshProfile
+EB.UpdateBarLayout = EB.RefreshProfile
 
 function EB:UpdateFonts()
     self:RefreshProfile()

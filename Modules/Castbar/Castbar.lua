@@ -122,11 +122,11 @@ end
 
 function ns.ClampCastbarCoordinates(bar, point, x, y, db)
     local width = (bar and bar.GetWidth and bar:GetWidth()) or (db and db.width) or 200
-    if not width or width <= 0 or (issecretvalue and issecretvalue(width)) then
+    if not width or (issecretvalue and issecretvalue(width)) or width <= 0 then
         width = (db and db.width) or 200
     end
     local height = (bar and bar.GetHeight and bar:GetHeight()) or (db and db.height) or 20
-    if not height or height <= 0 or (issecretvalue and issecretvalue(height)) then
+    if not height or (issecretvalue and issecretvalue(height)) or height <= 0 then
         height = (db and db.height) or 20
     end
 
@@ -195,6 +195,10 @@ function ns.InitializeBars()
             end
             if ns.RegisterCastbarLEM then
                 ns.RegisterCastbarLEM(bar, unit)
+            end
+        else
+            if ns.RegisterBarUnitEvents then
+                ns.RegisterBarUnitEvents(bar)
             end
         end
         if ns.UpdateBar then
@@ -432,11 +436,13 @@ function ns.UpdateCast(bar, unitOverride)
         texture = chTexture
         notInterruptible = chNotInt
         isChannel = true
-        local isEmp = (isEmpowered or (numEmpowerStages and numEmpowerStages > 0))
+        local isEmpoweredSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(isEmpowered)) or (issecretvalue and issecretvalue(isEmpowered))
+        local isNumStagesSecret = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(numEmpowerStages)) or (issecretvalue and issecretvalue(numEmpowerStages))
+        local isEmp = (not isEmpoweredSecret and isEmpowered == true) or (not isNumStagesSecret and numEmpowerStages and numEmpowerStages > 0)
         state = isEmp and "empowered" or "channel"
         if isEmp then
             durationObj = UnitEmpoweredChannelDuration and UnitEmpoweredChannelDuration(unit, true)
-            if ns.SetupEmpower then
+            if not bar.isEmpower and ns.SetupEmpower then
                 ns.SetupEmpower(bar)
             end
         else
@@ -515,6 +521,8 @@ function ns.UpdateCast(bar, unitOverride)
     else
         bar.Icon:Hide()
     end
+
+    if bar.Spark and bar.Spark.Show then bar.Spark:Show() end
 
     local isSecretText = (issecretvalue and issecretvalue(text)) or (canaccessvalue and not canaccessvalue(text))
     if not isSecretText and text and string.len(text) > 22 then
@@ -595,8 +603,10 @@ function ns.UpdateCast(bar, unitOverride)
         if not isTotalSecret and totalSec and totalSec > 0 then
             local latencySec = GetSafeLatency()
             if latencySec > 0 then
-                local width = bar:GetWidth() * (latencySec / totalSec)
-                if width > bar:GetWidth() then width = bar:GetWidth() end
+                local barW = bar.GetWidth and bar:GetWidth()
+                if not barW or (issecretvalue and issecretvalue(barW)) then barW = (db and db.width) or 200 end
+                local width = barW * (latencySec / totalSec)
+                if width > barW then width = barW end
                 bar.Latency:SetWidth(width)
                 bar.Latency:SetHeight(bar:GetHeight())
                 bar.Latency:ClearAllPoints()
@@ -637,7 +647,8 @@ function ns.HandleInterrupt(bar)
     -- 1. Visual Updates FIRST (Ensure Text/Color always apply)
     bar.Text:SetText(L["INTERRUPTED"] or "INTERRUPTED"); bar.Spark:Hide()
 
-    local c = RoithiUI.db.profile.Castbar[bar.unit].colors.interrupted
+    local cbDB = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[bar.unit]
+    local c = cbDB and cbDB.colors and cbDB.colors.interrupted
     if bar.Background and c then
         bar.Background:SetColorTexture(c[1], c[2], c[3], c[4])
         -- Fix V3: Visual Mask (Foreground == Background) to hide filling

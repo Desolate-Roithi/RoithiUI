@@ -19,6 +19,18 @@ local function RoundNumber(val)
     return math.floor(val * 1000 + 0.5) / 1000
 end
 
+local function IsSequentialArray(t)
+    if type(t) ~= "table" then return false end
+    local count = 0
+    for k in pairs(t) do
+        count = count + 1
+        if type(k) ~= "number" or k <= 0 or math.floor(k) ~= k then
+            return false
+        end
+    end
+    return count > 0 and count == #t
+end
+
 local function PruneTable(tbl, defaultTbl)
     if type(tbl) ~= "table" then
         return RoundNumber(tbl)
@@ -32,7 +44,7 @@ local function PruneTable(tbl, defaultTbl)
         if k ~= "tempImportString" and k ~= "migratedTypography" and k ~= "IndicatorTestMode" and not keyStr:match("^temp") then
             local defVal = defaultTbl and defaultTbl[k]
             if type(v) == "table" then
-                local isArray = (#v > 0)
+                local isArray = IsSequentialArray(v) and (defVal == nil or IsSequentialArray(defVal))
                 if isArray then
                     local cleanArray = {}
                     for i, elem in ipairs(v) do
@@ -68,7 +80,7 @@ local function CopyValues(dest, src)
     if type(dest) ~= "table" or type(src) ~= "table" then return end
     for k, v in pairs(src) do
         if type(v) == "table" then
-            local isArray = (#v > 0)
+            local isArray = IsSequentialArray(v)
             if isArray then
                 dest[k] = {}
                 for i, elem in ipairs(v) do
@@ -86,7 +98,9 @@ local function CopyValues(dest, src)
                 CopyValues(dest[k], v)
             end
         else
-            dest[k] = v
+            if type(dest[k]) ~= "table" then
+                dest[k] = v
+            end
         end
     end
 end
@@ -112,7 +126,13 @@ function ProfileSharing:ExportProfile()
 end
 
 function ProfileSharing:ImportProfile(importString)
+    if InCombatLockdown and InCombatLockdown() then
+        return false, "Cannot import profile while in combat"
+    end
     if not importString or importString == "" then return false, "Empty import string" end
+    if type(importString) ~= "string" or #importString > 250000 then
+        return false, "Import string exceeds maximum length (250KB limit)"
+    end
 
     local decoded = LibDeflate:DecodeForPrint(importString)
     if not decoded then return false, "Failed to decode import string" end

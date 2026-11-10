@@ -255,7 +255,9 @@ local function ApplyBarToDB()
     end
     local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
     if utils and utils.ApplyTypography then
-        utils.ApplyTypography(bar.Text, "Friz Quadrata TT", db.fontSize or 12, "OUTLINE", false, "Friz Quadrata TT")
+        local fontName = db.font or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Roithi Thick"
+        local fontOutline = db.fontOutline or "OUTLINE"
+        utils.ApplyTypography(bar.Text, fontName, db.fontSize or 12, fontOutline, false, "Roithi Thick")
     end
     bar:ClearAllPoints()
     local defEB = ns.Defaults.profile.EncounterResource
@@ -396,6 +398,10 @@ function ns.InitEncounterBarLEM()
 
     LEM:RegisterCallback("exit", function()
         bar.isInEditMode = false
-        bar:Hide()
+        if bar.Update then
+            bar:Update()
+        else
+            bar:Hide()
+        end
     end)
 end

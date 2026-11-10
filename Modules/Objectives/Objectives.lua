@@ -27,21 +27,47 @@ objState.selectionHooked = setmetatable({}, { __mode = "k" })
 local barBackdrops = objState.barBackdrops
 local selectionHooked = objState.selectionHooked
 
+local seenPool = {}
+local callbackStack = {}
+local seenDepth = 0
+
+local function DispatchTrackerBlock(b)
+    if not b then return end
+    local seen = seenPool[seenDepth]
+    local cb = callbackStack[seenDepth]
+    if seen and cb and not seen[b] then
+        seen[b] = true
+        cb(b)
+    end
+end
+
 local function ForEachTrackerBlock(tracker, callback)
     if not tracker or not callback then return end
+    seenDepth = seenDepth + 1
+    local seen = seenPool[seenDepth]
+    if not seen then
+        seen = setmetatable({}, { __mode = "k" })
+        seenPool[seenDepth] = seen
+    else
+        for k in pairs(seen) do seen[k] = nil end
+    end
+    callbackStack[seenDepth] = callback
     if tracker.EnumerateActiveBlocks then
-        tracker:EnumerateActiveBlocks(callback)
+        tracker:EnumerateActiveBlocks(DispatchTrackerBlock)
+        for k in pairs(seen) do seen[k] = nil end
+        callbackStack[seenDepth] = nil
+        seenDepth = math.max(0, seenDepth - 1)
         return
     end
     if tracker.usedBlocks then
         for _, val in pairs(tracker.usedBlocks) do
             if type(val) == "table" then
                 if val.IsObjectType or val.GetObjectType or val.SetPoint then
-                    callback(val)
+                    DispatchTrackerBlock(val)
                 else
                     for _, subBlock in pairs(val) do
                         if type(subBlock) == "table" and (subBlock.IsObjectType or subBlock.GetObjectType or subBlock.SetPoint) then
-                            callback(subBlock)
+                            DispatchTrackerBlock(subBlock)
                         end
                     end
                 end
@@ -51,10 +77,13 @@ local function ForEachTrackerBlock(tracker, callback)
     if tracker.blocks then
         for _, block in pairs(tracker.blocks) do
             if type(block) == "table" and (block.IsObjectType or block.GetObjectType or block.SetPoint) then
-                callback(block)
+                DispatchTrackerBlock(block)
             end
         end
     end
+    for k in pairs(seen) do seen[k] = nil end
+    callbackStack[seenDepth] = nil
+    seenDepth = math.max(0, seenDepth - 1)
 end
 objState.ForEachTrackerBlock = ForEachTrackerBlock
 ObjectivesMod.ForEachTrackerBlock = ForEachTrackerBlock
@@ -193,14 +222,18 @@ function ObjectivesMod:OnScenarioUpdate()
     end
 
     if self.db and self.db.attachedToMinimap ~= false then
+        if self.scenarioTimerPending then return end
+        self.scenarioTimerPending = true
         if _G.C_Timer and _G.C_Timer.After then
             _G.C_Timer.After(0, function()
+                self.scenarioTimerPending = false
                 if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
                     self:ApplyPosition()
                     self:ApplyScaleAndHeight()
                 end
             end)
         else
+            self.scenarioTimerPending = false
             self:ApplyPosition()
             self:ApplyScaleAndHeight()
         end
@@ -232,6 +265,9 @@ function ObjectivesMod:OnRegenEnabled()
             self.pendingItemButtonSkins = {}
         end
     end
+    if (not self.IsEnabled or self:IsEnabled()) and self.RefreshTrackers then
+        self:RefreshTrackers()
+    end
 end
 
 function ObjectivesMod:OnSuperTrackingChanged()
@@ -253,6 +289,22 @@ function ObjectivesMod:OnQuestLogUpdate()
             if self.ApplyQuestLevelToTitle then
                 pcall(self.ApplyQuestLevelToTitle, self, block)
             end
+            if self.UpdateBlockHoverObjectives then
+                local isHovered = (self.IsMouseOverBlock and self:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
+                pcall(self.UpdateBlockHoverObjectives, self, block, isHovered or false)
+            end
+        end
+    end
+    if self.SortTrackerBlocks then
+        local qot = _G.QuestObjectiveTracker
+        if qot and qot.IsShown and qot:IsShown() then
+            self:SortTrackerBlocks(qot)
+            if self.TrimTrackerGap then self:TrimTrackerGap(qot) end
+        end
+        local cqot = _G.CampaignQuestObjectiveTracker
+        if cqot and cqot.IsShown and cqot:IsShown() then
+            self:SortTrackerBlocks(cqot)
+            if self.TrimTrackerGap then self:TrimTrackerGap(cqot) end
         end
     end
 end
@@ -287,10 +339,13 @@ function ObjectivesMod:RefreshTrackers()
             end
         end
     end
-    if self.TrimTrackerGap then
-        for _, trackerName in ipairs(SUB_TRACKERS) do
-            local tracker = _G[trackerName]
-            if tracker and tracker.IsShown and tracker:IsShown() then
+    for _, trackerName in ipairs(SUB_TRACKERS) do
+        local tracker = _G[trackerName]
+        if tracker and tracker.IsShown and tracker:IsShown() then
+            if self.SortTrackerBlocks then
+                self:SortTrackerBlocks(tracker)
+            end
+            if self.TrimTrackerGap then
                 self:TrimTrackerGap(tracker)
             end
         end
@@ -302,6 +357,29 @@ function ObjectivesMod:OnZoneChanged()
         self:UpdateQuestLogData()
     end
     self:UpdateTrackerVisibility()
+    for block in pairs(skinnedBlocks) do
+        if type(block) == "table" and block.used ~= false and (block.IsShown and block:IsShown()) then
+            if self.ApplyQuestLevelToTitle then
+                pcall(self.ApplyQuestLevelToTitle, self, block)
+            end
+            if self.UpdateBlockHoverObjectives then
+                local isHovered = (self.IsMouseOverBlock and self:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
+                pcall(self.UpdateBlockHoverObjectives, self, block, isHovered or false)
+            end
+        end
+    end
+    if self.SortTrackerBlocks then
+        local qot = _G.QuestObjectiveTracker
+        if qot and qot.IsShown and qot:IsShown() then
+            self:SortTrackerBlocks(qot)
+            if self.TrimTrackerGap then self:TrimTrackerGap(qot) end
+        end
+        local cqot = _G.CampaignQuestObjectiveTracker
+        if cqot and cqot.IsShown and cqot:IsShown() then
+            self:SortTrackerBlocks(cqot)
+            if self.TrimTrackerGap then self:TrimTrackerGap(cqot) end
+        end
+    end
 end
 
 function ObjectivesMod:RestoreDefaultView()
@@ -596,6 +674,7 @@ function ObjectivesMod:ApplyPosition()
 end
 
 function ObjectivesMod:ApplyScaleAndHeight()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
     local otf = _G.ObjectiveTrackerFrame
     if not otf or not self.db or not self.db.enabled then return end
 
@@ -694,10 +773,18 @@ function ObjectivesMod:EnsureAnchor()
         if not selectionHooked[otf.Selection] and hooksecurefunc then
             selectionHooked[otf.Selection] = true
             hooksecurefunc(otf.Selection, "Show", function(sel)
-                sel:Hide()
+                if not (_G.InCombatLockdown and _G.InCombatLockdown()) and sel.Hide then
+                    sel:Hide()
+                elseif sel.SetAlpha then
+                    sel:SetAlpha(0)
+                end
             end)
         end
-        if otf.Selection.Hide then otf.Selection:Hide() end
+        if not (_G.InCombatLockdown and _G.InCombatLockdown()) and otf.Selection.Hide then
+            otf.Selection:Hide()
+        elseif otf.Selection.SetAlpha then
+            otf.Selection:SetAlpha(0)
+        end
         if otf.Selection.EnableMouse then otf.Selection:EnableMouse(false) end
     end
 
@@ -813,13 +900,20 @@ function ObjectivesMod:HookTracker(tracker)
 
     if tracker.EndLayout and not self:IsHooked(tracker, "EndLayout") then
         self:SecureHook(tracker, "EndLayout", function()
+            if self.IsEnabled and not self:IsEnabled() then return end
             pcall(function()
                 ForEachTrackerBlock(tracker, function(block)
+                    if self.ApplyQuestLevelToTitle then
+                        pcall(self.ApplyQuestLevelToTitle, self, block)
+                    end
                     if self.UpdateBlockHoverObjectives then
-                        local isHovered = (block.IsMouseOver and block:IsMouseOver()) or (block.HeaderButton and block.HeaderButton.IsMouseOver and block.HeaderButton:IsMouseOver())
+                        local isHovered = (self.IsMouseOverBlock and self:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
                         self:UpdateBlockHoverObjectives(block, isHovered or false)
                     end
                 end)
+                if self.SortTrackerBlocks then
+                    self:SortTrackerBlocks(tracker)
+                end
                 if self.TrimTrackerGap then
                     self:TrimTrackerGap(tracker)
                 end
@@ -900,6 +994,10 @@ function ObjectivesMod:HookTracker(tracker)
                         if self.ApplyQuestLevelToTitle then
                             pcall(self.ApplyQuestLevelToTitle, self, block)
                         end
+                        if self.UpdateBlockHoverObjectives then
+                            local isHovered = (self.IsMouseOverBlock and self:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
+                            pcall(self.UpdateBlockHoverObjectives, self, block, isHovered or false)
+                        end
                         if self.ForEachBlockLine then
                             self.ForEachBlockLine(block, formatLine)
                         elseif block.usedLines then
@@ -913,6 +1011,14 @@ function ObjectivesMod:HookTracker(tracker)
                         pcall(self.SkinProgressBar, self, bar)
                     end
                 end
+                if not tracker.EndLayout then
+                    if self.SortTrackerBlocks then
+                        pcall(self.SortTrackerBlocks, self, tracker)
+                    end
+                    if self.TrimTrackerGap then
+                        pcall(self.TrimTrackerGap, self, tracker)
+                    end
+                end
                 self:UpdateAllDividers()
             end)
         end)
@@ -920,6 +1026,7 @@ function ObjectivesMod:HookTracker(tracker)
 end
 
 function ObjectivesMod:RefreshSettings()
+    self.db = RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Objectives or self.db or self.defaultSettings
     if not self.db then return end
     self:ApplyScaleAndHeight()
     self:ApplyPosition()
@@ -927,4 +1034,8 @@ function ObjectivesMod:RefreshSettings()
     self:UpdateFonts()
     self:SkinAllExisting()
     self:UpdateTrackerVisibility()
+    if LEM and LEM.RefreshFrameSettings and _G.ObjectiveTrackerFrame then
+        LEM:RefreshFrameSettings(_G.ObjectiveTrackerFrame)
+    end
 end
+ObjectivesMod.RefreshProfile = ObjectivesMod.RefreshSettings

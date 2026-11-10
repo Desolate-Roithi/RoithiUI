@@ -151,7 +151,10 @@ function ns.GetGeneralOptions()
                 desc  = L["Enable debug logging to the chat window."],
                 order = 50,
                 get = function() return RoithiUI.db.profile.General.debugMode end,
-                set = function(_, v) RoithiUI.db.profile.General.debugMode = v end,
+                set = function(_, v)
+                    RoithiUI.db.profile.General.debugMode = v
+                    RoithiUI.debug = v
+                end,
                 width = "full",
             },
         },

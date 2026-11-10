@@ -174,8 +174,12 @@ function UF:CreatePowerBar(frame)
         end
         if not UnitExists(unit) then return end
 
-        -- Main Power always shows unless specifically disabled?
-        -- Actually main power logic is usually just "Show".
+        local db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.UnitFrames and RoithiUI.db.profile.UnitFrames[frame.unit]
+        if db and db.powerEnabled == false then
+            power:Hide()
+            return
+        end
+
         power:Show()
 
         local cur = UnitPower(unit)
@@ -184,20 +188,26 @@ function UF:CreatePowerBar(frame)
         power:SetValue(cur)
 
         local pTypeIndex, pToken = UnitPowerType(unit)
+        local tokenSafe = pToken and not (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(pToken))
+        local indexSafe = pTypeIndex and not (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(pTypeIndex))
 
         -- Safe Color Lookup
-        local info = PowerBarColor and (PowerBarColor[pToken] or PowerBarColor[pTypeIndex])
+        local info = PowerBarColor and ((tokenSafe and PowerBarColor[pToken]) or (indexSafe and PowerBarColor[pTypeIndex]))
         if not info then
-            info = DefaultPowerColors[pToken] or DefaultPowerColors[pTypeIndex] or DefaultPowerColors["MANA"]
+            info = (tokenSafe and DefaultPowerColors[pToken]) or (indexSafe and DefaultPowerColors[pTypeIndex]) or DefaultPowerColors["MANA"]
         end
 
         if info then
             power:SetStatusBarColor(info.r, info.g, info.b)
         else
             -- Debugging Color Failure
-            local pName = UnitName(unit) or "?"
+            local pName = UnitName(unit)
+            if ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(pName) then pName = "?" end
+            pName = pName or "?"
+            local sType = indexSafe and tostring(pTypeIndex) or "?"
+            local sToken = tokenSafe and tostring(pToken) or "?"
             RoithiUI:Log(string.format("Unit: %s | Type: %s (%s) | Info: Nil? Fallback to Blue.", pName,
-                pTypeIndex, pToken))
+                sType, sToken))
             if not DefaultPowerColors["RAGE"] then RoithiUI:Log("DefaultPowerColors[RAGE] is missing!") end
 
             power:SetStatusBarColor(0, 0, 1) -- Fallback Blue
@@ -234,6 +244,7 @@ end
 
 -- 12.0 Heal Prediction Implementation (Event-driven, COMBAT-FRAME-BUDGET compliant)
 function UF:CreateHealPrediction(frame)
+    if not frame or frame.RoithiHealPrediction then return end
     local health = frame.Health or frame.SafeHealth
     if not health then return end
     local clipFrame = CreateFrame("Frame", nil, health)
@@ -242,7 +253,9 @@ function UF:CreateHealPrediction(frame)
     pcall(function() clipFrame:SetClipsChildren(true) end)
     frame.Health.ClipFrame = clipFrame
 
-    local texture = LSM:Fetch("statusbar", RoithiUI.db.profile.barTexture or "Solid") or
+    local textureName = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameBar) or
+        (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.barTexture) or "Solid"
+    local texture = LSM:Fetch("statusbar", textureName) or
         "Interface\\TargetingFrame\\UI-StatusBar"
 
     local myHeal = CreateFrame("StatusBar", nil, clipFrame)
@@ -278,6 +291,13 @@ function UF:CreateHealPrediction(frame)
     healAbsorb:SetFrameLevel(health:GetFrameLevel() + 11)
     healAbsorb:SetReverseFill(true)
     healAbsorb:Hide()
+
+    frame.RoithiHealPrediction = {
+        myHeal = myHeal,
+        otherHeal = otherHeal,
+        absorb = absorb,
+        healAbsorb = healAbsorb,
+    }
 
     -- Using the Correct 12.0 API Usage
     ---@diagnostic disable-next-line: undefined-global
@@ -414,11 +434,20 @@ end
 
 function UF:UpdateHealthBarSettings(frame)
     if not frame.Health then return end
-    local texture = LSM:Fetch("statusbar", RoithiUI.db.profile.General.unitFrameBar or "Solid") or
+    local textureName = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameBar) or
+        (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.barTexture) or "Solid"
+    local texture = LSM:Fetch("statusbar", textureName) or
         "Interface\\TargetingFrame\\UI-StatusBar"
 
     frame.Health:SetStatusBarTexture(texture)
     if frame.Health.bg then frame.Health.bg:SetTexture(texture) end
+
+    if frame.RoithiHealPrediction and type(frame.RoithiHealPrediction) == "table" then
+        if frame.RoithiHealPrediction.myHeal then frame.RoithiHealPrediction.myHeal:SetStatusBarTexture(texture) end
+        if frame.RoithiHealPrediction.otherHeal then frame.RoithiHealPrediction.otherHeal:SetStatusBarTexture(texture) end
+        if frame.RoithiHealPrediction.absorb then frame.RoithiHealPrediction.absorb:SetStatusBarTexture(texture) end
+        if frame.RoithiHealPrediction.healAbsorb then frame.RoithiHealPrediction.healAbsorb:SetStatusBarTexture(texture) end
+    end
 
     -- Force update to re-color if needed
     local onShow = frame.Health:GetScript("OnShow")

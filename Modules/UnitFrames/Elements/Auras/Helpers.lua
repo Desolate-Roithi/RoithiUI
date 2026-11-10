@@ -145,8 +145,8 @@ local function GetSmartFilterQueries(filterType, db, unit)
         if db.raidInCombat == true then
             table.insert(queries, "HELPFUL|RAID_IN_COMBAT|PLAYER")
         end
-        -- Fallback: ONLY if NO explicit buff filter toggles have been set at all
-        local hasAnyBuffToggle = (db.showAllBuffs ~= nil) or (db.playerBuffs ~= nil) or (db.importantBuffs ~= nil) or (db.majorDefensives ~= nil) or (db.majorDefensivesBuffs ~= nil) or (db.externalDefensives ~= nil) or (db.raidInCombat ~= nil) or (db.onlyWhitelistBuffs ~= nil) or (db.onlyWhitelist ~= nil) or (db.additionalWhitelistBuffs ~= nil) or (db.additionalWhitelist ~= nil)
+        -- Fallback: ONLY if NO explicit buff filter toggles are active
+        local hasAnyBuffToggle = (db.showAllBuffs == true) or (db.playerBuffs == true) or (db.importantBuffs == true) or (db.majorDefensives == true) or (db.majorDefensivesBuffs == true) or (db.externalDefensives == true) or (db.raidInCombat == true) or (db.onlyWhitelistBuffs == true) or (db.onlyWhitelist == true) or (db.additionalWhitelistBuffs == true) or (db.additionalWhitelist == true)
         if #queries == 0 and not hasAnyBuffToggle then
             RADLog("[SmartFilter] unit=[%s] HELPFUL -> fallback default", tostring(unit))
             table.insert(queries, unit == "player" and "HELPFUL" or "HELPFUL|PLAYER")

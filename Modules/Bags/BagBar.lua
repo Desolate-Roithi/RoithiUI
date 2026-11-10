@@ -91,10 +91,18 @@ function BagsMod:SetupBagBar()
                 if not selSt.selectionHooked and hooksecurefunc then
                     selSt.selectionHooked = true
                     hooksecurefunc(_G.BagsBar.Selection, "Show", function(sel)
-                        sel:Hide()
+                        if not (_G.InCombatLockdown and _G.InCombatLockdown()) and sel.Hide then
+                            sel:Hide()
+                        elseif sel.SetAlpha then
+                            sel:SetAlpha(0)
+                        end
                     end)
                 end
-                _G.BagsBar.Selection:Hide()
+                if not (_G.InCombatLockdown and _G.InCombatLockdown()) and _G.BagsBar.Selection.Hide then
+                    _G.BagsBar.Selection:Hide()
+                elseif _G.BagsBar.Selection.SetAlpha then
+                    _G.BagsBar.Selection:SetAlpha(0)
+                end
                 if _G.BagsBar.Selection.EnableMouse then _G.BagsBar.Selection:EnableMouse(false) end
             end
         end
@@ -375,7 +383,6 @@ function BagsMod:CreateBagBarExpander()
     expander:SetScript("OnClick", function()
         if _G.InCombatLockdown and _G.InCombatLockdown() then
             self.pendingBagBarLayout = true
-            self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnPlayerRegenEnabledBagBar")
             return
         end
         self.db.bagBar = self.db.bagBar or {}
@@ -683,6 +690,10 @@ function BagsMod:StyleBagButtons()
 end
 
 function BagsMod:RestoreBlizzardBagBar()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.pendingRestoreBagBar = true
+        return
+    end
     if _G.BagsBar then
         if _G.BagsBar.SetAlpha then _G.BagsBar:SetAlpha(1) end
         if _G.BagsBar.EnableMouse then _G.BagsBar:EnableMouse(true) end
@@ -724,7 +735,6 @@ end
 function BagsMod:UpdateBagBarLayout()
     if _G.InCombatLockdown and _G.InCombatLockdown() then
         self.pendingBagBarLayout = true
-        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnPlayerRegenEnabledBagBar")
         return
     end
 
@@ -913,8 +923,10 @@ function BagsMod:UpdateBagBarLayout()
 end
 
 function BagsMod:OnPlayerRegenEnabledBagBar()
-    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-    if self.pendingBagBarLayout then
+    if self.pendingRestoreBagBar then
+        self.pendingRestoreBagBar = nil
+        self:RestoreBlizzardBagBar()
+    elseif self.pendingBagBarLayout then
         self.pendingBagBarLayout = nil
         self:UpdateBagBarLayout()
     end

@@ -177,7 +177,7 @@ local function Shared(self, unit)
         outsideAlpha = 0.4,
     }
     -- 6. Health Prediction
-    if UF.CreateHealPrediction then
+    if UF.CreateHealPrediction and not self.RoithiHealPrediction then
         UF:CreateHealPrediction(self)
     end
 
@@ -209,7 +209,32 @@ function UF:OnEnable()
     -- Initialize Units table container if not exists
     if not self.units then self.units = {} end
 
-    -- Note: Actual spawning is handled by Units.lua hooking OnEnable and calling InitializeUnits
+    if not self.regenEventFrame then
+        self.regenEventFrame = CreateFrame("Frame")
+        self.regenEventFrame:SetScript("OnEvent", function()
+            if UF.pendingToggles then
+                for u, en in pairs(UF.pendingToggles) do
+                    UF.pendingToggles[u] = nil
+                    UF:ToggleFrame(u, en)
+                end
+            end
+            if UF.pendingSettings then
+                for u in pairs(UF.pendingSettings) do
+                    UF.pendingSettings[u] = nil
+                    UF:UpdateFrameFromSettings(u)
+                end
+            end
+            if UF.pendingBossAnchors then
+                UF.pendingBossAnchors = nil
+                if UF.UpdateBossAnchors then UF:UpdateBossAnchors() end
+            end
+        end)
+        self.regenEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    end
+
+    if self.EnableUnits then
+        self:EnableUnits()
+    end
     if self.UpdateAllCustomAuras then
         self:UpdateAllCustomAuras()
     end

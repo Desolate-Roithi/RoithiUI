@@ -11,6 +11,7 @@ local function GetKeybind(action)
 end
 
 local function ApplyKeybind(action, val)
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
     local oldKey = _G.GetBindingKey and _G.GetBindingKey(action)
     if oldKey and _G.SetBinding then
         _G.SetBinding(oldKey)

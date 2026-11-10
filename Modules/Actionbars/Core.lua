@@ -149,9 +149,6 @@ function AB:OnEnable()
     self:StyleAllBars()
     self:LayoutAllBars()
     self:DisableActionPageSwitching()
-    if self.ProtectOverrideActionBar then
-        self:ProtectOverrideActionBar()
-    end
     self:SetupLEM()
     self.inCombat = (ns.Utils and ns.Utils.IsPlayerInCombat and ns.Utils.IsPlayerInCombat()) or false
 end
@@ -192,6 +189,14 @@ function AB:PLAYER_REGEN_ENABLED()
             self:UpdateAllEmptyButtons()
         end
     end
+    if self.queuedPageSync then
+        self.queuedPageSync = nil
+        self:SyncBar1Page()
+    end
+    if self.queuedRefresh then
+        self.queuedRefresh = nil
+        self:StyleAllBars()
+    end
     self:OnFaderEvent()
 end
 
@@ -217,6 +222,10 @@ function AB:OnSpellcastEvent(event, unit)
 end
 
 function AB:UpdateAllBindings()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.queuedRefresh = true
+        return
+    end
     self:StyleAllBars()
 end
 

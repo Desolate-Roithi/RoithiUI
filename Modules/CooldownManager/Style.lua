@@ -5,7 +5,6 @@ local CDM = RoithiUI:GetModule("CooldownManager")
 local LSM = LibStub("LibSharedMedia-3.0", true)
 
 local itemBackdrops = setmetatable({}, { __mode = "k" })
-local itemStackOverlays = setmetatable({}, { __mode = "k" })
 local itemShownHooked = setmetatable({}, { __mode = "k" })
 
 function CDM:GetItemBackdrop(frameObj)
@@ -103,9 +102,17 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
     end
 
     -- 4. Apply square crop to eliminate default Blizzard icon borders
+    local vConf = self.db.viewers and self.db.viewers[viewerKey]
+    if not vConf and viewerKey and viewerKey:find("^CustomBar") then
+        local cIdx = tonumber(viewerKey:match("^CustomBar_?(%d+)"))
+        if cIdx and self.db.customBars then
+            vConf = self.db.customBars[cIdx]
+        end
+    end
     if icon and icon.SetTexCoord then
-        if self.db.cropIcons ~= false then
-            local zoom = self.db.iconZoom or 0.07
+        local shouldCrop = (vConf and vConf.cropIcons ~= nil) and vConf.cropIcons or (self.db.cropIcons ~= false)
+        if shouldCrop then
+            local zoom = (vConf and vConf.iconZoom) or self.db.iconZoom or 0.07
             local zoomMax = tonumber(string.format("%.4f", 1 - zoom)) or (1 - zoom)
             icon:SetTexCoord(zoom, zoomMax, zoom, zoomMax)
         else
@@ -148,14 +155,6 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
         bg:SetBackdropBorderColor(c.r or 0, c.g or 0, c.b or 0, c.a or 1.0)
     end
     if bg.Show then bg:Show() end
-
-    local vConf = self.db.viewers and self.db.viewers[viewerKey]
-    if not vConf and viewerKey and viewerKey:find("^CustomBar") then
-        local cIdx = tonumber(viewerKey:match("^CustomBar(%d+)"))
-        if cIdx and self.db.customBars then
-            vConf = self.db.customBars[cIdx]
-        end
-    end
 
     local isOverridden = (vConf and vConf.overrideGlobal == true)
 
@@ -212,7 +211,14 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                 end
             end
             local cdAnchor = (isOverridden and (vConf.cooldownAnchor or vConf.timerAnchor)) or self.db.cooldownAnchor or "CENTER"
-            local defaultCdX, defaultCdY, defaultCdJustifyH = (ns.Utils and ns.Utils.GetDefaultAnchorOffsets) and ns.Utils.GetDefaultAnchorOffsets(cdAnchor, 2) or (cdAnchor:find("RIGHT") and -2 or (cdAnchor:find("LEFT") and 2 or 0)), (cdAnchor:find("TOP") and -2 or (cdAnchor:find("BOTTOM") and 2 or 0)), "CENTER"
+            local defaultCdX, defaultCdY, defaultCdJustifyH
+            if ns.Utils and ns.Utils.GetDefaultAnchorOffsets then
+                defaultCdX, defaultCdY, defaultCdJustifyH = ns.Utils.GetDefaultAnchorOffsets(cdAnchor, 2)
+            else
+                defaultCdX = cdAnchor:find("RIGHT") and -2 or (cdAnchor:find("LEFT") and 2 or 0)
+                defaultCdY = cdAnchor:find("TOP") and -2 or (cdAnchor:find("BOTTOM") and 2 or 0)
+                defaultCdJustifyH = "CENTER"
+            end
             local cdX = isOverridden and (vConf.cooldownOffsetX or vConf.timerOffsetX) or self.db.cooldownOffsetX or defaultCdX
             local cdY = isOverridden and (vConf.cooldownOffsetY or vConf.timerOffsetY) or self.db.cooldownOffsetY or defaultCdY
             if cdFS.SetJustifyH then
@@ -264,23 +270,6 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
             if stackParent.SetFrameLevel and itemFrame.GetFrameLevel then
                 stackParent:SetFrameLevel((itemFrame:GetFrameLevel() or 10) + 25)
             end
-        elseif stackParent and stackParent == itemFrame then
-            local stackOverlay = itemStackOverlays[itemFrame]
-            if not stackOverlay and CreateFrame then
-                stackOverlay = CreateFrame("Frame", nil, itemFrame)
-                stackOverlay:SetAllPoints(itemFrame)
-                if stackOverlay.SetFrameStrata and itemFrame.GetFrameStrata then
-                    stackOverlay:SetFrameStrata(itemFrame:GetFrameStrata())
-                end
-                if itemFrame.GetFrameLevel then
-                    stackOverlay:SetFrameLevel((itemFrame:GetFrameLevel() or 10) + 25)
-                end
-                if stackOverlay.EnableMouse then stackOverlay:EnableMouse(false) end
-                itemStackOverlays[itemFrame] = stackOverlay
-            end
-            if stackOverlay and stackFS.SetParent then
-                pcall(stackFS.SetParent, stackFS, stackOverlay)
-            end
         end
 
         if stackFS.SetDrawLayer then
@@ -301,7 +290,14 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
         end
         if stackFS.ClearAllPoints and stackFS.SetPoint then
             local anchor = (isOverridden and vConf.stackAnchor) or self.db.stackAnchor or "BOTTOMRIGHT"
-            local defaultOx, defaultOy, defaultStackJustifyH = (ns.Utils and ns.Utils.GetDefaultAnchorOffsets) and ns.Utils.GetDefaultAnchorOffsets(anchor, 2) or (anchor:find("RIGHT") and -2 or (anchor:find("LEFT") and 2 or 0)), (anchor:find("TOP") and -2 or (anchor:find("BOTTOM") and 2 or 0)), "CENTER"
+            local defaultOx, defaultOy, defaultStackJustifyH
+            if ns.Utils and ns.Utils.GetDefaultAnchorOffsets then
+                defaultOx, defaultOy, defaultStackJustifyH = ns.Utils.GetDefaultAnchorOffsets(anchor, 2)
+            else
+                defaultOx = anchor:find("RIGHT") and -2 or (anchor:find("LEFT") and 2 or 0)
+                defaultOy = anchor:find("TOP") and -2 or (anchor:find("BOTTOM") and 2 or 0)
+                defaultStackJustifyH = "CENTER"
+            end
             local ox = isOverridden and vConf.stackOffsetX or self.db.stackOffsetX or defaultOx
             local oy = isOverridden and vConf.stackOffsetY or self.db.stackOffsetY or defaultOy
             if stackFS.SetJustifyH then
@@ -495,7 +491,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                     if nameFS.Show then nameFS:Show() end
                     local fontName = (isOverridden and vConf.font) or self.db.font
                     -- fontPath resolved via ApplyTypography
-                    local nSize = (isOverridden and vConf.nameFontSize) or 11
+                    local nSize = (isOverridden and vConf.nameFontSize) or (vConf and vConf.nameFontSize) or 11
                     local nOutline = (isOverridden and vConf.nameFontOutline) or "OUTLINE"
                     local nShadow = (isOverridden and vConf and vConf.nameFontShadow == true) or (not isOverridden and self.db.nameFontShadow == true)
                     local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)

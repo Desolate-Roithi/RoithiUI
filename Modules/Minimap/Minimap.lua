@@ -67,6 +67,10 @@ function MinimapMod:PLAYER_REGEN_ENABLED()
             self:UpdateBuffFrameDisplacement(true)
         end
     end
+    if self.pendingLayoutDefaultButtons then
+        self.pendingLayoutDefaultButtons = nil
+        self:LayoutDefaultButtons()
+    end
 end
 
 function MinimapMod:ADDON_LOADED(event, name)
@@ -349,6 +353,7 @@ function MinimapMod:OnEnable()
     -- Setup LFG hook ticker to handle late-created LFG buttons safely
     if not self.lfgHookTicker and C_Timer.NewTicker then
         self.lfgHookTicker = C_Timer.NewTicker(1, function()
+            if _G.InCombatLockdown and _G.InCombatLockdown() then return end
             local qsb = _G.QueueStatusButton
             local elp = _G.ExpansionLandingPageMinimapButton or _G.PlumberLandingPageMinimapButton or _G.GarrisonLandingPageMinimapButton
 
@@ -374,7 +379,8 @@ function MinimapMod:OnEnable()
     -- Make anchors click-through during normal play
     self:UpdateAnchorsMouseState(false)
 
-    if LEM then
+    if LEM and not self.lemCallbacksRegistered then
+        self.lemCallbacksRegistered = true
         LEM:RegisterCallback("enter", function()
             self:UpdateAnchorsMouseState(true)
             self:UpdateBlizzardButtonsMouseState(false)
@@ -723,7 +729,10 @@ function MinimapMod:StyleMinimap()
             MinimapCluster.BorderTop:Hide()
             MinimapCluster.BorderTop:SetAlpha(0)
             if not self.isBorderTopHooked then
-                hooksecurefunc(MinimapCluster.BorderTop, "Show", function(s) s:Hide() end)
+                hooksecurefunc(MinimapCluster.BorderTop, "Show", function(s)
+                    if (self.IsEnabled and not self:IsEnabled()) or (self.db and self.db.enabled == false) then return end
+                    s:Hide()
+                end)
                 self.isBorderTopHooked = true
             end
         end
@@ -733,7 +742,10 @@ function MinimapMod:StyleMinimap()
             backdrop:Hide()
             backdrop:SetAlpha(0)
             if not self.isBackdropHooked then
-                hooksecurefunc(backdrop, "Show", function(s) s:Hide() end)
+                hooksecurefunc(backdrop, "Show", function(s)
+                    if (self.IsEnabled and not self:IsEnabled()) or (self.db and self.db.enabled == false) then return end
+                    s:Hide()
+                end)
                 self.isBackdropHooked = true
             end
         end
@@ -743,7 +755,10 @@ function MinimapMod:StyleMinimap()
             compass:Hide()
             compass:SetAlpha(0)
             if not self.isCompassHooked then
-                hooksecurefunc(compass, "Show", function(s) s:Hide() end)
+                hooksecurefunc(compass, "Show", function(s)
+                    if (self.IsEnabled and not self:IsEnabled()) or (self.db and self.db.enabled == false) then return end
+                    s:Hide()
+                end)
                 self.isCompassHooked = true
             end
         end
@@ -754,7 +769,10 @@ function MinimapMod:StyleMinimap()
             clockBtn:Hide()
             clockBtn:SetAlpha(0)
             if not self.isClockHooked then
-                hooksecurefunc(clockBtn, "Show", function(s) s:Hide() end)
+                hooksecurefunc(clockBtn, "Show", function(s)
+                    if (self.IsEnabled and not self:IsEnabled()) or (self.db and self.db.enabled == false) then return end
+                    s:Hide()
+                end)
                 self.isClockHooked = true
             end
         end
@@ -765,15 +783,29 @@ function MinimapMod:StyleMinimap()
             classicDayNight:Hide()
             classicDayNight:SetAlpha(0)
             if not self.isDayNightHooked then
-                hooksecurefunc(classicDayNight, "Show", function(s) s:Hide() end)
+                hooksecurefunc(classicDayNight, "Show", function(s)
+                    if (self.IsEnabled and not self:IsEnabled()) or (self.db and self.db.enabled == false) then return end
+                    s:Hide()
+                end)
                 self.isDayNightHooked = true
             end
         end
 
         if MinimapCluster.Selection then
-            MinimapCluster.Selection:Hide()
+            if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+                MinimapCluster.Selection:Hide()
+            elseif MinimapCluster.Selection.SetAlpha then
+                MinimapCluster.Selection:SetAlpha(0)
+            end
             if not self.isSelectionHooked then
-                hooksecurefunc(MinimapCluster.Selection, "Show", function(s) s:Hide() end)
+                hooksecurefunc(MinimapCluster.Selection, "Show", function(s)
+                    if (self.IsEnabled and not self:IsEnabled()) or (self.db and self.db.enabled == false) then return end
+                    if not (_G.InCombatLockdown and _G.InCombatLockdown()) and s.Hide then
+                        s:Hide()
+                    elseif s.SetAlpha then
+                        s:SetAlpha(0)
+                    end
+                end)
                 self.isSelectionHooked = true
             end
         end
@@ -784,7 +816,10 @@ function MinimapMod:StyleMinimap()
             coords:Hide()
             coords:SetAlpha(0)
             if not self.isCoordsHooked then
-                hooksecurefunc(coords, "Show", function(s) s:Hide() end)
+                hooksecurefunc(coords, "Show", function(s)
+                    if (self.IsEnabled and not self:IsEnabled()) or (self.db and self.db.enabled == false) then return end
+                    s:Hide()
+                end)
                 self.isCoordsHooked = true
             end
         end
@@ -807,11 +842,10 @@ function MinimapMod:StyleMinimap()
     -- Hide other default textures/frames inside Minimap
     if Minimap.ZoomHitArea then Minimap.ZoomHitArea:Hide() end
 
-    -- 4. Mouse Wheel Zoom
-    if Minimap.EnableMouseWheel then
-        Minimap:EnableMouseWheel(true)
-    end
-    if Minimap.HookScript then
+    -- 4. Mouse Wheel Zoom & Right Click for Tracking Menu (Idempotent Hook Guard)
+    if not self.minimapHooksDone and Minimap.HookScript then
+        self.minimapHooksDone = true
+        if Minimap.EnableMouseWheel then Minimap:EnableMouseWheel(true) end
         Minimap:HookScript("OnMouseWheel", function(_, delta)
             if delta > 0 then
                 if Minimap_ZoomIn then Minimap_ZoomIn() end
@@ -819,10 +853,6 @@ function MinimapMod:StyleMinimap()
                 if Minimap_ZoomOut then Minimap_ZoomOut() end
             end
         end)
-    end
-
-    -- 5. Right Click for Tracking Menu
-    if Minimap.HookScript then
         Minimap:HookScript("OnMouseUp", function(_, button)
             if button == "RightButton" then
                 local trackingBtn = MinimapCluster and MinimapCluster.Tracking and MinimapCluster.Tracking.Button
@@ -1278,6 +1308,10 @@ end
 
 -- Align default buttons to custom Edit Mode anchors
 function MinimapMod:LayoutDefaultButtons()
+    if InCombatLockdown and InCombatLockdown() then
+        self.pendingLayoutDefaultButtons = true
+        return
+    end
     if not LEM then return end
 
     local function HookBlizzardButton(btn, anchor)
@@ -1361,7 +1395,7 @@ function MinimapMod:LayoutDefaultButtons()
     local defPos = ns.Defaults.profile.Minimap.defaultAnchorPositions
 
     -- Setup Zone Text Anchor
-    local zoneWidth = (self.db and self.db.size) or 200
+    local zoneWidth = (self.db and (self.db.width or self.db.size)) or 200
     local zoneTextAnchor = CreateAnchorFrame(self, "zoneTextAnchor", "RoithiZoneTextAnchor", L["Minimap Zone Text"], zoneWidth, 20, defPos.zoneTextAnchor)
     local zoneText = (MinimapCluster and (MinimapCluster.ZoneTextButton or MinimapCluster.ZoneTextFrame)) or _G.MinimapZoneTextButton
     if zoneText then
@@ -1440,7 +1474,7 @@ function MinimapMod:LayoutDefaultButtons()
             HookZoneTextFS(targetFS)
         end
 
-        local currentZoneWidth = (self.db and self.db.size) or 200
+        local currentZoneWidth = (self.db and (self.db.width or self.db.size)) or 200
 
         -- Keep button aligned with anchor
         local zBtn = (MinimapCluster and (MinimapCluster.ZoneTextButton or MinimapCluster.ZoneTextFrame)) or _G.MinimapZoneTextButton
@@ -1622,6 +1656,7 @@ function MinimapMod:LayoutDefaultButtons()
 
         if not self.isCalendarHooked then
             hooksecurefunc(GameTimeFrame, "Show", function(s)
+                if (self.IsEnabled and not self:IsEnabled()) or (self.db and self.db.enabled == false) then return end
                 if not self.db.showCalendar then
                     s:Hide()
                 end
@@ -2294,7 +2329,12 @@ end
 -- ----------------------------------------------------------------------------
 -- Minimap Data Text Bar
 -- ----------------------------------------------------------------------------
+local cachedSocialStats = nil
 local function GetSocialStats()
+    if _G.InCombatLockdown and _G.InCombatLockdown() and cachedSocialStats then
+        return cachedSocialStats
+    end
+
     local guildOnline = 0
     local guildTotal = 0
     local guildName = ""
@@ -2369,7 +2409,7 @@ local function GetSocialStats()
         end
     end)
 
-    return {
+    cachedSocialStats = {
         guildOnline = guildOnline,
         guildTotal = guildTotal,
         guildName = guildName,
@@ -2381,6 +2421,7 @@ local function GetSocialStats()
         charFriendsTotal = charFriendsTotal,
         totalFriendsOnline = bnetOnline + charFriendsOnline,
     }
+    return cachedSocialStats
 end
 
 local function GetSectionText(dataType)
@@ -2813,6 +2854,10 @@ function MinimapMod:RefreshProfile()
         "zoomInAnchor",
         "zoomOutAnchor",
         "calendarAnchor",
+        "folioAnchor",
+        "difficultyAnchor",
+        "dielAnchor",
+        "coordsAnchor",
     }
     for _, key in ipairs(anchorKeys) do
         if self[key] then
@@ -2823,6 +2868,8 @@ function MinimapMod:RefreshProfile()
     self:UpdateAllElementVisibilities()
     self:UpdateDataTextBarVisibility()
     self:UpdateDataTextBarLayout()
+    self:UpdateFonts()
+    self:UpdateDifficultyText()
 
     if self.addonBar then
         self:UpdateAddonBarVisibility()
@@ -2848,7 +2895,7 @@ MinimapMod.RefreshSettings = MinimapMod.RefreshProfile
 function MinimapMod:UpdateFonts()
     if self.UpdateZoneTextFont then self:UpdateZoneTextFont() end
     if self.UpdateDifficultyFont then self:UpdateDifficultyFont() end
-    if self.UpdateAllBuffButtons then self:UpdateAllBuffButtons() end
-    if self.UpdateDataTexts then self:UpdateDataTexts() end
+    if self.RefreshBuffFrameStyling then self:RefreshBuffFrameStyling() end
+    if self.CreateDataTextBar then self:CreateDataTextBar() end
     if self.UpdateDataTextBarLayout then self:UpdateDataTextBarLayout() end
 end

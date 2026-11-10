@@ -33,6 +33,23 @@ local UnitHealthDeficit = _G.UnitHealthDeficit
 -- Missing Globals for Linter
 ---@diagnostic disable-next-line: undefined-field
 local AbbreviateLargeNumbers = _G.AbbreviateLargeNumbers
+
+-- Hoisted Class Abbreviation Map (Zero GC)
+local CLASS_MAP = {
+    ["DH"] = "DEMONHUNTER",
+    ["DK"] = "DEATHKNIGHT",
+    ["PALA"] = "PALADIN",
+    ["WAR"] = "WARRIOR",
+    ["WL"] = "WARLOCK",
+    ["SH"] = "SHAMAN",
+    ["DR"] = "DRUID",
+    ["H"] = "HUNTER",
+    ["M"] = "MAGE",
+    ["PR"] = "PRIEST",
+    ["ROG"] = "ROGUE",
+    ["EVO"] = "EVOKER",
+    ["MONK"] = "MONK"
+}
 ---@diagnostic disable-next-line: undefined-field
 local UnitHealthMissing = _G.UnitHealthMissing
 
@@ -86,6 +103,11 @@ local function AbbreviateNumber(value)
     return value
 end
 
+local function WrapRoundedString(val)
+    local strUtil = _G.C_StringUtil
+    return strUtil.WrapString(strUtil.RoundToNearestString(val), "", "%")
+end
+
 -- Helper: Format Percentage with max 1 decimal place (e.g. 87.5% or 100%)
 local function FormatPercent(value)
     if value == nil then return "" end
@@ -94,9 +116,7 @@ local function FormatPercent(value)
         if ok and formatted ~= nil then return formatted end
         local strUtil = _G.C_StringUtil
         if strUtil and strUtil.RoundToNearestString and strUtil.WrapString then
-            local ok2, roundedStr = pcall(function()
-                return strUtil.WrapString(strUtil.RoundToNearestString(value), "", "%")
-            end)
+            local ok2, roundedStr = pcall(WrapRoundedString, value)
             if ok2 and roundedStr ~= nil then return roundedStr end
         end
         return value
@@ -121,6 +141,36 @@ local function FormatPercent(value)
     end
 
     return tostring(value)
+end
+
+local function CallHealthPercent(unit)
+    local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
+    local fnHealthPercent = _G.UnitHealthPercent or UnitHealthPercent
+    local pct = fnHealthPercent(unit, false, curve)
+    return FormatPercent(pct)
+end
+
+local function CallHealthPercentText(unit)
+    return C_UnitHealth and C_UnitHealth.GetHealthPercentText and C_UnitHealth.GetHealthPercentText(unit)
+end
+
+local function CallPowerPercent(unit)
+    local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
+    local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
+    local pType = _G.UnitPowerType(unit)
+    local pct = fnPowerPercent(unit, pType, false, curve)
+    return FormatPercent(pct)
+end
+
+local function CallPowerPercentText(unit)
+    return C_UnitPower and C_UnitPower.GetPowerPercentText and C_UnitPower.GetPowerPercentText(unit)
+end
+
+local function CallManaPercent(unit)
+    local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
+    local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
+    local pct = fnPowerPercent(unit, 0, false, curve)
+    return FormatPercent(pct)
 end
 
 -- ----------------------------------------------------------------------------
@@ -170,20 +220,14 @@ TM.Methods = {
 
         if isActuallySecret then
             -- Secondary Fallback: UnitHealthPercent with curve
-            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
             local fnHealthPercent = _G.UnitHealthPercent or UnitHealthPercent
             if fnHealthPercent then
-                local success, result = pcall(function()
-                    local pct = fnHealthPercent(unit, false, curve)
-                    return FormatPercent(pct)
-                end)
+                local success, result = pcall(CallHealthPercent, unit)
                 if success and result then return result end
             end
 
             -- Fallback to official text API
-            local success2, result2 = pcall(function()
-                return C_UnitHealth and C_UnitHealth.GetHealthPercentText and C_UnitHealth.GetHealthPercentText(unit)
-            end)
+            local success2, result2 = pcall(CallHealthPercentText, unit)
             if success2 and result2 then return FormatPercent(result2) end
 
             return ""
@@ -202,20 +246,13 @@ TM.Methods = {
 
         if isActuallySecret then
             -- Secondary Fallback: UnitPowerPercent with curve
-            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
             local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
             if fnPowerPercent and _G.UnitPowerType then
-                local success, result = pcall(function()
-                    local pType = _G.UnitPowerType(unit)
-                    local pct = fnPowerPercent(unit, pType, false, curve)
-                    return FormatPercent(pct)
-                end)
+                local success, result = pcall(CallPowerPercent, unit)
                 if success and result then return result end
             end
 
-            local success2, result2 = pcall(function()
-                return C_UnitPower and C_UnitPower.GetPowerPercentText and C_UnitPower.GetPowerPercentText(unit)
-            end)
+            local success2, result2 = pcall(CallPowerPercentText, unit)
             if success2 and result2 then return FormatPercent(result2) end
 
             return ""
@@ -415,14 +452,9 @@ TM.Methods = {
 
         -- Handle Secrets via Helper API
         if IsSecret(cur) or IsSecret(max) then
-            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
             local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
             if fnPowerPercent then
-                local success, result = pcall(function()
-                    -- Explicitly request percent for MANA (0)
-                    local pct = fnPowerPercent(unit, 0, false, curve)
-                    return FormatPercent(pct)
-                end)
+                local success, result = pcall(CallManaPercent, unit)
                 if success and result then return result end
             end
             return ""
@@ -496,14 +528,18 @@ TM.Methods = {
 
     -- Status & Classification
     ["status"] = function(unit)
-        if not UnitIsConnected(unit) then return "Offline" end
-        if UnitIsGhost(unit) then return "Ghost" end
-        if UnitIsDead(unit) then return "Dead" end
+        local conn = UnitIsConnected(unit)
+        if not IsSecret(conn) and conn == false then return "Offline" end
+        local ghost = UnitIsGhost(unit)
+        if not IsSecret(ghost) and (ghost == true or ghost == 1) then return "Ghost" end
+        local dead = UnitIsDead(unit)
+        if not IsSecret(dead) and (dead == true or dead == 1) then return "Dead" end
         return ""
     end,
 
     ["classification"] = function(unit)
         local c = UnitClassification(unit)
+        if IsSecret(c) or not c then return "" end
         if c == "worldboss" or c == "boss" then return "Boss" end
         if c == "elite" then return "Elite" end
         if c == "rareelite" then return "Rare-Elite" end
@@ -512,12 +548,17 @@ TM.Methods = {
     end,
 
     ["creature"] = function(unit)
-        return UnitCreatureFamily(unit) or UnitCreatureType(unit) or ""
+        local fam = UnitCreatureFamily(unit)
+        if fam and not IsSecret(fam) then return fam end
+        local ct = UnitCreatureType(unit)
+        if ct and not IsSecret(ct) then return ct end
+        return ""
     end,
 
     ["difficulty"] = function(unit)
         if not UnitExists(unit) then return "" end
         local level = UnitLevel(unit)
+        if IsSecret(level) or not level then return "" end
         if level == -1 then return "Boss" end
         return level
     end,
@@ -552,23 +593,6 @@ function TM:GetSegments(formatString, unit)
         local getSpec = GetSpecialization or _G.GetSpecialization
         local spec = getSpec and getSpec()
 
-        -- Class Abbreviation Map
-        local classMap = {
-            ["DH"] = "DEMONHUNTER",
-            ["DK"] = "DEATHKNIGHT",
-            ["PALA"] = "PALADIN",
-            ["WAR"] = "WARRIOR",
-            ["WL"] = "WARLOCK",
-            ["SH"] = "SHAMAN",
-            ["DR"] = "DRUID",
-            ["H"] = "HUNTER",
-            ["M"] = "MAGE",
-            ["PR"] = "PRIEST",
-            ["ROG"] = "ROGUE",
-            ["EVO"] = "EVOKER",
-            ["MONK"] = "MONK"
-        }
-
         if class and not IsSecret(class) then
             -- Iterate all {cond}(content) blocks
             for cond, content in formatString:gmatch("%{([^%}]+)%}%(([^%)]+)%)") do
@@ -576,7 +600,7 @@ function TM:GetSegments(formatString, unit)
                 reqClass = reqClass and reqClass:upper()
 
                 -- Resolve Abbr
-                if classMap[reqClass] then reqClass = classMap[reqClass] end
+                if CLASS_MAP[reqClass] then reqClass = CLASS_MAP[reqClass] end
 
                 local classMatch = (reqClass == class)
                 local specMatch = true
@@ -678,12 +702,18 @@ function UF:UpdateTags(frame)
     local db = RoithiUI.db.profile.UnitFrames[dbUnit]
 
     if not frame.TagsPool then
-        frame.TagsPool = CreateFramePool("Frame", frame, nil, function(_, f)
+        local createPool = CreateFramePool or _G.CreateFramePool
+        if not createPool then return end
+        frame.TagsPool = createPool("Frame", frame, nil, function(_, f)
             f:Hide()
             f:ClearAllPoints()
             if f.SegmentPool then
                 f.SegmentPool:ReleaseAll()
             end
+            f.activeFontStrings = nil
+            f.appliedPoint = nil
+            f.appliedCount = nil
+            f.appliedFontKey = nil
         end)
     end
 
@@ -705,9 +735,16 @@ function UF:UpdateTags(frame)
 
             -- Segment Pool for individual FontStrings
             if not tagFrame.SegmentPool then
-                tagFrame.SegmentPool = CreateFontStringPool(tagFrame, "OVERLAY")
+                local createFSPool = CreateFontStringPool or _G.CreateFontStringPool
+                if createFSPool then
+                    tagFrame.SegmentPool = createFSPool(tagFrame, "OVERLAY")
+                end
             end
             tagFrame.SegmentPool:ReleaseAll()
+            tagFrame.activeFontStrings = nil
+            tagFrame.appliedPoint = nil
+            tagFrame.appliedCount = nil
+            tagFrame.appliedFontKey = nil
 
             -- Anchor to frame or specific element
             local point = tagConfig.point or "CENTER"
@@ -731,6 +768,7 @@ function UF:UpdateTags(frame)
             tagFrame.formatString = tagConfig.formatString
             tagFrame.font = tagConfig.font
             tagFrame.fontSize = tagConfig.fontSize or 12
+            tagFrame.fontOutline = tagConfig.fontOutline
             tagFrame.point = point -- Save point for alignment logic
             tagFrame.unit = unit
             tagFrame:Show()
@@ -759,27 +797,50 @@ function UF:UpdateTagFrame(tagFrame)
         if tagFrame.SegmentPool.ReleaseAll then
             tagFrame.SegmentPool:ReleaseAll()
         end
+        tagFrame.activeFontStrings = nil
+        tagFrame.appliedPoint = nil
+        tagFrame.appliedCount = nil
+        tagFrame.appliedFontKey = nil
         return
     end
 
-    -- Acquire fontstrings from pool
-    tagFrame.SegmentPool:ReleaseAll()
+    local point = tagFrame.point or "CENTER"
+    local fontStrings = tagFrame.activeFontStrings
+    local needsReanchor = (not fontStrings) or (#fontStrings ~= count) or (tagFrame.appliedPoint ~= point)
+        or (fontStrings[1] and fontStrings[1].GetNumPoints and fontStrings[1]:GetNumPoints() == 0)
 
-    local fontStrings = {}
+    if needsReanchor then
+        if tagFrame.SegmentPool.ReleaseAll then
+            tagFrame.SegmentPool:ReleaseAll()
+        end
+        fontStrings = {}
+        tagFrame.activeFontStrings = fontStrings
+        tagFrame.appliedPoint = point
+        tagFrame.appliedCount = count
+        for i = 1, count do
+            fontStrings[i] = tagFrame.SegmentPool:Acquire()
+        end
+    end
+
     local fontName = tagFrame.font or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Roithi Thick"
     local fontOutline = tagFrame.fontOutline or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE"
+    local fontKey = string.format("%s:%s:%s", fontName, tagFrame.fontSize or 12, fontOutline)
+    local updateTypo = needsReanchor or (tagFrame.appliedFontKey ~= fontKey)
+    if updateTypo then
+        tagFrame.appliedFontKey = fontKey
+    end
 
     local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
     for i, segment in ipairs(segments) do
-        local fs = tagFrame.SegmentPool:Acquire()
-        if utils and utils.ApplyTypography then
+        local fs = fontStrings[i]
+        local needsFont = updateTypo or (fs and fs.GetFont and not fs:GetFont())
+        if needsFont and utils and utils.ApplyTypography then
             utils.ApplyTypography(fs, fontName, tagFrame.fontSize or 12, fontOutline, false, "Roithi Thick")
         end
-        if fs.SetDrawLayer then fs:SetDrawLayer("OVERLAY", 7) end
+        if needsFont and fs.SetDrawLayer then fs:SetDrawLayer("OVERLAY", 7) end
 
         -- Direct pass-through: set text natively without comparison
         fs:SetText(segment.text)
-        fs:ClearAllPoints()
 
         -- 12.0.1 Secret Zero-Hiding for specific tags
         local isSecret = IsSecret(segment.text)
@@ -798,13 +859,12 @@ function UF:UpdateTagFrame(tagFrame)
         else
             fs:Show()
         end
-
-        fontStrings[i] = fs
     end
 
     -- 12.0.1: Robust anchoring without math (no GetStringWidth needed)
-    local point = tagFrame.point or "CENTER"
-
+    for i = 1, count do
+        fontStrings[i]:ClearAllPoints()
+    end
     if point:find("LEFT") then
         -- Flush Left: S1 at LEFT, Sn to the right of Sn-1
         fontStrings[1]:SetPoint("LEFT", tagFrame, "LEFT")

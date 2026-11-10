@@ -15,8 +15,11 @@ local function GetBuffBtnState(frame)
     return st
 end
 
-local function StyleAuraButton(button)
+local function StyleAuraButton(button, force)
     if not button then return end
+
+    local st = GetBuffBtnState(button)
+    if st.styled and not force then return end
 
     local db = MinimapMod.db
     local showBorder = db and db.buffFrameShowBorder == true
@@ -30,7 +33,6 @@ local function StyleAuraButton(button)
         end
     end
 
-    local st = GetBuffBtnState(button)
     if not st.backdrop then
         local bg = CreateFrame("Frame", nil, button, "BackdropTemplate")
         bg:SetAllPoints(button)
@@ -78,12 +80,12 @@ end
 function MinimapMod:RefreshBuffFrameStyling()
     if _G.BuffFrame and _G.BuffFrame.auraFrames then
         for _, auraFrame in ipairs(_G.BuffFrame.auraFrames) do
-            StyleAuraButton(auraFrame)
+            StyleAuraButton(auraFrame, true)
         end
     end
     if _G.DebuffFrame and _G.DebuffFrame.auraFrames then
         for _, auraFrame in ipairs(_G.DebuffFrame.auraFrames) do
-            StyleAuraButton(auraFrame)
+            StyleAuraButton(auraFrame, true)
         end
     end
 end
@@ -113,6 +115,7 @@ function MinimapMod:HookBuffFrameStyling()
 
     if _G.BuffFrame and _G.BuffFrame.UpdateAuraButtons then
         hooksecurefunc(_G.BuffFrame, "UpdateAuraButtons", function(frame)
+            if (MinimapMod.IsEnabled and not MinimapMod:IsEnabled()) or (MinimapMod.db and MinimapMod.db.enabled == false) then return end
             if frame.auraFrames then
                 for _, auraFrame in ipairs(frame.auraFrames) do
                     StyleAuraButton(auraFrame)
@@ -130,6 +133,7 @@ function MinimapMod:HookBuffFrameStyling()
 
     if _G.BuffFrame and _G.BuffFrame.UpdateGridLayout then
         hooksecurefunc(_G.BuffFrame, "UpdateGridLayout", function()
+            if (MinimapMod.IsEnabled and not MinimapMod:IsEnabled()) or (MinimapMod.db and MinimapMod.db.enabled == false) then return end
             local em = _G.EditModeManagerFrame
             if self.isBuffEditModeActive or (em and (em.editModeActive or em.layoutApplyInProgress or (em.IsShown and em:IsShown()))) then
                 return
@@ -142,6 +146,7 @@ function MinimapMod:HookBuffFrameStyling()
 
     if _G.DebuffFrame and _G.DebuffFrame.UpdateAuraButtons then
         hooksecurefunc(_G.DebuffFrame, "UpdateAuraButtons", function(frame)
+            if (MinimapMod.IsEnabled and not MinimapMod:IsEnabled()) or (MinimapMod.db and MinimapMod.db.enabled == false) then return end
             if frame.auraFrames then
                 for _, auraFrame in ipairs(frame.auraFrames) do
                     StyleAuraButton(auraFrame)
@@ -155,6 +160,7 @@ function MinimapMod:HookBuffFrameStyling()
         local btnSt = GetBuffBtnState(btn)
         if not btnSt.hooked and btn.HookScript then
             btn:HookScript("OnClick", function()
+                if (MinimapMod.IsEnabled and not MinimapMod:IsEnabled()) or (MinimapMod.db and MinimapMod.db.enabled == false) then return end
                 if MinimapMod.UpdateBuffFrameDisplacement then
                     MinimapMod:UpdateBuffFrameDisplacement(true)
                 end

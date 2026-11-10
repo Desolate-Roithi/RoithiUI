@@ -42,9 +42,9 @@ function ns.BuildUnitAndCastbarOptions(options)
                     order = order,
                     func = function()
                         if unit:find("^boss%d+$") then
-                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", "boss", unit)
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "unitframes", "boss", unit)
                         else
-                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "unitframes", ufUnit)
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "unitframes", ufUnit)
                         end
                     end,
                 }
@@ -55,7 +55,7 @@ function ns.BuildUnitAndCastbarOptions(options)
                     type = "execute",
                     name = L["> Castbars"],
                     order = order,
-                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "castbars", unit) end,
+                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "castbars", unit) end,
                 }
                 order = order + 1
             end
@@ -67,9 +67,9 @@ function ns.BuildUnitAndCastbarOptions(options)
                     order = order,
                     func = function()
                         if isBoss then
-                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", "bossFrames", unit)
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "auras", "units", "bossFrames", unit)
                         else
-                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", unit)
+                            LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "auras", "units", unit)
                         end
                     end,
                 }
@@ -80,7 +80,7 @@ function ns.BuildUnitAndCastbarOptions(options)
                     type = "execute",
                     name = L["> Custom Tags"],
                     order = order,
-                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "customtags", unit) end,
+                    func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "customtags", unit) end,
                 }
             end
             return {
@@ -1731,7 +1731,7 @@ function ns.BuildUnitAndCastbarOptions(options)
                             name = L["> Auras"],
                             order = 1,
                             func = function()
-                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", "bossFrames", bUnit)
+                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "auras", "units", "bossFrames", bUnit)
                             end,
                         },
                         castbars = {
@@ -1739,14 +1739,14 @@ function ns.BuildUnitAndCastbarOptions(options)
                             name = L["> Castbars"],
                             order = 2,
                             func = function()
-                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "castbars", "bosses", bUnit)
+                                LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "castbars", "bosses", bUnit)
                             end,
                         },
                         customtags = {
                             type = "execute",
                             name = L["> Custom Tags"],
                             order = 3,
-                            func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "customtags", bUnit) end,
+                            func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "customtags", bUnit) end,
                         },
                     }
                 },
@@ -1766,14 +1766,14 @@ function ns.BuildUnitAndCastbarOptions(options)
                 name = L["> Auras (Boss 1)"],
                 order = 1,
                 func = function()
-                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "auras", "units", "bossFrames", "boss1")
+                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "auras", "units", "bossFrames", "boss1")
                 end,
             },
             castbars = {
                 type = "execute",
                 name = L["> Boss Castbars"],
                 order = 2,
-                func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "castbars", "bosses") end,
+                func = function() LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "castbars", "bosses") end,
             },
         }
     }
