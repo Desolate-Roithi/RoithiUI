@@ -139,6 +139,9 @@ function Totems:GetOptions()
                         get = function() return self.db.showCooldown ~= false end,
                         set = function(_, val)
                             self.db.showCooldown = val
+                            if self.UpdateAllSpellCooldowns then
+                                self:UpdateAllSpellCooldowns()
+                            end
                         end,
                     },
                     showEarth = {

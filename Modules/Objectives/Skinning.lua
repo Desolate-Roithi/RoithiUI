@@ -18,6 +18,15 @@ objState.hoverHookedBlocks = hoverHookedBlocks
 local barBackdrops = objState.barBackdrops or setmetatable({}, { __mode = "k" })
 objState.barBackdrops = barBackdrops
 
+function ObjectivesMod:ResetSkinningHookGuards()
+    if skinnedBlocks then
+        for k in pairs(skinnedBlocks) do skinnedBlocks[k] = nil end
+    end
+    if titleFSCache then
+        for k in pairs(titleFSCache) do titleFSCache[k] = nil end
+    end
+end
+
 local function IsSecret(val)
     if ns.Utils and ns.Utils.IsSecret then
         return ns.Utils.IsSecret(val)

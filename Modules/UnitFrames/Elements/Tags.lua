@@ -405,12 +405,10 @@ TM.Methods = {
             local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
             local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
             if fnPowerPercent then
-                local success, result = pcall(function()
-                    -- 12.0.1: Native Class Power Percent usually via UnitPowerPercent
-                    local pType = config.type
-                    local pct = fnPowerPercent(unit, pType, false, curve)
+                local success, result = pcall(function(fn, u, pType, crv)
+                    local pct = fn(u, pType, false, crv)
                     return FormatPercent(pct)
-                end)
+                end, fnPowerPercent, unit, config.type, curve)
                 if success and result then return result end
             end
             return ""
@@ -505,25 +503,16 @@ TM.Methods = {
     ["absorb"] = function(unit)
         local absorb = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
         if IsSecret(absorb) then return absorb end
-
-        -- Safe check for > 0 using pcall to avoid crash if comparison fails
-        local isPositive = false
-        pcall(function() if absorb > 0 then isPositive = true end end)
-
-        if not isPositive then return "" end
-        return absorb
+        if type(absorb) == "number" and absorb > 0 then return absorb end
+        return ""
     end,
 
     ["healabsorb"] = function(unit)
         local healAbsorb = 0
         if UnitGetTotalHealAbsorbs then healAbsorb = UnitGetTotalHealAbsorbs(unit) or 0 end
         if IsSecret(healAbsorb) then return healAbsorb end
-
-        local isPositive = false
-        pcall(function() if healAbsorb > 0 then isPositive = true end end)
-
-        if not isPositive then return "" end
-        return healAbsorb
+        if type(healAbsorb) == "number" and healAbsorb > 0 then return healAbsorb end
+        return ""
     end,
 
     -- Status & Classification
@@ -819,15 +808,60 @@ function UF:UpdateTagFrame(tagFrame)
         tagFrame.appliedCount = count
         for i = 1, count do
             fontStrings[i] = tagFrame.SegmentPool:Acquire()
+            fontStrings[i]:ClearAllPoints()
+        end
+
+        -- 12.0.1: Robust anchoring without math (no GetStringWidth needed)
+        if point:find("LEFT") then
+            -- Flush Left: S1 at LEFT, Sn to the right of Sn-1
+            fontStrings[1]:SetPoint("LEFT", tagFrame, "LEFT")
+            for i = 2, count do
+                fontStrings[i]:SetPoint("LEFT", fontStrings[i - 1], "RIGHT")
+            end
+        elseif point:find("RIGHT") then
+            -- Flush Right: Sn at RIGHT, Sn-1 to the left of Sn
+            fontStrings[count]:SetPoint("RIGHT", tagFrame, "RIGHT")
+            for i = count - 1, 1, -1 do
+                fontStrings[i]:SetPoint("RIGHT", fontStrings[i + 1], "LEFT")
+            end
+        else
+            -- CENTER: Clustered around the center
+            if count % 2 == 1 then
+                -- Odd count: Middle segment at CENTER
+                local mid = (count + 1) / 2
+                fontStrings[mid]:SetPoint("CENTER", tagFrame, "CENTER")
+                -- Build out from middle
+                for i = mid - 1, 1, -1 do
+                    fontStrings[i]:SetPoint("RIGHT", fontStrings[i + 1], "LEFT")
+                end
+                for i = mid + 1, count do
+                    fontStrings[i]:SetPoint("LEFT", fontStrings[i - 1], "RIGHT")
+                end
+            else
+                -- Even count: Junction of mid/mid+1 at CENTER
+                local mid1 = count / 2
+                local mid2 = mid1 + 1
+                fontStrings[mid1]:SetPoint("RIGHT", tagFrame, "CENTER")
+                fontStrings[mid2]:SetPoint("LEFT", tagFrame, "CENTER")
+                -- Build out from junction
+                for i = mid1 - 1, 1, -1 do
+                    fontStrings[i]:SetPoint("RIGHT", fontStrings[i + 1], "LEFT")
+                end
+                for i = mid2 + 1, count do
+                    fontStrings[i]:SetPoint("LEFT", fontStrings[i - 1], "RIGHT")
+                end
+            end
         end
     end
 
     local fontName = tagFrame.font or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Roithi Thick"
     local fontOutline = tagFrame.fontOutline or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.fontOutline) or "OUTLINE"
-    local fontKey = string.format("%s:%s:%s", fontName, tagFrame.fontSize or 12, fontOutline)
-    local updateTypo = needsReanchor or (tagFrame.appliedFontKey ~= fontKey)
+    local fontSize = tagFrame.fontSize or 12
+    local updateTypo = needsReanchor or (tagFrame.appliedFontName ~= fontName or tagFrame.appliedFontSize ~= fontSize or tagFrame.appliedFontOutline ~= fontOutline)
     if updateTypo then
-        tagFrame.appliedFontKey = fontKey
+        tagFrame.appliedFontName = fontName
+        tagFrame.appliedFontSize = fontSize
+        tagFrame.appliedFontOutline = fontOutline
     end
 
     local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
@@ -835,7 +869,7 @@ function UF:UpdateTagFrame(tagFrame)
         local fs = fontStrings[i]
         local needsFont = updateTypo or (fs and fs.GetFont and not fs:GetFont())
         if needsFont and utils and utils.ApplyTypography then
-            utils.ApplyTypography(fs, fontName, tagFrame.fontSize or 12, fontOutline, false, "Roithi Thick")
+            utils.ApplyTypography(fs, fontName, fontSize, fontOutline, false, "Roithi Thick")
         end
         if needsFont and fs.SetDrawLayer then fs:SetDrawLayer("OVERLAY", 7) end
 
@@ -858,51 +892,6 @@ function UF:UpdateTagFrame(tagFrame)
             end
         else
             fs:Show()
-        end
-    end
-
-    -- 12.0.1: Robust anchoring without math (no GetStringWidth needed)
-    for i = 1, count do
-        fontStrings[i]:ClearAllPoints()
-    end
-    if point:find("LEFT") then
-        -- Flush Left: S1 at LEFT, Sn to the right of Sn-1
-        fontStrings[1]:SetPoint("LEFT", tagFrame, "LEFT")
-        for i = 2, count do
-            fontStrings[i]:SetPoint("LEFT", fontStrings[i - 1], "RIGHT")
-        end
-    elseif point:find("RIGHT") then
-        -- Flush Right: Sn at RIGHT, Sn-1 to the left of Sn
-        fontStrings[count]:SetPoint("RIGHT", tagFrame, "RIGHT")
-        for i = count - 1, 1, -1 do
-            fontStrings[i]:SetPoint("RIGHT", fontStrings[i + 1], "LEFT")
-        end
-    else
-        -- CENTER: Clustered around the center
-        if count % 2 == 1 then
-            -- Odd count: Middle segment at CENTER
-            local mid = (count + 1) / 2
-            fontStrings[mid]:SetPoint("CENTER", tagFrame, "CENTER")
-            -- Build out from middle
-            for i = mid - 1, 1, -1 do
-                fontStrings[i]:SetPoint("RIGHT", fontStrings[i + 1], "LEFT")
-            end
-            for i = mid + 1, count do
-                fontStrings[i]:SetPoint("LEFT", fontStrings[i - 1], "RIGHT")
-            end
-        else
-            -- Even count: Junction of mid/mid+1 at CENTER
-            local mid1 = count / 2
-            local mid2 = mid1 + 1
-            fontStrings[mid1]:SetPoint("RIGHT", tagFrame, "CENTER")
-            fontStrings[mid2]:SetPoint("LEFT", tagFrame, "CENTER")
-            -- Build out from junction
-            for i = mid1 - 1, 1, -1 do
-                fontStrings[i]:SetPoint("RIGHT", fontStrings[i + 1], "LEFT")
-            end
-            for i = mid2 + 1, count do
-                fontStrings[i]:SetPoint("LEFT", fontStrings[i - 1], "RIGHT")
-            end
         end
     end
 end

@@ -391,10 +391,11 @@ function Castbar:OnEnable()
                     end
                 end
             elseif event == "SPELL_UPDATE_COOLDOWN" then
-                local cbColors = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar.colors
-                if cbColors and cbColors.colorOnInterruptCD and ns.bars then
+                local cbProfile = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar
+                if cbProfile and ns.bars then
                     for u, bar in pairs(ns.bars) do
-                        if u ~= "player" and bar:IsShown() and (bar.casting or bar.channeling) then
+                        local udb = cbProfile[u]
+                        if u ~= "player" and udb and udb.colorOnInterruptCD and bar:IsShown() and (bar.casting or bar.channeling) then
                             ns.UpdateCast(bar, u)
                         end
                     end

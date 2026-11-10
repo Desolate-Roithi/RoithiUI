@@ -10,12 +10,15 @@ local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
 
 CDM.customBarFrames = CDM.customBarFrames or {}
 
+local function gtHelper(a, b) return a > b end
+local function eqHelper(a, b) return a == b end
+
 local function SafeIsGreaterThan(val, threshold)
     if val == nil then return false end
     if _G.issecretvalue and _G.issecretvalue(val) then return false end
     if _G.canaccessvalue and not _G.canaccessvalue(val) then return false end
 
-    local ok, res = pcall(function() return val > threshold end)
+    local ok, res = pcall(gtHelper, val, threshold)
     return ok and res == true
 end
 
@@ -28,7 +31,7 @@ local function SafeEquals(val, expected)
     if _G.issecretvalue and _G.issecretvalue(val) then return false end
     if _G.canaccessvalue and not _G.canaccessvalue(val) then return false end
 
-    local ok, res = pcall(function() return val == expected end)
+    local ok, res = pcall(eqHelper, val, expected)
     return ok and res == true
 end
 
@@ -43,7 +46,7 @@ local function SafeDurationIsZero(durObj)
             if _G.issecretvalue and _G.issecretvalue(isZero) then return false end
             if _G.canaccessvalue and not _G.canaccessvalue(isZero) then return false end
 
-            local cmpOk, res = pcall(function() return isZero == true end)
+            local cmpOk, res = pcall(eqHelper, isZero, true)
             if cmpOk and res ~= nil then
                 return res == true
             end
@@ -785,7 +788,8 @@ function CDM:InitializeCustomBar(index)
     if LEM and LEM.AddFrame and not frame.lemRegistered then
         local defaults = { point = targetPoint, x = cfg.x or 0, y = cfg.y or 0 }
         LEM:AddFrame(frame, function(f, unusedMode, pt, x, y)
-            local currentGrowth = cfg.growthDirection
+            local activeCfg = (cfg.id and CDM:GetCustomBarById(cfg.id)) or (CDM.db and CDM.db.profile and CDM.db.profile.customBars and CDM.db.profile.customBars[index]) or cfg
+            local currentGrowth = activeCfg.growthDirection
             if currentGrowth == "DOWN" then currentGrowth = "TOP_TO_BOTTOM"
             elseif currentGrowth == "UP" then currentGrowth = "BOTTOM_TO_TOP"
             elseif currentGrowth == "LEFT" then currentGrowth = "RIGHT_TO_LEFT"

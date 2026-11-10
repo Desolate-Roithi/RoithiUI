@@ -428,10 +428,18 @@ function ObjectivesMod:RestoreDefaultView()
     end
 end
 
+function ObjectivesMod:ResetHookGuards()
+    for k in pairs(hookedTrackers) do hookedTrackers[k] = nil end
+    if self.ResetSkinningHookGuards then
+        self:ResetSkinningHookGuards()
+    end
+end
+
 function ObjectivesMod:OnDisable()
     self:RestoreDefaultView()
     self:UnregisterAllEvents()
     self:UnhookAll()
+    self:ResetHookGuards()
 end
 
 function ObjectivesMod:UpdateTrackerVisibility(event)
@@ -1034,8 +1042,8 @@ function ObjectivesMod:RefreshSettings()
     self:UpdateFonts()
     self:SkinAllExisting()
     self:UpdateTrackerVisibility()
-    if LEM and LEM.RefreshFrameSettings and _G.ObjectiveTrackerFrame then
-        LEM:RefreshFrameSettings(_G.ObjectiveTrackerFrame)
+    if LEM and LEM.RefreshFrameSettings and self.anchor then
+        LEM:RefreshFrameSettings(self.anchor)
     end
 end
 ObjectivesMod.RefreshProfile = ObjectivesMod.RefreshSettings

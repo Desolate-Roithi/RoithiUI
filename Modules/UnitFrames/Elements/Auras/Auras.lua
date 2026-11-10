@@ -258,7 +258,30 @@ watcherFrame:RegisterEvent("VEHICLE_UPDATE")
 watcherFrame:SetScript("OnEvent", function(_, event)
     RADLog("Watcher event triggered: %s", tostring(event))
     local UFModule = RoithiUI:GetModule("UnitFrames", true)
-    if UFModule then
+    if not UFModule or not UFModule:IsEnabled() then return end
+    if event == "PLAYER_TARGET_CHANGED" then
+        if UFModule.units then
+            local targetFrame = UFModule.units["target"]
+            if targetFrame and targetFrame.unit and IsSupportedUnit(targetFrame.unit) then
+                UFModule:UpdateAuras(targetFrame)
+            end
+            local targettargetFrame = UFModule.units["targettarget"]
+            if targettargetFrame and targettargetFrame.unit and IsSupportedUnit(targettargetFrame.unit) then
+                UFModule:UpdateAuras(targettargetFrame)
+            end
+        end
+    elseif event == "PLAYER_FOCUS_CHANGED" then
+        if UFModule.units then
+            local focusFrame = UFModule.units["focus"]
+            if focusFrame and focusFrame.unit and IsSupportedUnit(focusFrame.unit) then
+                UFModule:UpdateAuras(focusFrame)
+            end
+            local focustargetFrame = UFModule.units["focustarget"]
+            if focustargetFrame and focustargetFrame.unit and IsSupportedUnit(focustargetFrame.unit) then
+                UFModule:UpdateAuras(focustargetFrame)
+            end
+        end
+    else
         if UFModule.units then
             for _, uFrame in pairs(UFModule.units) do
                 if uFrame and uFrame.unit and IsSupportedUnit(uFrame.unit) then
@@ -266,9 +289,9 @@ watcherFrame:SetScript("OnEvent", function(_, event)
                 end
             end
         end
-        if UFModule.UpdateAllCustomAuras then
-            UFModule:UpdateAllCustomAuras()
-        end
+    end
+    if UFModule.UpdateAllCustomAuras then
+        UFModule:UpdateAllCustomAuras()
     end
 end)
 

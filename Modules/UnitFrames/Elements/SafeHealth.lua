@@ -188,10 +188,10 @@ local function Enable(self)
         self:RegisterEvent("UNIT_CONNECTION", Path)
         if self.unit == "targettarget" then
             self:RegisterEvent("UNIT_TARGET", Path)
-            self:RegisterEvent("PLAYER_TARGET_CHANGED", Path)
+            self:RegisterEvent("PLAYER_TARGET_CHANGED", Path, true)
         elseif self.unit == "focustarget" then
             self:RegisterEvent("UNIT_TARGET", Path)
-            self:RegisterEvent("PLAYER_FOCUS_CHANGED", Path)
+            self:RegisterEvent("PLAYER_FOCUS_CHANGED", Path, true)
         end
 
         if (element.safeColorSmooth or element.colorSmooth) then

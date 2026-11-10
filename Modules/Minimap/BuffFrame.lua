@@ -22,6 +22,7 @@ local function StyleAuraButton(button, force)
     if st.styled and not force then return end
 
     local db = MinimapMod.db
+    if db and db.buffFrameEnableSkinning == false then return end
     local showBorder = db and db.buffFrameShowBorder == true
 
     local icon = button.Icon or button.icon
@@ -54,8 +55,6 @@ local function StyleAuraButton(button, force)
             st.backdrop:Hide()
         end
     end
-
-    if db and db.buffFrameEnableSkinning == false then return end
 
     local duration = button.Duration or button.duration
     local count = button.Count or button.count

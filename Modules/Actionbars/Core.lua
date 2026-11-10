@@ -387,7 +387,17 @@ function AB:RefreshProfile()
     end
     if _G.InCombatLockdown and _G.InCombatLockdown() then
         self.queuedLayout = true
+        self.queuedRefresh = true
         return
+    end
+    if self.DisableActionPageSwitching then
+        self:DisableActionPageSwitching()
+    end
+    if self.UpdateRangeColoringState then
+        self:UpdateRangeColoringState()
+    end
+    if self.UpdateAllBarFaders then
+        self:UpdateAllBarFaders()
     end
     if self.LayoutAllBars then
         self:LayoutAllBars()

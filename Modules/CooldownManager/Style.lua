@@ -582,7 +582,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
 end
 
 function CDM:UpdateItemSpellAlert(itemFrame)
-    if not itemFrame or not itemFrame.GetSize then return end
+    if (self.IsEnabled and not self:IsEnabled()) or not itemFrame or not itemFrame.GetSize then return end
     local alert = itemFrame.SpellActivationAlert
     if alert and alert.SetSize then
         local w, h = itemFrame:GetSize()

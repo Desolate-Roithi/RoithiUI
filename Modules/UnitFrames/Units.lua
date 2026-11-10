@@ -189,9 +189,11 @@ function UF:UpdateFrameFromSettings(unit)
     if self.UpdateClassPowerSettings then self:UpdateClassPowerSettings(frame) end
     if self.UpdateTags then self:UpdateTags(frame) end
     if self.UpdateIndicators then self:UpdateIndicators(frame) end
-    if self.UpdateAuras then self:UpdateAuras(frame) end
-    if self.UpdateAuraLayout then self.UpdateAuraLayout(frame) end -- Hook for initial layout
-    if frame.UpdateAuraLayout then frame.UpdateAuraLayout() end
+    if frame.UpdateAuraLayout then
+        frame.UpdateAuraLayout()
+    elseif self.UpdateAuras then
+        self:UpdateAuras(frame)
+    end
     if self.UpdateAdditionalPowerSettings then self:UpdateAdditionalPowerSettings(frame) end
 end
 

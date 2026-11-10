@@ -91,8 +91,19 @@ function RoithiUI:OpenSettings(group, ...)
     local basePath
     local fullPath = {}
 
-    -- Special sub-routing for auras on specific units
-    if lowGroup == "auras" and sub1 == "units" then
+    -- Special sub-routing for auras on specific units and boss castbars
+    if (lowGroup == "castbars" or lowGroup == "castbar") and sub1 and sub1:match("^boss%d$") then
+        basePath = { "combat", "castbars", "bosses", sub1 }
+        for _, p in ipairs(basePath) do
+            table.insert(fullPath, p)
+        end
+        for i = 2, select("#", ...) do
+            local sub = select(i, ...)
+            if sub then
+                table.insert(fullPath, sub)
+            end
+        end
+    elseif lowGroup == "auras" and sub1 == "units" then
         basePath = { "combat", "unitframes" }
         for _, p in ipairs(basePath) do
             table.insert(fullPath, p)
@@ -100,6 +111,12 @@ function RoithiUI:OpenSettings(group, ...)
         local unitTarget = select(2, ...)
         if unitTarget then
             table.insert(fullPath, unitTarget)
+        end
+        for i = 3, select("#", ...) do
+            local sub = select(i, ...)
+            if sub then
+                table.insert(fullPath, sub)
+            end
         end
     else
         basePath = GROUP_PATH_MAP[lowGroup]

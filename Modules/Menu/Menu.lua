@@ -91,9 +91,8 @@ function MenuMod:QueueLayoutMicroMenu()
     self.layoutTimerPending = true
     _G.C_Timer.After(0.02, function()
         self.layoutTimerPending = false
-        if self.db and self.db.enabled ~= false and self.db.styleMicroMenu ~= false then
-            self:LayoutMicroMenu()
-        end
+        if (self.IsEnabled and not self:IsEnabled()) or not self.db or self.db.enabled == false or self.db.styleMicroMenu == false then return end
+        self:LayoutMicroMenu()
     end)
 end
 
@@ -362,6 +361,10 @@ function MenuMod:SetupMicroMenu()
             self.db.point = newPoint
             self.db.x = newX
             self.db.y = newY
+            if InCombatLockdown and InCombatLockdown() then
+                self:RegisterEvent("PLAYER_REGEN_ENABLED")
+                return
+            end
             if f and f.ClearAllPoints and f.SetPoint then
                 f:ClearAllPoints()
                 f:SetPoint(newPoint, UIParent, newPoint, newX, newY)
@@ -380,12 +383,14 @@ function MenuMod:SetupMicroMenu()
                     maxValue = 2500,
                     valueStep = 1,
                     formatter = function(v) return string.format("%.0f", v) end,
-                    get = function() return self.db.x or 4 end,
+                    get = function() return self.db.x or 2 end,
                     set = function(_, val)
                         self.db.x = val
                         local p = self.db.point or "BOTTOMLEFT"
-                        container:ClearAllPoints()
-                        container:SetPoint(p, UIParent, p, val, self.db.y or 235)
+                        if not (InCombatLockdown and InCombatLockdown()) then
+                            container:ClearAllPoints()
+                            container:SetPoint(p, UIParent, p, val, self.db.y or 285)
+                        end
                         self:LayoutMicroMenu()
                     end,
                 },
@@ -396,12 +401,14 @@ function MenuMod:SetupMicroMenu()
                     maxValue = 1500,
                     valueStep = 1,
                     formatter = function(v) return string.format("%.0f", v) end,
-                    get = function() return self.db.y or 235 end,
+                    get = function() return self.db.y or 285 end,
                     set = function(_, val)
                         self.db.y = val
                         local p = self.db.point or "BOTTOMLEFT"
-                        container:ClearAllPoints()
-                        container:SetPoint(p, UIParent, p, self.db.x or 4, val)
+                        if not (InCombatLockdown and InCombatLockdown()) then
+                            container:ClearAllPoints()
+                            container:SetPoint(p, UIParent, p, self.db.x or 2, val)
+                        end
                         self:LayoutMicroMenu()
                     end,
                 },

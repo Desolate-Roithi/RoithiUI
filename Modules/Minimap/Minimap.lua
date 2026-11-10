@@ -1336,6 +1336,7 @@ function MinimapMod:LayoutDefaultButtons()
 
         local originalSetParent = btn.SetParent
         if hooksecurefunc and btn.SetParent then hooksecurefunc(btn, "SetParent", function(frame)
+            if (self.IsEnabled and not self:IsEnabled()) or (InCombatLockdown and InCombatLockdown()) then return end
             local targetAnchor = buttonAnchors[frame] or anchor
             local st = GetBlizzMinimapState(frame)
             if st.isReanchoring then return end
@@ -1347,6 +1348,7 @@ function MinimapMod:LayoutDefaultButtons()
 
         local originalSetPoint = btn.SetPoint
         if hooksecurefunc and btn.SetPoint then hooksecurefunc(btn, "SetPoint", function(frame)
+            if (self.IsEnabled and not self:IsEnabled()) or (InCombatLockdown and InCombatLockdown()) then return end
             local targetAnchor = buttonAnchors[frame] or anchor
             local st = GetBlizzMinimapState(frame)
             if st.isReanchoring then return end
@@ -1358,6 +1360,7 @@ function MinimapMod:LayoutDefaultButtons()
         end
 
         if hooksecurefunc and btn.SetAllPoints then hooksecurefunc(btn, "SetAllPoints", function(frame)
+            if (self.IsEnabled and not self:IsEnabled()) or (InCombatLockdown and InCombatLockdown()) then return end
             local targetAnchor = buttonAnchors[frame] or anchor
             local st = GetBlizzMinimapState(frame)
             if st.isReanchoring then return end
@@ -1511,17 +1514,20 @@ function MinimapMod:LayoutDefaultButtons()
     if not self.minimapUpdateHooked and hooksecurefunc then
         if _G.Minimap_Update then
             hooksecurefunc("Minimap_Update", function()
+                if (self.IsEnabled and not self:IsEnabled()) or (InCombatLockdown and InCombatLockdown()) then return end
                 if self.SafeReanchorZoneText then self:SafeReanchorZoneText() end
             end)
         end
         if MinimapCluster then
             if MinimapCluster.SetHeaderUnderneath then
                 hooksecurefunc(MinimapCluster, "SetHeaderUnderneath", function()
+                    if (self.IsEnabled and not self:IsEnabled()) or (InCombatLockdown and InCombatLockdown()) then return end
                     if self.SafeReanchorZoneText then self:SafeReanchorZoneText() end
                 end)
             end
             if MinimapCluster.SetEditModeScale then
                 hooksecurefunc(MinimapCluster, "SetEditModeScale", function()
+                    if (self.IsEnabled and not self:IsEnabled()) or (InCombatLockdown and InCombatLockdown()) then return end
                     if self.SafeReanchorZoneText then self:SafeReanchorZoneText() end
                 end)
             end
@@ -1560,6 +1566,7 @@ function MinimapMod:LayoutDefaultButtons()
                 if hooksecurefunc and not lfgState.updatePosHooked then
                     lfgState.updatePosHooked = true
                     hooksecurefunc(lfg, "UpdatePosition", function(frame)
+                        if (self.IsEnabled and not self:IsEnabled()) or (InCombatLockdown and InCombatLockdown()) then return end
                         HookBlizzardButton(frame, lfgAnchor)
                     end)
                 end

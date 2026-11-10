@@ -1341,31 +1341,37 @@ end
 -- ----------------------------------------------------------------------------
 
 function SwingTimer:OnCombatLog(event, ...)
-    local info
+    local subevent, sourceGUID, destGUID, arg12, arg13, arg15, arg21
     if _G.C_CombatLog and _G.C_CombatLog.GetCurrentEventInfo then
-        info = { _G.C_CombatLog.GetCurrentEventInfo() }
+        local _, se, _, sGUID, _, _, _, dGUID, _, _, _, a12, a13, _, a15, _, _, _, _, _, a21 = _G.C_CombatLog.GetCurrentEventInfo()
+        subevent, sourceGUID, destGUID, arg12, arg13, arg15, arg21 = se, sGUID, dGUID, a12, a13, a15, a21
     elseif _G.CombatLogGetCurrentEventInfo then
-        info = { _G.CombatLogGetCurrentEventInfo() }
-    elseif ... then
-        info = { ... }
+        local _, se, _, sGUID, _, _, _, dGUID, _, _, _, a12, a13, _, a15, _, _, _, _, _, a21 = _G.CombatLogGetCurrentEventInfo()
+        subevent, sourceGUID, destGUID, arg12, arg13, arg15, arg21 = se, sGUID, dGUID, a12, a13, a15, a21
+    elseif select("#", ...) > 0 then
+        local _, se, _, sGUID, _, _, _, dGUID, _, _, _, a12, a13, _, a15, _, _, _, _, _, a21 = ...
+        subevent, sourceGUID, destGUID, arg12, arg13, arg15, arg21 = se, sGUID, dGUID, a12, a13, a15, a21
     end
-    if not info or #info < 2 then return end
-
-    local subevent = info[2]
-    local sourceGUID = info[4]
-    local destGUID = info[8]
+    if not subevent or IsSecret(subevent) or IsSecret(sourceGUID) or IsSecret(destGUID) then return end
 
     local playerGUID = UnitGUID and UnitGUID("player")
     local targetGUID = UnitGUID and UnitGUID("target")
+    if IsSecret(playerGUID) then playerGUID = nil end
+    if IsSecret(targetGUID) then targetGUID = nil end
+
+    if sourceGUID ~= playerGUID and (not targetGUID or sourceGUID ~= targetGUID)
+        and destGUID ~= playerGUID and (not targetGUID or destGUID ~= targetGUID) then
+        return
+    end
 
     -- Player Actions
     if sourceGUID == playerGUID then
         if subevent == "SWING_DAMAGE" or subevent == "SWING_MISSED" then
             local isOffHand = false
             if subevent == "SWING_DAMAGE" then
-                isOffHand = info[21] or false
+                isOffHand = (not IsSecret(arg21) and arg21) or false
             elseif subevent == "SWING_MISSED" then
-                isOffHand = info[13] or false
+                isOffHand = (not IsSecret(arg13) and arg13) or false
             end
 
             local mainSpeed, offSpeed = self:GetSafeAttackSpeed("player")
@@ -1376,8 +1382,8 @@ function SwingTimer:OnCombatLog(event, ...)
                 self:StartSwing("player", "main", mainSpeed or 2.0)
             end
         elseif subevent == "SPELL_DAMAGE" or subevent == "SPELL_MISSED" then
-            local spellId = info[12]
-            if IsSpellInResetList(spellId) then
+            local spellId = not IsSecret(arg12) and arg12
+            if spellId and IsSpellInResetList(spellId) then
                 local mainSpeed = self:GetSafeAttackSpeed("player")
                 self:StartSwing("player", "main", mainSpeed)
             end
@@ -1397,7 +1403,8 @@ function SwingTimer:OnCombatLog(event, ...)
 
     -- Parry Haste Detection (White Swings & Yellow Special Attacks)
     if subevent == "SWING_MISSED" or subevent == "SPELL_MISSED" or subevent == "SPELL_EXTRA_ATTACKS_MISSED" then
-        local missType = (subevent == "SWING_MISSED") and info[12] or info[15]
+        local rawMiss = (subevent == "SWING_MISSED") and arg12 or arg15
+        local missType = not IsSecret(rawMiss) and rawMiss
         if missType == "PARRY" then
             if destGUID == playerGUID then
                 self:ApplyParryHaste("player")

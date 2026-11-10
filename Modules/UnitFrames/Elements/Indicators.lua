@@ -245,12 +245,6 @@ function UF:CreateIndicators(frame)
         local unit = frame.unit
         local inTestMode = RoithiUI.db.profile.IndicatorTestMode
 
-        if not frame.IndicatorLayoutApplying then
-            frame.IndicatorLayoutApplying = true
-            UpdateLayout()
-            frame.IndicatorLayoutApplying = false
-        end
-
         local function ShowIndicator(indicator, key, condition)
             if not indicator then return end
             if not IsEnabled(key) then
@@ -494,6 +488,7 @@ function UF:CreateIndicators(frame)
     end
 
     -- Initial
+    UpdateLayout()
     UpdateIndicators()
 end
 

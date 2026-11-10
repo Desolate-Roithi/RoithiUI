@@ -842,9 +842,17 @@ function ns.ApplyLEMCastbarConfiguration(bar, unit)
             text = L["Open Full Settings"],
             click = function()
                 if RoithiUI and RoithiUI.OpenSettings then
-                    RoithiUI:OpenSettings("castbars", unit)
+                    if unit and unit:match("^boss%d$") then
+                        RoithiUI:OpenSettings("castbars", "bosses", unit)
+                    else
+                        RoithiUI:OpenSettings("castbars", unit)
+                    end
                 elseif LibStub("AceConfigDialog-3.0") then
-                    LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "castbars", unit)
+                    if unit and unit:match("^boss%d$") then
+                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "castbars", "bosses", unit)
+                    else
+                        LibStub("AceConfigDialog-3.0"):SelectGroup("RoithiUI", "combat", "castbars", unit)
+                    end
                     LibStub("AceConfigDialog-3.0"):Open("RoithiUI")
                 end
             end

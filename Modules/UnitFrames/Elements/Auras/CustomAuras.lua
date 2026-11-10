@@ -62,14 +62,14 @@ function UF:UpdateCustomAura(id)
 
     local okSet = pcall(function()
         if container.SetScript then
-            container:SetScript("OnEvent", function(_s, _event, _unitArg)
+            container:SetScript("OnEvent", function(containerSelf, eventName, unitArg)
                 UF:UpdateCustomAura(id)
             end)
         end
     end)
     if not okSet then
         container.EventFrame = container.EventFrame or CreateFrame("Frame", nil, container)
-        container.EventFrame:SetScript("OnEvent", function(_s, _event, _unitArg)
+        container.EventFrame:SetScript("OnEvent", function(containerSelf, eventName, unitArg)
             UF:UpdateCustomAura(id)
         end)
         container.GetScript = function(frameSelf, script)

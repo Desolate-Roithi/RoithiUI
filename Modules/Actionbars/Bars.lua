@@ -634,6 +634,8 @@ function AB:SetupBars()
             if self.layoutInProgress and self.layoutInProgress["extraAction"] then return end
             if not _G.InCombatLockdown or not _G.InCombatLockdown() then
                 self:LayoutBar("extraAction")
+            else
+                self.queuedLayout = true
             end
         end)
         self.extraActionBarHooked = true
@@ -644,6 +646,8 @@ function AB:SetupBars()
             if self.layoutInProgress and self.layoutInProgress["zoneAction"] then return end
             if not _G.InCombatLockdown or not _G.InCombatLockdown() then
                 self:LayoutBar("zoneAction")
+            else
+                self.queuedLayout = true
             end
         end)
         self.zoneAbilityHooked = true
@@ -672,8 +676,12 @@ function AB:SetupBars()
     if _G.MainActionBar and not self.mainActionBarHooked and hooksecurefunc then
         hooksecurefunc(_G.MainActionBar, "SetAttribute", function(_, name, value)
             if name == "actionpage" and self.bars and self.bars.bar1 then
-                if not (_G.InCombatLockdown and _G.InCombatLockdown()) and self.bars.bar1.SetAttribute then
-                    self.bars.bar1:SetAttribute("actionpage", value)
+                if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
+                    if self.bars.bar1.SetAttribute then
+                        self.bars.bar1:SetAttribute("actionpage", value)
+                    end
+                else
+                    self.queuedPageSync = value
                 end
                 if self.UpdateEmptyButtons then
                     self:UpdateEmptyButtons("bar1")
@@ -1334,6 +1342,7 @@ function AB:StyleButton(button, explicitBarKey)
         if hotkey.SetMouseClickEnabled then hotkey:SetMouseClickEnabled(false) end
         if hotkey.SetMouseMotionEnabled then hotkey:SetMouseMotionEnabled(false) end
         local showHotkeys = self.db.showHotkeys ~= false
+        btnSt.barKey = barKey
         if barDb.showHotkeys ~= nil then
             showHotkeys = barDb.showHotkeys
         end
@@ -1364,13 +1373,14 @@ function AB:StyleButton(button, explicitBarKey)
             hooksecurefunc(hotkey, "SetText", function(s, txt)
                 local sSt = GetFrameState(s)
                 if sSt.formatting then return end
+                local activeBarDb = (btnSt.barKey and self.db and self.db[btnSt.barKey]) or barDb
                 if IsRangeIndicator(txt) then
                     if not btnSt.rangeDot then
                         local dot = button:CreateTexture(nil, "OVERLAY")
                         dot:SetSize(8, 8)
-                        local pos = barDb.hotkeyPosition or "TOPRIGHT"
-                        local ox = barDb.hotkeyOffsetX or -2
-                        local oy = barDb.hotkeyOffsetY or -2
+                        local pos = activeBarDb.hotkeyPosition or "TOPRIGHT"
+                        local ox = activeBarDb.hotkeyOffsetX or -2
+                        local oy = activeBarDb.hotkeyOffsetY or -2
                         dot:SetPoint(pos, button, pos, ox, oy)
                         dot:SetTexture("Interface\\Common\\Indicator-Red")
                         btnSt.rangeDot = dot

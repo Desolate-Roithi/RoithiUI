@@ -41,10 +41,12 @@ local function Update(self, event)
     local cur = UnitHealth("player")
     local max = UnitHealthMax("player")
 
-    -- Protected API check: Compare via pcall to avoid Secret crash
+    -- Protected API check: Compare safely to avoid Secret crash
     local isInjured = true  -- Default: assume injured if comparison fails
-    local ok, result = pcall(function() return cur < max end)
-    if ok then isInjured = result end
+    local isSec = (ns.Utils and ns.Utils.IsSecret and (ns.Utils.IsSecret(cur) or ns.Utils.IsSecret(max))) or (issecretvalue and (issecretvalue(cur) or issecretvalue(max)))
+    if not isSec and type(cur) == "number" and type(max) == "number" then
+        isInjured = cur < max
+    end
 
     if isInjured then
         self:SetAlpha(1)

@@ -426,7 +426,7 @@ function AL:ApplyLayout(unit, frameType)
 
                 -- Dynamic Width & Offset deduction for Castbars (fixes 0-start icon alignment)
                 if frameType == "Castbar" then
-                    local cbDB = RoithiUI.db.profile.Castbar[unit]
+                    local cbDB = db or (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Castbar and RoithiUI.db.profile.Castbar[unit])
                     if cbDB and cbDB.showIcon ~= false and not cbDB.detached then
                         local iconSize = (cbDB.height or 20) * (cbDB.iconScale or 1.0)
                         local w = parentW - iconSize

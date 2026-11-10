@@ -31,7 +31,6 @@ local function GetSecondsFromObject(obj)
     -- If Secret, return 0 to be safe (layout effectively collapses)
     if issecretvalue and issecretvalue(obj) then return 0 end
     if canaccessvalue and not canaccessvalue(obj) then return 0 end
-    if obj.HasSecretValues and obj:HasSecretValues() then return 0 end
 
     if obj.GetTotalDuration then
         local dur = obj:GetTotalDuration()
@@ -70,10 +69,26 @@ local function BuildEmpowerTimeline(unit)
     end
 
     local totalDuration = GetSecondsFromObject(totalObj)
-    local isSecretDuration = (totalObj and totalObj.HasSecretValues and totalObj:HasSecretValues())
-        or (ns.Utils and ns.Utils.IsSecret and (ns.Utils.IsSecret(totalObj) or ns.Utils.IsSecret(totalDuration)))
-        or (issecretvalue and (issecretvalue(totalObj) or issecretvalue(totalDuration)))
-        or (type(totalDuration) == "userdata" or type(totalObj) == "userdata")
+    local isSecretDuration = false
+    if totalObj then
+        if (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(totalObj))
+            or (issecretvalue and issecretvalue(totalObj))
+            or type(totalObj) == "userdata" then
+            isSecretDuration = true
+        elseif type(totalObj) == "table" and totalObj.HasSecretValues then
+            local ok, val = pcall(totalObj.HasSecretValues, totalObj)
+            if ok and val then isSecretDuration = true end
+        end
+        if not isSecretDuration and totalObj.GetTotalDuration then
+            local ok, dur = pcall(totalObj.GetTotalDuration, totalObj)
+            if ok and dur and ((issecretvalue and issecretvalue(dur)) or (canaccessvalue and not canaccessvalue(dur)) or type(dur) == "userdata") then
+                isSecretDuration = true
+            end
+        end
+    end
+    if not isSecretDuration and ((ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(totalDuration)) or (issecretvalue and issecretvalue(totalDuration)) or type(totalDuration) == "userdata") then
+        isSecretDuration = true
+    end
 
     -- 2. FETCH STAGE DATA (SSOT)
     local stageObjs = nil

@@ -25,20 +25,23 @@ function AB:SetupLEM()
     if not LEM then return end
 
     for barKey, container in pairs(self.bars) do
-        local displayName = L[BAR_DISPLAY_NAMES[barKey] or barKey] or barKey
-        container.editModeName = displayName
+        if not container.lemRegistered then
+            container.lemRegistered = true
+            local displayName = L[BAR_DISPLAY_NAMES[barKey] or barKey] or barKey
+            container.editModeName = displayName
 
-        local defBar = ns.Defaults.profile.Actionbars[barKey]
-        local defaults = { point = defBar.point, x = defBar.x, y = defBar.y }
+            local defBar = ns.Defaults.profile.Actionbars[barKey]
+            local defaults = { point = defBar.point, x = defBar.x, y = defBar.y }
 
-        LEM:AddFrame(container, function(f, _, point, x, y)
-            f:ClearAllPoints()
-            f:SetPoint(point, UIParent, point, x, y)
-            self.db[barKey] = self.db[barKey] or {}
-            self.db[barKey].point = point
-            self.db[barKey].x = x
-            self.db[barKey].y = y
-        end, defaults)
+            LEM:AddFrame(container, function(f, _, point, x, y)
+                if InCombatLockdown and InCombatLockdown() then return end
+                f:ClearAllPoints()
+                f:SetPoint(point, UIParent, point, x, y)
+                self.db[barKey] = self.db[barKey] or {}
+                self.db[barKey].point = point
+                self.db[barKey].x = x
+                self.db[barKey].y = y
+            end, defaults)
 
         if LEM.AddFrameSettings then
             local maxBarCount = self.BAR_CONFIGS and self.BAR_CONFIGS[barKey] and self.BAR_CONFIGS[barKey].count or 12
@@ -183,6 +186,7 @@ function AB:SetupLEM()
                     end,
                 },
             })
+        end
         end
     end
 

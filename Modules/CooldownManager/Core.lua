@@ -19,6 +19,8 @@ CDM.VIEWER_KEYS = {
 CDM.defaultSettings = ns.CooldownManagerDefaults or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.CooldownManager)
 CDM.dbKey = "CooldownManager"
 
+local alignScratchItems = {}
+
 function CDM:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.CooldownManager or self.defaultSettings
     if not self.db.viewers then
@@ -53,7 +55,7 @@ function CDM:OnEnable()
     if _G.ActionButtonSpellAlertManager and _G.ActionButtonSpellAlertManager.ShowAlert and not self.spellAlertHooked then
         self.spellAlertHooked = true
         hooksecurefunc(_G.ActionButtonSpellAlertManager, "ShowAlert", function(_, btn)
-            if btn and btn.SpellActivationAlert and CDM.UpdateItemSpellAlert then
+            if CDM:IsEnabled() and btn and CDM:GetItemBackdrop(btn) and btn.SpellActivationAlert and CDM.UpdateItemSpellAlert then
                 CDM:UpdateItemSpellAlert(btn)
             end
         end)
@@ -63,6 +65,11 @@ end
 function CDM:OnDisable()
     self:UnregisterAllEvents()
     self:RestoreAllItems()
+    if self.customBarFrames then
+        for _, frame in pairs(self.customBarFrames) do
+            if frame.Hide then frame:Hide() end
+        end
+    end
 end
 
 function CDM:OnEnteringWorld()
@@ -1923,17 +1930,18 @@ function CDM:AlignViewerItems(viewerKey, viewer)
         isHorizontal = container.isHorizontal
     end
 
-    local items = {}
+    for k in pairs(alignScratchItems) do alignScratchItems[k] = nil end
     for itemFrame in viewer.itemFramePool:EnumerateActive() do
         if itemFrame:IsShown() then
-            table.insert(items, itemFrame)
+            table.insert(alignScratchItems, itemFrame)
         end
     end
-    if #items == 0 then return end
+    if #alignScratchItems == 0 then return end
 
-    table.sort(items, function(a, b)
+    table.sort(alignScratchItems, function(a, b)
         return (a.layoutIndex or 0) < (b.layoutIndex or 0)
     end)
+    local items = alignScratchItems
 
     local stride = container.stride or (viewer.GetStride and viewer:GetStride()) or viewer.stride or 0
     if stride <= 0 then

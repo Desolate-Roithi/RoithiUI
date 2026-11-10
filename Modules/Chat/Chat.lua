@@ -445,8 +445,8 @@ function ChatMod:FormatChatMessage(frame, text, eventArgs)
         if type(frame.TransformMessages) == "function" then
             pcall(frame.TransformMessages, frame,
                 function(msg)
-                    local usable, same = pcall(function() return msg == text end)
-                    return usable and same
+                    if not msg or IsSecretString(msg) then return false end
+                    return msg == text
                 end,
                 function(msg, ...)
                     return newText, ...
@@ -847,6 +847,7 @@ function ChatMod:SetChatEditBoxDisplacement(cf, isShown)
     local baseY = (isDocked and (self.baseY or self.db.y or 0)) or frameBaseY[cf] or select(5, cf:GetPoint(1)) or 0
     local baseW = (isDocked and (self.db.width or 460)) or (cf.GetWidth and cf:GetWidth()) or 460
     local baseH = (isDocked and (self.db.height or 200)) or frameBaseHeight[cf] or (cf.GetHeight and cf:GetHeight()) or 200
+    if ns.Utils and ns.Utils.IsSecret and (ns.Utils.IsSecret(baseW) or ns.Utils.IsSecret(baseH) or ns.Utils.IsSecret(baseY)) then return end
 
     isDisplacing = true
     if isShown then
@@ -1613,6 +1614,7 @@ function ChatMod:SkinChatFrame(cf, idx)
     if cf == _G.ChatFrame1 and cf.AnchorSelectionFrame and hooksecurefunc and not editModeSelectionHooked[cf] then
         editModeSelectionHooked[cf] = true
         hooksecurefunc(cf, "AnchorSelectionFrame", function(frame)
+            if not self:IsEnabled() then return end
             self:UpdateChatSelectionBounds(frame)
         end)
     end
@@ -2762,17 +2764,17 @@ function ChatMod:UpdateButtonsDock()
             if not GetChatFrameState(btn).menuHooked then
                 GetChatFrameState(btn).menuHooked = true
                 local isApplying = false
-                if btn.SetNormalTexture and ChatMod.SecureHook then
-                    ChatMod:SecureHook(btn, "SetNormalTexture", function(b)
-                        if isApplying then return end
+                if _G.hooksecurefunc and btn.SetNormalTexture then
+                    _G.hooksecurefunc(btn, "SetNormalTexture", function(b)
+                        if not ChatMod:IsEnabled() or isApplying then return end
                         isApplying = true
                         ApplyMenuButtonTextures(b)
                         isApplying = false
                     end)
                 end
-                if btn.SetPushedTexture and ChatMod.SecureHook then
-                    ChatMod:SecureHook(btn, "SetPushedTexture", function(b)
-                        if isApplying then return end
+                if _G.hooksecurefunc and btn.SetPushedTexture then
+                    _G.hooksecurefunc(btn, "SetPushedTexture", function(b)
+                        if not ChatMod:IsEnabled() or isApplying then return end
                         isApplying = true
                         ApplyMenuButtonTextures(b)
                         isApplying = false
@@ -2849,8 +2851,9 @@ function ChatMod:UpdateButtonsDock()
 
             if not GetChatFrameState(btn).borderStripped then
                 GetChatFrameState(btn).borderStripped = true
-                if btn.SetNormalTexture and ChatMod.SecureHook then
-                    ChatMod:SecureHook(btn, "SetNormalTexture", function(b)
+                if _G.hooksecurefunc and btn.SetNormalTexture then
+                    _G.hooksecurefunc(btn, "SetNormalTexture", function(b)
+                        if not ChatMod:IsEnabled() then return end
                         local bnt = b:GetNormalTexture()
                         if bnt and bnt.GetAlpha and bnt:GetAlpha() > 0 then
                             if bnt.SetTexture then bnt:SetTexture("") end
@@ -2858,8 +2861,9 @@ function ChatMod:UpdateButtonsDock()
                         end
                     end)
                 end
-                if btn.SetPushedTexture and ChatMod.SecureHook then
-                    ChatMod:SecureHook(btn, "SetPushedTexture", function(b)
+                if _G.hooksecurefunc and btn.SetPushedTexture then
+                    _G.hooksecurefunc(btn, "SetPushedTexture", function(b)
+                        if not ChatMod:IsEnabled() then return end
                         local bpt = b:GetPushedTexture()
                         if bpt and bpt.GetAlpha and bpt:GetAlpha() > 0 then
                             if bpt.SetTexture then bpt:SetTexture("") end
@@ -2982,7 +2986,9 @@ function ChatMod:UpdateButtonsDock()
         if qjBtn.SetToastDirection then
             local right = qjBtn.GetRight and qjBtn:GetRight()
             local screenW = _G.GetScreenWidth and _G.GetScreenWidth()
-            if right and screenW and (right + 250 < screenW) then
+            local isSec = (ns.Utils and ns.Utils.IsSecret and (ns.Utils.IsSecret(right) or ns.Utils.IsSecret(screenW)))
+                or (issecretvalue and (issecretvalue(right) or issecretvalue(screenW)))
+            if not isSec and right and screenW and (right + 250 < screenW) then
                 qjBtn:SetToastDirection(true)
             else
                 qjBtn:SetToastDirection(false)
@@ -3003,6 +3009,7 @@ end
 -- Blizzard Chrome Suppression
 -------------------------------------------------------------------------------
 function ChatMod:HideBlizzardChrome()
+    if not self.db or not self.db.hideBlizzardChrome then return end
     if self.db.buttonDockPosition == "HIDDEN" then
         local hp = GetHiddenParent()
         local framesToHide = {
@@ -3017,6 +3024,9 @@ function ChatMod:HideBlizzardChrome()
             end
         end
     else
+        if _G.ChatAlertFrame and _G.ChatAlertFrame:GetParent() == GetHiddenParent() then
+            _G.ChatAlertFrame:SetParent(UIParent)
+        end
         self:UpdateButtonsDock()
     end
 end
@@ -3157,7 +3167,8 @@ function ChatMod:OpenChatCopyWindow(cf)
     local win = self:GetOrCreateChatCopyWindow()
     local cfName = cf.GetName and cf:GetName() or "Chat"
     local tabText = _G[cfName .. "Tab"] and _G[cfName .. "Tab"].GetText and _G[cfName .. "Tab"]:GetText()
-    if tabText and tabText ~= "" then
+    local isSecretTab = tabText and ((_G.issecretvalue and _G.issecretvalue(tabText)) or (_G.canaccessvalue and not _G.canaccessvalue(tabText)))
+    if tabText and not isSecretTab and tabText ~= "" then
         win.title:SetText((L["Copy Chat"] or "Copy Chat") .. " - " .. tabText)
     else
         win.title:SetText(L["Copy Chat"] or "Copy Chat")
@@ -3168,8 +3179,11 @@ function ChatMod:OpenChatCopyWindow(cf)
     if num > 0 and cf.GetMessageInfo then
         for i = 1, num do
             local text = cf:GetMessageInfo(i)
-            if text and text ~= "" then
-                table.insert(lines, self:SanitizeChatTextForCopy(text))
+            if text then
+                local clean = self:SanitizeChatTextForCopy(text)
+                if clean ~= "" then
+                    table.insert(lines, clean)
+                end
             end
         end
     end

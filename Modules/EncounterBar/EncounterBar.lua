@@ -50,8 +50,9 @@ local function ToggleBlizzard(enableCustom)
         if not showHooked then
             showHooked = true
             hooksecurefunc(PlayerPowerBarAlt, "Show", function(self)
+                if not EB:IsEnabled() or (InCombatLockdown and InCombatLockdown()) then return end
                 local db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.EncounterResource
-                if db and db.enabled then
+                if db and db.enabled ~= false then
                     self:Hide()
                 end
             end)
@@ -587,6 +588,7 @@ EB.order = 30
 function EB:RefreshProfile()
     local profile = RoithiUI.db and RoithiUI.db.profile
     self.db = profile and profile.EncounterResource or self.defaultSettings
+    self:Toggle(self.db.enabled ~= false, true)
     local bar = _G.RoithiEncounterResource
     if bar and self.db then
         bar:SetSize(self.db.width or 250, self.db.height or 20)

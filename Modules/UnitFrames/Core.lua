@@ -186,6 +186,23 @@ local function Shared(self, unit)
         outsideAlpha = 0.4
     }
 
+    -- 8. Eventless Unit Polling Hook (Refreshes Power, Tags, and Indicators on targettarget / focustarget)
+    if self.IsEventless and self:IsEventless() then
+        local origPostUpdate = self.PostUpdate
+        self.PostUpdate = function(frameSelf, event)
+            if origPostUpdate then origPostUpdate(frameSelf, event) end
+            if frameSelf.Power and frameSelf.Power.UpdatePower then
+                frameSelf.Power:UpdatePower(event or "OnUpdate")
+            end
+            if frameSelf.UpdateAllTagValues then
+                frameSelf:UpdateAllTagValues()
+            end
+            if frameSelf.UpdateIndicators then
+                frameSelf:UpdateIndicators()
+            end
+        end
+    end
+
     -- 8. Auras (Removed: Handled by Units.lua custom element)
     -- local Auras = CreateFrame("Frame", nil, self)
     -- ...

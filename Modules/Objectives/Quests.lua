@@ -330,23 +330,24 @@ local function GetBlockHeaderHeight(b)
     return 16
 end
 
+local seenLinesScratch = {}
 local function ForEachBlockLine(selfOrBlock, blockOrFunc, maybeFunc)
     local block = (type(selfOrBlock) == "table" and type(blockOrFunc) == "table" and blockOrFunc) or selfOrBlock
     local func = maybeFunc or (type(blockOrFunc) == "function" and blockOrFunc)
     if not block or not func then return end
-    local seen = {}
+    for k in pairs(seenLinesScratch) do seenLinesScratch[k] = nil end
     if block.usedLines then
         for _, line in pairs(block.usedLines) do
-            if line and not seen[line] then
-                seen[line] = true
+            if line and not seenLinesScratch[line] then
+                seenLinesScratch[line] = true
                 func(line)
             end
         end
     end
     if block.lines then
         for _, line in pairs(block.lines) do
-            if line and not seen[line] then
-                seen[line] = true
+            if line and not seenLinesScratch[line] then
+                seenLinesScratch[line] = true
                 func(line)
             end
         end
@@ -590,7 +591,7 @@ function ObjectivesMod:ApplyQuestLevelToTitle(block)
         prefix = prefix .. "|TInterface\\RaidFrame\\ReadyCheck-Ready:12:12:0:0|t "
     end
 
-    if showLevel and lvl and curText:match("^|c%x%x%x%x%x%x%x%x%[" .. tostring(lvl) .. "%]|r") and not showInfinity and prefix == "" and not isComplete then
+    if showLevel and lvl and curText:match("^|c%x%x%x%x%x%x%x%x%[" .. tostring(lvl) .. "%]|r") and not showInfinity and prefix == "" and not isComplete and not curText:find("%*") then
         return
     end
 
@@ -814,10 +815,6 @@ function ObjectivesMod:UpdateBlockHoverObjectives(block, isHovered)
         if math.abs(currentHeight - targetHeight) > 0.5 then
             block:SetHeight(targetHeight)
         end
-    end
-
-    if block.parentModule and self.TrimTrackerGap then
-        self:TrimTrackerGap(block.parentModule)
     end
 
     if isHovered then

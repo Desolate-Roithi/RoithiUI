@@ -45,7 +45,8 @@ end
 -- @param fontName The name of the font registered in LSM
 -- @param size The size of the font
 -- @param flags Optional flags (OUTLINE, MONOCHROME, etc.)
-function lib.mixins:SetFont(obj, fontName, size, flags)
+-- @param shadow Optional boolean to enable drop shadow (defaults to false)
+function lib.mixins:SetFont(obj, fontName, size, flags, shadow)
     local fontPath = nil
     if fontName and (fontName:find("\\") or fontName:find("/")) then
         fontPath = fontName
@@ -58,7 +59,7 @@ function lib.mixins:SetFont(obj, fontName, size, flags)
             or "Fonts\\FRIZQT__.TTF"
     end
     local fontFlags = flags
-    if fontFlags == "NONE" or fontFlags == "none" then
+    if type(fontFlags) == "string" and fontFlags:upper() == "NONE" then
         fontFlags = ""
     elseif fontFlags == nil then
         fontFlags = "OUTLINE"
@@ -68,10 +69,10 @@ function lib.mixins:SetFont(obj, fontName, size, flags)
     if fs and fs.SetFont then
         fs:SetFont(fontPath, size or 12, fontFlags)
         if fs.SetShadowOffset then
-            if fontFlags and fontFlags ~= "" and fontFlags ~= "NONE" and fontFlags ~= "none" then
-                fs:SetShadowOffset(0, 0)
-            else
+            if shadow then
                 fs:SetShadowOffset(1, -1)
+            else
+                fs:SetShadowOffset(0, 0)
             end
         end
         -- Always normalize text colour to opaque white; Blizzard font objects
@@ -79,6 +80,13 @@ function lib.mixins:SetFont(obj, fontName, size, flags)
         -- persists unless explicitly overridden here.
         if fs.SetTextColor then
             fs:SetTextColor(1, 1, 1, 1)
+        end
+        -- Force C-engine glyph cache flush
+        if fs.GetText and fs.SetText then
+            local currentText = fs:GetText()
+            if currentText then
+                fs:SetText(currentText)
+            end
         end
     end
 end
@@ -88,9 +96,9 @@ end
 -- @param ... The values to format
 -- @return The formatted string, or a placeholder if values are Secret
 function lib.mixins:SafeFormat(formatString, ...)
-    local args = { ... }
-    for i = 1, #args do
-        local val = args[i]
+    local numArgs = select("#", ...)
+    for i = 1, numArgs do
+        local val = select(i, ...)
         -- 12.0.1: Secret values can be userdata OR numbers that fail arithmetic
         local isSecret = (issecretvalue and issecretvalue(val))
         if isSecret then

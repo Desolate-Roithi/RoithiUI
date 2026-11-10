@@ -33,6 +33,10 @@ local REGULAR_BAG_SLOTS = {
 }
 
 function BagsMod:SetBagButtonsMouse(enable)
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.pendingBagBarApply = true
+        return
+    end
     local allButtons = {
         _G.MainMenuBarBackpackButton,
         _G.KeyRingButton,
@@ -91,6 +95,7 @@ function BagsMod:SetupBagBar()
                 if not selSt.selectionHooked and hooksecurefunc then
                     selSt.selectionHooked = true
                     hooksecurefunc(_G.BagsBar.Selection, "Show", function(sel)
+                        if not self:IsEnabled() then return end
                         if not (_G.InCombatLockdown and _G.InCombatLockdown()) and sel.Hide then
                             sel:Hide()
                         elseif sel.SetAlpha then
@@ -555,6 +560,7 @@ function BagsMod:StyleBagButton(btn)
     -- Hook UpdateTextures so Blizzard does not re-apply circular atlases over our styled square button
     if not st.texturesHooked and btn.UpdateTextures then
         hooksecurefunc(btn, "UpdateTextures", function(selfBtn)
+            if not BagsMod:IsEnabled() then return end
             local n = selfBtn.GetNormalTexture and selfBtn:GetNormalTexture()
             if n then
                 if n.SetTexture then n:SetTexture(nil) end

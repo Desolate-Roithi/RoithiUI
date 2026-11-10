@@ -182,4 +182,8 @@ function ProfileSharing:ImportProfile(importString)
     return true
 end
 
+function ProfileSharing:RefreshProfile()
+    self.cachedExportString = nil
+end
+
 ns.ProfileSharing = ProfileSharing

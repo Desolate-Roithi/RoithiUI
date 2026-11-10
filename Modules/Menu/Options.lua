@@ -170,12 +170,12 @@ function MenuMod:GetOptions()
                         order = 10,
                         values = (ns.Utils and ns.Utils.GetAnchorDropdownValues) and ns.Utils.GetAnchorDropdownValues() or {},
                         sorting = (ns.Utils and ns.Utils.ANCHOR_POINTS) or nil,
-                        get = function() return self.db.point or "BOTTOMRIGHT" end,
+                        get = function() return self.db.point or "BOTTOMLEFT" end,
                         set = function(_, val)
                             self.db.point = val
-                            if self.container then
+                            if self.container and not (InCombatLockdown and InCombatLockdown()) then
                                 self.container:ClearAllPoints()
-                                self.container:SetPoint(val, UIParent, val, self.db.x or -280, self.db.y or 0)
+                                self.container:SetPoint(val, UIParent, val, self.db.x or 2, self.db.y or 285)
                                 self:LayoutMicroMenu()
                             end
                         end,
@@ -187,13 +187,13 @@ function MenuMod:GetOptions()
                         min = -2500,
                         max = 2500,
                         step = 1,
-                        get = function() return self.db.x or -280 end,
+                        get = function() return self.db.x or 2 end,
                         set = function(_, val)
                             self.db.x = val
-                            if self.container then
-                                local pt = self.db.point or "BOTTOMRIGHT"
+                            if self.container and not (InCombatLockdown and InCombatLockdown()) then
+                                local pt = self.db.point or "BOTTOMLEFT"
                                 self.container:ClearAllPoints()
-                                self.container:SetPoint(pt, UIParent, pt, val, self.db.y or 0)
+                                self.container:SetPoint(pt, UIParent, pt, val, self.db.y or 285)
                                 self:LayoutMicroMenu()
                             end
                         end,
@@ -205,13 +205,13 @@ function MenuMod:GetOptions()
                         min = -1500,
                         max = 1500,
                         step = 1,
-                        get = function() return self.db.y or 0 end,
+                        get = function() return self.db.y or 285 end,
                         set = function(_, val)
                             self.db.y = val
-                            if self.container then
-                                local pt = self.db.point or "BOTTOMRIGHT"
+                            if self.container and not (InCombatLockdown and InCombatLockdown()) then
+                                local pt = self.db.point or "BOTTOMLEFT"
                                 self.container:ClearAllPoints()
-                                self.container:SetPoint(pt, UIParent, pt, self.db.x or -280, val)
+                                self.container:SetPoint(pt, UIParent, pt, self.db.x or 2, val)
                                 self:LayoutMicroMenu()
                             end
                         end,

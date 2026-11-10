@@ -216,6 +216,10 @@ function Totems:OnCombatEnter()
 end
 
 function Totems:OnCombatLeave()
+    if self.pendingProfileRefresh then
+        self.pendingProfileRefresh = false
+        self:RefreshProfile()
+    end
     if self.pendingSuppress then
         self.pendingSuppress = false
         if self:IsEnabled() and self:ShouldRun() then
@@ -1187,11 +1191,20 @@ function Totems:UpdateBarLayout()
 
             if isVisible then
                 btn:Show()
-                if btn.timerText then
-                    local fontName = (self.db and self.db.font) or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Roithi Thick"
-                    local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
-                    if utils and utils.ApplyTypography then
+                local fontName = (self.db and self.db.font) or (RoithiUI and RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.font) or "Roithi Thick"
+                local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
+                if utils and utils.ApplyTypography then
+                    if btn.timerText then
                         utils.ApplyTypography(btn.timerText, fontName, self.db.fontSize or 11, "OUTLINE", false, "Roithi Thick")
+                    end
+                    if btn.cooldownText then
+                        utils.ApplyTypography(btn.cooldownText, fontName, self.db.fontSize or 11, "OUTLINE", false, "Roithi Thick")
+                    end
+                    if btn.hotkeyText then
+                        utils.ApplyTypography(btn.hotkeyText, fontName, self.db.fontSize or 11, "OUTLINE", false, "Roithi Thick")
+                    end
+                    if btn.countText then
+                        utils.ApplyTypography(btn.countText, fontName, self.db.fontSize or 11, "OUTLINE", false, "Roithi Thick")
                     end
                 end
                 if btn.extender then
@@ -1267,16 +1280,15 @@ function Totems:UpdateSpellCooldown(catKey)
     end
     btn.cooldown.noCooldownCount = nil
 
-    local isSecret = false
+    local isSecret
     if _G.issecretvalue and (_G.issecretvalue(duration) or _G.issecretvalue(start)) then
         isSecret = true
     elseif type(duration) == "userdata" or type(start) == "userdata" then
         isSecret = true
+    elseif type(duration) == "number" then
+        isSecret = false
     else
-        local ok, _ = pcall(function() return duration > 1.5 end)
-        if not ok then
-            isSecret = true
-        end
+        isSecret = true
     end
 
     if isSecret then
@@ -1364,13 +1376,15 @@ function Totems:UpdateTotemSlots() -- code_smell_audit: suppress arrow-code
 
                 local isActive = false
                 local expTime = 0
-                local ok, active = pcall(function()
-                    return haveTotem and duration and duration > 0 and (startTime + duration) > now
-                end)
-                if ok and active then
-                    isActive = true
-                    expTime = startTime + duration
-                elseif not ok and haveTotem then
+                local isHaveSecret = (issecretvalue and issecretvalue(haveTotem)) or (canaccessvalue and not canaccessvalue(haveTotem))
+                local isDurSecret = (issecretvalue and issecretvalue(duration)) or (canaccessvalue and not canaccessvalue(duration))
+                local isStSecret = (issecretvalue and issecretvalue(startTime)) or (canaccessvalue and not canaccessvalue(startTime))
+                if not isHaveSecret and not isDurSecret and not isStSecret and type(duration) == "number" and type(startTime) == "number" then
+                    if haveTotem and duration > 0 and (startTime + duration) > now then
+                        isActive = true
+                        expTime = startTime + duration
+                    end
+                elseif haveTotem then
                     isActive = true
                     expTime = 0
                 end
@@ -1681,6 +1695,7 @@ function Totems:SetupLEM()
         self.db.point = newPoint
         self.db.x = newX
         self.db.y = newY
+        if InCombatLockdown and InCombatLockdown() then return end
         if f and f.ClearAllPoints and f.SetPoint then
             f:ClearAllPoints()
             f:SetPoint(newPoint, UIParent, newPoint, newX, newY)
@@ -1702,8 +1717,10 @@ function Totems:SetupLEM()
                 set = function(_, val)
                     self.db.x = val
                     local p = self.db.point or "BOTTOM"
-                    self.bar:ClearAllPoints()
-                    self.bar:SetPoint(p, UIParent, p, val, self.db.y or 190)
+                    if not (InCombatLockdown and InCombatLockdown()) then
+                        self.bar:ClearAllPoints()
+                        self.bar:SetPoint(p, UIParent, p, val, self.db.y or 190)
+                    end
                 end,
             },
             {
@@ -1717,8 +1734,10 @@ function Totems:SetupLEM()
                 set = function(_, val)
                     self.db.y = val
                     local p = self.db.point or "BOTTOM"
-                    self.bar:ClearAllPoints()
-                    self.bar:SetPoint(p, UIParent, p, self.db.x or -320, val)
+                    if not (InCombatLockdown and InCombatLockdown()) then
+                        self.bar:ClearAllPoints()
+                        self.bar:SetPoint(p, UIParent, p, self.db.x or -320, val)
+                    end
                 end,
             },
             {
@@ -1783,11 +1802,20 @@ end
 
 function Totems:RefreshProfile()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Totems or self.defaultSettings
+    if InCombatLockdown and InCombatLockdown() then
+        self.pendingProfileRefresh = true
+        return
+    end
     if self.bar and self.bar.ClearAllPoints and self.bar.SetPoint then
         local def = self.defaultSettings or (ns.Defaults and ns.Defaults.profile and ns.Defaults.profile.Totems) or { point = "BOTTOM", x = 0, y = 265 }
         local pt = self.db.point or def.point
         self.bar:ClearAllPoints()
         self.bar:SetPoint(pt, UIParent, pt, self.db.x or def.x, self.db.y or def.y)
+    end
+    self:UpdateAvailableSpells()
+    self:UpdateAllButtonAttributes()
+    if self.UpdateHotkeys then
+        self:UpdateHotkeys()
     end
     self:UpdateBarLayout()
     self:UpdateAllSpellCooldowns()

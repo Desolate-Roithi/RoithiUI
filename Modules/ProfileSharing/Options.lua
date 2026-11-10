@@ -20,10 +20,7 @@ local profileSharingGroup = {
             get = function()
                 local PS = RoithiUI:GetModule("ProfileSharing")
                 if not PS then return "" end
-                if not PS.cachedExportString then
-                    PS.cachedExportString = PS:ExportProfile() or ""
-                end
-                return PS.cachedExportString
+                return PS:ExportProfile() or ""
             end,
             set = function() end,
         },

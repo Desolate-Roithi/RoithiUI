@@ -665,12 +665,17 @@ local function AppendBagShortcuts(tooltip, itemID)
     local isFav = (favs[itemID] == true)
     tooltip:AddLine(" ")
     if isFav then
-        tooltip:AddLine("|cffffd100★ Favorited|r |cffaaaaaa(Alt + Right Click to remove)|r", 1, 1, 1)
+        local favTxt = L["★ Favorited"] or "★ Favorited"
+        local remTxt = L["(Alt + Right Click to remove)"] or "(Alt + Right Click to remove)"
+        tooltip:AddLine("|cffffd100" .. favTxt .. "|r |cffaaaaaa" .. remTxt .. "|r", 1, 1, 1)
     else
-        tooltip:AddLine("|cff888888<Alt + Right Click to Favorite>|r", 0.7, 0.7, 0.7)
+        local addFavTxt = L["<Alt + Right Click to Favorite>"] or "<Alt + Right Click to Favorite>"
+        tooltip:AddLine("|cff888888" .. addFavTxt .. "|r", 0.7, 0.7, 0.7)
     end
-    tooltip:AddLine("|cff00ccff<Shift + Right Click to Reassign Category>|r", 0.4, 0.8, 1.0)
-    tooltip:AddLine("|cff00ff00<Drag item onto Category tab to Reassign>|r", 0.4, 0.9, 0.4)
+    local reassignTxt = L["<Shift + Right Click to Reassign Category>"] or "<Shift + Right Click to Reassign Category>"
+    local dragTxt = L["<Drag item onto Category tab to Reassign>"] or "<Drag item onto Category tab to Reassign>"
+    tooltip:AddLine("|cff00ccff" .. reassignTxt .. "|r", 0.4, 0.8, 1.0)
+    tooltip:AddLine("|cff00ff00" .. dragTxt .. "|r", 0.4, 0.9, 0.4)
     tooltip:Show()
 end
 
@@ -678,6 +683,7 @@ function BagsMod:HookTooltipShortcuts()
     if self.tooltipShortcutsHooked then return end
     if _G.TooltipDataProcessor and _G.TooltipDataProcessor.AddTooltipPostCall and _G.Enum and _G.Enum.TooltipDataType then
         _G.TooltipDataProcessor.AddTooltipPostCall(_G.Enum.TooltipDataType.Item, function(tooltip, _)
+            if not self:IsEnabled() then return end
             local owner = tooltip:GetOwner()
             if owner and (owner.isRoithiBagSlot or self.activeTooltipSlot == owner) then
                 local itemID = (owner.itemData and owner.itemData.itemID)
@@ -3924,10 +3930,16 @@ function BagsMod:RefreshProfile()
         local cfg = (self.db and self.db.bagBar) or (self.defaultSettings and self.defaultSettings.bagBar) or {}
         local pt = cfg.point or "BOTTOMLEFT"
         self.bagBarFrame:ClearAllPoints()
-        self.bagBarFrame:SetPoint(pt, UIParent, pt, cfg.x or 286, cfg.y or 235)
+        self.bagBarFrame:SetPoint(pt, UIParent, pt, cfg.x or 286, cfg.y or 285)
     end
     if self.UpdateBagBarLayout then
         self:UpdateBagBarLayout()
+    end
+    if self.UpdateTypography then
+        self:UpdateTypography()
+    end
+    if self.UpdateInventory then
+        self:UpdateInventory()
     end
     if self.mainFrame and self.mainFrame.ClearAllPoints and self.mainFrame.SetPoint then
         local pos = (self.db and (self.db.bagWindow or self.db.mainBagPosition)) or (self.defaultSettings and (self.defaultSettings.bagWindow or self.defaultSettings.mainBagPosition))
