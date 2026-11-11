@@ -67,6 +67,12 @@ function MinimapMod:PLAYER_REGEN_ENABLED()
             self:UpdateBuffFrameDisplacement(true)
         end
     end
+    if self.queuedBuffDurationsRestore then
+        self.queuedBuffDurationsRestore = nil
+        if self.EnsureBuffDurationsCVar then
+            self:EnsureBuffDurationsCVar(false)
+        end
+    end
     if self.pendingLayoutDefaultButtons then
         self.pendingLayoutDefaultButtons = nil
         self:LayoutDefaultButtons()
@@ -80,6 +86,12 @@ function MinimapMod:ADDON_LOADED(event, name)
 end
 
 function MinimapMod:PLAYER_ENTERING_WORLD()
+    if self.ResetBuffDurationLoopGuard then
+        self:ResetBuffDurationLoopGuard()
+    end
+    if self.EnsureBuffDurationsCVar then
+        self:EnsureBuffDurationsCVar(false)
+    end
     self:LayoutDefaultButtons()
     self:UpdateDifficultyText()
     self:SafeReanchorZoneText()
@@ -980,6 +992,10 @@ end
 function MinimapMod:CVAR_UPDATE(event, cvarName, value)
     if cvarName == "rotateMinimap" and self.db then
         self.db.rotateMinimap = (value == "1")
+    elseif cvarName == "buffDurations" and value == "0" then
+        if self.EnsureBuffDurationsCVar then
+            self:EnsureBuffDurationsCVar(true)
+        end
     end
 end
 

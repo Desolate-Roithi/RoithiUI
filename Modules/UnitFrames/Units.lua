@@ -13,6 +13,19 @@ function UF:CreateUnitFrame(unit, name, skipEditMode)
     if not self.units then self.units = {} end
     self.units[unit] = frame
 
+    -- Ensure frame.Health is populated from SafeHealth for AddOn modules and tags
+    if not frame.Health and frame.SafeHealth then
+        frame.Health = frame.SafeHealth
+    end
+
+    -- Eventless Unit Polling Optimization (100ms instead of oUF's 500ms default)
+    if unit:match("%w+target") then
+        frame.onUpdateFrequency = 0.1
+        if oUF and oUF.HandleEventlessUnit then
+            oUF:HandleEventlessUnit(frame)
+        end
+    end
+
     -- Edit Mode Registration
     if LEM and not skipEditMode then
         frame.editModeName = name or unit

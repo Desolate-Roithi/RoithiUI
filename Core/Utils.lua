@@ -112,7 +112,7 @@ function ns.Utils.ResolveFontPath(fontName, defaultFallback)
     return "Fonts\\FRIZQT__.TTF"
 end
 
-function ns.Utils.ApplyTypography(fontString, fontName, fontSize, fontOutline, fontShadow, fallbackFont)
+function ns.Utils.ApplyTypography(fontString, fontName, fontSize, fontOutline, fontShadow, fallbackFont, skipTextFlush)
     if not fontString or not fontString.SetFont then return end
 
     local fontPath = ns.Utils.ResolveFontPath(fontName, fallbackFont or "Expressway")
@@ -128,10 +128,12 @@ function ns.Utils.ApplyTypography(fontString, fontName, fontSize, fontOutline, f
         end
     end
 
-    if fontString.GetText and fontString.SetText then
+    if not skipTextFlush and fontString.GetText and fontString.SetText then
         local ok, txt = pcall(fontString.GetText, fontString)
-        if ok and txt ~= nil and not ns.Utils.IsSecret(txt) then pcall(fontString.SetText, fontString, txt) end
-        -- Skip GetText/SetText round-trip when text is a Midnight Secret value
+        if ok and txt ~= nil and not ns.Utils.IsSecret(txt) and txt ~= "" then
+            pcall(fontString.SetText, fontString, txt)
+        end
+        -- Skip GetText/SetText round-trip when text is a Midnight Secret value, empty, or skipTextFlush is requested
     end
 end
 

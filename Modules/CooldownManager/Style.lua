@@ -76,8 +76,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                 local tex = region.GetTexture and region:GetTexture()
                 local isSecret = (issecretvalue and issecretvalue(tex)) or (canaccessvalue and not canaccessvalue(tex))
                 if tex and not isSecret then
-                    local ok, isMatch = pcall(function() return tex == 6707800 end)
-                    if ok and isMatch then
+                    if tex == 6707800 then
                         isMaskTex = true
                     end
                 end

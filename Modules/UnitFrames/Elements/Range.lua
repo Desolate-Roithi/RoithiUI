@@ -7,15 +7,7 @@ if ns.skipLoad then return end
 local oUF = ns.oUF or _G.oUF
 local UF = RoithiUI:GetModule("UnitFrames")
 
-local function IsSecret(v)
-    if ns.Utils and ns.Utils.IsSecret then
-        return ns.Utils.IsSecret(v)
-    end
-    if v == nil then return false end
-    if _G.issecretvalue and _G.issecretvalue(v) then return true end
-    if _G.canaccessvalue and not _G.canaccessvalue(v) then return true end
-    return type(v) == "userdata"
-end
+local IsSecret = ns.Utils.IsSecret
 
 function UF:CreateRange(frame)
     local element = {

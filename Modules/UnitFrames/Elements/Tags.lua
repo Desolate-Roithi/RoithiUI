@@ -16,8 +16,6 @@ local strsplit = _G.strsplit or strsplit
 local GetSpecialization = _G.GetSpecialization
 
 -- 12.0.1 Secret APIs (Localized if present)
-local issecretvalue = _G.issecretvalue
-local canaccessvalue = _G.canaccessvalue
 local C_UnitHealth = _G.C_UnitHealth
 ---@diagnostic disable-next-line: undefined-field
 local C_UnitPower = _G.C_UnitPower
@@ -62,18 +60,8 @@ UF.TagManager = TM
 
 
 
--- Helper: IsSecret predicate (delegates to centralized ns.Utils.IsSecret with local fallback)
-local function IsSecret(v)
-    if ns.Utils and ns.Utils.IsSecret then
-        return ns.Utils.IsSecret(v)
-    end
-    if v == nil then return false end
-    local fn = _G.issecretvalue or issecretvalue
-    if type(fn) == "function" and fn(v) then return true end
-    local ca = _G.canaccessvalue or canaccessvalue
-    if type(ca) == "function" and not ca(v) then return true end
-    return type(v) == "userdata"
-end
+-- Helper: IsSecret predicate (centralized in Core/Utils.lua)
+local IsSecret = ns.Utils.IsSecret
 
 -- Helper: Shorten Number (12.0.1 Style K/M/B)
 local function AbbreviateNumber(value)
@@ -170,6 +158,13 @@ local function CallManaPercent(unit)
     local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
     local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
     local pct = fnPowerPercent(unit, 0, false, curve)
+    return FormatPercent(pct)
+end
+
+local function CallPowerClassPercent(unit, pType)
+    local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
+    local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
+    local pct = fnPowerPercent(unit, pType, false, curve)
     return FormatPercent(pct)
 end
 
@@ -402,13 +397,9 @@ TM.Methods = {
         end
 
         if IsSecret(cur) or IsSecret(max) then
-            local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or (CurveConstants and CurveConstants.ScaleTo100)
             local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
             if fnPowerPercent then
-                local success, result = pcall(function(fn, u, pType, crv)
-                    local pct = fn(u, pType, false, crv)
-                    return FormatPercent(pct)
-                end, fnPowerPercent, unit, config.type, curve)
+                local success, result = pcall(CallPowerClassPercent, unit, config.type)
                 if success and result then return result end
             end
             return ""
@@ -557,8 +548,70 @@ TM.Methods = {
 -- 2. Parsing & Formatting
 -- ----------------------------------------------------------------------------
 
-function TM:GetSegments(formatString, unit)
-    if not formatString then return {} end
+local tokenTemplateCache = {}
+local function GetParsedTokens(fmt)
+    local tokens = tokenTemplateCache[fmt]
+    if tokens then return tokens end
+    tokens = {}
+    local lastPos = 1
+    for startPos, token, endPos in fmt:gmatch("()@([%w_%.%:]+)()") do
+        if startPos > lastPos then
+            table.insert(tokens, { isTag = false, text = fmt:sub(lastPos, startPos - 1) })
+        end
+        local tagName, modifier = strsplit(":", token)
+        if tagName == "classpower.current" then tagName = "power.class" end
+        if tagName == "classpower.maximum" then tagName = "power.class.max" end
+        if tagName == "classpower.percent" then tagName = "power.class.percent" end
+        table.insert(tokens, { isTag = true, tag = tagName, modifier = modifier, rawToken = "@" .. token })
+        lastPos = endPos
+    end
+    if lastPos <= #fmt then
+        table.insert(tokens, { isTag = false, text = fmt:sub(lastPos) })
+    end
+    tokenTemplateCache[fmt] = tokens
+    return tokens
+end
+
+local function WipeArray(tbl)
+    if _G.wipe then
+        _G.wipe(tbl)
+    else
+        for i = #tbl, 1, -1 do
+            tbl[i] = nil
+        end
+    end
+    return tbl
+end
+
+local function AcquireSegmentNode(outNodePool, idx, text, isTag, tag)
+    if outNodePool then
+        local node = outNodePool[idx]
+        if not node then
+            node = {}
+            outNodePool[idx] = node
+        end
+        node.text = text
+        node.isTag = isTag
+        node.tag = tag
+        return node
+    end
+    return { text = text, isTag = isTag, tag = tag }
+end
+
+local function ClearSegmentNodePool(outNodePool, startIdx)
+    if not outNodePool then return end
+    for i = startIdx, #outNodePool do
+        local node = outNodePool[i]
+        node.text = nil
+        node.tag = nil
+    end
+end
+
+function TM:GetSegments(formatString, unit, outResult, outNodePool)
+    if not formatString then
+        ClearSegmentNodePool(outNodePool, 1)
+        return outResult and WipeArray(outResult) or {}
+    end
 
     -- 1. Conditional Logic [type](format) for Power Type
     if formatString:find("%[") then
@@ -567,7 +620,7 @@ function TM:GetSegments(formatString, unit)
             local currentPower = pToken:upper()
             for cond, content in formatString:gmatch("%[([^%]]+)%]%(([^%)]+)%)") do
                 if cond:upper() == currentPower then
-                    return TM:GetSegments(content, unit)
+                    return TM:GetSegments(content, unit, outResult, outNodePool)
                 end
             end
         end
@@ -599,7 +652,7 @@ function TM:GetSegments(formatString, unit)
                 end
 
                 if classMatch and specMatch then
-                    return TM:GetSegments(content, unit)
+                    return TM:GetSegments(content, unit, outResult, outNodePool)
                 end
             end
         end
@@ -609,52 +662,47 @@ function TM:GetSegments(formatString, unit)
         formatString = stripped
     end
 
-    -- Tokenization
-    local result = {}
-    local lastPos = 1
+    -- Tokenization via cached template
+    local tokens = GetParsedTokens(formatString)
+    local result = outResult and WipeArray(outResult) or {}
+    local nodeCount = 0
 
-    for startPos, token, endPos in formatString:gmatch("()@([%w_%.%:]+)()") do
-        if startPos > lastPos then
-            table.insert(result, { text = formatString:sub(lastPos, startPos - 1), isTag = false })
-        end
+    for _, token in ipairs(tokens) do
+        if not token.isTag then
+            nodeCount = nodeCount + 1
+            result[nodeCount] = AcquireSegmentNode(outNodePool, nodeCount, token.text, false, nil)
+        else
+            local tagName = token.tag
+            local method = TM.Methods[tagName]
+            if method then
+                local success, val = pcall(method, unit)
+                if success then
+                    if token.modifier and token.modifier:lower() == "short" then
+                        val = AbbreviateNumber(val)
+                    end
 
-        local tagName, modifier = strsplit(":", token)
-
-        -- Legacy support (if config wasn't updated)
-        if tagName == "classpower.current" then tagName = "power.class" end
-        if tagName == "classpower.maximum" then tagName = "power.class.max" end
-        if tagName == "classpower.percent" then tagName = "power.class.percent" end
-
-        local method = TM.Methods[tagName]
-        if method then
-            local success, val = pcall(method, unit)
-            if success then
-                if modifier and modifier:lower() == "short" then
-                    val = AbbreviateNumber(val)
-                end
-
-                if type(val) == "table" then
-                    for _, subVal in ipairs(val) do
-                        table.insert(result, { text = subVal, isTag = true, tag = tagName })
+                    if type(val) == "table" then
+                        for _, subVal in ipairs(val) do
+                            nodeCount = nodeCount + 1
+                            result[nodeCount] = AcquireSegmentNode(outNodePool, nodeCount, subVal, true, tagName)
+                        end
+                    else
+                        nodeCount = nodeCount + 1
+                        result[nodeCount] = AcquireSegmentNode(outNodePool, nodeCount, val, true, tagName)
                     end
                 else
-                    table.insert(result, { text = val, isTag = true, tag = tagName })
+                    RoithiUI:Log("|cffff0000[RoithiUI Tag Error]|r", tagName, val)
+                    nodeCount = nodeCount + 1
+                    result[nodeCount] = AcquireSegmentNode(outNodePool, nodeCount, "<Err>", true, nil)
                 end
             else
-                RoithiUI:Log("|cffff0000[RoithiUI Tag Error]|r", tagName, val)
-                table.insert(result, { text = "<Err>", isTag = true })
+                nodeCount = nodeCount + 1
+                result[nodeCount] = AcquireSegmentNode(outNodePool, nodeCount, token.rawToken, false, nil)
             end
-        else
-            table.insert(result, { text = "@" .. token, isTag = false })
         end
-        lastPos = endPos
     end
 
-    -- Add remaining static text
-    if lastPos <= #formatString then
-        table.insert(result, { text = formatString:sub(lastPos), isTag = false })
-    end
-
+    ClearSegmentNodePool(outNodePool, nodeCount + 1)
     return result
 end
 
@@ -699,6 +747,10 @@ function UF:UpdateTags(frame)
             if f.SegmentPool then
                 f.SegmentPool:ReleaseAll()
             end
+            if f.segmentScratch then
+                WipeArray(f.segmentScratch)
+            end
+            ClearSegmentNodePool(f.segmentNodePool, 1)
             f.activeFontStrings = nil
             f.appliedPoint = nil
             f.appliedCount = nil
@@ -738,8 +790,9 @@ function UF:UpdateTags(frame)
             -- Anchor to frame or specific element
             local point = tagConfig.point or "CENTER"
             local relativeTo = frame
-            if tagConfig.anchorTo == "Health" and frame.Health then
-                relativeTo = frame.Health
+            local healthBar = frame.Health or frame.SafeHealth
+            if tagConfig.anchorTo == "Health" and healthBar then
+                relativeTo = healthBar
             elseif tagConfig.anchorTo == "Power" and frame.Power then
                 relativeTo = frame.Power
             elseif tagConfig.anchorTo == "ClassPower" and frame.ClassPower then
@@ -780,7 +833,9 @@ function UF:UpdateTagFrame(tagFrame)
         unit = GetEffectiveTagUnit("player")
     end
 
-    local segments = TM:GetSegments(tagFrame.formatString, unit)
+    tagFrame.segmentScratch = tagFrame.segmentScratch or {}
+    tagFrame.segmentNodePool = tagFrame.segmentNodePool or {}
+    local segments = TM:GetSegments(tagFrame.formatString, unit, tagFrame.segmentScratch, tagFrame.segmentNodePool)
     local count = #segments
     if count == 0 then
         if tagFrame.SegmentPool.ReleaseAll then
@@ -979,12 +1034,12 @@ function UF:EnableTags(frame)
         for _, ev in ipairs(STAT_EVENTS) do
             if isDirect and listener.RegisterUnitEvent then
                 if frame.unit == "player" then
-                    listener:RegisterUnitEvent(ev, "player", "vehicle")
+                    pcall(listener.RegisterUnitEvent, listener, ev, "player", "vehicle")
                 else
-                    listener:RegisterUnitEvent(ev, frame.unit)
+                    pcall(listener.RegisterUnitEvent, listener, ev, frame.unit)
                 end
             else
-                listener:RegisterEvent(ev)
+                pcall(listener.RegisterEvent, listener, ev)
             end
         end
     end

@@ -892,6 +892,138 @@ function ObjectivesMod:HookAllTrackers()
     self:ApplyMasterHeaderVisibility()
 end
 
+local function FormatTrackerLine(line, font, objSize, outline, useShadow)
+    local applyTypo = ns.Utils and ns.Utils.ApplyTypography
+    if line and applyTypo then
+        if line.Dash then
+            applyTypo(line.Dash, font, objSize, outline, useShadow)
+        end
+        if line.Text then
+            applyTypo(line.Text, font, objSize, outline, useShadow)
+        end
+    end
+end
+
+local layoutCtxStack = {}
+local layoutCtxDepth = 0
+
+local function PushLayoutCtx(mod, font, objSize, outline, useShadow)
+    layoutCtxDepth = layoutCtxDepth + 1
+    local ctx = layoutCtxStack[layoutCtxDepth]
+    if not ctx then
+        ctx = {}
+        layoutCtxStack[layoutCtxDepth] = ctx
+    end
+    ctx.mod = mod
+    ctx.font = font
+    ctx.objSize = objSize
+    ctx.outline = outline
+    ctx.useShadow = useShadow
+    return ctx
+end
+
+local function PopLayoutCtx()
+    if layoutCtxDepth > 0 then
+        layoutCtxStack[layoutCtxDepth].mod = nil
+        layoutCtxDepth = layoutCtxDepth - 1
+    end
+end
+
+local function EndLayoutBlockVisitor(block)
+    local ctx = layoutCtxStack[layoutCtxDepth]
+    local mod = ctx and ctx.mod
+    if not mod then return end
+    if mod.ApplyQuestLevelToTitle then
+        pcall(mod.ApplyQuestLevelToTitle, mod, block)
+    end
+    if mod.UpdateBlockHoverObjectives then
+        local isHovered = (mod.IsMouseOverBlock and mod:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
+        pcall(mod.UpdateBlockHoverObjectives, mod, block, isHovered or false)
+    end
+end
+
+local function RunEndLayoutInner(mod, tracker)
+    ForEachTrackerBlock(tracker, EndLayoutBlockVisitor)
+    if mod.SortTrackerBlocks then
+        mod:SortTrackerBlocks(tracker)
+    end
+    if mod.TrimTrackerGap then
+        mod:TrimTrackerGap(tracker)
+    end
+end
+
+local function RunTrackerEndLayout(mod, tracker)
+    PushLayoutCtx(mod)
+    pcall(RunEndLayoutInner, mod, tracker)
+    PopLayoutCtx()
+end
+
+local function LayoutLineVisitor(line)
+    local ctx = layoutCtxStack[layoutCtxDepth]
+    if ctx then
+        FormatTrackerLine(line, ctx.font, ctx.objSize, ctx.outline, ctx.useShadow)
+    end
+end
+
+local function LayoutBlockVisitor(block)
+    local ctx = layoutCtxStack[layoutCtxDepth]
+    local mod = ctx and ctx.mod
+    if not mod then return end
+    local itemBtn = block and (block.itemButton or block.ItemButton or (block.GetItemButton and block:GetItemButton()))
+    if itemBtn and mod.SkinQuestItemButton then
+        pcall(mod.SkinQuestItemButton, mod, block, itemBtn)
+    end
+    if not skinnedBlocks[block] then
+        pcall(mod.SkinBlock, mod, block)
+    else
+        if mod.ApplyQuestLevelToTitle then
+            pcall(mod.ApplyQuestLevelToTitle, mod, block)
+        end
+        if mod.UpdateBlockHoverObjectives then
+            local isHovered = (mod.IsMouseOverBlock and mod:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
+            pcall(mod.UpdateBlockHoverObjectives, mod, block, isHovered or false)
+        end
+        if mod.ForEachBlockLine then
+            mod.ForEachBlockLine(block, LayoutLineVisitor)
+        elseif block.usedLines then
+            for _, line in pairs(block.usedLines) do LayoutLineVisitor(line) end
+        end
+    end
+end
+
+local function RunLayoutContentsInner(mod, tracker)
+    local font = mod:GetFontPath("objectiveFont")
+    local objSize = mod.db.objectiveFontSize or 11
+    local outline = mod:GetFontOutline("objectiveFontOutline")
+    local useShadow = mod:GetFontShadow("objectiveFontShadow")
+    PushLayoutCtx(mod, font, objSize, outline, useShadow)
+
+    ForEachTrackerBlock(tracker, LayoutBlockVisitor)
+
+    if tracker.usedProgressBars then
+        for _, bar in pairs(tracker.usedProgressBars) do
+            pcall(mod.SkinProgressBar, mod, bar)
+        end
+    end
+    if not tracker.EndLayout then
+        if mod.SortTrackerBlocks then
+            pcall(mod.SortTrackerBlocks, mod, tracker)
+        end
+        if mod.TrimTrackerGap then
+            pcall(mod.TrimTrackerGap, mod, tracker)
+        end
+    end
+    mod:UpdateAllDividers()
+end
+
+local function RunTrackerLayoutContents(mod, tracker)
+    local depthBefore = layoutCtxDepth
+    pcall(RunLayoutContentsInner, mod, tracker)
+    while layoutCtxDepth > depthBefore do
+        PopLayoutCtx()
+    end
+end
+
 function ObjectivesMod:HookTracker(tracker)
     if not tracker or hookedTrackers[tracker] then return end
     hookedTrackers[tracker] = true
@@ -909,23 +1041,7 @@ function ObjectivesMod:HookTracker(tracker)
     if tracker.EndLayout and not self:IsHooked(tracker, "EndLayout") then
         self:SecureHook(tracker, "EndLayout", function()
             if self.IsEnabled and not self:IsEnabled() then return end
-            pcall(function()
-                ForEachTrackerBlock(tracker, function(block)
-                    if self.ApplyQuestLevelToTitle then
-                        pcall(self.ApplyQuestLevelToTitle, self, block)
-                    end
-                    if self.UpdateBlockHoverObjectives then
-                        local isHovered = (self.IsMouseOverBlock and self:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
-                        self:UpdateBlockHoverObjectives(block, isHovered or false)
-                    end
-                end)
-                if self.SortTrackerBlocks then
-                    self:SortTrackerBlocks(tracker)
-                end
-                if self.TrimTrackerGap then
-                    self:TrimTrackerGap(tracker)
-                end
-            end)
+            RunTrackerEndLayout(self, tracker)
         end)
     end
 
@@ -973,62 +1089,8 @@ function ObjectivesMod:HookTracker(tracker)
 
     if tracker.LayoutContents and not self:IsHooked(tracker, "LayoutContents") then
         self:SecureHook(tracker, "LayoutContents", function()
-            pcall(function()
-                local font = self:GetFontPath("objectiveFont")
-                local objSize = self.db.objectiveFontSize or 11
-                local outline = self:GetFontOutline("objectiveFontOutline")
-                local useShadow = self:GetFontShadow("objectiveFontShadow")
-                local applyTypo = ns.Utils and ns.Utils.ApplyTypography
-
-                local function formatLine(line)
-                    if line and applyTypo then
-                        if line.Dash then
-                            applyTypo(line.Dash, font, objSize, outline, useShadow)
-                        end
-                        if line.Text then
-                            applyTypo(line.Text, font, objSize, outline, useShadow)
-                        end
-                    end
-                end
-
-                ForEachTrackerBlock(tracker, function(block)
-                    local itemBtn = block and (block.itemButton or block.ItemButton or (block.GetItemButton and block:GetItemButton()))
-                    if itemBtn and self.SkinQuestItemButton then
-                        pcall(self.SkinQuestItemButton, self, block, itemBtn)
-                    end
-                    if not skinnedBlocks[block] then
-                        pcall(self.SkinBlock, self, block)
-                    else
-                        if self.ApplyQuestLevelToTitle then
-                            pcall(self.ApplyQuestLevelToTitle, self, block)
-                        end
-                        if self.UpdateBlockHoverObjectives then
-                            local isHovered = (self.IsMouseOverBlock and self:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
-                            pcall(self.UpdateBlockHoverObjectives, self, block, isHovered or false)
-                        end
-                        if self.ForEachBlockLine then
-                            self.ForEachBlockLine(block, formatLine)
-                        elseif block.usedLines then
-                            for _, line in pairs(block.usedLines) do formatLine(line) end
-                        end
-                    end
-                end)
-
-                if tracker.usedProgressBars then
-                    for _, bar in pairs(tracker.usedProgressBars) do
-                        pcall(self.SkinProgressBar, self, bar)
-                    end
-                end
-                if not tracker.EndLayout then
-                    if self.SortTrackerBlocks then
-                        pcall(self.SortTrackerBlocks, self, tracker)
-                    end
-                    if self.TrimTrackerGap then
-                        pcall(self.TrimTrackerGap, self, tracker)
-                    end
-                end
-                self:UpdateAllDividers()
-            end)
+            if self.IsEnabled and not self:IsEnabled() then return end
+            RunTrackerLayoutContents(self, tracker)
         end)
     end
 end

@@ -27,20 +27,7 @@ local SWING_RESET_SPELLS = {
     [6807] = true, [6808] = true, [6809] = true, [6810] = true, [9880] = true, [9881] = true, [26996] = true,
 }
 
-local issecretvalue = _G.issecretvalue
-local canaccessvalue = _G.canaccessvalue
-
-local function IsSecret(v)
-    if ns.Utils and ns.Utils.IsSecret then
-        return ns.Utils.IsSecret(v)
-    end
-    if v == nil then return false end
-    local fn = _G.issecretvalue or issecretvalue
-    if type(fn) == "function" and fn(v) then return true end
-    local ca = _G.canaccessvalue or canaccessvalue
-    if type(ca) == "function" and not ca(v) then return true end
-    return type(v) == "userdata"
-end
+local IsSecret = ns.Utils.IsSecret
 
 local function SafeUnitBool(val)
     if val == nil then return false end

@@ -777,6 +777,21 @@ function MinimapMod:GetOptions()
                             if self.RefreshBuffFrameStyling then self:RefreshBuffFrameStyling() end
                         end,
                     },
+                    buffFrameForceDurations = {
+                        type = "toggle",
+                        name = L["Always Show Buff Durations"] or "Always Show Buff Durations",
+                        desc = L["Enforces Blizzard's buffDurations CVar so external addons or presets cannot hide aura duration timers."] or "Enforces Blizzard's buffDurations CVar so external addons or presets cannot hide aura duration timers.",
+                        order = 12,
+                        width = "full",
+                        get = function() return self.db.buffFrameForceDurations ~= false end,
+                        set = function(_, val)
+                            self.db.buffFrameForceDurations = val
+                            if val then
+                                if self.ResetBuffDurationLoopGuard then self:ResetBuffDurationLoopGuard() end
+                                if self.EnsureBuffDurationsCVar then self:EnsureBuffDurationsCVar(false) end
+                            end
+                        end,
+                    },
                 },
             },
         },

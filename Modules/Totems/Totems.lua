@@ -125,6 +125,8 @@ function Totems:OnInitialize()
     self.availableSpells = {}
 end
 
+local IsSecret = ns.Utils.IsSecret
+
 local suppressedBars = setmetatable({}, { __mode = "k" })
 
 function Totems:HideBlizzardTotems()
@@ -1416,8 +1418,8 @@ function Totems:UpdateShieldSlot()
             local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellId)
             if ok and aura then
                 isActive = true
-                count = aura.applications or aura.charges or 0
-                expiration = aura.expirationTime or 0
+                count = (aura.applications and not IsSecret(aura.applications)) and aura.applications or ((aura.charges and not IsSecret(aura.charges)) and aura.charges or 0)
+                expiration = (aura.expirationTime and not IsSecret(aura.expirationTime)) and aura.expirationTime or 0
                 break
             end
         end
@@ -1565,6 +1567,62 @@ function Totems:UpdateTotemDisplay(catKey)
     self:OnTick()
 end
 
+local function UpdateButtonTick(self, catKey, btn, state, now)
+    if not btn or not btn:IsShown() then return end
+
+    if btn.cooldownText then
+        local isCdActive = false
+        if btn.cooldownEnd and not IsSecret(btn.cooldownEnd) then
+            isCdActive = (btn.cooldownEnd > now)
+        end
+        if isCdActive and self.db.showCooldown ~= false then
+            btn.cooldownText:SetText(FormatTimeSeconds(btn.cooldownEnd - now))
+            btn.cooldownText:Show()
+        else
+            btn.cooldownText:SetText("")
+            btn.cooldownText:Hide()
+        end
+    end
+
+    if not state then return end
+
+    local isExpActive = false
+    local isTimedOut = false
+    if state.isActive and state.expirationTime and not IsSecret(state.expirationTime) then
+        if state.expirationTime > now then
+            isExpActive = true
+        elseif state.expirationTime > 0 then
+            isTimedOut = true
+        end
+    end
+
+    if isExpActive then
+        if self.db.showDuration ~= false then
+            btn.timerText:SetText(FormatTimeSeconds(state.expirationTime - now))
+            btn.timerText:Show()
+        else
+            btn.timerText:SetText("")
+            btn.timerText:Hide()
+        end
+    else
+        btn.timerText:SetText("")
+        btn.timerText:Hide()
+        if isTimedOut then
+            -- Timed out: refresh this slot
+            state.isActive = false
+            state.expirationTime = 0
+            local info = self.categoryInfo[catKey]
+            if info and info.blizzSlot then
+                self:UpdateTotemSlots()
+            elseif catKey == "shield" then
+                self:UpdateShieldSlot()
+            elseif catKey == "weapon" then
+                self:UpdateWeaponSlot()
+            end
+        end
+    end
+end
+
 function Totems:OnTick()
     local now = GetTime()
     if not self.lastSlotSync or (now - self.lastSlotSync >= 1.0) then
@@ -1575,59 +1633,7 @@ function Totems:OnTick()
     for _, catKey in ipairs(self.categories) do
         local btn = self.buttons[catKey]
         local state = self.slotStates and self.slotStates[catKey]
-        if btn and btn:IsShown() then
-            if btn.cooldownText then
-                local isCdActive = false
-                if btn.cooldownEnd then
-                    local ok, cmp = pcall(function() return btn.cooldownEnd > now end)
-                    isCdActive = ok and cmp
-                end
-                if isCdActive and self.db.showCooldown ~= false then
-                    btn.cooldownText:SetText(FormatTimeSeconds(btn.cooldownEnd - now))
-                    btn.cooldownText:Show()
-                else
-                    btn.cooldownText:SetText("")
-                    btn.cooldownText:Hide()
-                end
-            end
-            if state then
-                local isExpActive = false
-                local isTimedOut = false
-                if state.isActive and state.expirationTime then
-                    local ok, cmp = pcall(function() return state.expirationTime > now end)
-                    if ok and cmp then
-                        isExpActive = true
-                    elseif ok and not cmp and state.expirationTime > 0 then
-                        isTimedOut = true
-                    end
-                end
-                if isExpActive then
-                    if self.db.showDuration ~= false then
-                        btn.timerText:SetText(FormatTimeSeconds(state.expirationTime - now))
-                        btn.timerText:Show()
-                    else
-                        btn.timerText:SetText("")
-                        btn.timerText:Hide()
-                    end
-                else
-                    btn.timerText:SetText("")
-                    btn.timerText:Hide()
-                    if isTimedOut then
-                        -- Timed out: refresh this slot
-                        state.isActive = false
-                        state.expirationTime = 0
-                        local info = self.categoryInfo[catKey]
-                        if info and info.blizzSlot then
-                            self:UpdateTotemSlots()
-                        elseif catKey == "shield" then
-                            self:UpdateShieldSlot()
-                        elseif catKey == "weapon" then
-                            self:UpdateWeaponSlot()
-                        end
-                    end
-                end
-            end
-        end
+        UpdateButtonTick(self, catKey, btn, state, now)
     end
 end
 

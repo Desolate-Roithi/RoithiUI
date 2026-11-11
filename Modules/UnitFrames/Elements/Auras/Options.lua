@@ -4,9 +4,9 @@ local RoithiUI = _G.RoithiUI
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
 
 local RESTRICTED_FRIENDLY_DEBUFF_SPELLS = {
-    [124275] = "Light Stagger",
-    [124274] = "Moderate Stagger",
-    [124273] = "Heavy Stagger",
+    [124275] = L["Light Stagger"],
+    [124274] = L["Moderate Stagger"],
+    [124273] = L["Heavy Stagger"],
 }
 
 local function GenerateAuraFilters(GetDB, RefreshFunc)
@@ -677,12 +677,12 @@ local function GetGlobalAuraOptions()
     if RoithiUI.db.profile.CustomAuraFrames then
         local i = 10
         local unitsList = {
-            player = "Player",
-            target = "Target",
-            focus = "Focus",
-            pet = "Pet",
-            targettarget = "Target of Target",
-            focustarget = "Focus Target"
+            player = L["Player"],
+            target = L["Target"],
+            focus = L["Focus"],
+            pet = L["Pet"],
+            targettarget = L["Target of Target"],
+            focustarget = L["Focus Target"]
         }
 
         for id, conf in pairs(RoithiUI.db.profile.CustomAuraFrames) do
@@ -774,22 +774,18 @@ local function GetGlobalAuraOptions()
                                 name = L["Grow Direction"],
                                 order = 6,
                                 values = {
-                                    ["RIGHT_DOWN"]             = "Right then Down",
-                                    ["RIGHT_UP"]               = "Right then Up",
-                                    ["LEFT_DOWN"]              = "Left then Down",
-                                    ["LEFT_UP"]                = "Left then Up",
-                                    ["DOWN_RIGHT"]             = "Down then Right",
-                                    ["DOWN_LEFT"]              = "Down then Left",
-                                    ["UP_RIGHT"]               = "Up then Right",
-                                    ["UP_LEFT"]                = "Up then Left",
-                                    ["CENTER_HORIZONTAL"]      = "Centered Horizontal",
-                                    -- ["CENTER_HORIZONTAL_DOWN"] = "Centered Horizontal (Grow Down)",
-                                    -- ["CENTER_HORIZONTAL_UP"]   = "Centered Horizontal (Grow Up)",
-                                    ["CENTER_VERTICAL"]        = "Centered Vertical",
-                                    -- ["CENTER_VERTICAL_RIGHT"]  = "Centered Vertical (Grow Right)",
-                                    -- ["CENTER_VERTICAL_LEFT"]   = "Centered Vertical (Grow Left)",
+                                    ["RIGHT_DOWN"]        = L["Right then Down"],
+                                    ["RIGHT_UP"]          = L["Right then Up"],
+                                    ["LEFT_DOWN"]         = L["Left then Down"],
+                                    ["LEFT_UP"]           = L["Left then Up"],
+                                    ["DOWN_RIGHT"]        = L["Down then Right"],
+                                    ["DOWN_LEFT"]         = L["Down then Left"],
+                                    ["UP_RIGHT"]          = L["Up then Right"],
+                                    ["UP_LEFT"]           = L["Up then Left"],
+                                    ["CENTER_HORIZONTAL"] = L["Centered Horizontal"],
+                                    ["CENTER_VERTICAL"]   = L["Centered Vertical"],
                                 },
-                                sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" --[[, "CENTER_HORIZONTAL_DOWN", "CENTER_HORIZONTAL_UP", "CENTER_VERTICAL_RIGHT", "CENTER_VERTICAL_LEFT"]] },
+                                sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" },
                                 get = function() return GetDB().auraGrowDirection or "RIGHT_DOWN" end,
                                 set = function(_, v)
                                     GetDB().auraGrowDirection = v; ns.RefreshAllUnitFrames()

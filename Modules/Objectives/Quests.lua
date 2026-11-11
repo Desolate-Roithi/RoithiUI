@@ -18,17 +18,7 @@ objState.barBackdrops = barBackdrops
 local questZoneCache = {}
 local questTitleCache = {}
 
-local function IsSecret(val)
-    if ns.Utils and ns.Utils.IsSecret then
-        return ns.Utils.IsSecret(val)
-    end
-    if val == nil then return false end
-    local fn = _G.issecretvalue
-    if type(fn) == "function" and fn(val) then return true end
-    local ca = _G.canaccessvalue
-    if type(ca) == "function" and not ca(val) then return true end
-    return type(val) == "userdata"
-end
+local IsSecret = ns.Utils.IsSecret
 objState.IsSecret = IsSecret
 
 local function WipeTable(tbl)
@@ -520,15 +510,21 @@ local function GetCleanQuestTitle(block, questID, curText)
     if not curText or IsSecret(curText) or type(curText) ~= "string" then
         return ""
     end
-    local clean = curText:gsub("^%s*|c%x%x%x%x%x%x%x%x%[[^%]]+%]%|r%s*", "")
-    clean = clean:gsub("^%s*%[[^%]]+%]%s*", "")
-    clean = clean:gsub("^%s*|c%x%x%x%x%x%x%x%x\226\136\158%|r%s*", "")
-    clean = clean:gsub("^%s*\226\136\158%s*", "")
-    clean = clean:gsub("^%s*|c%x%x%x%x%x%x%x%x%*%|r%s*", "")
-    clean = clean:gsub("^%s*%*%s*", "")
-    clean = clean:gsub("^%s*|T[^|]+|t%s*", "")
+    local clean = curText
+    local changed = true
+    while changed do
+        local before = clean
+        clean = clean:gsub("^%s*|T[^|]+|t%s*", "")
+        clean = clean:gsub("^%s*|A[^|]+|a%s*", "")
+        clean = clean:gsub("^%s*|c%x%x%x%x%x%x%x%x%[[^%]]+%]%|r%s*", "")
+        clean = clean:gsub("^%s*%[[^%]]+%]%s*", "")
+        clean = clean:gsub("^%s*|c%x%x%x%x%x%x%x%x\226\136\158%|r%s*", "")
+        clean = clean:gsub("^%s*\226\136\158%s*", "")
+        clean = clean:gsub("^%s*|c%x%x%x%x%x%x%x%x%*%|r%s*", "")
+        clean = clean:gsub("^%s*%*%s*", "")
+        changed = (clean ~= before)
+    end
     clean = clean:gsub("%s*|T[^|]+|t%s*$", "")
-    clean = clean:gsub("^%s*|A[^|]+|a%s*", "")
     clean = clean:gsub("%s*|A[^|]+|a%s*$", "")
     clean = clean:gsub("%s*|c%x%x%x%x%x%x%x%x%[✓%]%|r%s*$", "")
     clean = clean:gsub("%s*%[✓%]%s*$", "")
@@ -607,7 +603,7 @@ function ObjectivesMod:ApplyQuestLevelToTitle(block)
     local newText
     if colorCode then
         if showLevel and showInfinity then
-            newText = string.format("%s%s[%d]|r %s %s%s|r", prefix, colorCode, lvl, infinityStr, colorCode, baseText)
+            newText = string.format("%s%s %s[%d]|r %s%s|r", prefix, infinityStr, colorCode, lvl, colorCode, baseText)
         elseif showLevel then
             newText = string.format("%s%s[%d]|r %s%s|r", prefix, colorCode, lvl, colorCode, baseText)
         elseif showInfinity then
@@ -617,7 +613,7 @@ function ObjectivesMod:ApplyQuestLevelToTitle(block)
         end
     else
         if showLevel and showInfinity then
-            newText = string.format("%s[%d] %s %s", prefix, lvl, infinityStr, baseText)
+            newText = string.format("%s%s [%d] %s", prefix, infinityStr, lvl, baseText)
         elseif showLevel then
             newText = string.format("%s[%d] %s", prefix, lvl, baseText)
         elseif showInfinity then
@@ -778,15 +774,16 @@ function ObjectivesMod:UpdateBlockHoverObjectives(block, isHovered)
             if line.Icon and line.Icon.SetAlpha then line.Icon:SetAlpha(1) end
             SetProgressBarState(pb, true)
             local textHeight = (line.Text and line.Text.GetStringHeight and line.Text:GetStringHeight()) or 0
-            if textHeight < 14 then
+            if not IsSecret(textHeight) and textHeight < 14 then
                 textHeight = (line.Text and line.Text.GetHeight and line.Text:GetHeight()) or 14
             end
-            local lh = math.max(16, math.ceil(textHeight) + 3)
+            local textHVal = (not IsSecret(textHeight) and textHeight) or 14
+            local lh = math.max(16, math.ceil(textHVal) + 3)
             if line.SetHeight then line:SetHeight(lh) end
             fullHeight = fullHeight + lh + lineSpacing
             if pb and pb.GetHeight then
                 local pbH = pb:GetHeight()
-                if pbH and pbH > 0 then
+                if pbH and not IsSecret(pbH) and pbH > 0 then
                     fullHeight = fullHeight + pbH + lineSpacing
                 end
             end
@@ -812,7 +809,7 @@ function ObjectivesMod:UpdateBlockHoverObjectives(block, isHovered)
     if block.SetHeight then
         local currentHeight = (block.GetHeight and block:GetHeight()) or 0
         local targetHeight = hoverMode and (isExpanded and fullHeight or headerHeight) or fullHeight
-        if math.abs(currentHeight - targetHeight) > 0.5 then
+        if not IsSecret(currentHeight) and not IsSecret(targetHeight) and math.abs(currentHeight - targetHeight) > 0.5 then
             block:SetHeight(targetHeight)
         end
     end

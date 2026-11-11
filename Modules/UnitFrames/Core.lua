@@ -154,12 +154,8 @@ local function Shared(self, unit)
     Health.colorHealth = false
 
     self.SafeHealth = Health  -- Register as "SafeHealth" element (Secret-safe)
-    self.Health = Health      -- Register as standard "Health" frame object
-
-    -- Disable oUF's built-in Health element so it does not attempt to index colors.class with secret keys
-    if self.DisableElement then
-        self:DisableElement("Health")
-    end
+    -- Note: self.Health is assigned to frame.SafeHealth in Units.lua after oUF:Spawn()
+    -- to prevent oUF's built-in Health element from enabling and conflicting with SafeHealth.
 
     -- 4. Text (Tags)
     if UF.CreateTags then

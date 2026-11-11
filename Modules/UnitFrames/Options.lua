@@ -6,6 +6,19 @@ local AL = ns.AttachmentLogic
 local SafeNum = ns.SafeNum
 local LEM = LibStub("LibEditMode-Roithi", true)
 
+local GROW_DIRECTION_VALUES = {
+    ["RIGHT_DOWN"]        = L["Right then Down"],
+    ["RIGHT_UP"]          = L["Right then Up"],
+    ["LEFT_DOWN"]         = L["Left then Down"],
+    ["LEFT_UP"]           = L["Left then Up"],
+    ["DOWN_RIGHT"]        = L["Down then Right"],
+    ["DOWN_LEFT"]         = L["Down then Left"],
+    ["UP_RIGHT"]          = L["Up then Right"],
+    ["UP_LEFT"]           = L["Up then Left"],
+    ["CENTER_HORIZONTAL"] = L["Centered Horizontal"],
+    ["CENTER_VERTICAL"]   = L["Centered Vertical"],
+}
+
 function ns.BuildUnitAndCastbarOptions(options)
     -- Populate Unit Frame Options
     local units = {
@@ -560,18 +573,7 @@ function ns.BuildUnitAndCastbarOptions(options)
                                 name = L["Grow Direction"],
                                 order = 8,
                                 scope = "both",
-                                values = {
-                                    ["RIGHT_DOWN"]             = "Right then Down",
-                                    ["RIGHT_UP"]               = "Right then Up",
-                                    ["LEFT_DOWN"]              = "Left then Down",
-                                    ["LEFT_UP"]                = "Left then Up",
-                                    ["DOWN_RIGHT"]             = "Down then Right",
-                                    ["DOWN_LEFT"]              = "Down then Left",
-                                    ["UP_RIGHT"]               = "Up then Right",
-                                    ["UP_LEFT"]                = "Up then Left",
-                                    ["CENTER_HORIZONTAL"]      = "Centered Horizontal",
-                                    ["CENTER_VERTICAL"]        = "Centered Vertical",
-                                },
+                                values = GROW_DIRECTION_VALUES,
                                 sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" },
                                 get = function()
                                     local dir = GetDB().auraGrowDirection
@@ -941,23 +943,8 @@ function ns.BuildUnitAndCastbarOptions(options)
                     type = "select",
                     name = L["Grow Direction"],
                     order = 6,
-                    values = {
-                        ["RIGHT_DOWN"]             = "Right then Down",
-                        ["RIGHT_UP"]               = "Right then Up",
-                        ["LEFT_DOWN"]              = "Left then Down",
-                        ["LEFT_UP"]                = "Left then Up",
-                        ["DOWN_RIGHT"]             = "Down then Right",
-                        ["DOWN_LEFT"]              = "Down then Left",
-                        ["UP_RIGHT"]               = "Up then Right",
-                        ["UP_LEFT"]                = "Up then Left",
-                        ["CENTER_HORIZONTAL"]      = "Centered Horizontal",
-                        -- ["CENTER_HORIZONTAL_DOWN"] = "Centered Horizontal (Grow Down)",
-                        -- ["CENTER_HORIZONTAL_UP"]   = "Centered Horizontal (Grow Up)",
-                        ["CENTER_VERTICAL"]        = "Centered Vertical",
-                        -- ["CENTER_VERTICAL_RIGHT"]  = "Centered Vertical (Grow Right)",
-                        -- ["CENTER_VERTICAL_LEFT"]   = "Centered Vertical (Grow Left)",
-                    },
-                    sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" --[[, "CENTER_HORIZONTAL_DOWN", "CENTER_HORIZONTAL_UP", "CENTER_VERTICAL_RIGHT", "CENTER_VERTICAL_LEFT"]] },
+                    values = GROW_DIRECTION_VALUES,
+                    sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" },
                     get = function() return GetDB().auraGrowDirection or "RIGHT_DOWN" end,
                     set = function(_, v)
                         GetDB().auraGrowDirection = v; ns.RefreshUnitFrame(unit)
@@ -1100,23 +1087,8 @@ function ns.BuildUnitAndCastbarOptions(options)
                             type = "select",
                             name = L["Grow Direction"],
                             order = 5,
-                            values = {
-                                ["RIGHT_DOWN"]             = "Right then Down",
-                                ["RIGHT_UP"]               = "Right then Up",
-                                ["LEFT_DOWN"]              = "Left then Down",
-                                ["LEFT_UP"]                = "Left then Up",
-                                ["DOWN_RIGHT"]             = "Down then Right",
-                                ["DOWN_LEFT"]              = "Down then Left",
-                                ["UP_RIGHT"]               = "Up then Right",
-                                ["UP_LEFT"]                = "Up then Left",
-                                ["CENTER_HORIZONTAL"]      = "Centered Horizontal",
-                                -- ["CENTER_HORIZONTAL_DOWN"] = "Centered Horizontal (Grow Down)",
-                                -- ["CENTER_HORIZONTAL_UP"]   = "Centered Horizontal (Grow Up)",
-                                ["CENTER_VERTICAL"]        = "Centered Vertical",
-                                -- ["CENTER_VERTICAL_RIGHT"]  = "Centered Vertical (Grow Right)",
-                                -- ["CENTER_VERTICAL_LEFT"]   = "Centered Vertical (Grow Left)",
-                            },
-                            sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" --[[, "CENTER_HORIZONTAL_DOWN", "CENTER_HORIZONTAL_UP", "CENTER_VERTICAL_RIGHT", "CENTER_VERTICAL_LEFT"]] },
+                            values = GROW_DIRECTION_VALUES,
+                            sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" },
                             get = function() return GetDB().buffGrowDirection or GetDB().auraGrowDirection or "RIGHT_DOWN" end,
                             set = function(_, v)
                                 GetDB().buffGrowDirection = v; ns.RefreshUnitFrame(unit)
@@ -1257,18 +1229,7 @@ function ns.BuildUnitAndCastbarOptions(options)
                             type = "select",
                             name = L["Grow Direction"],
                             order = 5,
-                            values = {
-                                ["RIGHT_DOWN"]             = "Right then Down",
-                                ["RIGHT_UP"]               = "Right then Up",
-                                ["LEFT_DOWN"]              = "Left then Down",
-                                ["LEFT_UP"]                = "Left then Up",
-                                ["DOWN_RIGHT"]             = "Down then Right",
-                                ["DOWN_LEFT"]              = "Down then Left",
-                                ["UP_RIGHT"]               = "Up then Right",
-                                ["UP_LEFT"]                = "Up then Left",
-                                ["CENTER_HORIZONTAL"]      = "Centered Horizontal",
-                                ["CENTER_VERTICAL"]        = "Centered Vertical",
-                            },
+                            values = GROW_DIRECTION_VALUES,
                             sorting = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT", "CENTER_HORIZONTAL", "CENTER_VERTICAL" },
                             get = function()
                                 local dir = GetDB().debuffGrowDirection or GetDB().auraGrowDirection

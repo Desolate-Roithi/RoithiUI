@@ -2,25 +2,79 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 local RoithiUI = _G.RoithiUI
 
--- Bare seconds numeric rule formatter cache (removes 's' suffix: "45", "2m", "1h")
+-- Bare seconds numeric rule formatter cache (removes 's' suffix: "45", "2m", "1h", "1d")
 local bareSecondsFormatterCache = nil
-local function GetBareSecondsFormatter()
-    if bareSecondsFormatterCache ~= nil then return bareSecondsFormatterCache end
-    if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Enum and Enum.NumericRuleFormatRounding) then
-        bareSecondsFormatterCache = false
-        return false
+local function BuildSecondsFallbackFormatter()
+    local csu = _G.C_StringUtil
+    local ccu = _G.C_CurveUtil
+    local enum = _G.Enum
+    if not (csu and csu.CreateSecondsFormatter and ccu and ccu.CreateCurve and enum and enum.SecondsFormatterInterval and enum.SecondsFormatterAbbreviation) then
+        return nil
     end
     local ok, fmt = pcall(function()
-        local down = Enum.NumericRuleFormatRounding.Down
-        local up   = Enum.NumericRuleFormatRounding.Up
-        local f = C_StringUtil.CreateNumericRuleFormatter()
-        f:AddBreakpoint({ threshold = 0, step = 1, rounding = up, min = 1, format = "%d" })
-        f:AddBreakpoint({ threshold = 60, step = 1, rounding = down, min = 1, format = "%dm", components = { { div = 60, rounding = up } } })
-        f:AddBreakpoint({ threshold = 3600, step = 1, rounding = down, min = 1, format = "%dh", components = { { div = 3600, rounding = up } } })
+        local curve = ccu.CreateCurve()
+        curve:AddPoint(61, enum.SecondsFormatterInterval.Minutes)
+        curve:AddPoint(3601, enum.SecondsFormatterInterval.Hours)
+        curve:AddPoint(86401, enum.SecondsFormatterInterval.Days)
+
+        local f = csu.CreateSecondsFormatter()
+        f:SetDefaultAbbreviation(enum.SecondsFormatterAbbreviation.OneLetter)
+        f:SetMinInterval(enum.SecondsFormatterInterval.Seconds)
+        f:SetMaxIntervalCurve(curve)
+        f:SetDesiredUnitCount(1)
+        if f.SetStripIntervalWhitespace and enum.SecondsFormatterIntervalWhitespace then
+            f:SetStripIntervalWhitespace(enum.SecondsFormatterIntervalWhitespace.Strip)
+        end
         return f
     end)
-    bareSecondsFormatterCache = (ok and fmt) or false
-    return bareSecondsFormatterCache
+    if ok and fmt then
+        return fmt
+    end
+    return nil
+end
+
+local function GetBareSecondsFormatter()
+    if bareSecondsFormatterCache ~= nil then return bareSecondsFormatterCache end
+    local csu = _G.C_StringUtil
+    local enum = _G.Enum
+    if csu and csu.CreateNumericRuleFormatter and enum and enum.NumericRuleFormatRounding then
+        local ok, fmt = pcall(function()
+            local down = enum.NumericRuleFormatRounding.Down
+            local up   = enum.NumericRuleFormatRounding.Up
+            local f = csu.CreateNumericRuleFormatter()
+            -- Breakpoint-level rounding avoids engine rejection from nested rounding inside components
+            if f.SetBreakpoints then
+                f:SetBreakpoints({
+                    { threshold = 0,     step = 1, rounding = up,   min = 1, format = "%d" },
+                    { threshold = 60,    step = 1, rounding = down, min = 1, format = "%dm", components = { { div = 60 } } },
+                    { threshold = 3600,  step = 1, rounding = down, min = 1, format = "%dh", components = { { div = 3600 } } },
+                    { threshold = 86400, step = 1, rounding = down, min = 1, format = "%dd", components = { { div = 86400 } } },
+                })
+            else
+                f:AddBreakpoint({ threshold = 0,     step = 1, rounding = up,   min = 1, format = "%d" })
+                f:AddBreakpoint({ threshold = 60,    step = 1, rounding = down, min = 1, format = "%dm", components = { { div = 60 } } })
+                f:AddBreakpoint({ threshold = 3600,  step = 1, rounding = down, min = 1, format = "%dh", components = { { div = 3600 } } })
+                f:AddBreakpoint({ threshold = 86400, step = 1, rounding = down, min = 1, format = "%dd", components = { { div = 86400 } } })
+            end
+            return f
+        end)
+        if ok and fmt then
+            bareSecondsFormatterCache = fmt
+            return bareSecondsFormatterCache
+        end
+    end
+    local fallback = BuildSecondsFallbackFormatter()
+    if fallback then
+        bareSecondsFormatterCache = fallback
+        return bareSecondsFormatterCache
+    end
+    bareSecondsFormatterCache = false
+    return false
+end
+
+local function ShouldUseLegacyFormatterKey()
+    local acu = _G.C_AuraContainerUtil
+    return acu ~= nil and type(acu.ProcessCustomAuraButtonDurationTextOptions) ~= "function"
 end
 
 -------------------------------------------------------------------------------
@@ -44,7 +98,8 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
         end
 
         -- Visual Debug helper background (ONLY when /rad is enabled)
-        if RoithiUI.AuraDebug then
+        local roithi = _G.RoithiUI or RoithiUI
+        if roithi and roithi.AuraDebug then
             local dbgBg = auraButton.DbgBg or auraButton:CreateTexture(nil, "BACKGROUND", nil, -7)
             dbgBg:SetAllPoints(auraButton)
             dbgBg:SetColorTexture(0, 1, 0, 0.4)
@@ -55,7 +110,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
         end
 
         -- Font settings from profile options
-        local fontName = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameFont) or "Friz Quadrata TT"
+        local fontName = (roithi and roithi.db and roithi.db.profile and roithi.db.profile.General and roithi.db.profile.General.unitFrameFont) or "Friz Quadrata TT"
 
         -- Visibility Flags
         local hideIcon = isDebuff and (db.hideDebuffIcon or db.hideIcon) or (db.hideBuffIcon or db.hideIcon)
@@ -88,7 +143,6 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
         if cd then
             if cd.SetAllPoints then cd:SetAllPoints(auraButton) end
             if cd.SetReverse then cd:SetReverse(true) end
-            if cd.SetHideCountdownNumbers then cd:SetHideCountdownNumbers(true) end
             local hideSwipe = hideIcon or hideTimer
             if cd.SetDrawSwipe then cd:SetDrawSwipe(not hideSwipe) end
             if cd.SetDrawEdge then cd:SetDrawEdge(not hideSwipe) end
@@ -131,7 +185,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
 
                 local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
                 if utils and utils.ApplyTypography then
-                    utils.ApplyTypography(durationText, fontName, timerFontSize, "OUTLINE", false, "Expressway")
+                    utils.ApplyTypography(durationText, fontName, timerFontSize, "OUTLINE", false, "Expressway", true)
                 end
                 if durationText.ClearAllPoints then durationText:ClearAllPoints() end
                 if durationText.SetPoint then durationText:SetPoint(timerAnchor, auraButton, timerAnchor, timerX, timerY) end
@@ -144,22 +198,45 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                 end
 
                 auraButton.DurationText = durationText
+                local durationBound = false
                 if auraButton.SetDurationText then
-                    local fmt = GetBareSecondsFormatter()
-                    if fmt then
-                        local opts = {}
-                        if C_DurationUtil and C_DurationUtil.CreateDurationTextBinding then
-                            local b = C_DurationUtil.CreateDurationTextBinding()
-                            if b.SetFormatter then b:SetFormatter(fmt) end
-                            if b.SetEnabled then b:SetEnabled(true) end
-                            opts.binding = b
-                        else
-                            opts.formatter = fmt
-                        end
-                        pcall(auraButton.SetDurationText, auraButton, durationText, opts)
-                    else
-                        pcall(auraButton.SetDurationText, auraButton, durationText)
+                    if auraButton.ClearDurationText then
+                        pcall(auraButton.ClearDurationText, auraButton)
                     end
+                    local fmt = GetBareSecondsFormatter()
+                    local useLegacyKey = ShouldUseLegacyFormatterKey()
+                    local durationOpts = {}
+                    if fmt then
+                        if useLegacyKey then
+                            durationOpts.formatter = fmt
+                        else
+                            durationOpts.textFormatter = fmt
+                        end
+                    end
+                    local ok = pcall(auraButton.SetDurationText, auraButton, durationText, durationOpts)
+                    if ok then
+                        durationBound = true
+                    elseif fmt then
+                        local altOpts = useLegacyKey and { textFormatter = fmt } or { formatter = fmt }
+                        local okAlt = pcall(auraButton.SetDurationText, auraButton, durationText, altOpts)
+                        if okAlt then
+                            durationBound = true
+                        end
+                    end
+                    if not durationBound then
+                        local okBare = pcall(auraButton.SetDurationText, auraButton, durationText, {})
+                        if okBare then
+                            durationBound = true
+                        end
+                    end
+                end
+
+                -- Manage Cooldown swipe countdown numbers:
+                -- Suppress native countdown numbers only if user hid the timer OR if native SetDurationText is actively bound.
+                -- In WoW Forever / environments without SetDurationText, keep countdown numbers enabled so native/OmniCC timers show.
+                if cd and cd.SetHideCountdownNumbers then
+                    local suppressCooldownNumbers = (hideTimer == true) or durationBound
+                    cd:SetHideCountdownNumbers(suppressCooldownNumbers)
                 end
             end
 
@@ -176,7 +253,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
 
                 local utils = ns.Utils or (_G.RoithiUI and _G.RoithiUI.Utils)
                 if utils and utils.ApplyTypography then
-                    utils.ApplyTypography(countText, fontName, stackFontSize, "OUTLINE", false, "Expressway")
+                    utils.ApplyTypography(countText, fontName, stackFontSize, "OUTLINE", false, "Expressway", true)
                 end
                 if countText.ClearAllPoints then countText:ClearAllPoints() end
                 if countText.SetPoint then countText:SetPoint(stackAnchor, auraButton, stackAnchor, stackX, stackY) end
@@ -222,8 +299,6 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
         if auraButton.SetCancelAuraButtons then
             pcall(auraButton.SetCancelAuraButtons, auraButton, "RightButtonUp")
         end
-
-        auraButton.roithiStyled = true
     end)
 end
 

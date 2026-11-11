@@ -218,15 +218,7 @@ local speakerCount = 0
 local MAX_SPEAKERS = 2000
 local playerNameToGuid = {}
 
-local function IsSecret(v)
-    if ns and ns.Utils and ns.Utils.IsSecret then
-        return ns.Utils.IsSecret(v)
-    end
-    if v == nil then return false end
-    if _G.issecretvalue and _G.issecretvalue(v) then return true end
-    if _G.canaccessvalue and not _G.canaccessvalue(v) then return true end
-    return type(v) == "userdata"
-end
+local IsSecret = ns.Utils.IsSecret
 
 local function GetSpeakerInfo(guid)
     if not guid or IsSecret(guid) or type(guid) ~= "string" or guid == "" then return nil end

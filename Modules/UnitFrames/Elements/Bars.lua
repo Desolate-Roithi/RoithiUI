@@ -251,7 +251,7 @@ function UF:CreateHealPrediction(frame)
     clipFrame:SetAllPoints()
     -- Safety wrap for older clients or environments where this might strict-error
     pcall(function() clipFrame:SetClipsChildren(true) end)
-    frame.Health.ClipFrame = clipFrame
+    health.ClipFrame = clipFrame
 
     local textureName = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameBar) or
         (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.barTexture) or "Solid"
@@ -272,7 +272,7 @@ function UF:CreateHealPrediction(frame)
     absorb:SetStatusBarTexture(texture)
     -- Debug Color (Bright Neon Yellow) and High Strata as requested
     absorb:SetStatusBarColor(1, 1, 0, 1)
-    absorb:SetFrameLevel(frame.Health:GetFrameLevel() + 10)
+    absorb:SetFrameLevel(health:GetFrameLevel() + 10)
 
     -- Over-absorb Glow
     local overAbsorbGlow = absorb:CreateTexture(nil, "OVERLAY")
@@ -322,7 +322,9 @@ function UF:CreateHealPrediction(frame)
             local healAbsorbAmount = calculator:GetHealAbsorbs() or 0
 
             local maxHealthVal = UnitHealthMax(frame.unit)
-            local width = frame.Health:GetWidth()
+            local healthBar = frame.Health or frame.SafeHealth or health
+            if not healthBar then return end
+            local width = healthBar:GetWidth()
             if width <= 0 then return end
 
             -- Heal Logic (SetValue + Stacked)
@@ -334,14 +336,14 @@ function UF:CreateHealPrediction(frame)
             otherHeal:SetMinMaxValues(0, maxHealthVal)
             otherHeal:SetValue(SafeValOrZero(otherIncomingHeal))
 
-            local healthTex = frame.Health:GetStatusBarTexture()
+            local healthTex = healthBar:GetStatusBarTexture()
             myHeal:ClearAllPoints()
             if healthTex then
                 myHeal:SetPoint("TOPLEFT", healthTex, "TOPRIGHT", 0, 0)
                 myHeal:SetPoint("BOTTOMLEFT", healthTex, "BOTTOMRIGHT", 0, 0)
             else
-                myHeal:SetPoint("TOPLEFT", frame.Health, "TOPLEFT", 0, 0)
-                myHeal:SetPoint("BOTTOMLEFT", frame.Health, "BOTTOMLEFT", 0, 0)
+                myHeal:SetPoint("TOPLEFT", healthBar, "TOPLEFT", 0, 0)
+                myHeal:SetPoint("BOTTOMLEFT", healthBar, "BOTTOMLEFT", 0, 0)
             end
 
             local myTex = myHeal:GetStatusBarTexture()
@@ -362,20 +364,20 @@ function UF:CreateHealPrediction(frame)
                 healAbsorb:SetPoint("TOPRIGHT", healthTex, "TOPRIGHT", 0, 0)
                 healAbsorb:SetPoint("BOTTOMRIGHT", healthTex, "BOTTOMRIGHT", 0, 0)
             else
-                healAbsorb:SetPoint("TOPRIGHT", frame.Health, "TOPRIGHT", 0, 0)
-                healAbsorb:SetPoint("BOTTOMRIGHT", frame.Health, "BOTTOMRIGHT", 0, 0)
+                healAbsorb:SetPoint("TOPRIGHT", healthBar, "TOPRIGHT", 0, 0)
+                healAbsorb:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", 0, 0)
             end
             healAbsorb:Show()
 
             local totalAbsorb = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(frame.unit) or 0
 
             absorb:ClearAllPoints()
-            absorb:SetPoint("TOPLEFT", frame.Health, "TOPLEFT", 0, 0)
-            absorb:SetPoint("BOTTOMLEFT", frame.Health, "BOTTOMLEFT", 0, 0)
+            absorb:SetPoint("TOPLEFT", healthBar, "TOPLEFT", 0, 0)
+            absorb:SetPoint("BOTTOMLEFT", healthBar, "BOTTOMLEFT", 0, 0)
 
             absorb:SetWidth(width)
 
-            local hMin, hMax = frame.Health:GetMinMaxValues()
+            local hMin, hMax = healthBar:GetMinMaxValues()
             absorb:SetMinMaxValues(hMin, hMax)
             absorb:SetValue(SafeValOrZero(totalAbsorb))
             absorb:Show()
@@ -420,8 +422,9 @@ function UF:CreateHealPrediction(frame)
         end
 
         frame:HookScript("OnShow", function() pcall(RunHealPredictionUpdate) end)
-        if frame.Health and frame.Health.HookScript then
-            frame.Health:HookScript("OnSizeChanged", function() pcall(RunHealPredictionUpdate) end)
+        local hookHealth = frame.Health or frame.SafeHealth or health
+        if hookHealth and hookHealth.HookScript then
+            hookHealth:HookScript("OnSizeChanged", function() pcall(RunHealPredictionUpdate) end)
         end
 
         pcall(RunHealPredictionUpdate)

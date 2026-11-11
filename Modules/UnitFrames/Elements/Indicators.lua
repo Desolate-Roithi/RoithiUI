@@ -376,7 +376,10 @@ function UF:CreateIndicators(frame)
                         pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
                     else
                         local faction = pvpType or (UnitFactionGroup("player") or "Neutral")
-                        if faction == "FFA" then
+                        local isSecretFaction = (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(faction)) or (_G.issecretvalue and _G.issecretvalue(faction))
+                        if isSecretFaction then
+                            pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Neutral")
+                        elseif faction == "FFA" then
                             pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-FFA")
                         elseif faction == "Alliance" then
                             pvp:SetTexture("Interface\\TargetingFrame\\UI-PVP-Alliance")
@@ -397,9 +400,10 @@ function UF:CreateIndicators(frame)
 
         local pvpTimerFS = frame.PvPTimerText
         if pvpTimerFS then
-            if unit == "player" and pvp:IsShown() and _G.GetPVPTimer then
+            if unit == "player" and not isSecretPvP and pvp:IsShown() and _G.GetPVPTimer then
                 local ok, pvpTime = pcall(_G.GetPVPTimer)
-                if ok and pvpTime and pvpTime > 0 and pvpTime < 301000 then
+                local isSecretTimer = ok and pvpTime ~= nil and ((ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(pvpTime)) or (issecretvalue and issecretvalue(pvpTime)) or (canaccessvalue and not canaccessvalue(pvpTime)))
+                if ok and pvpTime and not isSecretTimer and type(pvpTime) == "number" and pvpTime > 0 and pvpTime < 301000 then
                     local totalSec = math.floor(pvpTime / 1000)
                     local m = math.floor(totalSec / 60)
                     local s = totalSec % 60
@@ -414,7 +418,7 @@ function UF:CreateIndicators(frame)
                     pvpTimerFS:Hide()
                     if frame.pvpTicker then frame.pvpTicker:Hide() end
                 end
-            elseif inTestMode and unit == "player" and pvp:IsShown() then
+            elseif inTestMode and unit == "player" and not isSecretPvP and pvp:IsShown() then
                 pvpTimerFS:SetText("4:59")
                 pvpTimerFS:Show()
                 if frame.pvpTicker then frame.pvpTicker:Hide() end

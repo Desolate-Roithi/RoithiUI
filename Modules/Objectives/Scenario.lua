@@ -27,6 +27,8 @@ end
 objState.SharesWidgetPool = SharesWidgetPool
 ObjectivesMod.SharesWidgetPool = SharesWidgetPool
 
+local IsSecret = ns.Utils.IsSecret
+
 function ObjectivesMod:GetStageBlockWidgetHeight(stageBlock)
     if not stageBlock then return nil, false, nil, false end
 
@@ -143,11 +145,13 @@ function ObjectivesMod:AlignEventTracker(tracker)
     if not tracker then return end
     local otf = _G.ObjectiveTrackerFrame
     local targetWidth = (otf and otf.GetWidth and otf:GetWidth())
-    if targetWidth and targetWidth > 50 then
-        if tracker.SetWidth and math.abs((tracker.GetWidth and tracker:GetWidth() or 0) - targetWidth) > 1 then
+    if targetWidth and not IsSecret(targetWidth) and targetWidth > 50 then
+        local tw = tracker.GetWidth and tracker:GetWidth() or 0
+        if tracker.SetWidth and not IsSecret(tw) and math.abs(tw - targetWidth) > 1 then
             tracker:SetWidth(targetWidth)
         end
-        if tracker.Header and tracker.Header.SetWidth and math.abs((tracker.Header.GetWidth and tracker.Header:GetWidth() or 0) - targetWidth) > 1 then
+        local hw = tracker.Header and tracker.Header.GetWidth and tracker.Header:GetWidth() or 0
+        if tracker.Header and tracker.Header.SetWidth and not IsSecret(hw) and math.abs(hw - targetWidth) > 1 then
             tracker.Header:SetWidth(targetWidth)
         end
         if tracker.Block and tracker.Block.SetWidth then

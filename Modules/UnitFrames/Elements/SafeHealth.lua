@@ -38,7 +38,9 @@ local function GetSmoothColorCurve(grad)
 end
 
 local function Update(self, event, unit)
-    if event == "PLAYER_TARGET_CHANGED" or (event == "UNIT_TARGET" and self.unit == "targettarget") or event == "ForceUpdate" then
+    if event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED"
+        or (event == "UNIT_TARGET" and (self.unit == "targettarget" or self.unit == "focustarget"))
+        or event == "ForceUpdate" then
         unit = self.unit
     end
     if (not unit or self.unit ~= unit) then return end
@@ -52,9 +54,27 @@ local function Update(self, event, unit)
     local max = UnitHealthMax(unit)
 
     -- 2. Get Safe Percentage for Logic/Colors
-    -- UnitHealthPercent(unit, exact, curve) -> safe number 0-100
-    -- CurveConstants.ScaleTo100 is required for 0-100 scale
-    local per = UnitHealthPercent(unit, false, CurveConstants.ScaleTo100) or 100
+    -- In Classic/out-of-combat: compute directly from numeric cur/max inside pcall to catch secret comparison/arithmetic traps.
+    -- In Retail Midnight combat: call UnitHealthPercent with guarded CurveConstants.
+    local per = 100
+    local computedOk, computedPer = pcall(function()
+        if issecretvalue and (issecretvalue(cur) or issecretvalue(max)) then return nil end
+        if canaccessvalue and (not canaccessvalue(cur) or not canaccessvalue(max)) then return nil end
+        if type(cur) == "number" and type(max) == "number" and max > 0 then
+            return (cur / max) * 100
+        end
+        return nil
+    end)
+    if computedOk and type(computedPer) == "number" then
+        per = computedPer
+    elseif _G.UnitHealthPercent then
+        local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or nil
+        local okP, p = pcall(_G.UnitHealthPercent, unit, false, curve)
+        local isSecP = (issecretvalue and issecretvalue(p)) or (canaccessvalue and not canaccessvalue(p))
+        if okP and type(p) == "number" and not isSecP then
+            per = p
+        end
+    end
 
     -- 3. Update StatusBar
     -- SetMinMaxValues and SetValue are SAFE to call with Secrets (Blizzard allow-list)
@@ -186,7 +206,11 @@ local function Enable(self)
         self:RegisterEvent("UNIT_HEALTH", Path)
         self:RegisterEvent("UNIT_MAXHEALTH", Path)
         self:RegisterEvent("UNIT_CONNECTION", Path)
-        if self.unit == "targettarget" then
+        if self.unit == "target" then
+            self:RegisterEvent("PLAYER_TARGET_CHANGED", Path, true)
+        elseif self.unit == "focus" then
+            self:RegisterEvent("PLAYER_FOCUS_CHANGED", Path, true)
+        elseif self.unit == "targettarget" then
             self:RegisterEvent("UNIT_TARGET", Path)
             self:RegisterEvent("PLAYER_TARGET_CHANGED", Path, true)
         elseif self.unit == "focustarget" then
@@ -215,7 +239,11 @@ local function Disable(self)
         self:UnregisterEvent("UNIT_HEALTH", Path)
         self:UnregisterEvent("UNIT_MAXHEALTH", Path)
         self:UnregisterEvent("UNIT_CONNECTION", Path)
-        if self.unit == "targettarget" then
+        if self.unit == "target" then
+            self:UnregisterEvent("PLAYER_TARGET_CHANGED", Path)
+        elseif self.unit == "focus" then
+            self:UnregisterEvent("PLAYER_FOCUS_CHANGED", Path)
+        elseif self.unit == "targettarget" then
             self:UnregisterEvent("UNIT_TARGET", Path)
             self:UnregisterEvent("PLAYER_TARGET_CHANGED", Path)
         elseif self.unit == "focustarget" then

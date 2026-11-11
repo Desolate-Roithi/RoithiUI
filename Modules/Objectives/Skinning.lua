@@ -27,17 +27,7 @@ function ObjectivesMod:ResetSkinningHookGuards()
     end
 end
 
-local function IsSecret(val)
-    if ns.Utils and ns.Utils.IsSecret then
-        return ns.Utils.IsSecret(val)
-    end
-    if val == nil then return false end
-    local fn = _G.issecretvalue
-    if type(fn) == "function" and fn(val) then return true end
-    local ca = _G.canaccessvalue
-    if type(ca) == "function" and not ca(val) then return true end
-    return type(val) == "userdata"
-end
+local IsSecret = ns.Utils.IsSecret
 objState.IsSecret = objState.IsSecret or IsSecret
 
 local function ApplyTypographySafe(target, font, size, outline, shadow)
@@ -72,10 +62,10 @@ function ObjectivesMod:SkinHeader(header)
     local otf = _G.ObjectiveTrackerFrame
     local parent = header:GetParent()
     local targetWidth = (otf and otf.GetWidth and otf:GetWidth())
-    if not targetWidth or targetWidth < 50 then
+    if not targetWidth or (not IsSecret(targetWidth) and targetWidth < 50) then
         targetWidth = (parent and parent.GetWidth and parent:GetWidth()) or 235
     end
-    if targetWidth and targetWidth > 50 then
+    if targetWidth and not IsSecret(targetWidth) and targetWidth > 50 then
         if header.SetWidth then header:SetWidth(targetWidth) end
         local parentFrame = header:GetParent()
         local isShared = parentFrame and ((objState.SharesWidgetPool and objState.SharesWidgetPool(parentFrame)) or parentFrame == _G.ScenarioObjectiveTracker or parentFrame == _G.UIWidgetObjectiveTracker)
@@ -222,11 +212,11 @@ function ObjectivesMod:EnsureAccentDivider(header)
     local otf = _G.ObjectiveTrackerFrame
     local parent = header:GetParent()
     local targetWidth = (otf and otf.GetWidth and otf:GetWidth())
-    if not targetWidth or targetWidth < 50 then
+    if not targetWidth or (not IsSecret(targetWidth) and targetWidth < 50) then
         targetWidth = (parent and parent.GetWidth and parent:GetWidth()) or 235
     end
 
-    if targetWidth and targetWidth > 50 then
+    if targetWidth and not IsSecret(targetWidth) and targetWidth > 50 then
         divider:ClearAllPoints()
         divider:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 0, -2)
         divider:SetPoint("BOTTOMRIGHT", header, "BOTTOMLEFT", targetWidth, -2)

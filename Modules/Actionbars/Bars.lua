@@ -73,15 +73,7 @@ local HIGHLIGHT_TEX_KEYS = { "SpellHighlightTexture", "NewActionTexture" }
 local CENTERED_FX_KEYS = { "SpellCastAnimFrame", "TargetReticleAnimFrame", "InterruptDisplay", "CooldownFlash" }
 local singleButtonScratch = {}
 
-local function IsSecret(val)
-    if ns.Utils and ns.Utils.IsSecret then
-        return ns.Utils.IsSecret(val)
-    end
-    if val == nil then return false end
-    if _G.issecretvalue and _G.issecretvalue(val) then return true end
-    if _G.canaccessvalue and not _G.canaccessvalue(val) then return true end
-    return type(val) == "userdata"
-end
+local IsSecret = ns.Utils.IsSecret
 
 local function IsRangeIndicator(text)
     if not text then return false end

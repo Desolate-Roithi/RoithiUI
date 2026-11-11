@@ -2,9 +2,17 @@ local addonName, AT = ...
 if AT.skipLoad then return end
 local RoithiUI = AT.RoithiUI or _G.RoithiUI
 local MinimapMod = RoithiUI:GetModule("Minimap")
+local aceLocale = _G.LibStub and _G.LibStub("AceLocale-3.0", true)
+local L = aceLocale and aceLocale.GetLocale and aceLocale:GetLocale("RoithiUI", true)
 
 local isStylingBuffs = false
 local buffBtnState = setmetatable({}, { __mode = "k" })
+
+local cvarRestoreWindowStart = 0
+local cvarRestoreCount = 0
+local cvarLoopPaused = false
+local pendingCvarRestore = false
+local cvarWarningPrinted = false
 
 local function GetBuffBtnState(frame)
     local st = buffBtnState[frame]
@@ -15,14 +23,111 @@ local function GetBuffBtnState(frame)
     return st
 end
 
+local function RunCoalescedCvarRestore()
+    pendingCvarRestore = false
+    if MinimapMod and MinimapMod.EnsureBuffDurationsCVar then
+        MinimapMod:EnsureBuffDurationsCVar(false)
+    end
+end
+
+function MinimapMod:ResetBuffDurationLoopGuard()
+    cvarLoopPaused = false
+    cvarRestoreCount = 0
+    cvarRestoreWindowStart = 0
+    cvarWarningPrinted = false
+end
+
+function MinimapMod:EnsureBuffDurationsCVar(fromCVarEvent)
+    local db = self.db
+    if (self.IsEnabled and not self:IsEnabled()) or (db and db.enabled == false) then
+        return false
+    end
+    if db and db.buffFrameForceDurations == false then
+        return false
+    end
+    if not (_G.GetCVar and _G.SetCVar) then
+        return false
+    end
+
+    local ok, curVal = pcall(_G.GetCVar, "buffDurations")
+    if not ok or curVal ~= "0" then
+        return true
+    end
+    if cvarLoopPaused then
+        return false
+    end
+
+    if _G.InCombatLockdown and _G.InCombatLockdown() then
+        self.queuedBuffDurationsRestore = true
+        return false
+    end
+
+    if fromCVarEvent and _G.C_Timer and _G.C_Timer.After then
+        if not pendingCvarRestore then
+            pendingCvarRestore = true
+            _G.C_Timer.After(0, RunCoalescedCvarRestore)
+        end
+        return true
+    end
+
+    local now = _G.GetTime and _G.GetTime() or 0
+    if now > 0 then
+        if (now - cvarRestoreWindowStart) > 5 then
+            cvarRestoreWindowStart = now
+            cvarRestoreCount = 0
+        end
+        cvarRestoreCount = cvarRestoreCount + 1
+        if cvarRestoreCount > 3 then
+            cvarLoopPaused = true
+            if not cvarWarningPrinted and RoithiUI and RoithiUI.Print then
+                cvarWarningPrinted = true
+                L = L or (aceLocale and aceLocale.GetLocale and aceLocale:GetLocale("RoithiUI", true))
+                local msg = (L and L["External addon repeatedly disabled Blizzard's buffDurations CVar; paused auto-restore to prevent a loop."])
+                    or "External addon repeatedly disabled Blizzard's buffDurations CVar; paused auto-restore to prevent a loop."
+                RoithiUI:Print(msg)
+            end
+            return false
+        end
+    end
+
+    self.queuedBuffDurationsRestore = nil
+    pcall(_G.SetCVar, "buffDurations", "1")
+    return true
+end
+
 local function StyleAuraButton(button, force)
     if not button then return end
 
     local st = GetBuffBtnState(button)
-    if st.styled and not force then return end
-
     local db = MinimapMod.db
     if db and db.buffFrameEnableSkinning == false then return end
+
+    local font = (db and db.buffFrameFont) or "Friz Quadrata TT"
+    local outline = (db and db.buffFrameFontOutline) or "OUTLINE"
+    local showShadow = db and db.buffFrameShowShadow == true
+    local utils = (AT and AT.Utils) or (_G.RoithiUI and _G.RoithiUI.Utils)
+    local duration = button.Duration or button.duration
+
+    if st.styled and not force then
+        -- Only Duration needs drift recovery; Blizzard_BuffFrame only calls SetFontObject on Duration, never Count.
+        if duration and duration.GetFont and utils and utils.ApplyTypography and utils.ResolveFontPath and utils.NormalizeFontFlags then
+            local targetPath = utils.ResolveFontPath(font, "Friz Quadrata TT")
+            local targetFlags = utils.NormalizeFontFlags(outline)
+            local size = (db and db.buffFrameDurationSize) or 10
+            local okFont, curPath, curSize, curFlags = pcall(duration.GetFont, duration)
+            local invalidOrSecret = type(curPath) ~= "string"
+                or (utils.IsSecret and utils.IsSecret(curPath))
+                or type(curSize) ~= "number"
+                or (utils.IsSecret and utils.IsSecret(curSize))
+                or type(targetPath) ~= "string"
+                or (curFlags ~= nil and (type(curFlags) ~= "string" or (utils.IsSecret and utils.IsSecret(curFlags))))
+            if okFont and (invalidOrSecret or curPath:lower():gsub("/", "\\") ~= targetPath:lower():gsub("/", "\\") or (curFlags or "") ~= targetFlags or math.abs((tonumber(curSize) or 0) - size) > 0.5) then
+                utils.ApplyTypography(duration, font, size, outline, showShadow, "Friz Quadrata TT", true)
+            end
+        end
+        return
+    end
+
     local showBorder = db and db.buffFrameShowBorder == true
 
     local icon = button.Icon or button.icon
@@ -56,21 +161,16 @@ local function StyleAuraButton(button, force)
         end
     end
 
-    local duration = button.Duration or button.duration
     local count = button.Count or button.count
-    local font = (db and db.buffFrameFont) or "Friz Quadrata TT"
-    local outline = (db and db.buffFrameFontOutline) or "OUTLINE"
-    local showShadow = db and db.buffFrameShowShadow == true
 
-    local utils = (AT and AT.Utils) or (_G.RoithiUI and _G.RoithiUI.Utils)
     if duration and utils and utils.ApplyTypography then
         local size = (db and db.buffFrameDurationSize) or 10
-        utils.ApplyTypography(duration, font, size, outline, showShadow, "Friz Quadrata TT")
+        utils.ApplyTypography(duration, font, size, outline, showShadow, "Friz Quadrata TT", true)
     end
 
     if count and utils and utils.ApplyTypography then
         local size = (db and db.buffFrameCountSize) or 10
-        utils.ApplyTypography(count, font, size, outline, showShadow, "Friz Quadrata TT")
+        utils.ApplyTypography(count, font, size, outline, showShadow, "Friz Quadrata TT", true)
     end
 
     st.styled = true
@@ -92,6 +192,9 @@ end
 function MinimapMod:HookBuffFrameStyling()
     if isStylingBuffs then return end
     isStylingBuffs = true
+
+    -- Ensure buffDurations CVar is active so Blizzard does not suppress aura duration text
+    self:EnsureBuffDurationsCVar(false)
 
     if _G.EventRegistry and _G.EventRegistry.RegisterCallback and not self.buffEditModeRegistered then
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
@@ -167,6 +270,8 @@ function MinimapMod:HookBuffFrameStyling()
             btnSt.hooked = true
         end
     end
+
+    self:RefreshBuffFrameStyling()
 end
 
 local lastNumRows = nil
