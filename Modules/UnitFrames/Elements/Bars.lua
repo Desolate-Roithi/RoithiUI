@@ -250,7 +250,9 @@ function UF:CreateHealPrediction(frame)
     local clipFrame = CreateFrame("Frame", nil, health)
     clipFrame:SetAllPoints()
     -- Safety wrap for older clients or environments where this might strict-error
-    pcall(function() clipFrame:SetClipsChildren(true) end)
+    if clipFrame.SetClipsChildren then
+        ns.Utils.SafeCall(clipFrame.SetClipsChildren, clipFrame, true)
+    end
     health.ClipFrame = clipFrame
 
     local textureName = (RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.General and RoithiUI.db.profile.General.unitFrameBar) or
@@ -395,7 +397,7 @@ function UF:CreateHealPrediction(frame)
                     return
                 end
             end
-            pcall(RunHealPredictionUpdate)
+            ns.Utils.SafeCall(RunHealPredictionUpdate)
         end
         listener:SetScript("OnEvent", OnHealPredEvent)
 
@@ -421,13 +423,13 @@ function UF:CreateHealPrediction(frame)
             listener:RegisterEvent("UNIT_TARGET")
         end
 
-        frame:HookScript("OnShow", function() pcall(RunHealPredictionUpdate) end)
+        frame:HookScript("OnShow", function() ns.Utils.SafeCall(RunHealPredictionUpdate) end)
         local hookHealth = frame.Health or frame.SafeHealth or health
         if hookHealth and hookHealth.HookScript then
-            hookHealth:HookScript("OnSizeChanged", function() pcall(RunHealPredictionUpdate) end)
+            hookHealth:HookScript("OnSizeChanged", function() ns.Utils.SafeCall(RunHealPredictionUpdate) end)
         end
 
-        pcall(RunHealPredictionUpdate)
+        ns.Utils.SafeCall(RunHealPredictionUpdate)
     end
 end
 

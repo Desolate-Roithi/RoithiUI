@@ -41,37 +41,27 @@ local function DispatchTrackerBlock(b)
     end
 end
 
-local function ForEachTrackerBlock(tracker, callback)
-    if not tracker or not callback then return end
-    seenDepth = seenDepth + 1
-    local seen = seenPool[seenDepth]
-    if not seen then
-        seen = setmetatable({}, { __mode = "k" })
-        seenPool[seenDepth] = seen
-    else
-        for k in pairs(seen) do seen[k] = nil end
+local function DispatchUsedBlockEntry(val)
+    if type(val) ~= "table" then return end
+    if val.IsObjectType or val.GetObjectType or val.SetPoint then
+        DispatchTrackerBlock(val)
+        return
     end
-    callbackStack[seenDepth] = callback
+    for _, subBlock in pairs(val) do
+        if type(subBlock) == "table" and (subBlock.IsObjectType or subBlock.GetObjectType or subBlock.SetPoint) then
+            DispatchTrackerBlock(subBlock)
+        end
+    end
+end
+
+local function IterateTrackerBlocks(tracker)
     if tracker.EnumerateActiveBlocks then
         tracker:EnumerateActiveBlocks(DispatchTrackerBlock)
-        for k in pairs(seen) do seen[k] = nil end
-        callbackStack[seenDepth] = nil
-        seenDepth = math.max(0, seenDepth - 1)
         return
     end
     if tracker.usedBlocks then
         for _, val in pairs(tracker.usedBlocks) do
-            if type(val) == "table" then
-                if val.IsObjectType or val.GetObjectType or val.SetPoint then
-                    DispatchTrackerBlock(val)
-                else
-                    for _, subBlock in pairs(val) do
-                        if type(subBlock) == "table" and (subBlock.IsObjectType or subBlock.GetObjectType or subBlock.SetPoint) then
-                            DispatchTrackerBlock(subBlock)
-                        end
-                    end
-                end
-            end
+            DispatchUsedBlockEntry(val)
         end
     end
     if tracker.blocks then
@@ -81,9 +71,31 @@ local function ForEachTrackerBlock(tracker, callback)
             end
         end
     end
-    for k in pairs(seen) do seen[k] = nil end
-    callbackStack[seenDepth] = nil
-    seenDepth = math.max(0, seenDepth - 1)
+end
+
+local function ForEachTrackerBlock(tracker, callback)
+    if not tracker or not callback then return end
+    local depthBefore = seenDepth
+    seenDepth = seenDepth + 1
+    local seen = seenPool[seenDepth]
+    if not seen then
+        seen = setmetatable({}, { __mode = "k" })
+        seenPool[seenDepth] = seen
+    else
+        for k in pairs(seen) do seen[k] = nil end
+    end
+    callbackStack[seenDepth] = callback
+
+    ns.Utils.SafeCall(IterateTrackerBlocks, tracker)
+
+    while seenDepth > depthBefore do
+        local pool = seenPool[seenDepth]
+        if pool then
+            for k in pairs(pool) do pool[k] = nil end
+        end
+        callbackStack[seenDepth] = nil
+        seenDepth = seenDepth - 1
+    end
 end
 objState.ForEachTrackerBlock = ForEachTrackerBlock
 ObjectivesMod.ForEachTrackerBlock = ForEachTrackerBlock
@@ -274,7 +286,7 @@ function ObjectivesMod:OnSuperTrackingChanged()
     for block in pairs(skinnedBlocks) do
         if type(block) == "table" and block.used ~= false and (block.IsShown and block:IsShown()) then
             if self.ApplyQuestLevelToTitle then
-                pcall(self.ApplyQuestLevelToTitle, self, block)
+                ns.Utils.SafeCall(self.ApplyQuestLevelToTitle, self, block)
             end
         end
     end
@@ -282,16 +294,16 @@ end
 
 function ObjectivesMod:OnQuestLogUpdate()
     if self.UpdateQuestLogData then
-        pcall(self.UpdateQuestLogData, self)
+        ns.Utils.SafeCall(self.UpdateQuestLogData, self)
     end
     for block in pairs(skinnedBlocks) do
         if type(block) == "table" and block.used ~= false and (block.IsShown and block:IsShown()) then
             if self.ApplyQuestLevelToTitle then
-                pcall(self.ApplyQuestLevelToTitle, self, block)
+                ns.Utils.SafeCall(self.ApplyQuestLevelToTitle, self, block)
             end
             if self.UpdateBlockHoverObjectives then
                 local isHovered = (self.IsMouseOverBlock and self:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
-                pcall(self.UpdateBlockHoverObjectives, self, block, isHovered or false)
+                ns.Utils.SafeCall(self.UpdateBlockHoverObjectives, self, block, isHovered or false)
             end
         end
     end
@@ -322,7 +334,7 @@ function ObjectivesMod:RefreshTrackers()
                 end
             end
             if self.ApplyQuestLevelToTitle then
-                pcall(self.ApplyQuestLevelToTitle, self, block)
+                ns.Utils.SafeCall(self.ApplyQuestLevelToTitle, self, block)
             end
             local titleFS = self.GetBlockTitleFS and self:GetBlockTitleFS(block)
             if titleFS and ns.Utils and ns.Utils.ApplyTypography then
@@ -360,11 +372,11 @@ function ObjectivesMod:OnZoneChanged()
     for block in pairs(skinnedBlocks) do
         if type(block) == "table" and block.used ~= false and (block.IsShown and block:IsShown()) then
             if self.ApplyQuestLevelToTitle then
-                pcall(self.ApplyQuestLevelToTitle, self, block)
+                ns.Utils.SafeCall(self.ApplyQuestLevelToTitle, self, block)
             end
             if self.UpdateBlockHoverObjectives then
                 local isHovered = (self.IsMouseOverBlock and self:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
-                pcall(self.UpdateBlockHoverObjectives, self, block, isHovered or false)
+                ns.Utils.SafeCall(self.UpdateBlockHoverObjectives, self, block, isHovered or false)
             end
         end
     end
@@ -413,8 +425,8 @@ function ObjectivesMod:RestoreDefaultView()
     for block in pairs(skinnedBlocks) do
         local fs = titleFSCache[block]
         if fs and fs.SetFontObject then
-            pcall(fs.SetFontObject, fs, "GameFontNormal")
-            pcall(fs.SetTextColor, fs, 1, 0.82, 0)
+            ns.Utils.SafeCall(fs.SetFontObject, fs, "GameFontNormal")
+            ns.Utils.SafeCall(fs.SetTextColor, fs, 1, 0.82, 0)
         end
     end
 
@@ -548,17 +560,35 @@ function ObjectivesMod:GetBelowMinimapWidgetOffset(anchorTarget)
     if anchorTarget and anchorTarget.GetBottom and widgetContainer.GetBottom then
         local targetBottom = anchorTarget:GetBottom()
         local widgetBottom = widgetContainer:GetBottom()
-        if targetBottom and widgetBottom and targetBottom > widgetBottom then
+        if targetBottom and widgetBottom and not ns.Utils.IsSecret(targetBottom) and not ns.Utils.IsSecret(widgetBottom) and targetBottom > widgetBottom then
             return targetBottom - widgetBottom
         end
     end
 
     local widgetHeight = (widgetContainer.GetHeight and widgetContainer:GetHeight()) or 0
-    if widgetHeight > 1 then
+    if not ns.Utils.IsSecret(widgetHeight) and widgetHeight > 1 then
         return widgetHeight
     end
 
     return 0
+end
+
+local function OnObjectiveTrackerSetPoint(self, relativeTo)
+    local em = _G.EditModeManagerFrame
+    if (em and em.layoutApplyInProgress) or (self.isEditModeActive and em and em.editModeActive == false) then
+        return
+    end
+    if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
+        local expectedTarget = self:GetMinimapAnchorTarget()
+        if relativeTo ~= expectedTarget then
+            self:ApplyPosition()
+        end
+    end
+end
+
+local function SetDetachedOrAttachedPoints(frame, p, parent, rp, x, y)
+    frame:ClearAllPoints()
+    frame:SetPoint(p, parent, rp, x, y)
 end
 
 function ObjectivesMod:ApplyPosition()
@@ -570,16 +600,7 @@ function ObjectivesMod:ApplyPosition()
 
     if not self.positionHooked and hooksecurefunc then
         hooksecurefunc(otf, "SetPoint", function(_, _, relativeTo)
-            local em = _G.EditModeManagerFrame
-            if (em and em.layoutApplyInProgress) or (self.isEditModeActive and em and em.editModeActive == false) then
-                return
-            end
-            if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
-                local expectedTarget = self:GetMinimapAnchorTarget()
-                if relativeTo ~= expectedTarget then
-                    self:ApplyPosition()
-                end
-            end
+            ns.Utils.SafeCall(OnObjectiveTrackerSetPoint, self, relativeTo)
         end)
         self.positionHooked = true
     end
@@ -630,16 +651,16 @@ function ObjectivesMod:ApplyPosition()
             end
 
             local extraY = self:GetBelowMinimapWidgetOffset(anchorTarget)
-            self.settingPosition = true
-            otf:ClearAllPoints()
             local xOffset = self.db.offsetX or 0
             local yOffset = self.db.offsetY or -5
-            otf:SetPoint("TOPRIGHT", anchorTarget, "BOTTOMRIGHT", xOffset, yOffset - extraY)
+            self.settingPosition = true
+            ns.Utils.SafeCall(SetDetachedOrAttachedPoints, otf, "TOPRIGHT", anchorTarget, "BOTTOMRIGHT", xOffset, yOffset - extraY)
             self.settingPosition = nil
 
-            if mmWidth > 50 then
+            if not ns.Utils.IsSecret(mmWidth) and mmWidth > 50 then
                 if otf.SetWidth then otf:SetWidth(mmWidth) end
-                if otf.Header and otf.Header.SetWidth and math.abs((otf.Header.GetWidth and otf.Header:GetWidth() or 0) - mmWidth) > 1 then
+                local headerW = otf.Header and otf.Header.GetWidth and otf.Header:GetWidth() or 0
+                if otf.Header and otf.Header.SetWidth and (ns.Utils.IsSecret(headerW) or math.abs(headerW - mmWidth) > 1) then
                     otf.Header:SetWidth(mmWidth)
                 end
                 if otf.HeaderMenu and otf.HeaderMenu.SetWidth then otf.HeaderMenu:SetWidth(mmWidth) end
@@ -655,29 +676,41 @@ function ObjectivesMod:ApplyPosition()
         if self.anchor and self.anchor.SetClampedToScreen then self.anchor:SetClampedToScreen(true) end
         local parent = otf:GetParent() or _G.UIParent
         if parent and otf.ClearAllPoints and otf.SetPoint then
-            self.settingPosition = true
             local p = self.db.point or "TOPRIGHT"
             local rp = self.db.relativePoint or "TOPRIGHT"
             local x = self.db.detachedX or self.db.x or -20
             local y = self.db.detachedY or self.db.y or -200
-            otf:ClearAllPoints()
-            otf:SetPoint(p, parent, rp, x, y)
+            self.settingPosition = true
+            ns.Utils.SafeCall(SetDetachedOrAttachedPoints, otf, p, parent, rp, x, y)
+            self.settingPosition = nil
             if self.anchor and self.anchor.ClearAllPoints and self.anchor.SetPoint then
                 self.anchor:ClearAllPoints()
                 self.anchor:SetPoint(p, parent, rp, x, y)
             end
-            self.settingPosition = nil
 
             local customWidth = self.db.detachedWidth or 235
-            if customWidth > 50 then
+            if not ns.Utils.IsSecret(customWidth) and customWidth > 50 then
                 if otf.SetWidth then otf:SetWidth(customWidth) end
-                if otf.Header and otf.Header.SetWidth and math.abs((otf.Header.GetWidth and otf.Header:GetWidth() or 0) - customWidth) > 1 then
+                local headerW = otf.Header and otf.Header.GetWidth and otf.Header:GetWidth() or 0
+                if otf.Header and otf.Header.SetWidth and (ns.Utils.IsSecret(headerW) or math.abs(headerW - customWidth) > 1) then
                     otf.Header:SetWidth(customWidth)
                 end
                 if otf.HeaderMenu and otf.HeaderMenu.SetWidth then otf.HeaderMenu:SetWidth(customWidth) end
                 if self.anchor and self.anchor.SetWidth then self.anchor:SetWidth(customWidth) end
             end
         end
+    end
+end
+
+local function OnObjectiveTrackerUpdateHeight(self)
+    local em = _G.EditModeManagerFrame
+    if (em and em.layoutApplyInProgress) or (self.isEditModeActive and em and em.editModeActive == false) then
+        return
+    end
+    if not self.settingHeight and self.db and self.db.enabled ~= false then
+        self.settingHeight = true
+        ns.Utils.SafeCall(self.ApplyScaleAndHeight, self)
+        self.settingHeight = nil
     end
 end
 
@@ -688,15 +721,7 @@ function ObjectivesMod:ApplyScaleAndHeight()
 
     if otf.UpdateHeight and not self.updateHeightHooked and hooksecurefunc then
         hooksecurefunc(otf, "UpdateHeight", function()
-            local em = _G.EditModeManagerFrame
-            if (em and em.layoutApplyInProgress) or (self.isEditModeActive and em and em.editModeActive == false) then
-                return
-            end
-            if not self.settingHeight and self.db and self.db.enabled ~= false then
-                self.settingHeight = true
-                self:ApplyScaleAndHeight()
-                self.settingHeight = nil
-            end
+            ns.Utils.SafeCall(OnObjectiveTrackerUpdateHeight, self)
         end)
         self.updateHeightHooked = true
     end
@@ -714,7 +739,7 @@ function ObjectivesMod:ApplyScaleAndHeight()
         local anchorTarget = self:GetMinimapAnchorTarget()
         if anchorTarget and anchorTarget.GetBottom then
             local bottomY = anchorTarget:GetBottom()
-            if bottomY and bottomY > 50 then
+            if bottomY and not ns.Utils.IsSecret(bottomY) and bottomY > 50 then
                 local bottomMargin = 20
                 local extraY = self:GetBelowMinimapWidgetOffset(anchorTarget)
                 local availableH = math.floor(bottomY - extraY - bottomMargin)
@@ -847,7 +872,7 @@ function ObjectivesMod:RegisterWithEditMode()
         },
     }
 
-    pcall(function()
+    ns.Utils.SafeCall(function()
         LEM:AddFrame(anchor, function(f, _, newPoint, newX, newY)
             if self.db.attachedToMinimap == false then
                 local point, _, relPoint, x, y = (f or anchor):GetPoint(1)
@@ -934,11 +959,11 @@ local function EndLayoutBlockVisitor(block)
     local mod = ctx and ctx.mod
     if not mod then return end
     if mod.ApplyQuestLevelToTitle then
-        pcall(mod.ApplyQuestLevelToTitle, mod, block)
+        ns.Utils.SafeCall(mod.ApplyQuestLevelToTitle, mod, block)
     end
     if mod.UpdateBlockHoverObjectives then
         local isHovered = (mod.IsMouseOverBlock and mod:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
-        pcall(mod.UpdateBlockHoverObjectives, mod, block, isHovered or false)
+        ns.Utils.SafeCall(mod.UpdateBlockHoverObjectives, mod, block, isHovered or false)
     end
 end
 
@@ -954,7 +979,7 @@ end
 
 local function RunTrackerEndLayout(mod, tracker)
     PushLayoutCtx(mod)
-    pcall(RunEndLayoutInner, mod, tracker)
+    ns.Utils.SafeCall(RunEndLayoutInner, mod, tracker)
     PopLayoutCtx()
 end
 
@@ -971,17 +996,17 @@ local function LayoutBlockVisitor(block)
     if not mod then return end
     local itemBtn = block and (block.itemButton or block.ItemButton or (block.GetItemButton and block:GetItemButton()))
     if itemBtn and mod.SkinQuestItemButton then
-        pcall(mod.SkinQuestItemButton, mod, block, itemBtn)
+        ns.Utils.SafeCall(mod.SkinQuestItemButton, mod, block, itemBtn)
     end
     if not skinnedBlocks[block] then
-        pcall(mod.SkinBlock, mod, block)
+        ns.Utils.SafeCall(mod.SkinBlock, mod, block)
     else
         if mod.ApplyQuestLevelToTitle then
-            pcall(mod.ApplyQuestLevelToTitle, mod, block)
+            ns.Utils.SafeCall(mod.ApplyQuestLevelToTitle, mod, block)
         end
         if mod.UpdateBlockHoverObjectives then
             local isHovered = (mod.IsMouseOverBlock and mod:IsMouseOverBlock(block)) or (block.IsMouseOver and block:IsMouseOver())
-            pcall(mod.UpdateBlockHoverObjectives, mod, block, isHovered or false)
+            ns.Utils.SafeCall(mod.UpdateBlockHoverObjectives, mod, block, isHovered or false)
         end
         if mod.ForEachBlockLine then
             mod.ForEachBlockLine(block, LayoutLineVisitor)
@@ -1002,15 +1027,15 @@ local function RunLayoutContentsInner(mod, tracker)
 
     if tracker.usedProgressBars then
         for _, bar in pairs(tracker.usedProgressBars) do
-            pcall(mod.SkinProgressBar, mod, bar)
+            ns.Utils.SafeCall(mod.SkinProgressBar, mod, bar)
         end
     end
     if not tracker.EndLayout then
         if mod.SortTrackerBlocks then
-            pcall(mod.SortTrackerBlocks, mod, tracker)
+            ns.Utils.SafeCall(mod.SortTrackerBlocks, mod, tracker)
         end
         if mod.TrimTrackerGap then
-            pcall(mod.TrimTrackerGap, mod, tracker)
+            ns.Utils.SafeCall(mod.TrimTrackerGap, mod, tracker)
         end
     end
     mod:UpdateAllDividers()
@@ -1018,9 +1043,24 @@ end
 
 local function RunTrackerLayoutContents(mod, tracker)
     local depthBefore = layoutCtxDepth
-    pcall(RunLayoutContentsInner, mod, tracker)
+    ns.Utils.SafeCall(RunLayoutContentsInner, mod, tracker)
     while layoutCtxDepth > depthBefore do
         PopLayoutCtx()
+    end
+end
+
+local function OnTrackerAnchorBlock(mod, t, block)
+    if block and block.SetPoint then
+        local offsetX = (mod.db and mod.db.blockOffsetX) or 4
+        local parent = (block.GetParent and block:GetParent()) or t
+        block:SetPoint("LEFT", parent, "LEFT", offsetX, 0)
+    end
+end
+
+local function OnTrackerGetProgressBar(mod, t, line)
+    local bar = (t and t.usedProgressBars and t.usedProgressBars[line]) or (line and line.progressBar)
+    if bar then
+        mod:SkinProgressBar(bar)
     end
 end
 
@@ -1034,7 +1074,7 @@ function ObjectivesMod:HookTracker(tracker)
 
     if tracker.SetCollapsed and not self:IsHooked(tracker, "SetCollapsed") then
         self:SecureHook(tracker, "SetCollapsed", function()
-            pcall(self.UpdateAllDividers, self)
+            ns.Utils.SafeCall(self.UpdateAllDividers, self)
         end)
     end
 
@@ -1049,41 +1089,28 @@ function ObjectivesMod:HookTracker(tracker)
         self:SkinHeader(tracker.Header)
         if tracker.Header.SetCollapsed and not self:IsHooked(tracker.Header, "SetCollapsed") then
             self:SecureHook(tracker.Header, "SetCollapsed", function()
-                pcall(self.UpdateAllDividers, self)
+                ns.Utils.SafeCall(self.UpdateAllDividers, self)
             end)
         end
     end
 
     if tracker.AnchorBlock and not self:IsHooked(tracker, "AnchorBlock") then
         self:SecureHook(tracker, "AnchorBlock", function(t, block)
-            pcall(function()
-                if block and block.SetPoint then
-                    local offsetX = (self.db and self.db.blockOffsetX) or 4
-                    local parent = (block.GetParent and block:GetParent()) or t
-                    block:SetPoint("LEFT", parent, "LEFT", offsetX, 0)
-                end
-            end)
+            ns.Utils.SafeCall(OnTrackerAnchorBlock, self, t, block)
         end)
     end
 
     if tracker.GetProgressBar and not self:IsHooked(tracker, "GetProgressBar") then
         self:SecureHook(tracker, "GetProgressBar", function(t, line, _)
-            pcall(function()
-                local bar = (t and t.usedProgressBars and t.usedProgressBars[line]) or (line and line.progressBar)
-                if bar then
-                    self:SkinProgressBar(bar)
-                end
-            end)
+            ns.Utils.SafeCall(OnTrackerGetProgressBar, self, t, line)
         end)
     end
 
     if tracker.AddBlock and not self:IsHooked(tracker, "AddBlock") then
         self:SecureHook(tracker, "AddBlock", function(_, block)
-            pcall(function()
-                if block then
-                    self:SkinBlock(block)
-                end
-            end)
+            if block then
+                ns.Utils.SafeCall(self.SkinBlock, self, block)
+            end
         end)
     end
 

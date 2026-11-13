@@ -176,7 +176,7 @@ local function HasAtlas(name)
     end
     local cTexture = _G.C_Texture
     if cTexture and cTexture.GetAtlasInfo then
-        local ok, info = pcall(cTexture.GetAtlasInfo, name)
+        local ok, info = ns.Utils.SafeCall(cTexture.GetAtlasInfo, name)
         atlasCache[name] = (ok and type(info) == "table") or false
     else
         atlasCache[name] = true
@@ -226,7 +226,7 @@ local function GetSpeakerInfo(guid)
     local getInfo = _G.GetPlayerInfoByGUID
     if not getInfo then return nil end
 
-    local ok, _, class, _, race, sex = pcall(getInfo, guid)
+    local ok, _, class, _, race, sex = ns.Utils.SafeCall(getInfo, guid)
     if not ok or (not class and not race) or IsSecret(class) or IsSecret(race) then return nil end
 
     speakerCount = speakerCount + 1
@@ -435,7 +435,7 @@ function ChatMod:FormatChatMessage(frame, text, eventArgs)
     local newText = self:FormatChatMessageText(text, eventArgs)
     if newText and newText ~= text then
         if type(frame.TransformMessages) == "function" then
-            pcall(frame.TransformMessages, frame,
+            ns.Utils.SafeCall(frame.TransformMessages, frame,
                 function(msg)
                     if not msg or IsSecretString(msg) then return false end
                     return msg == text
@@ -752,6 +752,9 @@ function ChatMod:OnPlayerLogin()
                     if self.ApplyTimestampFormat then
                         self:ApplyTimestampFormat()
                     end
+                    if self.ApplyWhisperMode then
+                        self:ApplyWhisperMode()
+                    end
                 end)
             end
         end
@@ -848,14 +851,14 @@ function ChatMod:SetChatEditBoxDisplacement(cf, isShown)
         local newH = math.max(60, baseH - displaceY)
         if cf.SetSize then cf:SetSize(baseW, newH) end
         cf:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", baseX, baseY + displaceY)
-        if cf.ScrollToBottom then pcall(cf.ScrollToBottom, cf) end
+        if cf.ScrollToBottom then ns.Utils.SafeCall(cf.ScrollToBottom, cf) end
     else
         if frameBaseY[cf] or frameBaseHeight[cf] then
             frameBaseY[cf] = nil
             frameBaseHeight[cf] = nil
             if cf.SetSize then cf:SetSize(baseW, baseH) end
             cf:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", baseX, baseY)
-            if cf.ScrollToBottom then pcall(cf.ScrollToBottom, cf) end
+            if cf.ScrollToBottom then ns.Utils.SafeCall(cf.ScrollToBottom, cf) end
         end
     end
     isDisplacing = false
@@ -1247,9 +1250,9 @@ function ChatMod:UpdateChatFonts()
                 local id = cf:GetID()
                 if id and id > 0 then
                     if _G.FCF_SetChatWindowFontSize then
-                        pcall(_G.FCF_SetChatWindowFontSize, nil, cf, size)
+                        ns.Utils.SafeCall(_G.FCF_SetChatWindowFontSize, nil, cf, size)
                     elseif _G.SetChatWindowSize then
-                        pcall(_G.SetChatWindowSize, id, size)
+                        ns.Utils.SafeCall(_G.SetChatWindowSize, id, size)
                     end
                 end
             end
@@ -1544,9 +1547,9 @@ function ChatMod:SkinChatFrame(cf, idx)
             local id = cf:GetID()
             if id and id > 0 then
                 if _G.FCF_SetChatWindowFontSize then
-                    pcall(_G.FCF_SetChatWindowFontSize, nil, cf, size)
+                    ns.Utils.SafeCall(_G.FCF_SetChatWindowFontSize, nil, cf, size)
                 elseif _G.SetChatWindowSize then
-                    pcall(_G.SetChatWindowSize, id, size)
+                    ns.Utils.SafeCall(_G.SetChatWindowSize, id, size)
                 end
             end
         end
@@ -1577,7 +1580,7 @@ function ChatMod:SkinChatFrame(cf, idx)
 
     -- Scroll chat to bottom so messages sit flush against the bottom
     if cf.ScrollToBottom then
-        pcall(cf.ScrollToBottom, cf)
+        ns.Utils.SafeCall(cf.ScrollToBottom, cf)
     end
 
     -- Screen Clamping (allow moving directly to the screen edge)
@@ -2503,15 +2506,19 @@ function ChatMod:AutoFitChatTabs(dock)
     end
 end
 
+local function ApplyBlizzardSetting(variable, value)
+    if _G.Settings and _G.Settings.SetValue and (not _G.Settings.GetSetting or _G.Settings.GetSetting(variable)) then
+        ns.Utils.SafeCall(_G.Settings.SetValue, variable, value)
+    end
+end
+
 function ChatMod:ApplyWhisperMode()
     local mode = self.db.whisperMode or "inline"
     local setCVar = _G.SetCVar or (_G.C_CVar and _G.C_CVar.SetCVar)
     if setCVar then
-        pcall(setCVar, "whisperMode", mode)
+        ns.Utils.SafeCall(setCVar, "whisperMode", mode)
     end
-    if _G.Settings and _G.Settings.SetValue then
-        pcall(_G.Settings.SetValue, "whisperMode", mode)
-    end
+    ApplyBlizzardSetting("whisperMode", mode)
 end
 
 -------------------------------------------------------------------------------
@@ -2521,16 +2528,14 @@ function ChatMod:ApplyTimestampFormat()
     local fmt = self.db.timestampFormat or "%H:%M "
     if fmt == "" then fmt = "none" end
 
-    -- Primary: Settings framework (requires Blizzard_SettingsDefinitions_Frame to be loaded)
+    -- Primary: Settings framework (only when setting variable is registered by Blizzard UI)
     -- This is the path ChatFrameUtil.GetTimestampFormat() reads from.
-    if _G.Settings and _G.Settings.SetValue then
-        pcall(_G.Settings.SetValue, "showTimestamps", fmt)
-    end
+    ApplyBlizzardSetting("showTimestamps", fmt)
 
     -- Fallback: direct CVar write (takes effect if Settings framework not yet registered)
     local setCVar = _G.SetCVar or (_G.C_CVar and _G.C_CVar.SetCVar)
     if setCVar then
-        pcall(setCVar, "showTimestamps", fmt)
+        ns.Utils.SafeCall(setCVar, "showTimestamps", fmt)
     end
 end
 
@@ -2606,7 +2611,7 @@ function ChatMod:UpdateButtonsDock()
 
     local voiceLoggedIn = false
     if _G.C_VoiceChat and _G.C_VoiceChat.IsLoggedIn then
-        local ok, loggedIn = pcall(_G.C_VoiceChat.IsLoggedIn)
+        local ok, loggedIn = ns.Utils.SafeCall(_G.C_VoiceChat.IsLoggedIn)
         voiceLoggedIn = ok and (loggedIn == true)
     end
 

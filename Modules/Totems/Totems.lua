@@ -734,7 +734,7 @@ function Totems:CreateTotemBar()
                         if slotToDestroy and slotToDestroy > 0 then
                             local cannotDismiss = _G.GetTotemCannotDismiss and _G.GetTotemCannotDismiss(slotToDestroy)
                             if ns and ns.isTestEnvironment and not cannotDismiss and DestroyTotem then
-                                pcall(DestroyTotem, slotToDestroy)
+                                ns.Utils.SafeCall(DestroyTotem, slotToDestroy)
                             end
                         end
                     end
@@ -1297,7 +1297,7 @@ function Totems:UpdateSpellCooldown(catKey)
         btn.cooldownEnd = nil
         if btn.cooldownText then btn.cooldownText:Hide() end
         if enabled and btn.cooldown.SetCooldown then
-            pcall(btn.cooldown.SetCooldown, btn.cooldown, start, duration)
+            ns.Utils.SafeCall(btn.cooldown.SetCooldown, btn.cooldown, start, duration)
         elseif btn.cooldown.Clear then
             btn.cooldown:Clear()
         end
@@ -1415,7 +1415,7 @@ function Totems:UpdateShieldSlot()
     -- 1. Modern WoW / Midnight 12.0/12.1 safe query (AllowedWhenTainted)
     if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for spellId in pairs(SHIELD_SPELLS) do
-            local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellId)
+            local ok, aura = ns.Utils.SafeCall(C_UnitAuras.GetPlayerAuraBySpellID, spellId)
             if ok and aura then
                 isActive = true
                 count = (aura.applications and not IsSecret(aura.applications)) and aura.applications or ((aura.charges and not IsSecret(aura.charges)) and aura.charges or 0)
@@ -1428,7 +1428,7 @@ function Totems:UpdateShieldSlot()
     -- 2. Legacy Classic Era fallback (OOC-only: UnitAura->GetAuraDataByIndex is secret-restricted when tainted)
     if not isActive and UnitAura and not InCombatLockdown() then
         for i = 1, 40 do
-            local ok, name, _, buffCount, _, _, expirationTime, _, _, _, spellId = pcall(UnitAura, "player", i, "HELPFUL")
+            local ok, name, _, buffCount, _, _, expirationTime, _, _, _, spellId = ns.Utils.SafeCall(UnitAura, "player", i, "HELPFUL")
             if not ok or not name then break end
             if (spellId and SHIELD_SPELLS[spellId]) or (name and (name:find("Shield") or name:find("Schild") or name:find("Bouclier") or name:find("Escudo"))) then
                 isActive = true

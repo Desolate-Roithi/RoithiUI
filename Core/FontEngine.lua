@@ -83,19 +83,19 @@ function RoithiUI:TriggerFontUpdate()
         self:SendMessage("ROITHIUI_FONT_CHANGED")
     end
     if ns and ns.RefreshAllCastbars then
-        pcall(ns.RefreshAllCastbars)
+        ns.Utils.SafeCall(ns.RefreshAllCastbars)
     end
     if ns and ns.RefreshAllUnitFrames then
-        pcall(ns.RefreshAllUnitFrames)
+        ns.Utils.SafeCall(ns.RefreshAllUnitFrames)
     end
     if self.modules then
         for _, module in self:IterateModules() do
             if module.UpdateFonts then
-                pcall(module.UpdateFonts, module)
+                ns.Utils.SafeCall(module.UpdateFonts, module)
             elseif module.StyleAll then
-                pcall(module.StyleAll, module)
+                ns.Utils.SafeCall(module.StyleAll, module)
             elseif module.StyleAllBars then
-                pcall(module.StyleAllBars, module)
+                ns.Utils.SafeCall(module.StyleAllBars, module)
             end
         end
     end

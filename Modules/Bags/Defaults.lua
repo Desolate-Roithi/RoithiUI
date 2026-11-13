@@ -49,6 +49,11 @@ local defaultSettings = {
     junkIndicatorAnchor = "BOTTOMLEFT",
     junkIndicatorX = 1,
     junkIndicatorY = 1,
+    showReagentQuality = true,
+    reagentQualitySize = 32,
+    reagentQualityAnchor = "TOPLEFT",
+    reagentQualityX = -6,
+    reagentQualityY = 6,
 }
 
 local mod = RoithiUI and RoithiUI:GetModule("Bags", true)

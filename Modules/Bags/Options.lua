@@ -4,6 +4,17 @@ local RoithiUI = _G.RoithiUI
 local BagsMod = RoithiUI:GetModule("Bags")
 local L = LibStub("AceLocale-3.0"):GetLocale("RoithiUI")
 
+local function IsNonRetailClient()
+    if ns and ns.IsForever then return true end
+    if _G.WOW_PROJECT_ID ~= nil and _G.WOW_PROJECT_MAINLINE ~= nil then
+        return _G.WOW_PROJECT_ID ~= _G.WOW_PROJECT_MAINLINE
+    end
+    if ns and ns.IsRetail ~= nil then
+        return not ns.IsRetail
+    end
+    return false
+end
+
 function BagsMod:GetOptions()
     local options = {
         type = "group",
@@ -905,6 +916,96 @@ function BagsMod:GetOptions()
                             self:UpdateInventory()
                         end,
                         disabled = function() return self.db.showJunkIndicator == false end,
+                    },
+                    reagentQualityHeader = {
+                        type = "header",
+                        name = L["Reagent Quality Indicator"] or "Reagent Quality Indicator",
+                        order = 60,
+                        hidden = IsNonRetailClient,
+                    },
+                    showReagentQuality = {
+                        type = "toggle",
+                        name = L["Show Reagent Quality Icon"] or "Show Reagent Quality Icon",
+                        desc = L["Display the crafting reagent quality tier icon on Retail."] or "Display the crafting reagent quality tier icon on Retail.",
+                        order = 61,
+                        get = function() return self.db.showReagentQuality ~= false end,
+                        set = function(_, val)
+                            self.db.showReagentQuality = val
+                            self:UpdateInventory()
+                        end,
+                        hidden = IsNonRetailClient,
+                    },
+                    reagentQualitySize = {
+                        type = "range",
+                        name = L["Reagent Quality Size"] or "Reagent Quality Size",
+                        order = 62,
+                        min = 10,
+                        max = 48,
+                        step = 1,
+                        get = function() return self.db.reagentQualitySize or 32 end,
+                        set = function(_, val)
+                            self.db.reagentQualitySize = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                        disabled = function() return self.db.showReagentQuality == false end,
+                        hidden = IsNonRetailClient,
+                    },
+                    reagentQualityAnchor = {
+                        type = "select",
+                        name = L["Reagent Quality Anchor"] or "Reagent Quality Anchor",
+                        order = 63,
+                        values = {
+                            ["TOPLEFT"] = "TOPLEFT",
+                            ["TOP"] = "TOP",
+                            ["TOPRIGHT"] = "TOPRIGHT",
+                            ["LEFT"] = "LEFT",
+                            ["CENTER"] = "CENTER",
+                            ["RIGHT"] = "RIGHT",
+                            ["BOTTOMLEFT"] = "BOTTOMLEFT",
+                            ["BOTTOM"] = "BOTTOM",
+                            ["BOTTOMRIGHT"] = "BOTTOMRIGHT",
+                        },
+                        get = function() return self.db.reagentQualityAnchor or "TOPLEFT" end,
+                        set = function(_, val)
+                            self.db.reagentQualityAnchor = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                        disabled = function() return self.db.showReagentQuality == false end,
+                        hidden = IsNonRetailClient,
+                    },
+                    reagentQualityX = {
+                        type = "range",
+                        name = L["Reagent Quality X Offset"] or "Reagent Quality X Offset",
+                        order = 64,
+                        min = -30,
+                        max = 30,
+                        step = 1,
+                        get = function() return self.db.reagentQualityX ~= nil and self.db.reagentQualityX or -6 end,
+                        set = function(_, val)
+                            self.db.reagentQualityX = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                        disabled = function() return self.db.showReagentQuality == false end,
+                        hidden = IsNonRetailClient,
+                    },
+                    reagentQualityY = {
+                        type = "range",
+                        name = L["Reagent Quality Y Offset"] or "Reagent Quality Y Offset",
+                        order = 65,
+                        min = -30,
+                        max = 30,
+                        step = 1,
+                        get = function() return self.db.reagentQualityY ~= nil and self.db.reagentQualityY or 6 end,
+                        set = function(_, val)
+                            self.db.reagentQualityY = val
+                            if self.UpdateTypography then self:UpdateTypography() end
+                            self:UpdateInventory()
+                        end,
+                        disabled = function() return self.db.showReagentQuality == false end,
+                        hidden = IsNonRetailClient,
                     },
                 },
             },

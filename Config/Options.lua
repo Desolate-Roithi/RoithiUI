@@ -282,7 +282,7 @@ end
 
 function Config:RegisterOptions()
     -- Build options early to populate OptionsEngine schemas for Edit Mode
-    pcall(GetOptions)
+    ns.Utils.SafeCall(GetOptions)
 
     local AC = LibStub("AceConfig-3.0", true)
     local ACD = LibStub("AceConfigDialog-3.0", true)
@@ -290,7 +290,7 @@ function Config:RegisterOptions()
     if AC and ACD then
         AC:RegisterOptionsTable("RoithiUI", GetOptions)
         if not self.optionsFrame then
-            local success, frame, categoryID = pcall(ACD.AddToBlizOptions, ACD, "RoithiUI", "RoithiUI")
+            local success, frame, categoryID = ns.Utils.SafeCall(ACD.AddToBlizOptions, ACD, "RoithiUI", "RoithiUI")
             if success then
                 self.optionsFrame = frame
                 RoithiUI.SettingsCategoryID = categoryID

@@ -214,7 +214,7 @@ local function FormatDuration(val)
     if not val then return "" end
     -- Secret Safety: If issecretvalue(val), we can't do math, but string.format works natively.
     if (issecretvalue and issecretvalue(val)) or (canaccessvalue and not canaccessvalue(val)) then
-        local success, str = pcall(string.format, "%.1f", val)
+        local success, str = ns.Utils.SafeCall(string.format, "%.1f", val)
         if success then return str end
         return ""
     end
@@ -232,7 +232,7 @@ end
 local function GetSafeLatency()
     -- Try C_Castbar first (12.0.1)
     if C_Castbar and C_Castbar.GetLatencyAspect then
-        local success, latency = pcall(C_Castbar.GetLatencyAspect)
+        local success, latency = ns.Utils.SafeCall(C_Castbar.GetLatencyAspect)
         if success and latency then return latency / 1000 end
     end
     -- Fallback: Network World Latency
@@ -307,9 +307,9 @@ local function GetPlayerInterruptCooldownState()
 
     -- 1. Try C_Spell.GetSpellCooldownDuration(spellID, true) first (12.0.1+ Native API)
     if C_Spell and C_Spell.GetSpellCooldownDuration then
-        local success, durObj = pcall(C_Spell.GetSpellCooldownDuration, spellID, true)
+        local success, durObj = ns.Utils.SafeCall(C_Spell.GetSpellCooldownDuration, spellID, true)
         if success and durObj and durObj.IsZero then
-            local isZeroSuccess, isZero = pcall(durObj.IsZero, durObj)
+            local isZeroSuccess, isZero = ns.Utils.SafeCall(durObj.IsZero, durObj)
             if isZeroSuccess and isZero ~= nil then
                 local isZeroSecret = (issecretvalue and issecretvalue(isZero)) or (canaccessvalue and not canaccessvalue(isZero))
                 if isZeroSecret then
@@ -325,14 +325,14 @@ local function GetPlayerInterruptCooldownState()
     -- 2. Fallback to C_Spell.GetSpellCooldown
     local startTime, duration, isEnabled
     if C_Spell and C_Spell.GetSpellCooldown then
-        local success, info = pcall(C_Spell.GetSpellCooldown, spellID)
+        local success, info = ns.Utils.SafeCall(C_Spell.GetSpellCooldown, spellID)
         if success and info then
             startTime = info.startTime
             duration = info.duration
             isEnabled = info.isEnabled
         end
     elseif _G.GetSpellCooldown then
-        local success, sT, dur, en = pcall(_G.GetSpellCooldown, spellID)
+        local success, sT, dur, en = ns.Utils.SafeCall(_G.GetSpellCooldown, spellID)
         if success then
             startTime = sT
             duration = dur

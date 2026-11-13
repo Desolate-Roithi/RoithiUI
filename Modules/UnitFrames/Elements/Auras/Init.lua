@@ -12,7 +12,7 @@ RoithiUI.AuraDebug = RoithiUI.AuraDebug or false
 
 local function RADLog(fmt, ...)
     if RoithiUI.AuraDebug then
-        local ok, msg = pcall(string.format, fmt, ...)
+        local ok, msg = ns.Utils.SafeCall(string.format, fmt, ...)
         if ok then
             print("|cff00ffff[RAD 12.1.0]|r " .. msg)
             if RoithiUI.Log then

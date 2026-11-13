@@ -4,7 +4,7 @@ local RoithiUI = _G.RoithiUI
 
 -- WoW APIs
 local _G = _G
-local pcall, type, tonumber, tostring, ipairs, string = pcall, type, tonumber, tostring, ipairs, string
+local type, tonumber, tostring, ipairs, string = type, tonumber, tostring, ipairs, string
 local UnitHealth, UnitHealthMax, UnitPower, UnitPowerMax = UnitHealth, UnitHealthMax, UnitPower, UnitPowerMax
 local UnitName, UnitClass, UnitRace, UnitLevel = UnitName, UnitClass, UnitRace, UnitLevel
 local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
@@ -70,7 +70,7 @@ local function AbbreviateNumber(value)
     if IsSecret(value) then
         local abbrev = _G.AbbreviateLargeNumbers or AbbreviateLargeNumbers
         if abbrev then
-            local success, result = pcall(abbrev, value)
+            local success, result = ns.Utils.SafeCall(abbrev, value)
             if success and result ~= nil then return result end
         end
         return value
@@ -78,14 +78,14 @@ local function AbbreviateNumber(value)
 
     local abbrev = _G.AbbreviateLargeNumbers or AbbreviateLargeNumbers
     if abbrev then
-        local success, result = pcall(abbrev, value)
+        local success, result = ns.Utils.SafeCall(abbrev, value)
         if success and result ~= nil then
             return result
         end
     end
 
     if type(value) == "number" then
-        local ok, str = pcall(tostring, value)
+        local ok, str = ns.Utils.SafeCall(tostring, value)
         if ok and str then return str end
     end
     return value
@@ -100,11 +100,11 @@ end
 local function FormatPercent(value)
     if value == nil then return "" end
     if IsSecret(value) then
-        local ok, formatted = pcall(string.format, "%.1f%%", value)
+        local ok, formatted = ns.Utils.SafeCall(string.format, "%.1f%%", value)
         if ok and formatted ~= nil then return formatted end
         local strUtil = _G.C_StringUtil
         if strUtil and strUtil.RoundToNearestString and strUtil.WrapString then
-            local ok2, roundedStr = pcall(WrapRoundedString, value)
+            local ok2, roundedStr = ns.Utils.SafeCall(WrapRoundedString, value)
             if ok2 and roundedStr ~= nil then return roundedStr end
         end
         return value
@@ -187,11 +187,11 @@ TM.Methods = {
         if isActuallySecret then
             local fn = _G.UnitHealthDeficit or UnitHealthDeficit
             if fn then
-                local ok, def = pcall(fn, unit)
+                local ok, def = ns.Utils.SafeCall(fn, unit)
                 if ok and def then
                     local abbrev = _G.AbbreviateLargeNumbers or AbbreviateLargeNumbers
                     if abbrev then
-                        local ok2, res = pcall(abbrev, def)
+                        local ok2, res = ns.Utils.SafeCall(abbrev, def)
                         if ok2 and res ~= nil then return res end
                     end
                     return def
@@ -199,7 +199,7 @@ TM.Methods = {
             end
             local fnMissing = _G.UnitHealthMissing or UnitHealthMissing
             if fnMissing then
-                local okM, mVal = pcall(fnMissing, unit)
+                local okM, mVal = ns.Utils.SafeCall(fnMissing, unit)
                 if okM and mVal then return mVal end
             end
             return ""
@@ -217,12 +217,12 @@ TM.Methods = {
             -- Secondary Fallback: UnitHealthPercent with curve
             local fnHealthPercent = _G.UnitHealthPercent or UnitHealthPercent
             if fnHealthPercent then
-                local success, result = pcall(CallHealthPercent, unit)
+                local success, result = ns.Utils.SafeCall(CallHealthPercent, unit)
                 if success and result then return result end
             end
 
             -- Fallback to official text API
-            local success2, result2 = pcall(CallHealthPercentText, unit)
+            local success2, result2 = ns.Utils.SafeCall(CallHealthPercentText, unit)
             if success2 and result2 then return FormatPercent(result2) end
 
             return ""
@@ -243,11 +243,11 @@ TM.Methods = {
             -- Secondary Fallback: UnitPowerPercent with curve
             local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
             if fnPowerPercent and _G.UnitPowerType then
-                local success, result = pcall(CallPowerPercent, unit)
+                local success, result = ns.Utils.SafeCall(CallPowerPercent, unit)
                 if success and result then return result end
             end
 
-            local success2, result2 = pcall(CallPowerPercentText, unit)
+            local success2, result2 = ns.Utils.SafeCall(CallPowerPercentText, unit)
             if success2 and result2 then return FormatPercent(result2) end
 
             return ""
@@ -399,7 +399,7 @@ TM.Methods = {
         if IsSecret(cur) or IsSecret(max) then
             local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
             if fnPowerPercent then
-                local success, result = pcall(CallPowerClassPercent, unit, config.type)
+                local success, result = ns.Utils.SafeCall(CallPowerClassPercent, unit, config.type)
                 if success and result then return result end
             end
             return ""
@@ -443,7 +443,7 @@ TM.Methods = {
         if IsSecret(cur) or IsSecret(max) then
             local fnPowerPercent = _G.UnitPowerPercent or UnitPowerPercent
             if fnPowerPercent then
-                local success, result = pcall(CallManaPercent, unit)
+                local success, result = ns.Utils.SafeCall(CallManaPercent, unit)
                 if success and result then return result end
             end
             return ""
@@ -675,7 +675,7 @@ function TM:GetSegments(formatString, unit, outResult, outNodePool)
             local tagName = token.tag
             local method = TM.Methods[tagName]
             if method then
-                local success, val = pcall(method, unit)
+                local success, val = ns.Utils.SafeCall(method, unit)
                 if success then
                     if token.modifier and token.modifier:lower() == "short" then
                         val = AbbreviateNumber(val)
@@ -1034,12 +1034,12 @@ function UF:EnableTags(frame)
         for _, ev in ipairs(STAT_EVENTS) do
             if isDirect and listener.RegisterUnitEvent then
                 if frame.unit == "player" then
-                    pcall(listener.RegisterUnitEvent, listener, ev, "player", "vehicle")
+                    ns.Utils.SafeCall(listener.RegisterUnitEvent, listener, ev, "player", "vehicle")
                 else
-                    pcall(listener.RegisterUnitEvent, listener, ev, frame.unit)
+                    ns.Utils.SafeCall(listener.RegisterUnitEvent, listener, ev, frame.unit)
                 end
             else
-                pcall(listener.RegisterEvent, listener, ev)
+                ns.Utils.SafeCall(listener.RegisterEvent, listener, ev)
             end
         end
     end

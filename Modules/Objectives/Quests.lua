@@ -95,7 +95,75 @@ local cachedZoneKeySub = nil
 local cachedZoneKeyReal = nil
 local cachedZoneKeyZone = nil
 local cachedZoneKeyMapID = nil
-local cachedParentMapID = nil
+local cachedSubzoneMapID = nil
+local cachedZoneMapID = nil
+
+local function GetMapTypeZone()
+    return (_G.Enum and _G.Enum.UIMapType and _G.Enum.UIMapType.Zone) or 3
+end
+
+local function AddLowerName(tbl, name)
+    if name and not IsSecret(name) and type(name) == "string" and name ~= "" then
+        local trimmed = string.lower(SafeTrim(name))
+        if trimmed ~= "" then
+            tbl[trimmed] = true
+        end
+    end
+end
+
+local function ResolveZoneHierarchyMaps(currentMapID)
+    if not currentMapID or not (_G.C_Map and _G.C_Map.GetMapInfo) then
+        return nil, nil
+    end
+    local mapInfo = _G.C_Map.GetMapInfo(currentMapID)
+    if not mapInfo then
+        return nil, nil
+    end
+
+    local zoneType = GetMapTypeZone()
+    if mapInfo.mapType ~= nil then
+        if mapInfo.mapType > zoneType then
+            -- Dungeon/Micro subzone map: record subzone and walk up to enclosing Zone (never Continent/World)
+            AddLowerName(cachedSubzoneNames, mapInfo.name)
+            local zoneID = nil
+            local cursor = mapInfo.parentMapID
+            for _ = 1, 4 do
+                if not cursor or cursor <= 0 then break end
+                local pInfo = _G.C_Map.GetMapInfo(cursor)
+                if not pInfo then break end
+                if pInfo.mapType == zoneType then
+                    zoneID = cursor
+                    AddLowerName(cachedZoneNames, pInfo.name)
+                    break
+                elseif pInfo.mapType and pInfo.mapType < zoneType then
+                    break
+                end
+                cursor = pInfo.parentMapID
+            end
+            return currentMapID, zoneID
+        elseif mapInfo.mapType == zoneType then
+            -- Outdoor Zone map: currentMapID is the Zone itself, never a Subzone, and parent is Continent
+            AddLowerName(cachedZoneNames, mapInfo.name)
+            return nil, currentMapID
+        else
+            -- Continent / World / Cosmic map: never treat as Zone or Subzone
+            return nil, nil
+        end
+    end
+
+    -- Fallback when mapType is absent: only treat parentMapID as Zone if parent has no Continent/World grandparent
+    if mapInfo.parentMapID and mapInfo.parentMapID > 0 then
+        local parentInfo = _G.C_Map.GetMapInfo(mapInfo.parentMapID)
+        if parentInfo and (not parentInfo.mapType or parentInfo.mapType >= zoneType)
+            and (not parentInfo.parentMapID or parentInfo.parentMapID <= 0) then
+            AddLowerName(cachedSubzoneNames, mapInfo.name)
+            AddLowerName(cachedZoneNames, parentInfo.name)
+            return currentMapID, mapInfo.parentMapID
+        end
+    end
+    AddLowerName(cachedZoneNames, mapInfo.name)
+    return nil, currentMapID
+end
 
 local function GetCurrentZoneHierarchy()
     local subZone = (_G.GetSubZoneText and _G.GetSubZoneText()) or ""
@@ -104,44 +172,25 @@ local function GetCurrentZoneHierarchy()
     local currentMapID = _G.C_Map and _G.C_Map.GetBestMapForUnit and _G.C_Map.GetBestMapForUnit("player")
 
     if subZone == cachedZoneKeySub and realZone == cachedZoneKeyReal and zone == cachedZoneKeyZone and currentMapID == cachedZoneKeyMapID then
-        return cachedSubzoneNames, cachedZoneNames, currentMapID, cachedParentMapID
+        return cachedSubzoneNames, cachedZoneNames, cachedSubzoneMapID, cachedZoneMapID
     end
 
     cachedZoneKeySub = subZone
     cachedZoneKeyReal = realZone
     cachedZoneKeyZone = zone
     cachedZoneKeyMapID = currentMapID
-    cachedParentMapID = nil
+    cachedSubzoneMapID = nil
+    cachedZoneMapID = nil
     WipeTable(cachedSubzoneNames)
     WipeTable(cachedZoneNames)
 
-    if subZone ~= "" then
-        cachedSubzoneNames[string.lower(SafeTrim(subZone))] = true
-    end
-    if realZone ~= "" then
-        cachedZoneNames[string.lower(SafeTrim(realZone))] = true
-    end
-    if zone ~= "" then
-        cachedZoneNames[string.lower(SafeTrim(zone))] = true
-    end
+    AddLowerName(cachedSubzoneNames, subZone)
+    AddLowerName(cachedZoneNames, realZone)
+    AddLowerName(cachedZoneNames, zone)
 
-    if currentMapID and _G.C_Map and _G.C_Map.GetMapInfo then
-        local mapInfo = _G.C_Map.GetMapInfo(currentMapID)
-        if mapInfo then
-            if mapInfo.name and mapInfo.name ~= "" then
-                cachedSubzoneNames[string.lower(SafeTrim(mapInfo.name))] = true
-            end
-            if mapInfo.parentMapID and mapInfo.parentMapID > 0 then
-                cachedParentMapID = mapInfo.parentMapID
-                local parentInfo = _G.C_Map.GetMapInfo(cachedParentMapID)
-                if parentInfo and parentInfo.name and parentInfo.name ~= "" then
-                    cachedZoneNames[string.lower(SafeTrim(parentInfo.name))] = true
-                end
-            end
-        end
-    end
+    cachedSubzoneMapID, cachedZoneMapID = ResolveZoneHierarchyMaps(currentMapID)
 
-    return cachedSubzoneNames, cachedZoneNames, currentMapID, cachedParentMapID
+    return cachedSubzoneNames, cachedZoneNames, cachedSubzoneMapID, cachedZoneMapID
 end
 
 local function GetQuestMapID(questID)
@@ -186,22 +235,20 @@ local function GetQuestSortTitle(questID, questObj)
     return ""
 end
 
-local function GetQuestSortTier(questID, questZone, questObj, subzoneNames, zoneNames, currentMapID, parentMapID)
+local function GetQuestSortTier(questID, questZone, questObj, subzoneNames, zoneNames, subzoneMapID, zoneMapID)
     local isComplete = IsQuestEntryComplete(questID, questObj)
     local qMap = GetQuestMapID(questID)
     local cleanZone = questZone and string.lower(SafeTrim(questZone)) or ""
 
-    local inSubzone = (currentMapID and qMap == currentMapID) or (cleanZone ~= "" and subzoneNames and subzoneNames[cleanZone])
-    if inSubzone then
-        return isComplete and 2 or 1
+    local inCurrentZone = (zoneMapID and qMap == zoneMapID)
+        or (subzoneMapID and qMap == subzoneMapID)
+        or (cleanZone ~= "" and zoneNames and zoneNames[cleanZone])
+        or (cleanZone ~= "" and subzoneNames and subzoneNames[cleanZone])
+    if inCurrentZone then
+        return isComplete and 3 or 1
     end
 
-    local inZone = (parentMapID and qMap == parentMapID) or (cleanZone ~= "" and zoneNames and zoneNames[cleanZone])
-    if inZone then
-        return isComplete and 4 or 3
-    end
-
-    return isComplete and 6 or 5
+    return isComplete and 4 or 2
 end
 
 local function GetQuestLevel(questID)
@@ -237,13 +284,15 @@ local function CompareQuestInfosByZone(a, b)
         return mA.level < mB.level
     end
 
-    if mA.tier >= 5 and mA.zoneLower ~= mB.zoneLower then
+    if (mA.tier == 2 or mA.tier == 4) and mA.zoneLower ~= mB.zoneLower then
         if mA.zoneLower == "" then return false end
         if mB.zoneLower == "" then return true end
         return mA.zoneLower < mB.zoneLower
     end
 
-    if mA.titleLower ~= mB.titleLower and mA.titleLower ~= "" and mB.titleLower ~= "" then
+    if mA.titleLower ~= mB.titleLower then
+        if mA.titleLower == "" then return false end
+        if mB.titleLower == "" then return true end
         return mA.titleLower < mB.titleLower
     end
 
@@ -256,13 +305,28 @@ local function CompareQuestInfosByZone(a, b)
     return qidA < qidB
 end
 
+local function NeedsQuestZoneCacheRefresh(infos)
+    if not next(questZoneCache) then
+        return true
+    end
+    for _, item in ipairs(infos) do
+        local qObj = item.quest
+        local qID = (type(qObj) == "table" and (qObj.questID or qObj.id))
+            or (type(item) == "table" and (item.questID or item.id))
+        if qID and questZoneCache[qID] == nil then
+            return true
+        end
+    end
+    return false
+end
+
 local function SortInfosByCurrentZone(infos)
     if not infos or #infos <= 1 then return infos end
 
-    if not next(questZoneCache) then
+    if NeedsQuestZoneCacheRefresh(infos) then
         UpdateQuestLogData()
     end
-    local subzoneNames, zoneNames, currentMapID, parentMapID = GetCurrentZoneHierarchy()
+    local subzoneNames, zoneNames, subzoneMapID, zoneMapID = GetCurrentZoneHierarchy()
 
     WipeTable(sortMetaByItem)
     for index, item in ipairs(infos) do
@@ -270,7 +334,10 @@ local function SortInfosByCurrentZone(infos)
         local qID = (type(qObj) == "table" and (qObj.questID or qObj.id))
             or (type(item) == "table" and (item.questID or item.id))
         local zName = GetQuestZone(qID) or ""
-        local tier = GetQuestSortTier(qID, zName, qObj, subzoneNames, zoneNames, currentMapID, parentMapID)
+        if qID and questZoneCache[qID] == nil then
+            questZoneCache[qID] = zName
+        end
+        local tier = GetQuestSortTier(qID, zName, qObj, subzoneNames, zoneNames, subzoneMapID, zoneMapID)
         local title = GetQuestSortTitle(qID, qObj) or ""
         local level = GetQuestLevel(qID)
         local m = sortMetaPool[index]
@@ -281,7 +348,7 @@ local function SortInfosByCurrentZone(infos)
         m.tier = tier
         m.level = level
         m.zone = zName
-        m.zoneLower = (tier >= 5 and zName ~= "") and string.lower(zName) or ""
+        m.zoneLower = ((tier == 2 or tier == 4) and zName ~= "") and string.lower(zName) or ""
         m.title = title
         m.titleLower = (title ~= "") and string.lower(title) or ""
         m.index = item.index or index
@@ -295,9 +362,9 @@ local function SortInfosByCurrentZone(infos)
 end
 
 local function IsQuestInCurrentZone(questID, questZone)
-    local subzoneNames, zoneNames, currentMapID, parentMapID = GetCurrentZoneHierarchy()
-    local tier = GetQuestSortTier(questID, questZone, nil, subzoneNames, zoneNames, currentMapID, parentMapID)
-    return tier <= 4
+    local subzoneNames, zoneNames, subzoneMapID, zoneMapID = GetCurrentZoneHierarchy()
+    local tier = GetQuestSortTier(questID, questZone, nil, subzoneNames, zoneNames, subzoneMapID, zoneMapID)
+    return tier == 1 or tier == 3
 end
 
 ObjectivesMod.GetQuestSortTier = GetQuestSortTier
@@ -311,11 +378,11 @@ local function GetBlockHeaderHeight(b)
     if not b or not b.HeaderText then return 16 end
     if b.HeaderText.GetStringHeight then
         local sh = b.HeaderText:GetStringHeight()
-        if sh and sh > 0 then return sh end
+        if sh and not IsSecret(sh) and sh > 0 then return sh end
     end
     if b.HeaderText.GetHeight then
         local h = b.HeaderText:GetHeight()
-        if h and h > 0 then return h end
+        if h and not IsSecret(h) and h > 0 then return h end
     end
     return 16
 end
@@ -648,7 +715,7 @@ local function IsLineCompleted(line, block)
     end
     if line.objectiveIndex and block and block.id and _G.C_QuestLog and _G.C_QuestLog.GetQuestObjectives then
         local qid = block.id or block.questID
-        local ok, objs = pcall(_G.C_QuestLog.GetQuestObjectives, qid)
+        local ok, objs = ns.Utils.SafeCall(_G.C_QuestLog.GetQuestObjectives, qid)
         if ok and objs and objs[line.objectiveIndex] then
             return objs[line.objectiveIndex].finished == true
         end
@@ -853,7 +920,7 @@ function ObjectivesMod:ShowQuestTooltip(block)
     end
 
     if _G.C_QuestLog and _G.C_QuestLog.GetQuestObjectives then
-        local ok, objs = pcall(_G.C_QuestLog.GetQuestObjectives, qid)
+        local ok, objs = ns.Utils.SafeCall(_G.C_QuestLog.GetQuestObjectives, qid)
         if ok and objs and #objs > 0 then
             tooltip:AddLine(" ")
             for _, obj in ipairs(objs) do
@@ -871,7 +938,7 @@ function ObjectivesMod:ShowQuestTooltip(block)
     end
 
     if _G.IsInGroup and _G.IsInGroup() and tooltip.SetQuestPartyProgress then
-        pcall(tooltip.SetQuestPartyProgress, tooltip, qid)
+        ns.Utils.SafeCall(tooltip.SetQuestPartyProgress, tooltip, qid)
     end
 
     tooltip:AddLine(" ")

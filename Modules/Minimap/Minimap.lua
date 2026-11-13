@@ -58,6 +58,19 @@ function MinimapMod:OnInitialize()
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED")
     self:RegisterEvent("CHALLENGE_MODE_RESET")
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
+    self:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+end
+
+function MinimapMod:EDIT_MODE_LAYOUTS_UPDATED()
+    if _G.C_Timer and _G.C_Timer.After then
+        _G.C_Timer.After(0, function()
+            if self.UpdateBuffFrameDisplacement then
+                self:UpdateBuffFrameDisplacement(true)
+            end
+        end)
+    elseif self.UpdateBuffFrameDisplacement then
+        self:UpdateBuffFrameDisplacement(true)
+    end
 end
 
 function MinimapMod:PLAYER_REGEN_ENABLED()
@@ -104,6 +117,15 @@ function MinimapMod:PLAYER_ENTERING_WORLD()
     local objMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Objectives", true)
     if objMod and objMod.ApplyPosition then
         objMod:ApplyPosition()
+    end
+    if _G.C_Timer and _G.C_Timer.After then
+        _G.C_Timer.After(0, function()
+            if self.UpdateBuffFrameDisplacement then
+                self:UpdateBuffFrameDisplacement(true)
+            end
+        end)
+    elseif self.UpdateBuffFrameDisplacement then
+        self:UpdateBuffFrameDisplacement(true)
     end
 end
 
@@ -484,9 +506,9 @@ function MinimapMod:OnDisable()
         Minimap:SetMaskTexture("Interface\\Masks\\MinimapMask")
     end
     if Minimap then
-        if Minimap.SetQuestBlobRingAlpha then pcall(Minimap.SetQuestBlobRingAlpha, Minimap, 1) end
-        if Minimap.SetTaskBlobRingAlpha then pcall(Minimap.SetTaskBlobRingAlpha, Minimap, 1) end
-        if Minimap.SetArchBlobRingAlpha then pcall(Minimap.SetArchBlobRingAlpha, Minimap, 1) end
+        if Minimap.SetQuestBlobRingAlpha then ns.Utils.SafeCall(Minimap.SetQuestBlobRingAlpha, Minimap, 1) end
+        if Minimap.SetTaskBlobRingAlpha then ns.Utils.SafeCall(Minimap.SetTaskBlobRingAlpha, Minimap, 1) end
+        if Minimap.SetArchBlobRingAlpha then ns.Utils.SafeCall(Minimap.SetArchBlobRingAlpha, Minimap, 1) end
     end
 
     -- Hide RoithiUI container and custom frames
@@ -737,16 +759,20 @@ function MinimapMod:StyleMinimap()
         MinimapCluster:Show()
         MinimapCluster:SetAlpha(1)
 
-        if MinimapCluster.BorderTop then
-            MinimapCluster.BorderTop:Hide()
-            MinimapCluster.BorderTop:SetAlpha(0)
+        local borderTop = MinimapCluster.BorderTop
+        if borderTop then
+            borderTop:Hide()
+            borderTop:SetAlpha(0)
             if not self.isBorderTopHooked then
-                hooksecurefunc(MinimapCluster.BorderTop, "Show", function(s)
+                hooksecurefunc(borderTop, "Show", function(s)
                     if (self.IsEnabled and not self:IsEnabled()) or (self.db and self.db.enabled == false) then return end
                     s:Hide()
                 end)
                 self.isBorderTopHooked = true
             end
+        end
+        if _G.MinimapBorderTop and _G.MinimapBorderTop ~= borderTop then
+            self:StripZoneTextArt(_G.MinimapBorderTop, true)
         end
 
         local backdrop = MinimapCluster.MinimapBackdrop or _G.MinimapBackdrop
@@ -908,9 +934,9 @@ end
 function MinimapMod:UpdateMinimapShape()
     if self.db.shape == "SQUARE" then
         Minimap:SetMaskTexture("Interface\\ChatFrame\\ChatFrameBackground")
-        if Minimap.SetQuestBlobRingAlpha then pcall(Minimap.SetQuestBlobRingAlpha, Minimap, 0) end
-        if Minimap.SetTaskBlobRingAlpha then pcall(Minimap.SetTaskBlobRingAlpha, Minimap, 0) end
-        if Minimap.SetArchBlobRingAlpha then pcall(Minimap.SetArchBlobRingAlpha, Minimap, 0) end
+        if Minimap.SetQuestBlobRingAlpha then ns.Utils.SafeCall(Minimap.SetQuestBlobRingAlpha, Minimap, 0) end
+        if Minimap.SetTaskBlobRingAlpha then ns.Utils.SafeCall(Minimap.SetTaskBlobRingAlpha, Minimap, 0) end
+        if Minimap.SetArchBlobRingAlpha then ns.Utils.SafeCall(Minimap.SetArchBlobRingAlpha, Minimap, 0) end
         if self.borderFrame then
             self.borderFrame:Show()
             self:UpdateMinimapBorder()
@@ -918,9 +944,9 @@ function MinimapMod:UpdateMinimapShape()
     else
         -- Restore default circular shape mask in Retail
         Minimap:SetMaskTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-        if Minimap.SetQuestBlobRingAlpha then pcall(Minimap.SetQuestBlobRingAlpha, Minimap, 1) end
-        if Minimap.SetTaskBlobRingAlpha then pcall(Minimap.SetTaskBlobRingAlpha, Minimap, 1) end
-        if Minimap.SetArchBlobRingAlpha then pcall(Minimap.SetArchBlobRingAlpha, Minimap, 1) end
+        if Minimap.SetQuestBlobRingAlpha then ns.Utils.SafeCall(Minimap.SetQuestBlobRingAlpha, Minimap, 1) end
+        if Minimap.SetTaskBlobRingAlpha then ns.Utils.SafeCall(Minimap.SetTaskBlobRingAlpha, Minimap, 1) end
+        if Minimap.SetArchBlobRingAlpha then ns.Utils.SafeCall(Minimap.SetArchBlobRingAlpha, Minimap, 1) end
         if self.borderFrame then self.borderFrame:Hide() end
     end
     self:LayoutDefaultButtons()
@@ -1322,6 +1348,95 @@ function MinimapMod:UpdateZoneTextFont(fontString)
     end
 end
 
+local function SafeCallOrDirect(fn, ...)
+    if ns.Utils and ns.Utils.SafeCall then
+        return ns.Utils.SafeCall(fn, ...)
+    end
+    return true, fn(...)
+end
+
+local function SuppressZoneTextObject(mod, obj, requireTexture)
+    if not obj then return end
+    if requireTexture then
+        local isTex = (obj.IsObjectType and obj:IsObjectType("Texture")) or (obj.GetObjectType and obj:GetObjectType() == "Texture")
+        if not isTex then return end
+    end
+
+    if obj.SetBackdrop then
+        SafeCallOrDirect(obj.SetBackdrop, obj, nil)
+    end
+    if obj.SetAlpha then
+        SafeCallOrDirect(obj.SetAlpha, obj, 0)
+    end
+    if obj.Hide then
+        SafeCallOrDirect(obj.Hide, obj)
+    end
+
+    local st = GetBlizzMinimapState(obj)
+    if not st.zoneTextArtHooked and hooksecurefunc then
+        st.zoneTextArtHooked = true
+        if obj.Show then
+            hooksecurefunc(obj, "Show", function(s)
+                if (mod.IsEnabled and not mod:IsEnabled()) or (mod.db and mod.db.enabled == false) then return end
+                if st.isSuppressing then return end
+                st.isSuppressing = true
+                if s.SetAlpha then SafeCallOrDirect(s.SetAlpha, s, 0) end
+                if s.Hide then SafeCallOrDirect(s.Hide, s) end
+                st.isSuppressing = false
+            end)
+        end
+        if obj.SetAlpha then
+            hooksecurefunc(obj, "SetAlpha", function(s)
+                if (mod.IsEnabled and not mod:IsEnabled()) or (mod.db and mod.db.enabled == false) then return end
+                if st.isSuppressing then return end
+                st.isSuppressing = true
+                SafeCallOrDirect(s.SetAlpha, s, 0)
+                st.isSuppressing = false
+            end)
+        end
+    end
+end
+
+function MinimapMod:StripZoneTextArt(frame, suppressSelf)
+    if not frame then return end
+    if suppressSelf then
+        SuppressZoneTextObject(self, frame, false)
+        return
+    end
+
+    if frame.SetBackdrop then
+        SafeCallOrDirect(frame.SetBackdrop, frame, nil)
+    end
+
+    local childKeys = { "NineSlice", "Border", "Backdrop", "Background" }
+    for _, key in ipairs(childKeys) do
+        SuppressZoneTextObject(self, frame[key], false)
+    end
+
+    local texKeys = {
+        "AddTexture", "StateTexture", "Background", "Border",
+        "Left", "Middle", "Right",
+        "NormalTexture", "PushedTexture", "HighlightTexture", "DisabledTexture",
+    }
+    for _, key in ipairs(texKeys) do
+        SuppressZoneTextObject(self, frame[key], true)
+    end
+
+    if frame.GetNormalTexture then SuppressZoneTextObject(self, frame:GetNormalTexture(), true) end
+    if frame.GetPushedTexture then SuppressZoneTextObject(self, frame:GetPushedTexture(), true) end
+    if frame.GetHighlightTexture then SuppressZoneTextObject(self, frame:GetHighlightTexture(), true) end
+    if frame.GetDisabledTexture then SuppressZoneTextObject(self, frame:GetDisabledTexture(), true) end
+
+    if frame.GetRegions then
+        local okRegs, regions = SafeCallOrDirect(function() return { frame:GetRegions() } end)
+        if okRegs and regions then
+            for _, region in ipairs(regions) do
+                SuppressZoneTextObject(self, region, true)
+            end
+        end
+    end
+end
+
 -- Align default buttons to custom Edit Mode anchors
 function MinimapMod:LayoutDefaultButtons()
     if InCombatLockdown and InCombatLockdown() then
@@ -1336,16 +1451,16 @@ function MinimapMod:LayoutDefaultButtons()
 
         if hookedButtons[btn] then
             if btn.SetParent and anchor then
-                pcall(btn.SetParent, btn, anchor)
+                ns.Utils.SafeCall(btn.SetParent, btn, anchor)
             end
             if btn.SetFrameStrata and anchor.GetFrameStrata then
-                pcall(btn.SetFrameStrata, btn, anchor:GetFrameStrata())
+                ns.Utils.SafeCall(btn.SetFrameStrata, btn, anchor:GetFrameStrata())
             end
             if btn.SetFrameLevel and anchor.GetFrameLevel then
-                pcall(btn.SetFrameLevel, btn, anchor:GetFrameLevel() + 5)
+                ns.Utils.SafeCall(btn.SetFrameLevel, btn, anchor:GetFrameLevel() + 5)
             end
-            if btn.ClearAllPoints then pcall(btn.ClearAllPoints, btn) end
-            if btn.SetPoint then pcall(btn.SetPoint, btn, "CENTER", anchor, "CENTER", 0, 0) end
+            if btn.ClearAllPoints then ns.Utils.SafeCall(btn.ClearAllPoints, btn) end
+            if btn.SetPoint then ns.Utils.SafeCall(btn.SetPoint, btn, "CENTER", anchor, "CENTER", 0, 0) end
             return
         end
         hookedButtons[btn] = true
@@ -1416,10 +1531,14 @@ function MinimapMod:LayoutDefaultButtons()
     -- Setup Zone Text Anchor
     local zoneWidth = (self.db and (self.db.width or self.db.size)) or 200
     local zoneTextAnchor = CreateAnchorFrame(self, "zoneTextAnchor", "RoithiZoneTextAnchor", L["Minimap Zone Text"], zoneWidth, 20, defPos.zoneTextAnchor)
+    if zoneTextAnchor and zoneTextAnchor.SetBackdrop then
+        SafeCallOrDirect(zoneTextAnchor.SetBackdrop, zoneTextAnchor, nil)
+    end
     local zoneText = (MinimapCluster and (MinimapCluster.ZoneTextButton or MinimapCluster.ZoneTextFrame)) or _G.MinimapZoneTextButton
     if zoneText then
         HookBlizzardButton(zoneText, zoneTextAnchor)
         if zoneText.SetSize then zoneText:SetSize(zoneWidth, 20) end
+        self:StripZoneTextArt(zoneText)
     end
 
     local fs = _G.MinimapZoneText or (zoneText and zoneText.GetFontString and zoneText:GetFontString())
@@ -1824,29 +1943,29 @@ function MinimapMod:UpdateLandingVisibility()
         if landing then
             if show then
                 if landing.RefreshButton then
-                    pcall(landing.RefreshButton, landing, true)
+                    ns.Utils.SafeCall(landing.RefreshButton, landing, true)
                 end
                 local canShow = true
                 if landing == _G.ExpansionLandingPageMinimapButton and landing.RefreshButton then
                     canShow = (landing.IsShown and landing:IsShown()) or (landing.isShown == true) or (landing.title ~= nil and landing.title ~= "")
                 end
                 if canShow and landing.Show then
-                    pcall(landing.Show, landing)
+                    ns.Utils.SafeCall(landing.Show, landing)
                 end
                 if landing == _G.ExpansionLandingPageMinimapButton and landing.SetMouseMotionEnabled and (landing.title == nil or landing.title == "") then
                     landing:SetMouseMotionEnabled(false)
                 end
                 if self.landingAnchor then
                     if landing.SetFrameStrata and self.landingAnchor.GetFrameStrata then
-                        pcall(landing.SetFrameStrata, landing, self.landingAnchor:GetFrameStrata())
+                        ns.Utils.SafeCall(landing.SetFrameStrata, landing, self.landingAnchor:GetFrameStrata())
                     end
                     if landing.SetFrameLevel and self.landingAnchor.GetFrameLevel then
-                        pcall(landing.SetFrameLevel, landing, self.landingAnchor:GetFrameLevel() + 5)
+                        ns.Utils.SafeCall(landing.SetFrameLevel, landing, self.landingAnchor:GetFrameLevel() + 5)
                     end
                 end
             else
                 if landing.Hide then
-                    pcall(landing.Hide, landing)
+                    ns.Utils.SafeCall(landing.Hide, landing)
                 end
             end
         end
@@ -1856,13 +1975,13 @@ end
 function MinimapMod:IsOmniumFolioMode(btn)
     if not btn then return false end
     if btn.IsExpansionOverlayMode then
-        local ok, isOverlay = pcall(btn.IsExpansionOverlayMode, btn)
+        local ok, isOverlay = ns.Utils.SafeCall(btn.IsExpansionOverlayMode, btn)
         if ok and isOverlay ~= nil then
             return isOverlay == true
         end
     end
     if _G.ExpansionLandingPage and _G.ExpansionLandingPage.IsOverlayApplied then
-        local ok, isOverlay = pcall(_G.ExpansionLandingPage.IsOverlayApplied, _G.ExpansionLandingPage)
+        local ok, isOverlay = ns.Utils.SafeCall(_G.ExpansionLandingPage.IsOverlayApplied, _G.ExpansionLandingPage)
         if ok and isOverlay ~= nil then
             return isOverlay == true
         end
@@ -1884,26 +2003,26 @@ function MinimapMod:UpdateFolioVisibility()
     if folio and _G.PlumberLandingPageMinimapButton then
         if show and isFolioMode then
             if folio.RefreshButton then
-                pcall(folio.RefreshButton, folio, true)
+                ns.Utils.SafeCall(folio.RefreshButton, folio, true)
             end
             local canShowFolio = (not folio.RefreshButton) or (folio.IsShown and folio:IsShown()) or (folio.isShown == true) or (folio.title ~= nil and folio.title ~= "")
             if canShowFolio and folio.Show then
-                pcall(folio.Show, folio)
+                ns.Utils.SafeCall(folio.Show, folio)
             end
             if folio.SetMouseMotionEnabled and (folio.title == nil or folio.title == "") then
                 folio:SetMouseMotionEnabled(false)
             end
             if self.folioAnchor then
                 if folio.SetFrameStrata and self.folioAnchor.GetFrameStrata then
-                    pcall(folio.SetFrameStrata, folio, self.folioAnchor:GetFrameStrata())
+                    ns.Utils.SafeCall(folio.SetFrameStrata, folio, self.folioAnchor:GetFrameStrata())
                 end
                 if folio.SetFrameLevel and self.folioAnchor.GetFrameLevel then
-                    pcall(folio.SetFrameLevel, folio, self.folioAnchor:GetFrameLevel() + 5)
+                    ns.Utils.SafeCall(folio.SetFrameLevel, folio, self.folioAnchor:GetFrameLevel() + 5)
                 end
             end
         else
             if folio.Hide then
-                pcall(folio.Hide, folio)
+                ns.Utils.SafeCall(folio.Hide, folio)
             end
         end
     end
@@ -2032,7 +2151,7 @@ function MinimapMod:UpdateDifficultyText()
     if hasWorldTier or diffID == 208 then
         local tier = nil
         if _G.C_UIWidgetManager and _G.C_UIWidgetManager.GetScenarioHeaderDelvesWidgetVisualizationInfo then
-            local ok, info = pcall(_G.C_UIWidgetManager.GetScenarioHeaderDelvesWidgetVisualizationInfo, 6183)
+            local ok, info = ns.Utils.SafeCall(_G.C_UIWidgetManager.GetScenarioHeaderDelvesWidgetVisualizationInfo, 6183)
             if ok and info and info.tierText then
                 tier = tostring(info.tierText):match("%d+")
             end
@@ -2122,6 +2241,7 @@ function MinimapMod:UpdateZoneTextVisibility()
     if zoneText then
         if self.db.showZoneText then
             zoneText:Show()
+            self:StripZoneTextArt(zoneText)
             if self.zoneTextAnchor then self.zoneTextAnchor:Show() end
             -- Re-enforce centering after show; Blizzard's Show path can reset the fontstring position
             if self.ReanchorZoneText then
@@ -2156,18 +2276,16 @@ end
 
 function MinimapMod:SharePlayerCoordinates()
     local mapID
-    local okMap, bestMap = pcall(function()
-        return _G.C_Map and _G.C_Map.GetBestMapForUnit and _G.C_Map.GetBestMapForUnit("player")
-    end)
-    if okMap and bestMap then mapID = bestMap end
+    if _G.C_Map and _G.C_Map.GetBestMapForUnit then
+        local okMap, bestMap = ns.Utils.SafeCall(_G.C_Map.GetBestMapForUnit, "player")
+        if okMap and bestMap then mapID = bestMap end
+    end
 
     local x, y
-    if mapID then
-        local okPos, pos = pcall(function()
-            return _G.C_Map.GetPlayerMapPosition(mapID, "player")
-        end)
+    if mapID and _G.C_Map and _G.C_Map.GetPlayerMapPosition then
+        local okPos, pos = ns.Utils.SafeCall(_G.C_Map.GetPlayerMapPosition, mapID, "player")
         if okPos and pos and pos.GetXY then
-            local okXY, px, py = pcall(function() return pos:GetXY() end)
+            local okXY, px, py = ns.Utils.SafeCall(pos.GetXY, pos)
             if okXY and px and py and px > 0 and py > 0 then
                 x, y = px * 100, py * 100
             end
@@ -2210,7 +2328,7 @@ function MinimapMod:SharePlayerCoordinates()
     end
 
     if _G.PlaySound then
-        pcall(_G.PlaySound, (_G.SOUNDKIT and _G.SOUNDKIT.U_CHAT_SCROLL_BUTTON) or 856)
+        ns.Utils.SafeCall(_G.PlaySound, (_G.SOUNDKIT and _G.SOUNDKIT.U_CHAT_SCROLL_BUTTON) or 856)
     end
 
     if _G.ChatEdit_OpenChat then
@@ -2361,7 +2479,7 @@ local function GetSocialStats()
     local guildOnline = 0
     local guildTotal = 0
     local guildName = ""
-    pcall(function()
+    ns.Utils.SafeCall(function()
         if _G.IsInGuild and _G.IsInGuild() then
             if _G.GetGuildInfo then
                 guildName = _G.GetGuildInfo("player") or ""
@@ -2380,7 +2498,7 @@ local function GetSocialStats()
     local bnetSameVersion = 0
     local myProjectID = _G.WOW_PROJECT_ID
 
-    pcall(function()
+    ns.Utils.SafeCall(function()
         if _G.C_BattleNet and _G.C_BattleNet.GetFriendAccountInfo then
             local numBNet = _G.C_BattleNet.GetFriendNumOnline and _G.C_BattleNet.GetFriendNumOnline() or 0
             bnetOnline = numBNet
@@ -2415,7 +2533,7 @@ local function GetSocialStats()
 
     local charFriendsTotal = 0
     local charFriendsOnline = 0
-    pcall(function()
+    ns.Utils.SafeCall(function()
         if _G.C_FriendList and _G.C_FriendList.GetNumFriends then
             local num = _G.C_FriendList.GetNumFriends() or 0
             charFriendsTotal = num
@@ -2729,6 +2847,15 @@ function MinimapMod:UpdateDataTextBarLayout()
     local objMod = RoithiUI and RoithiUI.GetModule and RoithiUI:GetModule("Objectives", true)
     if objMod and objMod.ApplyPosition then
         objMod:ApplyPosition()
+    end
+    if _G.C_Timer and _G.C_Timer.After then
+        _G.C_Timer.After(0, function()
+            if self.UpdateBuffFrameDisplacement then
+                self:UpdateBuffFrameDisplacement(true)
+            end
+        end)
+    elseif self.UpdateBuffFrameDisplacement then
+        self:UpdateBuffFrameDisplacement(true)
     end
 end
 

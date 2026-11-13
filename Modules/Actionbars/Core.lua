@@ -53,7 +53,7 @@ function AB:ToggleQuickKeybind()
     end
 
     if not _G.QuickKeybindFrame and _G.C_AddOns and _G.C_AddOns.LoadAddOn then
-        pcall(_G.C_AddOns.LoadAddOn, "Blizzard_QuickKeybind")
+        ns.Utils.SafeCall(_G.C_AddOns.LoadAddOn, "Blizzard_QuickKeybind")
     end
     if _G.QuickKeybindFrame then
         if _G.QuickKeybindFrame:IsShown() then
@@ -70,7 +70,7 @@ function AB:ToggleQuickKeybind()
             if _G.KeyBindingFrame:IsShown() then _G.KeyBindingFrame:Hide() else _G.KeyBindingFrame:Show() end
         end
     elseif _G.Settings and _G.Settings.OpenToCategory then
-        pcall(_G.Settings.OpenToCategory, "Keybindings")
+        ns.Utils.SafeCall(_G.Settings.OpenToCategory, "Keybindings")
     end
     if self.UpdateAllEmptyButtons then
         self:UpdateAllEmptyButtons()

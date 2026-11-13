@@ -397,7 +397,7 @@ function BagsMod:CreateBagBarExpander()
             expander.arrow:SetText(expanded and "<" or ">")
         end
         if _G.MainMenuBarBagManager and _G.MainMenuBarBagManager.ToggleExpandBar then
-            pcall(_G.MainMenuBarBagManager.ToggleExpandBar, _G.MainMenuBarBagManager)
+            ns.Utils.SafeCall(_G.MainMenuBarBagManager.ToggleExpandBar, _G.MainMenuBarBagManager)
         end
         self:UpdateBagBarLayout()
     end)
@@ -734,7 +734,7 @@ function BagsMod:RestoreBlizzardBagBar()
         self.reagentSeparator:Hide()
     end
     if _G.BagsBar and _G.BagsBar.Layout then
-        pcall(_G.BagsBar.Layout, _G.BagsBar)
+        ns.Utils.SafeCall(_G.BagsBar.Layout, _G.BagsBar)
     end
 end
 

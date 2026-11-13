@@ -51,6 +51,170 @@ function ns.Utils.IsSecret(val)
     return false
 end
 
+-- -------------------------------------------------------------------------
+-- Persistent Error Logging & SafeCall (ALWAYS-LOG-PCALL)
+-- -------------------------------------------------------------------------
+local maxErrorLog = 50
+local memoryErrorLog = {}
+local boundGlobalDB = nil
+local currentSessionID = 0
+
+local function NormalizeErrorMessage(err)
+    if err == nil then return "Unknown error" end
+    if ns.Utils.IsSecret(err) then return "<secret error value>" end
+    return tostring(err)
+end
+
+local function NormalizeErrorSource(source)
+    if source ~= nil and not ns.Utils.IsSecret(source) then
+        return tostring(source)
+    end
+    if _G.debugstack then
+        local frameLine = _G.debugstack(3, 1, 0)
+        if type(frameLine) == "string" and frameLine ~= "" then
+            local cleanLine = frameLine:match("^([^\r\n]+)")
+            if cleanLine and cleanLine ~= "" then
+                return cleanLine
+            end
+        end
+    end
+    return "RoithiUI"
+end
+
+local function GetActiveErrorList()
+    if boundGlobalDB and type(boundGlobalDB.errorLog) == "table" then
+        return boundGlobalDB.errorLog
+    end
+    return memoryErrorLog
+end
+
+function ns.Utils.LogError(err, source)
+    local msg = NormalizeErrorMessage(err)
+    local src = NormalizeErrorSource(source)
+    local logList = GetActiveErrorList()
+    local nowStr = (_G.date and _G.date("%Y-%m-%d %H:%M:%S")) or ""
+    local nowEpoch = (_G.time and _G.time()) or 0
+
+    for i = #logList, 1, -1 do
+        local entry = logList[i]
+        if entry and entry.source == src and entry.message == msg then
+            entry.count = (entry.count or 1) + 1
+            entry.session = currentSessionID
+            entry.timestamp = nowStr
+            entry.time = nowEpoch
+            if i ~= #logList then
+                table.remove(logList, i)
+                logList[#logList + 1] = entry
+            end
+            return entry
+        end
+    end
+
+    local stack = (_G.debugstack and _G.debugstack(2, 8, 0)) or ""
+    local entry = {
+        message = msg,
+        source = src,
+        stack = stack,
+        count = 1,
+        session = currentSessionID,
+        timestamp = nowStr,
+        time = nowEpoch,
+    }
+    logList[#logList + 1] = entry
+    while #logList > maxErrorLog do
+        table.remove(logList, 1)
+    end
+    return entry
+end
+
+local function MergeLogEntry(targetList, pending)
+    for i = #targetList, 1, -1 do
+        local existing = targetList[i]
+        if existing and existing.source == pending.source and existing.message == pending.message then
+            existing.count = (existing.count or 1) + (pending.count or 1)
+            existing.session = currentSessionID
+            existing.timestamp = pending.timestamp or existing.timestamp
+            existing.time = pending.time or existing.time
+            return
+        end
+    end
+    pending.session = currentSessionID
+    targetList[#targetList + 1] = pending
+end
+
+function ns.Utils.BindErrorLogDB(globalDB)
+    if type(globalDB) ~= "table" then return end
+    if type(globalDB.errorLog) ~= "table" then
+        globalDB.errorLog = {}
+    end
+    boundGlobalDB = globalDB
+    currentSessionID = (tonumber(globalDB.errorSessionID) or 0) + 1
+    globalDB.errorSessionID = currentSessionID
+
+    for i = 1, #memoryErrorLog do
+        local pending = memoryErrorLog[i]
+        if pending then
+            MergeLogEntry(globalDB.errorLog, pending)
+        end
+        memoryErrorLog[i] = nil
+    end
+    while #globalDB.errorLog > maxErrorLog do
+        table.remove(globalDB.errorLog, 1)
+    end
+end
+
+function ns.Utils.GetErrorSessionID()
+    return currentSessionID
+end
+
+function ns.Utils.GetErrorLog(sessionOnly)
+    local logList = GetActiveErrorList()
+    if not sessionOnly then
+        return logList
+    end
+    local filtered = {}
+    for i = 1, #logList do
+        local entry = logList[i]
+        if entry and entry.session == currentSessionID then
+            filtered[#filtered + 1] = entry
+        end
+    end
+    return filtered
+end
+
+function ns.Utils.ClearErrorLog(sessionOnly)
+    local logList = GetActiveErrorList()
+    if not sessionOnly then
+        for i = #logList, 1, -1 do
+            logList[i] = nil
+        end
+        return
+    end
+    for i = #logList, 1, -1 do
+        local entry = logList[i]
+        if not entry or entry.session == currentSessionID then
+            table.remove(logList, i)
+        end
+    end
+end
+
+local function SafeCallReturn(ok, ...)
+    if not ok then
+        local err = ...
+        ns.Utils.LogError(err)
+        return false, err
+    end
+    return true, ...
+end
+
+function ns.Utils.SafeCall(fn, ...)
+    if type(fn) ~= "function" then
+        ns.Utils.LogError("SafeCall: expected function")
+        return false, "SafeCall: expected function"
+    end
+    return SafeCallReturn(pcall(fn, ...))
+end
+
 function ns.Utils.SafeUnitIsUnit(unitA, unitB)
     if not unitA or not unitB then return false, false end
     if not ns.Utils.IsSecret(unitA) and not ns.Utils.IsSecret(unitB) and unitA == unitB then
@@ -58,7 +222,7 @@ function ns.Utils.SafeUnitIsUnit(unitA, unitB)
     end
     local unitIsUnit = _G.UnitIsUnit
     if not unitIsUnit then return false, false end
-    local ok, res = pcall(unitIsUnit, unitA, unitB)
+    local ok, res = ns.Utils.SafeCall(unitIsUnit, unitA, unitB)
     if not ok then return false, false end
     if ns.Utils.IsSecret(res) then
         return false, true
@@ -77,7 +241,7 @@ function ns.Utils.IsPlayerInCombat(event)
     end
     local uac = _G.UnitAffectingCombat
     if uac then
-        local ok, inCombat = pcall(uac, "player")
+        local ok, inCombat = ns.Utils.SafeCall(uac, "player")
         if ok and not ns.Utils.IsSecret(inCombat) and inCombat == true then
             return true
         end
@@ -117,7 +281,7 @@ function ns.Utils.ApplyTypography(fontString, fontName, fontSize, fontOutline, f
 
     local fontPath = ns.Utils.ResolveFontPath(fontName, fallbackFont or "Expressway")
     local flags = ns.Utils.NormalizeFontFlags(fontOutline)
-    pcall(fontString.SetFont, fontString, fontPath, fontSize or 12, flags)
+    ns.Utils.SafeCall(fontString.SetFont, fontString, fontPath, fontSize or 12, flags)
 
     if fontString.SetShadowOffset then
         if fontShadow == true then
@@ -129,9 +293,9 @@ function ns.Utils.ApplyTypography(fontString, fontName, fontSize, fontOutline, f
     end
 
     if not skipTextFlush and fontString.GetText and fontString.SetText then
-        local ok, txt = pcall(fontString.GetText, fontString)
+        local ok, txt = ns.Utils.SafeCall(fontString.GetText, fontString)
         if ok and txt ~= nil and not ns.Utils.IsSecret(txt) and txt ~= "" then
-            pcall(fontString.SetText, fontString, txt)
+            ns.Utils.SafeCall(fontString.SetText, fontString, txt)
         end
         -- Skip GetText/SetText round-trip when text is a Midnight Secret value, empty, or skipTextFlush is requested
     end
@@ -213,6 +377,230 @@ function ns.Utils.ShowExportWindow(exportString)
     f.EditBox:SetText(exportString)
     f.EditBox:HighlightText()
     f:Show()
+end
+
+local function SetErrorButtonEnabled(btn, enabled)
+    if not btn then return end
+    if btn.SetEnabled then
+        btn:SetEnabled(enabled)
+    elseif btn.SetAlpha then
+        btn:SetAlpha(enabled and 1 or 0.4)
+    end
+end
+
+local function FormatErrorMeta(entry)
+    local ts = (entry.timestamp and entry.timestamp ~= "") and entry.timestamp or "Unknown time"
+    return string.format("%dx | Session %d | %s", entry.count or 1, entry.session or 0, ts)
+end
+
+local function FormatErrorEntryText(entry, index)
+    local meta = FormatErrorMeta(entry)
+    local header = index and string.format("[%d] %s", index, meta) or meta
+    local body = header .. "\n" .. (entry.message or "")
+    if entry.stack and entry.stack ~= "" then
+        body = body .. "\n\n" .. entry.stack
+    end
+    return body
+end
+
+local function RefreshErrorViewer(f)
+    if not f then return end
+    local sessionEntries = ns.Utils.GetErrorLog(true)
+    local allEntries = ns.Utils.GetErrorLog(false)
+
+    f.SessionBtn:SetText(string.format("Current Session (%d)", #sessionEntries))
+    f.AllBtn:SetText(string.format("All Sessions (%d)", #allEntries))
+    SetErrorButtonEnabled(f.SessionBtn, not f.sessionOnly)
+    SetErrorButtonEnabled(f.AllBtn, f.sessionOnly)
+
+    local entries = f.sessionOnly and sessionEntries or allEntries
+    local total = #entries
+    if total == 0 then
+        f.currentIndex = 0
+        f.Counter:SetText("0 / 0")
+        f.Meta:SetText("")
+        f.EditBox:SetText("No errors recorded.")
+        SetErrorButtonEnabled(f.PrevBtn, false)
+        SetErrorButtonEnabled(f.NextBtn, false)
+        SetErrorButtonEnabled(f.CopyAllBtn, false)
+        return
+    end
+
+    if not f.currentIndex or f.currentIndex < 1 or f.currentIndex > total then
+        f.currentIndex = total
+    end
+
+    local entry = entries[f.currentIndex]
+    f.Counter:SetText(string.format("%d / %d", f.currentIndex, total))
+    f.Meta:SetText(FormatErrorMeta(entry))
+
+    f.EditBox:SetText(FormatErrorEntryText(entry))
+    SetErrorButtonEnabled(f.PrevBtn, f.currentIndex > 1)
+    SetErrorButtonEnabled(f.NextBtn, f.currentIndex < total)
+    SetErrorButtonEnabled(f.CopyAllBtn, true)
+end
+
+local function CreateErrorViewerHeader(f)
+    f.Title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    f.Title:SetPoint("TOPLEFT", 16, -12)
+    f.Title:SetText("RoithiUI Error Log")
+    ns.Utils.ApplyTypography(f.Title, "Expressway", 14, "OUTLINE", false)
+    if f.Title.SetTextColor then f.Title:SetTextColor(1, 0.82, 0) end
+
+    f.SessionBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.SessionBtn:SetSize(145, 22)
+    f.SessionBtn:SetPoint("TOPLEFT", 16, -38)
+    f.SessionBtn:SetScript("OnClick", function()
+        f.sessionOnly = true
+        f.currentIndex = nil
+        RefreshErrorViewer(f)
+    end)
+
+    f.AllBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.AllBtn:SetSize(130, 22)
+    f.AllBtn:SetPoint("LEFT", f.SessionBtn, "RIGHT", 6, 0)
+    f.AllBtn:SetScript("OnClick", function()
+        f.sessionOnly = false
+        f.currentIndex = nil
+        RefreshErrorViewer(f)
+    end)
+
+    f.PrevBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.PrevBtn:SetSize(60, 22)
+    f.PrevBtn:SetPoint("TOPLEFT", 16, -66)
+    f.PrevBtn:SetText("< Prev")
+    f.PrevBtn:SetScript("OnClick", function()
+        if (f.currentIndex or 0) > 1 then
+            f.currentIndex = f.currentIndex - 1
+            RefreshErrorViewer(f)
+        end
+    end)
+
+    f.Counter = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.Counter:SetPoint("LEFT", f.PrevBtn, "RIGHT", 8, 0)
+    ns.Utils.ApplyTypography(f.Counter, "Expressway", 12, "OUTLINE", false)
+
+    f.NextBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.NextBtn:SetSize(60, 22)
+    f.NextBtn:SetPoint("LEFT", f.Counter, "RIGHT", 8, 0)
+    f.NextBtn:SetText("Next >")
+    f.NextBtn:SetScript("OnClick", function()
+        local entries = ns.Utils.GetErrorLog(f.sessionOnly)
+        if (f.currentIndex or 0) < #entries then
+            f.currentIndex = f.currentIndex + 1
+            RefreshErrorViewer(f)
+        end
+    end)
+
+    f.Meta = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.Meta:SetPoint("RIGHT", f, "TOPRIGHT", -16, -77)
+    ns.Utils.ApplyTypography(f.Meta, "Expressway", 11, "OUTLINE", false)
+    if f.Meta.SetTextColor then f.Meta:SetTextColor(0.75, 0.75, 0.75) end
+end
+
+local function CreateErrorViewerBody(f)
+    f.Scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+    f.Scroll:SetPoint("TOPLEFT", 16, -96)
+    f.Scroll:SetPoint("BOTTOMRIGHT", -32, 42)
+
+    f.EditBox = CreateFrame("EditBox", nil, f.Scroll)
+    f.EditBox:SetMultiLine(true)
+    if f.EditBox.SetAutoFocus then f.EditBox:SetAutoFocus(false) end
+    f.EditBox:SetFontObject(_G.ChatFontNormal)
+    f.EditBox:SetWidth(580)
+    f.EditBox:SetScript("OnEscapePressed", function() f:Hide() end)
+    f.Scroll:SetScrollChild(f.EditBox)
+
+    f.SelectBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.SelectBtn:SetSize(95, 24)
+    f.SelectBtn:SetPoint("BOTTOMLEFT", 16, 10)
+    f.SelectBtn:SetText("Select All")
+    f.SelectBtn:SetScript("OnClick", function()
+        if f.EditBox.SetFocus then f.EditBox:SetFocus() end
+        f.EditBox:HighlightText()
+    end)
+
+    f.ClearBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.ClearBtn:SetSize(90, 24)
+    f.ClearBtn:SetPoint("LEFT", f.SelectBtn, "RIGHT", 8, 0)
+    f.ClearBtn:SetText("Clear")
+    f.ClearBtn:SetScript("OnClick", function()
+        ns.Utils.ClearErrorLog(f.sessionOnly)
+        f.currentIndex = nil
+        RefreshErrorViewer(f)
+    end)
+
+    f.CopyAllBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.CopyAllBtn:SetSize(95, 24)
+    f.CopyAllBtn:SetPoint("LEFT", f.ClearBtn, "RIGHT", 8, 0)
+    f.CopyAllBtn:SetText("Copy All")
+    f.CopyAllBtn:SetScript("OnClick", function()
+        local entries = ns.Utils.GetErrorLog(f.sessionOnly)
+        if #entries == 0 then return end
+        local blocks = {}
+        for idx, entry in ipairs(entries) do
+            table.insert(blocks, FormatErrorEntryText(entry, idx))
+        end
+        f.EditBox:SetText(table.concat(blocks, "\n\n----------------------------------------\n\n"))
+        if f.EditBox.SetFocus then f.EditBox:SetFocus() end
+        f.EditBox:HighlightText()
+    end)
+
+    f.CloseBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.CloseBtn:SetSize(95, 24)
+    f.CloseBtn:SetPoint("BOTTOMRIGHT", -16, 10)
+    local L = _G.LibStub and _G.LibStub("AceLocale-3.0", true) and _G.LibStub("AceLocale-3.0"):GetLocale("RoithiUI", true)
+    f.CloseBtn:SetText((L and L["Close"]) or "Close")
+    f.CloseBtn:SetScript("OnClick", function() f:Hide() end)
+end
+
+function ns.Utils.ShowErrorViewer(requestedIndex)
+    local f = _G.RoithiUIErrorFrame or CreateFrame("Frame", "RoithiUIErrorFrame", UIParent, "BackdropTemplate")
+    if not f.EditBox then
+        f:SetSize(640, 460)
+        f:SetPoint("CENTER")
+        if f.SetFrameStrata then f:SetFrameStrata("DIALOG") end
+        f:SetMovable(true)
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", f.StartMoving)
+        f:SetScript("OnDragStop", f.StopMovingOrSizing)
+        if f.SetBackdrop then
+            f:SetBackdrop({
+                bgFile = "Interface\\Buttons\\WHITE8x8",
+                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                tile = true,
+                tileSize = 16,
+                edgeSize = 14,
+                insets = { left = 3, right = 3, top = 3, bottom = 3 },
+            })
+            if f.SetBackdropColor then f:SetBackdropColor(0.06, 0.06, 0.08, 0.95) end
+            if f.SetBackdropBorderColor then f:SetBackdropBorderColor(0.35, 0.35, 0.4, 1) end
+        end
+        if type(_G.UISpecialFrames) == "table" then
+            local listed = false
+            for i = 1, #_G.UISpecialFrames do
+                if _G.UISpecialFrames[i] == "RoithiUIErrorFrame" then
+                    listed = true
+                    break
+                end
+            end
+            if not listed then table.insert(_G.UISpecialFrames, "RoithiUIErrorFrame") end
+        end
+        CreateErrorViewerHeader(f)
+        CreateErrorViewerBody(f)
+    end
+    if f.sessionOnly == nil then
+        f.sessionOnly = (#ns.Utils.GetErrorLog(true) > 0) or (#ns.Utils.GetErrorLog(false) == 0)
+    end
+    if type(requestedIndex) == "number" then
+        f.currentIndex = requestedIndex
+    else
+        f.currentIndex = nil
+    end
+    RefreshErrorViewer(f)
+    f:Show()
+    return f
 end
 
 -- -------------------------------------------------------------------------

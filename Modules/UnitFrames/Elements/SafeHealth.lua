@@ -17,19 +17,30 @@ local function SafeBool(val)
 end
 
 local smoothCurveCache = nil
+local function BuildSmoothColorCurve(grad)
+    local c = _G.C_CurveUtil.CreateColorCurve()
+    local g = grad or { 1, 0, 0, 1, 1, 0, 0, 1, 0 }
+    c:AddPoint(0.0, _G.CreateColor(g[1] or 1, g[2] or 0, g[3] or 0))
+    c:AddPoint(0.5, _G.CreateColor(g[4] or 1, g[5] or 1, g[6] or 0))
+    c:AddPoint(1.0, _G.CreateColor(g[7] or 0, g[8] or 1, g[9] or 0))
+    return c
+end
+
+local function ComputeSafeHealthPercent(cur, max)
+    if issecretvalue and (issecretvalue(cur) or issecretvalue(max)) then return nil end
+    if canaccessvalue and (not canaccessvalue(cur) or not canaccessvalue(max)) then return nil end
+    if type(cur) == "number" and type(max) == "number" and max > 0 then
+        return (cur / max) * 100
+    end
+    return nil
+end
+
 local function GetSmoothColorCurve(grad)
     if smoothCurveCache then return smoothCurveCache end
     if not (_G.C_CurveUtil and _G.C_CurveUtil.CreateColorCurve and _G.CreateColor) then
         return nil
     end
-    local ok, curve = pcall(function()
-        local c = _G.C_CurveUtil.CreateColorCurve()
-        local g = grad or { 1, 0, 0, 1, 1, 0, 0, 1, 0 }
-        c:AddPoint(0.0, _G.CreateColor(g[1] or 1, g[2] or 0, g[3] or 0))
-        c:AddPoint(0.5, _G.CreateColor(g[4] or 1, g[5] or 1, g[6] or 0))
-        c:AddPoint(1.0, _G.CreateColor(g[7] or 0, g[8] or 1, g[9] or 0))
-        return c
-    end)
+    local ok, curve = ns.Utils.SafeCall(BuildSmoothColorCurve, grad)
     if ok and curve then
         smoothCurveCache = curve
         return curve
@@ -54,22 +65,15 @@ local function Update(self, event, unit)
     local max = UnitHealthMax(unit)
 
     -- 2. Get Safe Percentage for Logic/Colors
-    -- In Classic/out-of-combat: compute directly from numeric cur/max inside pcall to catch secret comparison/arithmetic traps.
+    -- In Classic/out-of-combat: compute directly from numeric cur/max inside SafeCall to catch secret comparison/arithmetic traps.
     -- In Retail Midnight combat: call UnitHealthPercent with guarded CurveConstants.
     local per = 100
-    local computedOk, computedPer = pcall(function()
-        if issecretvalue and (issecretvalue(cur) or issecretvalue(max)) then return nil end
-        if canaccessvalue and (not canaccessvalue(cur) or not canaccessvalue(max)) then return nil end
-        if type(cur) == "number" and type(max) == "number" and max > 0 then
-            return (cur / max) * 100
-        end
-        return nil
-    end)
+    local computedOk, computedPer = ns.Utils.SafeCall(ComputeSafeHealthPercent, cur, max)
     if computedOk and type(computedPer) == "number" then
         per = computedPer
     elseif _G.UnitHealthPercent then
         local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or nil
-        local okP, p = pcall(_G.UnitHealthPercent, unit, false, curve)
+        local okP, p = ns.Utils.SafeCall(_G.UnitHealthPercent, unit, false, curve)
         local isSecP = (issecretvalue and issecretvalue(p)) or (canaccessvalue and not canaccessvalue(p))
         if okP and type(p) == "number" and not isSecP then
             per = p
@@ -164,7 +168,7 @@ local function Update(self, event, unit)
             local curve = GetSmoothColorCurve(element.smoothGradient or (self.colors and self.colors.smooth))
             local colored = false
             if curve and _G.UnitHealthPercent then
-                local ok, col = pcall(_G.UnitHealthPercent, unit, false, curve)
+                local ok, col = ns.Utils.SafeCall(_G.UnitHealthPercent, unit, false, curve)
                 if ok and col and col.GetRGB then
                     local cr, cg, cb = col:GetRGB()
                     element:SetStatusBarColor(cr, cg, cb)

@@ -18,7 +18,7 @@ local function SafeIsGreaterThan(val, threshold)
     if _G.issecretvalue and _G.issecretvalue(val) then return false end
     if _G.canaccessvalue and not _G.canaccessvalue(val) then return false end
 
-    local ok, res = pcall(gtHelper, val, threshold)
+    local ok, res = ns.Utils.SafeCall(gtHelper, val, threshold)
     return ok and res == true
 end
 
@@ -31,7 +31,7 @@ local function SafeEquals(val, expected)
     if _G.issecretvalue and _G.issecretvalue(val) then return false end
     if _G.canaccessvalue and not _G.canaccessvalue(val) then return false end
 
-    local ok, res = pcall(eqHelper, val, expected)
+    local ok, res = ns.Utils.SafeCall(eqHelper, val, expected)
     return ok and res == true
 end
 
@@ -41,12 +41,12 @@ local function SafeDurationIsZero(durObj)
     if _G.canaccessvalue and not _G.canaccessvalue(durObj) then return false end
 
     if durObj.IsZero then
-        local ok, isZero = pcall(durObj.IsZero, durObj)
+        local ok, isZero = ns.Utils.SafeCall(durObj.IsZero, durObj)
         if ok and isZero ~= nil then
             if _G.issecretvalue and _G.issecretvalue(isZero) then return false end
             if _G.canaccessvalue and not _G.canaccessvalue(isZero) then return false end
 
-            local cmpOk, res = pcall(eqHelper, isZero, true)
+            local cmpOk, res = ns.Utils.SafeCall(eqHelper, isZero, true)
             if cmpOk and res ~= nil then
                 return res == true
             end
@@ -54,7 +54,7 @@ local function SafeDurationIsZero(durObj)
         end
     end
     if durObj.GetRemainingDuration then
-        local ok, rem = pcall(durObj.GetRemainingDuration, durObj)
+        local ok, rem = ns.Utils.SafeCall(durObj.GetRemainingDuration, durObj)
         if ok and rem ~= nil then
             if _G.issecretvalue and _G.issecretvalue(rem) then return false end
             if _G.canaccessvalue and not _G.canaccessvalue(rem) then return false end
@@ -71,7 +71,7 @@ local function SafeDurationIsActive(durObj)
     if _G.canaccessvalue and not _G.canaccessvalue(durObj) then return false end
 
     if durObj.IsZero then
-        local ok, isZero = pcall(durObj.IsZero, durObj)
+        local ok, isZero = ns.Utils.SafeCall(durObj.IsZero, durObj)
         if ok and isZero ~= nil then
             if (ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(isZero)) or (_G.issecretvalue and _G.issecretvalue(isZero)) then return false end
             if _G.canaccessvalue and not _G.canaccessvalue(isZero) then return false end
@@ -85,7 +85,7 @@ local function SafeDurationIsActive(durObj)
         end
     end
     if durObj.GetRemainingDuration then
-        local ok, rem = pcall(durObj.GetRemainingDuration, durObj)
+        local ok, rem = ns.Utils.SafeCall(durObj.GetRemainingDuration, durObj)
         if ok and rem ~= nil then
             if _G.issecretvalue and _G.issecretvalue(rem) then return false end
             if _G.canaccessvalue and not _G.canaccessvalue(rem) then return false end
@@ -101,11 +101,11 @@ local function SetIconVisualState(icon, isOnCD)
     if not icon then return end
     local isCD = (isOnCD == true)
     if icon.SetDesaturated then
-        pcall(icon.SetDesaturated, icon, isCD)
+        ns.Utils.SafeCall(icon.SetDesaturated, icon, isCD)
     end
     if icon.SetVertexColor then
         local v = isCD and 0.55 or 1.0
-        pcall(icon.SetVertexColor, icon, v, v, v)
+        ns.Utils.SafeCall(icon.SetVertexColor, icon, v, v, v)
     end
 end
 
@@ -299,11 +299,11 @@ function CDM:IsCustomBarItemAccessible(entry)
         -- Check if it is equippable gear or trinket
         local equipSlot = nil
         if _G.C_Item and _G.C_Item.GetItemInventoryTypeByID then
-            local ok, slot = pcall(_G.C_Item.GetItemInventoryTypeByID, itemID)
+            local ok, slot = ns.Utils.SafeCall(_G.C_Item.GetItemInventoryTypeByID, itemID)
             if ok and slot then equipSlot = slot end
         end
         if not equipSlot and _G.GetItemInfoInstant then
-            local ok, _, _, slot = pcall(_G.GetItemInfoInstant, itemID)
+            local ok, _, _, slot = ns.Utils.SafeCall(_G.GetItemInfoInstant, itemID)
             if ok and slot then equipSlot = slot end
         end
 
@@ -315,10 +315,10 @@ function CDM:IsCustomBarItemAccessible(entry)
         if isEquippable then
             -- Trinkets and equipment: MUST be currently equipped!
             if _G.C_Item and _G.C_Item.IsEquippedItem then
-                local ok, isEq = pcall(_G.C_Item.IsEquippedItem, itemID)
+                local ok, isEq = ns.Utils.SafeCall(_G.C_Item.IsEquippedItem, itemID)
                 return ok and isEq == true
             elseif _G.IsEquippedItem then
-                local ok, isEq = pcall(_G.IsEquippedItem, itemID)
+                local ok, isEq = ns.Utils.SafeCall(_G.IsEquippedItem, itemID)
                 return ok and isEq == true
             end
             return false
@@ -326,10 +326,10 @@ function CDM:IsCustomBarItemAccessible(entry)
             -- Potions and consumables: MUST be in bags (item count > 0)
             local count = 0
             if _G.C_Item and _G.C_Item.GetItemCount then
-                local ok, c = pcall(_G.C_Item.GetItemCount, itemID)
+                local ok, c = ns.Utils.SafeCall(_G.C_Item.GetItemCount, itemID)
                 if ok and type(c) == "number" then count = c end
             elseif _G.GetItemCount then
-                local ok, c = pcall(_G.GetItemCount, itemID)
+                local ok, c = ns.Utils.SafeCall(_G.GetItemCount, itemID)
                 if ok and type(c) == "number" then count = c end
             end
             return count > 0
@@ -340,19 +340,19 @@ function CDM:IsCustomBarItemAccessible(entry)
     local spellID = tonumber(entry.spellID)
     if spellID then
         if _G.IsSpellKnownOrOverridesKnown then
-            local ok, known = pcall(_G.IsSpellKnownOrOverridesKnown, spellID)
+            local ok, known = ns.Utils.SafeCall(_G.IsSpellKnownOrOverridesKnown, spellID)
             if ok and known == true then return true end
         end
         if _G.C_Spell and _G.C_Spell.IsSpellKnown then
-            local ok, known = pcall(_G.C_Spell.IsSpellKnown, spellID)
+            local ok, known = ns.Utils.SafeCall(_G.C_Spell.IsSpellKnown, spellID)
             if ok and known == true then return true end
         end
         if _G.IsPlayerSpell then
-            local ok, known = pcall(_G.IsPlayerSpell, spellID)
+            local ok, known = ns.Utils.SafeCall(_G.IsPlayerSpell, spellID)
             if ok and known == true then return true end
         end
         if _G.IsSpellKnown then
-            local ok, known = pcall(_G.IsSpellKnown, spellID)
+            local ok, known = ns.Utils.SafeCall(_G.IsSpellKnown, spellID)
             if ok and known == true then return true end
         end
         return false
@@ -454,7 +454,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
         local showTimer = (cfg.showTimer ~= false)
         if cd then
             if cd.SetHideCountdownNumbers then
-                pcall(cd.SetHideCountdownNumbers, cd, not showTimer)
+                ns.Utils.SafeCall(cd.SetHideCountdownNumbers, cd, not showTimer)
             end
             local cdFS = cd.GetCountdownFontString and cd:GetCountdownFontString()
             if cdFS then
@@ -476,7 +476,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                 end
                 local isEnabled = (SafeEquals(enable, true) or SafeEquals(enable, 1))
                 if isEnabled and SafeIsGreaterThanZero(dur) then
-                    pcall(cd.SetCooldown, cd, start, dur)
+                    ns.Utils.SafeCall(cd.SetCooldown, cd, start, dur)
                     if SafeIsGreaterThan(dur, 1.5) then
                         local now = (_G.GetTime and _G.GetTime()) or 0
                         local finish = (start or 0) + dur
@@ -487,7 +487,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                 elseif cd.Clear then
                     cd:Clear()
                 elseif cd.SetCooldown then
-                    pcall(cd.SetCooldown, cd, 0, 0)
+                    ns.Utils.SafeCall(cd.SetCooldown, cd, 0, 0)
                 end
             end
             SetIconVisualState(iconBtn.Icon, isOnCD)
@@ -536,7 +536,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
     local showTimer = (cfg.showTimer ~= false)
     if cd then
         if cd.SetHideCountdownNumbers then
-            pcall(cd.SetHideCountdownNumbers, cd, not showTimer)
+            ns.Utils.SafeCall(cd.SetHideCountdownNumbers, cd, not showTimer)
         end
         local cdFS = cd.GetCountdownFontString and cd:GetCountdownFontString()
         if cdFS then
@@ -563,7 +563,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
         if cd.SetCooldownFromDurationObject and _G.C_Spell and _G.C_Spell.GetSpellCooldownDuration then
             durObj = _G.C_Spell.GetSpellCooldownDuration(spellID, true)
             if durObj then
-                local ok = pcall(cd.SetCooldownFromDurationObject, cd, durObj)
+                local ok = ns.Utils.SafeCall(cd.SetCooldownFromDurationObject, cd, durObj)
                 if ok then
                     cdApplied = true
                     if not isOnCD and (cdInfo == nil or cdInfo.isActive == nil) and SafeDurationIsActive(durObj) then
@@ -577,7 +577,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
             if cdInfo and cdInfo.startTime and cdInfo.duration and cdInfo.isEnabled ~= nil then
                 local isEnabled = SafeEquals(cdInfo.isEnabled, true) or SafeEquals(cdInfo.isEnabled, 1)
                 if isEnabled then
-                    pcall(cd.SetCooldown, cd, cdInfo.startTime, cdInfo.duration, cdInfo.modRate or 1)
+                    ns.Utils.SafeCall(cd.SetCooldown, cd, cdInfo.startTime, cdInfo.duration, cdInfo.modRate or 1)
                     cdApplied = true
                     if not isOnCD and SafeIsGreaterThan(cdInfo.duration, 1.5) then
                         local now = (_G.GetTime and _G.GetTime()) or 0
@@ -591,7 +591,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
                 local start, dur, enable, modRate = _G.GetSpellCooldown(spellID)
                 local isEnabled = SafeEquals(enable, true) or SafeEquals(enable, 1)
                 if start and dur and isEnabled then
-                    pcall(cd.SetCooldown, cd, start, dur, modRate or 1)
+                    ns.Utils.SafeCall(cd.SetCooldown, cd, start, dur, modRate or 1)
                     cdApplied = true
                     if not isOnCD and SafeIsGreaterThan(dur, 1.5) then
                         local now = (_G.GetTime and _G.GetTime()) or 0
@@ -608,7 +608,7 @@ function CDM:UpdateCustomBarSlot(barIndex, slotIndex)
             if cd.Clear then
                 cd:Clear()
             elseif cd.SetCooldown then
-                pcall(cd.SetCooldown, cd, 0, 0)
+                ns.Utils.SafeCall(cd.SetCooldown, cd, 0, 0)
             end
         end
 
@@ -1038,8 +1038,8 @@ function CDM:InitializeCustomBar(index)
                             RoithiUI:OpenSettings("cooldownmanager")
                         elseif LibStub and LibStub("AceConfigDialog-3.0", true) then
                             local ACD = LibStub("AceConfigDialog-3.0", true)
-                            pcall(function() ACD:Open("RoithiUI") end)
-                            pcall(function() ACD:SelectGroup("RoithiUI", "combat", "cooldownmanager") end)
+                            ns.Utils.SafeCall(ACD.Open, ACD, "RoithiUI")
+                            ns.Utils.SafeCall(ACD.SelectGroup, ACD, "RoithiUI", "combat", "cooldownmanager")
                         end
                     end,
                 },

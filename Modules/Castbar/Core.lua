@@ -197,12 +197,12 @@ function ns.UpdateBlizzardVisibility()
             if frame.EnableMouse then frame:EnableMouse(true) end
             if unit and frame.RegisterUnitEvent and not (frame.IsEventRegistered and frame:IsEventRegistered("UNIT_SPELLCAST_START")) then
                 for _, event in ipairs(BLIZZ_CAST_EVENTS) do
-                    pcall(frame.RegisterUnitEvent, frame, event, unit)
+                    ns.Utils.SafeCall(frame.RegisterUnitEvent, frame, event, unit)
                 end
                 if frame.RegisterEvent then
-                    pcall(frame.RegisterEvent, frame, "PLAYER_ENTERING_WORLD")
+                    ns.Utils.SafeCall(frame.RegisterEvent, frame, "PLAYER_ENTERING_WORLD")
                     if unit == "pet" then
-                        pcall(frame.RegisterEvent, frame, "UNIT_PET")
+                        ns.Utils.SafeCall(frame.RegisterEvent, frame, "UNIT_PET")
                     end
                 end
             end

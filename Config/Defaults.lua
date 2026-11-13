@@ -2,6 +2,10 @@ local addonName, ns = ...
 if ns.skipLoad then return end
 
 ns.Defaults = {
+    global = {
+        errorLog = {},
+        errorSessionID = 0,
+    },
     profile = {
         Auras = {
             Blacklist = { ["264689"] = true, ["36032"] = true, ["390435"] = true, ["57723"] = true, ["57724"] = true, ["80354"] = true, ["95809"] = true },

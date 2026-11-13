@@ -5,6 +5,14 @@ local MinimapMod = RoithiUI:GetModule("Minimap")
 local aceLocale = _G.LibStub and _G.LibStub("AceLocale-3.0", true)
 local L = aceLocale and aceLocale.GetLocale and aceLocale:GetLocale("RoithiUI", true)
 
+local function SafeCall(fn, ...)
+    local utils = (AT and AT.Utils) or (_G.RoithiUI and _G.RoithiUI.Utils)
+    if utils and utils.SafeCall then
+        return utils.SafeCall(fn, ...)
+    end
+    return true, fn(...)
+end
+
 local isStylingBuffs = false
 local buffBtnState = setmetatable({}, { __mode = "k" })
 
@@ -49,7 +57,7 @@ function MinimapMod:EnsureBuffDurationsCVar(fromCVarEvent)
         return false
     end
 
-    local ok, curVal = pcall(_G.GetCVar, "buffDurations")
+    local ok, curVal = SafeCall(_G.GetCVar, "buffDurations")
     if not ok or curVal ~= "0" then
         return true
     end
@@ -91,7 +99,7 @@ function MinimapMod:EnsureBuffDurationsCVar(fromCVarEvent)
     end
 
     self.queuedBuffDurationsRestore = nil
-    pcall(_G.SetCVar, "buffDurations", "1")
+    SafeCall(_G.SetCVar, "buffDurations", "1")
     return true
 end
 
@@ -114,7 +122,7 @@ local function StyleAuraButton(button, force)
             local targetPath = utils.ResolveFontPath(font, "Friz Quadrata TT")
             local targetFlags = utils.NormalizeFontFlags(outline)
             local size = (db and db.buffFrameDurationSize) or 10
-            local okFont, curPath, curSize, curFlags = pcall(duration.GetFont, duration)
+            local okFont, curPath, curSize, curFlags = SafeCall(duration.GetFont, duration)
             local invalidOrSecret = type(curPath) ~= "string"
                 or (utils.IsSecret and utils.IsSecret(curPath))
                 or type(curSize) ~= "number"
@@ -189,6 +197,56 @@ function MinimapMod:RefreshBuffFrameStyling()
     end
 end
 
+local function IsBuffEditModeActive(mod)
+    local em = _G.EditModeManagerFrame
+    return (mod and mod.isBuffEditModeActive)
+        or (em and (em.editModeActive or em.layoutApplyInProgress or (em.IsShown and em:IsShown())))
+end
+
+local function ScheduleBuffDisplacement(mod, force)
+    if _G.C_Timer and _G.C_Timer.After then
+        _G.C_Timer.After(0, function()
+            if mod and mod.UpdateBuffFrameDisplacement then
+                mod:UpdateBuffFrameDisplacement(force)
+            end
+        end)
+    elseif mod and mod.UpdateBuffFrameDisplacement then
+        mod:UpdateBuffFrameDisplacement(force)
+    end
+end
+
+local function RegisterAuraFrameHooks(mod, targetFrame, withStyling)
+    if not targetFrame then return end
+    local frameSt = GetBuffBtnState(targetFrame)
+
+    if targetFrame.UpdateAuraButtons and not frameSt.updateAuraButtonsHooked then
+        frameSt.updateAuraButtonsHooked = true
+        hooksecurefunc(targetFrame, "UpdateAuraButtons", function(frame)
+            if (mod.IsEnabled and not mod:IsEnabled()) or (mod.db and mod.db.enabled == false) then return end
+            if withStyling and frame and frame.auraFrames then
+                for _, auraFrame in ipairs(frame.auraFrames) do
+                    StyleAuraButton(auraFrame)
+                end
+            end
+            if IsBuffEditModeActive(mod) then return end
+            if mod.UpdateBuffFrameDisplacement then
+                mod:UpdateBuffFrameDisplacement()
+            end
+        end)
+    end
+
+    if targetFrame.UpdateGridLayout and not frameSt.updateGridLayoutHooked then
+        frameSt.updateGridLayoutHooked = true
+        hooksecurefunc(targetFrame, "UpdateGridLayout", function()
+            if (mod.IsEnabled and not mod:IsEnabled()) or (mod.db and mod.db.enabled == false) then return end
+            if IsBuffEditModeActive(mod) then return end
+            if mod.UpdateBuffFrameDisplacement then
+                mod:UpdateBuffFrameDisplacement()
+            end
+        end)
+    end
+end
+
 function MinimapMod:HookBuffFrameStyling()
     if isStylingBuffs then return end
     isStylingBuffs = true
@@ -202,60 +260,13 @@ function MinimapMod:HookBuffFrameStyling()
         end, self)
         _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
             self.isBuffEditModeActive = false
-            if _G.C_Timer and _G.C_Timer.After then
-                _G.C_Timer.After(0, function()
-                    if self.UpdateBuffFrameDisplacement then
-                        self:UpdateBuffFrameDisplacement(true)
-                    end
-                end)
-            elseif self.UpdateBuffFrameDisplacement then
-                self:UpdateBuffFrameDisplacement(true)
-            end
+            ScheduleBuffDisplacement(self, true)
         end, self)
         self.buffEditModeRegistered = true
     end
 
-    if _G.BuffFrame and _G.BuffFrame.UpdateAuraButtons then
-        hooksecurefunc(_G.BuffFrame, "UpdateAuraButtons", function(frame)
-            if (MinimapMod.IsEnabled and not MinimapMod:IsEnabled()) or (MinimapMod.db and MinimapMod.db.enabled == false) then return end
-            if frame.auraFrames then
-                for _, auraFrame in ipairs(frame.auraFrames) do
-                    StyleAuraButton(auraFrame)
-                end
-            end
-            local em = _G.EditModeManagerFrame
-            if self.isBuffEditModeActive or (em and (em.editModeActive or em.layoutApplyInProgress or (em.IsShown and em:IsShown()))) then
-                return
-            end
-            if MinimapMod.UpdateBuffFrameDisplacement then
-                MinimapMod:UpdateBuffFrameDisplacement()
-            end
-        end)
-    end
-
-    if _G.BuffFrame and _G.BuffFrame.UpdateGridLayout then
-        hooksecurefunc(_G.BuffFrame, "UpdateGridLayout", function()
-            if (MinimapMod.IsEnabled and not MinimapMod:IsEnabled()) or (MinimapMod.db and MinimapMod.db.enabled == false) then return end
-            local em = _G.EditModeManagerFrame
-            if self.isBuffEditModeActive or (em and (em.editModeActive or em.layoutApplyInProgress or (em.IsShown and em:IsShown()))) then
-                return
-            end
-            if MinimapMod.UpdateBuffFrameDisplacement then
-                MinimapMod:UpdateBuffFrameDisplacement()
-            end
-        end)
-    end
-
-    if _G.DebuffFrame and _G.DebuffFrame.UpdateAuraButtons then
-        hooksecurefunc(_G.DebuffFrame, "UpdateAuraButtons", function(frame)
-            if (MinimapMod.IsEnabled and not MinimapMod:IsEnabled()) or (MinimapMod.db and MinimapMod.db.enabled == false) then return end
-            if frame.auraFrames then
-                for _, auraFrame in ipairs(frame.auraFrames) do
-                    StyleAuraButton(auraFrame)
-                end
-            end
-        end)
-    end
+    RegisterAuraFrameHooks(self, _G.BuffFrame, true)
+    RegisterAuraFrameHooks(self, _G.DebuffFrame, true)
 
     if _G.BuffFrame and _G.BuffFrame.CollapseAndExpandButton then
         local btn = _G.BuffFrame.CollapseAndExpandButton
@@ -272,15 +283,21 @@ function MinimapMod:HookBuffFrameStyling()
     end
 
     self:RefreshBuffFrameStyling()
+    if self.UpdateBuffFrameDisplacement then
+        self:UpdateBuffFrameDisplacement(true)
+    end
 end
 
 local lastNumRows = nil
 local lastFinalX = nil
 local lastCollapseWidth = nil
+local lastDebuffRelX = nil
+local lastDebuffRelY = nil
+local lastAnchorTarget = nil
 
 local function SafeIsShown(frame)
     if not frame or not frame.IsShown then return false, false end
-    local ok, shown = pcall(frame.IsShown, frame)
+    local ok, shown = SafeCall(frame.IsShown, frame)
     if not ok then return false, false end
     local isSecret = (AT and AT.Utils and AT.Utils.IsSecret and AT.Utils.IsSecret(shown))
         or (issecretvalue and issecretvalue(shown))
@@ -288,6 +305,51 @@ local function SafeIsShown(frame)
         return false, true
     end
     return shown == true, false
+end
+
+local function IsNonSecretNumber(val)
+    if type(val) ~= "number" then return false end
+    local isSecret = (AT and AT.Utils and AT.Utils.IsSecret and AT.Utils.IsSecret(val))
+        or (issecretvalue and issecretvalue(val))
+    return not isSecret
+end
+
+local function SafeGetEffectiveScale(frame)
+    if not frame or not frame.GetEffectiveScale then return 1 end
+    local ok, s = SafeCall(frame.GetEffectiveScale, frame)
+    if ok and IsNonSecretNumber(s) and s > 0 then
+        return s
+    end
+    return 1
+end
+
+local function SafeGetCoord(region, methodName)
+    if not region or not region[methodName] then return nil end
+    local ok, val = SafeCall(region[methodName], region)
+    if ok and IsNonSecretNumber(val) then
+        return val
+    end
+    return nil
+end
+
+local function HasFrameAnchorDrifted(frame, expectedPoint, expectedRelTo, expectedRelPoint, expectedX, expectedY)
+    if not frame or not frame.GetPoint then return true end
+    local ok, pt, relTo, relPoint, xOfs, yOfs = SafeCall(frame.GetPoint, frame, 1)
+    if not ok or not pt then return true end
+    if (AT and AT.Utils and AT.Utils.IsSecret and (AT.Utils.IsSecret(pt) or AT.Utils.IsSecret(relPoint) or AT.Utils.IsSecret(xOfs) or AT.Utils.IsSecret(yOfs)))
+        or (issecretvalue and (issecretvalue(pt) or issecretvalue(relPoint) or issecretvalue(xOfs) or issecretvalue(yOfs))) then
+        return true
+    end
+    if pt ~= expectedPoint or relTo ~= expectedRelTo or relPoint ~= expectedRelPoint then
+        return true
+    end
+    if not IsNonSecretNumber(xOfs) or not IsNonSecretNumber(yOfs) then
+        return true
+    end
+    if math.abs(xOfs - expectedX) > 0.1 or math.abs(yOfs - expectedY) > 0.1 then
+        return true
+    end
+    return false
 end
 
 local function GetNumVisibleBuffRows()
@@ -326,6 +388,68 @@ local function GetNumVisibleBuffRows()
     return math.ceil(count / stride)
 end
 
+local function ComputeDebuffRelativeOffset(buffFrame, debuffFrame, numRows, collapseWidth)
+    local buffEffScale = SafeGetEffectiveScale(buffFrame)
+    local debuffEffScale = SafeGetEffectiveScale(debuffFrame)
+    local debuffRelX = -((collapseWidth * buffEffScale) / debuffEffScale)
+    if numRows == 0 then
+        return debuffRelX, 0
+    end
+
+    local addIconsToTop = buffFrame and buffFrame.AuraContainer and buffFrame.AuraContainer.addIconsToTop
+    local buffTopCoord = SafeGetCoord(buffFrame, "GetTop")
+    if buffTopCoord and not addIconsToTop then
+        local buffTopScreen = buffTopCoord * buffEffScale
+        local lowestBottomScreen = nil
+
+        local function TrackRegionBottom(region)
+            local shown, secret = SafeIsShown(region)
+            if secret or not shown then return end
+            local bottomCoord = SafeGetCoord(region, "GetBottom")
+            if bottomCoord then
+                local screenB = bottomCoord * SafeGetEffectiveScale(region)
+                if not lowestBottomScreen or screenB < lowestBottomScreen then
+                    lowestBottomScreen = screenB
+                end
+            end
+        end
+
+        if buffFrame.auraFrames then
+            for _, btn in ipairs(buffFrame.auraFrames) do
+                TrackRegionBottom(btn)
+                local dur = btn and (btn.Duration or btn.duration)
+                if dur then
+                    TrackRegionBottom(dur)
+                end
+            end
+        end
+        if buffFrame.ConsolidatedBuffs then
+            TrackRegionBottom(buffFrame.ConsolidatedBuffs)
+        end
+
+        if lowestBottomScreen and lowestBottomScreen < buffTopScreen then
+            local gapScreen = 5 * buffEffScale
+            local debuffRelY = (lowestBottomScreen - gapScreen - buffTopScreen) / debuffEffScale
+            return debuffRelX, debuffRelY
+        end
+    end
+
+    -- Fallback when frame geometry is unavailable (pre-layout / headless stubs)
+    local rowHeight = 45
+    if buffFrame and buffFrame.auraFrames and buffFrame.auraFrames[1] then
+        local h = SafeGetCoord(buffFrame.auraFrames[1], "GetHeight")
+        local pad = (buffFrame.AuraContainer and buffFrame.AuraContainer.iconPadding) or 5
+        local scale = (buffFrame.AuraContainer and buffFrame.AuraContainer.iconScale) or 1
+        if h and h > 0 then
+            rowHeight = (h + pad) * scale
+        end
+    end
+
+    local rawY = -(numRows * rowHeight + 5)
+    local debuffRelY = (rawY * buffEffScale) / debuffEffScale
+    return debuffRelX, debuffRelY
+end
+
 function MinimapMod:UpdateBuffFrameDisplacement(force)
     if _G.InCombatLockdown and _G.InCombatLockdown() then
         self.queuedBuffDisplacement = true
@@ -351,7 +475,8 @@ function MinimapMod:UpdateBuffFrameDisplacement(force)
     local finalX = baseOffset - displacement
 
     local buffFrame = _G.BuffFrame
-    if buffFrame and buffFrame.ClearAllPoints and buffFrame.SetPoint then
+    local buffDrifted = buffFrame and HasFrameAnchorDrifted(buffFrame, "TOPRIGHT", anchorTarget, "TOPLEFT", finalX, 0)
+    if buffFrame and buffFrame.ClearAllPoints and buffFrame.SetPoint and (force or buffDrifted or finalX ~= lastFinalX or anchorTarget ~= lastAnchorTarget) then
         buffFrame:ClearAllPoints()
         buffFrame:SetPoint("TOPRIGHT", anchorTarget, "TOPLEFT", finalX, 0)
     end
@@ -361,32 +486,40 @@ function MinimapMod:UpdateBuffFrameDisplacement(force)
 
     local numRows = GetNumVisibleBuffRows()
     local collapseWidth = 0
-    if buffFrame and buffFrame.CollapseAndExpandButton and buffFrame.CollapseAndExpandButton:IsShown() then
-        collapseWidth = (buffFrame.CollapseAndExpandButton:GetWidth() or 15) * (buffFrame.CollapseAndExpandButton:GetScale() or 1)
+    if buffFrame and buffFrame.CollapseAndExpandButton then
+        local cShown, cSecret = SafeIsShown(buffFrame.CollapseAndExpandButton)
+        if cShown and not cSecret then
+            collapseWidth = (buffFrame.CollapseAndExpandButton:GetWidth() or 15) * (buffFrame.CollapseAndExpandButton:GetScale() or 1)
+        end
     end
 
-    if not force and numRows == lastNumRows and finalX == lastFinalX and collapseWidth == lastCollapseWidth then
+    local anchorRef = buffFrame or anchorTarget
+    local anchorRefPoint = buffFrame and "TOPRIGHT" or "TOPLEFT"
+    local debuffRelX, debuffRelY
+    if buffFrame then
+        debuffRelX, debuffRelY = ComputeDebuffRelativeOffset(buffFrame, debuffFrame, numRows, collapseWidth)
+    else
+        debuffRelX = finalX - collapseWidth
+        debuffRelY = (numRows == 0) and 0 or -(numRows * 45 + 5)
+    end
+
+    local debuffDrifted = HasFrameAnchorDrifted(debuffFrame, "TOPRIGHT", anchorRef, anchorRefPoint, debuffRelX, debuffRelY)
+
+    if not force and not debuffDrifted and not buffDrifted
+        and numRows == lastNumRows and finalX == lastFinalX and collapseWidth == lastCollapseWidth
+        and anchorTarget == lastAnchorTarget
+        and lastDebuffRelX and math.abs(lastDebuffRelX - debuffRelX) <= 0.1
+        and lastDebuffRelY and math.abs(lastDebuffRelY - debuffRelY) <= 0.1 then
         return
     end
 
     lastNumRows = numRows
     lastFinalX = finalX
     lastCollapseWidth = collapseWidth
-
-    -- Dynamic row height: icon + duration + padding
-    local rowHeight = 45
-    if buffFrame and buffFrame.auraFrames and buffFrame.auraFrames[1] then
-        local h = buffFrame.auraFrames[1]:GetHeight()
-        local pad = (buffFrame.AuraContainer and buffFrame.AuraContainer.iconPadding) or 5
-        local scale = (buffFrame.AuraContainer and buffFrame.AuraContainer.iconScale) or 1
-        if h and h > 0 then
-            rowHeight = (h + pad) * scale
-        end
-    end
-
-    local debuffY = (numRows == 0) and 0 or -(numRows * rowHeight + 5)
-    local debuffX = finalX - collapseWidth
+    lastDebuffRelX = debuffRelX
+    lastDebuffRelY = debuffRelY
+    lastAnchorTarget = anchorTarget
 
     debuffFrame:ClearAllPoints()
-    debuffFrame:SetPoint("TOPRIGHT", anchorTarget, "TOPLEFT", debuffX, debuffY)
+    debuffFrame:SetPoint("TOPRIGHT", anchorRef, anchorRefPoint, debuffRelX, debuffRelY)
 end

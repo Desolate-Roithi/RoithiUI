@@ -60,21 +60,20 @@ function UF:UpdateCustomAura(id)
         container:SetParent(parentFrame)
     end
 
-    local okSet = pcall(function()
-        if container.SetScript then
-            container:SetScript("OnEvent", function(containerSelf, eventName, unitArg)
-                UF:UpdateCustomAura(id)
-            end)
-        end
-    end)
-    if not okSet then
-        container.EventFrame = container.EventFrame or CreateFrame("Frame", nil, container)
-        container.EventFrame:SetScript("OnEvent", function(containerSelf, eventName, unitArg)
+    -- CustomAuraContainerTemplate inherits a forbidden OnEvent C++ script slot;
+    -- use a dedicated child EventFrame rather than mutating container:SetScript("OnEvent").
+    if not container.EventFrame then
+        container.EventFrame = CreateFrame("Frame", nil, container)
+        container.EventFrame:SetScript("OnEvent", function()
             UF:UpdateCustomAura(id)
         end)
+        local origGetScript = container.GetScript
         container.GetScript = function(frameSelf, script)
             if script == "OnEvent" and frameSelf.EventFrame then
                 return frameSelf.EventFrame:GetScript("OnEvent")
+            end
+            if origGetScript then
+                return origGetScript(frameSelf, script)
             end
         end
     end
@@ -84,7 +83,7 @@ function UF:UpdateCustomAura(id)
             c.groups = c.groups or {}
             c.groups[groupKey] = options
             if _G.C_UnitAuras and _G.C_UnitAuras.GetUnitAuraInstanceIDs then
-                local ok, ids = pcall(_G.C_UnitAuras.GetUnitAuraInstanceIDs, unit or "player", filterStr, options and options.sortMethod)
+                local ok, ids = ns.Utils.SafeCall(_G.C_UnitAuras.GetUnitAuraInstanceIDs, unit or "player", filterStr, options and options.sortMethod)
                 if ok and ids and options and options.initializeFrame then
                     for idx, auraInstId in ipairs(ids) do
                         local btn = c.icons[idx] or CreateFrame("Frame", nil, c)
@@ -395,7 +394,7 @@ function UF:UpdateCustomAura(id)
     local isSec = issecretvalue and (issecretvalue(pt) or issecretvalue(px) or issecretvalue(py))
     if not isSec then
         container:ClearAllPoints()
-        local ok = pcall(container.SetPoint, container, pt, UIParent, pt, px, py)
+        local ok = ns.Utils.SafeCall(container.SetPoint, container, pt, UIParent, pt, px, py)
         if ok then
             container.roithiSavedPoint = pt
             container.roithiSavedRelPoint = pt

@@ -356,9 +356,9 @@ local function Update(s)
         return
     end
 
-    local ok1, current = pcall(UnitPower, "player", ALTERNATE_POWER_INDEX)
+    local ok1, current = ns.Utils.SafeCall(UnitPower, "player", ALTERNATE_POWER_INDEX)
     if not ok1 then current = 0 end
-    local ok2, max = pcall(UnitPowerMax, "player", ALTERNATE_POWER_INDEX)
+    local ok2, max = ns.Utils.SafeCall(UnitPowerMax, "player", ALTERNATE_POWER_INDEX)
     if not ok2 then max = 0 end
 
     local currentIsSecret = issecretvalue and issecretvalue(current)
@@ -389,10 +389,10 @@ local function Update(s)
 
         if isSecret and _G.UnitPowerPercent then
             local curve = (_G.CurveConstants and _G.CurveConstants.ScaleTo100) or 0
-            local success, pct = pcall(_G.UnitPowerPercent, "player", ALTERNATE_POWER_INDEX, false, curve)
+            local success, pct = ns.Utils.SafeCall(_G.UnitPowerPercent, "player", ALTERNATE_POWER_INDEX, false, curve)
 
             if success and pct then
-                local fmtOk, fmtStr = pcall(string.format, "%.0f%%", pct)
+                local fmtOk, fmtStr = ns.Utils.SafeCall(string.format, "%.0f%%", pct)
                 if fmtOk then
                     currentStr = fmtStr
                 else

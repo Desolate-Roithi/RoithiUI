@@ -76,11 +76,11 @@ local function BuildEmpowerTimeline(unit)
             or type(totalObj) == "userdata" then
             isSecretDuration = true
         elseif type(totalObj) == "table" and totalObj.HasSecretValues then
-            local ok, val = pcall(totalObj.HasSecretValues, totalObj)
+            local ok, val = ns.Utils.SafeCall(totalObj.HasSecretValues, totalObj)
             if ok and val then isSecretDuration = true end
         end
         if not isSecretDuration and totalObj.GetTotalDuration then
-            local ok, dur = pcall(totalObj.GetTotalDuration, totalObj)
+            local ok, dur = ns.Utils.SafeCall(totalObj.GetTotalDuration, totalObj)
             if ok and dur and ((issecretvalue and issecretvalue(dur)) or (canaccessvalue and not canaccessvalue(dur)) or type(dur) == "userdata") then
                 isSecretDuration = true
             end

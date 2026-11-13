@@ -262,7 +262,7 @@ end
 local function HookOrSetScript(frame, script, handler)
     if not frame then return end
     if frame.HookScript then
-        pcall(frame.HookScript, frame, script, handler)
+        ns.Utils.SafeCall(frame.HookScript, frame, script, handler)
     end
 end
 
@@ -359,6 +359,58 @@ function ObjectivesMod:SkinQuestItemButton(block, itemBtn)
     end
 end
 
+local function OnBlockAddRightEdgeFrame(self, b)
+    if b and b.used ~= false then
+        local rightBtn = b.itemButton or b.ItemButton or (b.GetItemButton and b:GetItemButton())
+        if rightBtn and self.SkinQuestItemButton then
+            self:SkinQuestItemButton(b, rightBtn)
+        end
+    end
+end
+
+local function OnBlockAddPOIButton(self, b)
+    if b and b.used ~= false and self.ApplyQuestIconVisibility then
+        self:ApplyQuestIconVisibility(b)
+    end
+end
+
+local function OnBlockAddProgressBar(self, b)
+    local bar = b and b.lastRegion
+    if bar and self.SkinProgressBar then
+        self:SkinProgressBar(bar)
+    end
+end
+
+local function OnBlockSetHeader(self, b)
+    if b and self.ApplyQuestLevelToTitle then
+        self:ApplyQuestLevelToTitle(b)
+    end
+end
+
+local function OnBlockUpdateHighlight(self, b)
+    if not b or b.used == false then return end
+    local tFS = (self.GetBlockTitleFS and self:GetBlockTitleFS(b)) or titleFSCache[b]
+    if tFS and tFS.SetTextColor then
+        local titleC = self.db.titleColor or (self.defaultSettings and self.defaultSettings.titleColor) or { r = 1, g = 0.85, b = 0.35 }
+        tFS:SetTextColor(titleC.r or 1.0, titleC.g or 0.85, titleC.b or 0.35, 1.0)
+    end
+    if self.ApplyQuestLevelToTitle then
+        self:ApplyQuestLevelToTitle(b)
+    end
+    local oc = self.db.objectiveColor or (self.defaultSettings and self.defaultSettings.objectiveColor) or { r = 1, g = 1, b = 1 }
+    local lines = b.usedLines or b.lines
+    if lines then
+        for _, line in pairs(lines) do
+            if line.Text and line.Text.SetTextColor then
+                line.Text:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
+            end
+            if line.Dash and line.Dash.SetTextColor then
+                line.Dash:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
+            end
+        end
+    end
+end
+
 function ObjectivesMod:SkinBlock(block)
     if not block or type(block) ~= "table" then return end
     if not (block.IsObjectType or block.GetObjectType or block.SetPoint) then return end
@@ -370,20 +422,13 @@ function ObjectivesMod:SkinBlock(block)
 
     if block.AddRightEdgeFrame and not self:IsHooked(block, "AddRightEdgeFrame") then
         self:SecureHook(block, "AddRightEdgeFrame", function(b)
-            pcall(function()
-                if b and b.used ~= false then
-                    local rightBtn = b.itemButton or b.ItemButton or (b.GetItemButton and b:GetItemButton())
-                    if rightBtn and self.SkinQuestItemButton then
-                        self:SkinQuestItemButton(b, rightBtn)
-                    end
-                end
-            end)
+            ns.Utils.SafeCall(OnBlockAddRightEdgeFrame, self, b)
         end)
     end
 
     if skinnedBlocks[block] then
         if self.ApplyQuestLevelToTitle then
-            pcall(self.ApplyQuestLevelToTitle, self, block)
+            ns.Utils.SafeCall(self.ApplyQuestLevelToTitle, self, block)
         end
         if self.UpdateBlockHoverObjectives then
             local isHovered = self.IsMouseOverBlock and self:IsMouseOverBlock(block)
@@ -424,11 +469,7 @@ function ObjectivesMod:SkinBlock(block)
     self:ApplyQuestIconVisibility(block)
     if block.AddPOIButton and not self:IsHooked(block, "AddPOIButton") then
         self:SecureHook(block, "AddPOIButton", function(b)
-            pcall(function()
-                if b and b.used ~= false and self.ApplyQuestIconVisibility then
-                    self:ApplyQuestIconVisibility(b)
-                end
-            end)
+            ns.Utils.SafeCall(OnBlockAddPOIButton, self, b)
         end)
     end
 
@@ -445,50 +486,19 @@ function ObjectivesMod:SkinBlock(block)
 
     if block.AddProgressBar and not self:IsHooked(block, "AddProgressBar") then
         self:SecureHook(block, "AddProgressBar", function(b)
-            pcall(function()
-                local bar = b and b.lastRegion
-                if bar and self.SkinProgressBar then
-                    self:SkinProgressBar(bar)
-                end
-            end)
+            ns.Utils.SafeCall(OnBlockAddProgressBar, self, b)
         end)
     end
 
     if block.SetHeader and not self:IsHooked(block, "SetHeader") then
         self:SecureHook(block, "SetHeader", function(b)
-            pcall(function()
-                if b and self.ApplyQuestLevelToTitle then
-                    self:ApplyQuestLevelToTitle(b)
-                end
-            end)
+            ns.Utils.SafeCall(OnBlockSetHeader, self, b)
         end)
     end
 
     if block.UpdateHighlight and not self:IsHooked(block, "UpdateHighlight") then
         self:SecureHook(block, "UpdateHighlight", function(b)
-            pcall(function()
-                if not b or b.used == false then return end
-                local tFS = (self.GetBlockTitleFS and self:GetBlockTitleFS(b)) or titleFSCache[b]
-                if tFS and tFS.SetTextColor then
-                    local titleC = self.db.titleColor or (self.defaultSettings and self.defaultSettings.titleColor) or { r = 1, g = 0.85, b = 0.35 }
-                    tFS:SetTextColor(titleC.r or 1.0, titleC.g or 0.85, titleC.b or 0.35, 1.0)
-                end
-                if self.ApplyQuestLevelToTitle then
-                    self:ApplyQuestLevelToTitle(b)
-                end
-                local oc = self.db.objectiveColor or (self.defaultSettings and self.defaultSettings.objectiveColor) or { r = 1, g = 1, b = 1 }
-                local lines = b.usedLines or b.lines
-                if lines then
-                    for _, line in pairs(lines) do
-                        if line.Text and line.Text.SetTextColor then
-                            line.Text:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
-                        end
-                        if line.Dash and line.Dash.SetTextColor then
-                            line.Dash:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
-                        end
-                    end
-                end
-            end)
+            ns.Utils.SafeCall(OnBlockUpdateHighlight, self, b)
         end)
     end
 

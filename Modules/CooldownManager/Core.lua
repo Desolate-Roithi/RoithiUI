@@ -1081,7 +1081,7 @@ function CDM:PopulateSettingsPanel(panel)
                 removeIcon:SetPoint("CENTER", btnRemove, "CENTER", 0, 0)
                 local atlasOk = false
                 if removeIcon.SetAtlas and _G.C_Texture and _G.C_Texture.GetAtlasInfo and _G.C_Texture.GetAtlasInfo("common-icon-redx") then
-                    atlasOk = pcall(function() removeIcon:SetAtlas("common-icon-redx") end)
+                    atlasOk = ns.Utils.SafeCall(removeIcon.SetAtlas, removeIcon, "common-icon-redx")
                 end
                 if not atlasOk then
                     removeIcon:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
@@ -1551,11 +1551,11 @@ function CDM:HookCooldownViewerSettings()
         local atlas = checked and tab.activeAtlas or tab.inactiveAtlas
         local atlasOk = false
         if atlas and _G.C_Texture and _G.C_Texture.GetAtlasInfo and _G.C_Texture.GetAtlasInfo(atlas) then
-            atlasOk = pcall(function() tab.Icon:SetAtlas(atlas, true) end)
+            atlasOk = ns.Utils.SafeCall(tab.Icon.SetAtlas, tab.Icon, atlas, true)
         end
         if not atlasOk then
             if _G.C_Texture and _G.C_Texture.GetAtlasInfo and _G.C_Texture.GetAtlasInfo("GM-icon-settings") then
-                pcall(function() tab.Icon:SetAtlas("GM-icon-settings", true) end)
+                ns.Utils.SafeCall(tab.Icon.SetAtlas, tab.Icon, "GM-icon-settings", true)
             else
                 tab.Icon:SetTexture("Interface\\Icons\\INV_Gizmo_02")
                 tab.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -1655,8 +1655,8 @@ function CDM:HookCooldownViewerSettings()
         local function HookBlizzardTabButton(tabBtn)
             if not tabBtn or hookedSettingsTabs[tabBtn] or not tabBtn.HookScript then return end
             hookedSettingsTabs[tabBtn] = true
-            pcall(tabBtn.HookScript, tabBtn, "OnMouseUp", function(btn) OnBlizzardTabSelected(btn) end)
-            pcall(tabBtn.HookScript, tabBtn, "OnClick", function(btn) OnBlizzardTabSelected(btn) end)
+            ns.Utils.SafeCall(tabBtn.HookScript, tabBtn, "OnMouseUp", function(btn) OnBlizzardTabSelected(btn) end)
+            ns.Utils.SafeCall(tabBtn.HookScript, tabBtn, "OnClick", function(btn) OnBlizzardTabSelected(btn) end)
         end
         if parent.TabButtons then
             for _, frame in ipairs(parent.TabButtons) do
@@ -1782,9 +1782,9 @@ function CDM:OpenBlizzardSettings(fromEditMode)
         return
     end
     if C_AddOns and C_AddOns.LoadAddOn and not (C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Blizzard_CooldownViewer")) then
-        pcall(C_AddOns.LoadAddOn, "Blizzard_CooldownViewer")
+        ns.Utils.SafeCall(C_AddOns.LoadAddOn, "Blizzard_CooldownViewer")
     elseif _G.UIParentLoadAddOn and not (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Blizzard_CooldownViewer")) then
-        pcall(_G.UIParentLoadAddOn, "Blizzard_CooldownViewer")
+        ns.Utils.SafeCall(_G.UIParentLoadAddOn, "Blizzard_CooldownViewer")
     end
     if self.HookCooldownViewerSettings then
         self:HookCooldownViewerSettings()
@@ -1978,14 +1978,12 @@ function CDM:AlignViewerItems(viewerKey, viewer)
         end
 
         if isEditing then
-            pcall(function()
-                local w = totalW * itemScale
-                local h = itemH * itemScale
-                container:SetSize(w, h)
-                if viewer ~= container then
-                    viewer:SetSize(w, h)
-                end
-            end)
+            local w = totalW * itemScale
+            local h = itemH * itemScale
+            ns.Utils.SafeCall(container.SetSize, container, w, h)
+            if viewer ~= container then
+                ns.Utils.SafeCall(viewer.SetSize, viewer, w, h)
+            end
         end
 
         local containerW = (container:GetWidth() or 0) / itemScale

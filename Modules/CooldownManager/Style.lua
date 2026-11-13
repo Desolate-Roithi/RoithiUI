@@ -41,7 +41,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
         for i = numMasks, 1, -1 do
             local mask = icon:GetMaskTexture(i)
             if mask then
-                pcall(icon.RemoveMaskTexture, icon, mask)
+                ns.Utils.SafeCall(icon.RemoveMaskTexture, icon, mask)
                 if mask.Hide then mask:Hide() end
                 if mask.SetAlpha then mask:SetAlpha(0) end
             end
@@ -50,12 +50,12 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
 
     -- 2. Strip explicit mask properties
     if itemFrame.IconMask and icon and icon.RemoveMaskTexture then
-        pcall(icon.RemoveMaskTexture, icon, itemFrame.IconMask)
+        ns.Utils.SafeCall(icon.RemoveMaskTexture, icon, itemFrame.IconMask)
         if itemFrame.IconMask.Hide then itemFrame.IconMask:Hide() end
         if itemFrame.IconMask.SetAlpha then itemFrame.IconMask:SetAlpha(0) end
     end
     if itemFrame.Icon and itemFrame.Icon.IconMask and icon and icon.RemoveMaskTexture then
-        pcall(icon.RemoveMaskTexture, icon, itemFrame.Icon.IconMask)
+        ns.Utils.SafeCall(icon.RemoveMaskTexture, icon, itemFrame.Icon.IconMask)
         if itemFrame.Icon.IconMask.Hide then itemFrame.Icon.IconMask:Hide() end
         if itemFrame.Icon.IconMask.SetAlpha then itemFrame.Icon.IconMask:SetAlpha(0) end
     end
@@ -83,7 +83,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
 
                 if isMask or atlas == "UI-HUD-CoolDownManager-Mask" or isMaskTex then
                     if icon and icon.RemoveMaskTexture then
-                        pcall(icon.RemoveMaskTexture, icon, region)
+                        ns.Utils.SafeCall(icon.RemoveMaskTexture, icon, region)
                     end
                     if region.Hide then region:Hide() end
                     if region.SetAlpha then region:SetAlpha(0) end
@@ -165,31 +165,31 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
             for i = cdMaskCount, 1, -1 do
                 local mask = cd:GetMaskTexture(i)
                 if mask then
-                    pcall(cd.RemoveMaskTexture, cd, mask)
+                    ns.Utils.SafeCall(cd.RemoveMaskTexture, cd, mask)
                     if mask.Hide then mask:Hide() end
                     if mask.SetAlpha then mask:SetAlpha(0) end
                 end
             end
         end
         if cd.SetSwipeTexture then
-            pcall(cd.SetSwipeTexture, cd, "Interface\\Buttons\\WHITE8x8", 0, 0, 0, 0.64)
+            ns.Utils.SafeCall(cd.SetSwipeTexture, cd, "Interface\\Buttons\\WHITE8x8", 0, 0, 0, 0.64)
         end
         if cd.SetDrawEdge then
-            pcall(cd.SetDrawEdge, cd, false)
+            ns.Utils.SafeCall(cd.SetDrawEdge, cd, false)
         end
         if cd.SetDrawBling then
-            pcall(cd.SetDrawBling, cd, false)
+            ns.Utils.SafeCall(cd.SetDrawBling, cd, false)
         end
 
         local fontName = (isOverridden and vConf.font) or self.db.font
         -- fontPath resolved via ApplyTypography
         local fontPath = GetActiveFont(fontName)
         if cd.SetCountdownFont then
-            pcall(cd.SetCountdownFont, cd, fontPath)
+            ns.Utils.SafeCall(cd.SetCountdownFont, cd, fontPath)
         end
         local showTimer = (vConf and vConf.showTimer ~= nil) and vConf.showTimer or true
         if cd.SetHideCountdownNumbers then
-            pcall(cd.SetHideCountdownNumbers, cd, not showTimer)
+            ns.Utils.SafeCall(cd.SetHideCountdownNumbers, cd, not showTimer)
         end
         local cdFS = cd.GetCountdownFontString and cd:GetCountdownFontString()
         if cdFS then
@@ -352,7 +352,7 @@ function CDM:StyleItemFrame(viewerKey, itemFrame)
                     elseif region.IsObjectType and region:IsObjectType("MaskTexture") then
                         if self.db.cropIcons then
                             if icon and icon.RemoveMaskTexture then
-                                pcall(icon.RemoveMaskTexture, icon, region)
+                                ns.Utils.SafeCall(icon.RemoveMaskTexture, icon, region)
                             end
                             region:SetAlpha(0)
                         end
@@ -625,7 +625,7 @@ function CDM:RestoreItemFrame(itemFrame)
 
             if isMask or atlas == "UI-HUD-CoolDownManager-Mask" then
                 if icon and icon.AddMaskTexture then
-                    pcall(icon.AddMaskTexture, icon, region)
+                    ns.Utils.SafeCall(icon.AddMaskTexture, icon, region)
                 end
                 if region.Show then region:Show() end
                 if region.SetAlpha then region:SetAlpha(1) end

@@ -135,8 +135,8 @@ function RoithiUI:OpenSettings(group, ...)
         end
     end
 
-    pcall(function() ACD:Open("RoithiUI") end)
-    pcall(function() ACD:SelectGroup("RoithiUI", unpack(fullPath)) end)
+    ns.Utils.SafeCall(ACD.Open, ACD, "RoithiUI")
+    ns.Utils.SafeCall(ACD.SelectGroup, ACD, "RoithiUI", unpack(fullPath))
 
     local f = ACD.OpenFrames and ACD.OpenFrames["RoithiUI"]
     if f and f.frame then
@@ -158,6 +158,7 @@ commandHandlers = {
         print("  |cff00ccff/rui export|r - Open profile export dialog")
         print("  |cff00ccff/rui reset|r - Reset profile to defaults")
         print("  |cff00ccff/rui debug|r (or |cff00ccff/rd|r) - Toggle debug mode")
+        print("  |cff00ccff/rui error|r (or |cff00ccff/rui errors|r) - Open persistent error log (|cffffd700list|r, |cffffd700clear|r)")
         print("  |cff00ccff/rui test boss|r - Toggle Boss frames preview mode")
         print("  |cff00ccff/rl|r - Quick reload UI")
     end,
@@ -183,13 +184,13 @@ commandHandlers = {
     ["bliz"] = function(self)
         if Settings and Settings.OpenToCategory then
             local categoryID = RoithiUI.SettingsCategoryID or addonName
-            local ok = pcall(Settings.OpenToCategory, categoryID)
+            local ok = ns.Utils.SafeCall(Settings.OpenToCategory, categoryID)
             if not ok and _G.InterfaceOptionsFrame_OpenToCategory then
-                pcall(_G.InterfaceOptionsFrame_OpenToCategory, addonName)
+                ns.Utils.SafeCall(_G.InterfaceOptionsFrame_OpenToCategory, addonName)
             end
         elseif _G.InterfaceOptionsFrame_OpenToCategory then
             ---@diagnostic disable-next-line: undefined-field
-            pcall(_G.InterfaceOptionsFrame_OpenToCategory, addonName)
+            ns.Utils.SafeCall(_G.InterfaceOptionsFrame_OpenToCategory, addonName)
         else
             self:Print("Options available in Game Menu -> Options -> AddOns")
         end
@@ -197,6 +198,32 @@ commandHandlers = {
     ["options"] = function(self) commandHandlers["bliz"](self) end,
     ["export"] = function(self) self:ExportSettings() end,
     ["reset"] = function(self) self:ResetSettings() end,
+    ["error"] = function(self, arg)
+        local sub = arg and arg:trim():lower() or ""
+        if sub == "clear" then
+            ns.Utils.ClearErrorLog(false)
+            if _G.RoithiUIErrorFrame and _G.RoithiUIErrorFrame.IsShown and _G.RoithiUIErrorFrame:IsShown() then
+                ns.Utils.ShowErrorViewer()
+            end
+            self:Print("Cleared all recorded errors.")
+            return
+        elseif sub == "list" then
+            local entries = ns.Utils.GetErrorLog(false)
+            if #entries == 0 then
+                self:Print("No errors recorded.")
+                return
+            end
+            self:Print(string.format("Recorded errors (%d):", #entries))
+            for i = 1, #entries do
+                local e = entries[i]
+                print(string.format("  [%d] (%dx, s%d) %s", i, e.count or 1, e.session or 0, e.message or ""))
+            end
+            return
+        end
+        local idx = tonumber(sub)
+        ns.Utils.ShowErrorViewer(idx)
+    end,
+    ["errors"] = function(self, arg) commandHandlers["error"](self, arg) end,
     ["secrets"] = function(self) self:Print("Use /rs or /roithisecrets for secrets tests.") end,
     ["debug"] = function(self)
         self.debug = not self.debug

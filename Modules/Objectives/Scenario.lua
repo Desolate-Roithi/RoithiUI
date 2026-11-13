@@ -172,19 +172,12 @@ function ObjectivesMod:AlignEventTracker(tracker)
     end
 end
 
-function ObjectivesMod:AlignScenarioElements()
-    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
-    if _G.C_ChallengeMode and _G.C_ChallengeMode.IsChallengeModeActive and _G.C_ChallengeMode.IsChallengeModeActive() then return end
-    local sot = _G.ScenarioObjectiveTracker
-    if not sot or not self.db or not self.db.enabled then return end
-    if self.isAligningScenario then return end
-    self.isAligningScenario = true
-
+local function AlignScenarioElementsInner(self, sot)
     if sot.EndLayout and not self.hookedScenarioEndLayout then
         self.hookedScenarioEndLayout = true
         _G.hooksecurefunc(sot, "EndLayout", function()
             if not (_G.InCombatLockdown and _G.InCombatLockdown()) then
-                self:AlignScenarioElements()
+                ns.Utils.SafeCall(self.AlignScenarioElements, self)
             end
         end)
     end
@@ -231,7 +224,6 @@ function ObjectivesMod:AlignScenarioElements()
 
     -- Complete Non-Interference: If a standard scenario toast or dungeon header is present, NEVER touch, move, or style it!
     if hasToast or hasDungeonHeader then
-        self.isAligningScenario = nil
         return
     end
 
@@ -240,7 +232,7 @@ function ObjectivesMod:AlignScenarioElements()
 
         local otf = _G.ObjectiveTrackerFrame
         local trackerWidth = (otf and otf.GetWidth and otf:GetWidth()) or (self.db and self.db.detachedWidth) or 235
-        if trackerWidth < 100 then trackerWidth = 235 end
+        if ns.Utils.IsSecret(trackerWidth) or trackerWidth < 100 then trackerWidth = 235 end
 
         local stageW = (isDelveWidget and (widgetW or 253)) or (isTextOnly and trackerWidth) or ((hasWidget and (widgetW or 253)) or 218)
         local xOffset
@@ -263,7 +255,9 @@ function ObjectivesMod:AlignScenarioElements()
         local isSbPositioned = false
         if sb.GetPoint then
             local p, rel, rp, x, y = sb:GetPoint(1)
-            if p == "TOPLEFT" and rel == relTo and rp == relPt and math.abs((x or 0) - xOffset) < 0.5 and math.abs((y or 0) - yOffset) < 0.5 then
+            if p == "TOPLEFT" and rel == relTo and rp == relPt
+                and not ns.Utils.IsSecret(x) and not ns.Utils.IsSecret(y)
+                and math.abs((x or 0) - xOffset) < 0.5 and math.abs((y or 0) - yOffset) < 0.5 then
                 isSbPositioned = true
             end
         end
@@ -272,10 +266,12 @@ function ObjectivesMod:AlignScenarioElements()
             sb:ClearAllPoints()
             sb:SetPoint("TOPLEFT", relTo, relPt, xOffset, yOffset)
         end
-        if sb.SetWidth and math.abs(((sb.GetWidth and sb:GetWidth()) or 0) - stageW) > 0.5 then
+        local curW = sb.GetWidth and sb:GetWidth() or 0
+        if sb.SetWidth and (ns.Utils.IsSecret(curW) or math.abs(curW - stageW) > 0.5) then
             sb:SetWidth(stageW)
         end
-        if sb.SetHeight and math.abs(((sb.GetHeight and sb:GetHeight()) or 0) - desiredH) > 0.5 then
+        local curH = sb.GetHeight and sb:GetHeight() or 0
+        if sb.SetHeight and (ns.Utils.IsSecret(curH) or math.abs(curH - desiredH) > 0.5) then
             sb:SetHeight(desiredH)
         end
 
@@ -298,7 +294,8 @@ function ObjectivesMod:AlignScenarioElements()
         local isObPositioned = false
         if ob.GetPoint then
             local p, rel, rp, _, y = ob:GetPoint(1)
-            if p == "TOP" and rel == relTo and rp == relPt and math.abs((y or 0) - stageBottomOffsetY) < 0.5 then
+            if p == "TOP" and rel == relTo and rp == relPt
+                and not ns.Utils.IsSecret(y) and math.abs((y or 0) - stageBottomOffsetY) < 0.5 then
                 isObPositioned = true
             end
         end
@@ -331,6 +328,15 @@ function ObjectivesMod:AlignScenarioElements()
             self:SkinProgressBar(bar)
         end
     end
+end
 
+function ObjectivesMod:AlignScenarioElements()
+    if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+    if _G.C_ChallengeMode and _G.C_ChallengeMode.IsChallengeModeActive and _G.C_ChallengeMode.IsChallengeModeActive() then return end
+    local sot = _G.ScenarioObjectiveTracker
+    if not sot or not self.db or not self.db.enabled then return end
+    if self.isAligningScenario then return end
+    self.isAligningScenario = true
+    ns.Utils.SafeCall(AlignScenarioElementsInner, self, sot)
     self.isAligningScenario = nil
 end

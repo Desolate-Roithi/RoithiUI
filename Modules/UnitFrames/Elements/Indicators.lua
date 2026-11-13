@@ -120,7 +120,7 @@ function UF:CreateIndicators(frame)
                 tickerFrame.elapsed = 0
                 local timerText = frame.PvPTimerText
                 if timerText and frame.unit == "player" and frame.PvPIndicator and frame.PvPIndicator:IsShown() and _G.GetPVPTimer then
-                    local ok, pvpTime = pcall(_G.GetPVPTimer)
+                    local ok, pvpTime = ns.Utils.SafeCall(_G.GetPVPTimer)
                     if ok and pvpTime and pvpTime > 0 and pvpTime < 301000 then
                         local totalSec = math.floor(pvpTime / 1000)
                         local m = math.floor(totalSec / 60)
@@ -401,7 +401,7 @@ function UF:CreateIndicators(frame)
         local pvpTimerFS = frame.PvPTimerText
         if pvpTimerFS then
             if unit == "player" and not isSecretPvP and pvp:IsShown() and _G.GetPVPTimer then
-                local ok, pvpTime = pcall(_G.GetPVPTimer)
+                local ok, pvpTime = ns.Utils.SafeCall(_G.GetPVPTimer)
                 local isSecretTimer = ok and pvpTime ~= nil and ((ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(pvpTime)) or (issecretvalue and issecretvalue(pvpTime)) or (canaccessvalue and not canaccessvalue(pvpTime)))
                 if ok and pvpTime and not isSecretTimer and type(pvpTime) == "number" and pvpTime > 0 and pvpTime < 301000 then
                     local totalSec = math.floor(pvpTime / 1000)

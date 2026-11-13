@@ -38,7 +38,7 @@ end
 local function UnitCanAttack(a, b)
     local fn = _G.UnitCanAttack
     if not fn then return true end
-    local ok, res = pcall(fn, a, b)
+    local ok, res = ns.Utils.SafeCall(fn, a, b)
     if not ok or res == nil then return false end
     return SafeUnitBool(res)
 end
@@ -46,7 +46,7 @@ end
 local function UnitAffectingCombat(u)
     local fn = _G.UnitAffectingCombat
     if not fn then return false end
-    local ok, res = pcall(fn, u)
+    local ok, res = ns.Utils.SafeCall(fn, u)
     if not ok or res == nil then return false end
     return SafeUnitBool(res)
 end
@@ -64,7 +64,7 @@ end
 local function UnitIsDeadOrGhost(u)
     local fn = _G.UnitIsDeadOrGhost or _G.UnitIsDead
     if not fn then return false end
-    local ok, res = pcall(fn, u)
+    local ok, res = ns.Utils.SafeCall(fn, u)
     if not ok or res == nil then return false end
     return SafeUnitBool(res)
 end
@@ -123,7 +123,7 @@ function SwingTimer:EnsureBlizzardTimerEnabled()
     if not _G.C_CVar or not _G.C_CVar.GetCVar or not _G.C_CVar.SetCVar then return false end
     if _G.C_CVar.GetCVar(SHOW_SWING_TIMER_CVAR) == "1" then return true end
     if _G.InCombatLockdown and _G.InCombatLockdown() then return false end
-    pcall(_G.C_CVar.SetCVar, SHOW_SWING_TIMER_CVAR, "1")
+    ns.Utils.SafeCall(_G.C_CVar.SetCVar, SHOW_SWING_TIMER_CVAR, "1")
     return _G.C_CVar.GetCVar(SHOW_SWING_TIMER_CVAR) == "1"
 end
 
@@ -162,16 +162,16 @@ function SwingTimer:SyncNativeProgress(hand, frame, value)
         local label = frame.GetTimeLabel and frame:GetTimeLabel()
         local txt = label and label:GetText()
         if IsSecret(txt) then
-            pcall(bar.timeText.SetText, bar.timeText, "")
+            ns.Utils.SafeCall(bar.timeText.SetText, bar.timeText, "")
         elseif txt and type(txt) == "string" and txt ~= "" then
-            pcall(bar.timeText.SetText, bar.timeText, txt)
+            ns.Utils.SafeCall(bar.timeText.SetText, bar.timeText, txt)
         else
             if not IsSecret(maxVal) and not IsSecret(value) and type(maxVal) == "number" and type(value) == "number" then
                 local dur = maxVal or 2.0
                 local val = value or 0
-                pcall(bar.timeText.SetText, bar.timeText, string.format("%.1fs", math.max(0, dur - val)))
+                ns.Utils.SafeCall(bar.timeText.SetText, bar.timeText, string.format("%.1fs", math.max(0, dur - val)))
             else
-                pcall(bar.timeText.SetText, bar.timeText, "")
+                ns.Utils.SafeCall(bar.timeText.SetText, bar.timeText, "")
             end
         end
     end
@@ -320,7 +320,7 @@ function SwingTimer:BindNativeSwingFrames()
     local anyBound = false
 
     if _G.C_AddOns and _G.C_AddOns.LoadAddOn and not _G.SwingTimerMainHandFrame then
-        pcall(_G.C_AddOns.LoadAddOn, "Blizzard_SwingTimer")
+        ns.Utils.SafeCall(_G.C_AddOns.LoadAddOn, "Blizzard_SwingTimer")
     end
 
     self:EnsureBlizzardTimerEnabled()
@@ -527,7 +527,7 @@ end
 
 function SwingTimer:RegisterEvent(event, _)
     if self.eventFrame then
-        pcall(self.eventFrame.RegisterEvent, self.eventFrame, event)
+        ns.Utils.SafeCall(self.eventFrame.RegisterEvent, self.eventFrame, event)
     end
 end
 
@@ -566,8 +566,8 @@ function SwingTimer:OnEnable()
         f:RegisterEvent("PLAYER_ENTER_COMBAT")
         f:RegisterEvent("PLAYER_LEAVE_COMBAT")
         if f.RegisterEvent then
-            pcall(f.RegisterEvent, f, "PLAYER_SWING")
-            pcall(f.RegisterEvent, f, "PLAYER_SWING_RANGE_UPDATE")
+            ns.Utils.SafeCall(f.RegisterEvent, f, "PLAYER_SWING")
+            ns.Utils.SafeCall(f.RegisterEvent, f, "PLAYER_SWING_RANGE_UPDATE")
         end
         if f.RegisterUnitEvent then
             f:RegisterUnitEvent("UNIT_COMBAT", "player", "target")
@@ -603,8 +603,8 @@ function SwingTimer:OnDisable()
         f:UnregisterEvent("UNIT_FLAGS")
         f:UnregisterEvent("UNIT_HEALTH")
         if f.UnregisterEvent then
-            pcall(f.UnregisterEvent, f, "PLAYER_SWING")
-            pcall(f.UnregisterEvent, f, "PLAYER_SWING_RANGE_UPDATE")
+            ns.Utils.SafeCall(f.UnregisterEvent, f, "PLAYER_SWING")
+            ns.Utils.SafeCall(f.UnregisterEvent, f, "PLAYER_SWING_RANGE_UPDATE")
         end
     end
     if self.playerFrame then self.playerFrame:Hide() end
@@ -1078,7 +1078,7 @@ function SwingTimer:StartSwing(unit, swingType, duration)
         local inCombat = UnitAffectingCombat and UnitAffectingCombat("target")
         local isTargetingPlayer = false
         if UnitIsUnit then
-            local ok, isUnit = pcall(UnitIsUnit, "targettarget", "player")
+            local ok, isUnit = ns.Utils.SafeCall(UnitIsUnit, "targettarget", "player")
             if ok and not IsSecret(isUnit) and isUnit == true then
                 isTargetingPlayer = true
             end
@@ -1566,7 +1566,7 @@ function SwingTimer:OnUnitCombat(unit, action)
             if ns.Utils and ns.Utils.SafeUnitIsUnit then
                 isTargetAttackingPlayer = ns.Utils.SafeUnitIsUnit("targettarget", "player")
             elseif UnitIsUnit then
-                local ok, isUnit = pcall(UnitIsUnit, "targettarget", "player")
+                local ok, isUnit = ns.Utils.SafeCall(UnitIsUnit, "targettarget", "player")
                 if ok and not IsSecret(isUnit) and isUnit == true then
                     isTargetAttackingPlayer = true
                 end

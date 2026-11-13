@@ -26,6 +26,69 @@ end
 BagsMod.FormatNumberWithDots = FormatNumberWithDots
 
 
+local reagentQualityCache = {}
+
+local function IsRetailClient()
+    if ns and ns.IsForever then
+        return false
+    end
+    if _G.WOW_PROJECT_ID ~= nil and _G.WOW_PROJECT_MAINLINE ~= nil then
+        return _G.WOW_PROJECT_ID == _G.WOW_PROJECT_MAINLINE
+    end
+    if ns and ns.IsRetail ~= nil then
+        return ns.IsRetail == true
+    end
+    return true
+end
+
+function BagsMod:ClearReagentQualityCache()
+    local wipeTbl = _G.wipe
+    if wipeTbl then
+        wipeTbl(reagentQualityCache)
+    else
+        for k in pairs(reagentQualityCache) do
+            reagentQualityCache[k] = nil
+        end
+    end
+end
+
+function BagsMod:GetReagentQualityAtlas(itemID, link)
+    if not IsRetailClient() then return nil end
+    local tradeSkill = _G.C_TradeSkillUI
+    if not (tradeSkill and tradeSkill.GetItemReagentQualityInfo) then
+        return nil
+    end
+    if itemID then
+        local cached = reagentQualityCache[itemID]
+        if cached ~= nil then
+            return cached or nil
+        end
+    end
+    local targetItem = link or itemID
+    if not targetItem then return nil end
+    local ok, qInfo = ns.Utils.SafeCall(tradeSkill.GetItemReagentQualityInfo, targetItem)
+    local atlas = ok and type(qInfo) == "table" and (qInfo.iconSmall or qInfo.iconInventory or qInfo.icon) or nil
+    if itemID then
+        reagentQualityCache[itemID] = atlas or false
+    end
+    return atlas
+end
+
+local function ApplyReagentQualityLayout(mod, texture, parentSlot)
+    if not texture then return end
+    local db = mod and mod.db
+    local rSize = (db and db.reagentQualitySize) or 32
+    local rAnchor = (db and db.reagentQualityAnchor) or "TOPLEFT"
+    local rX = (db and db.reagentQualityX ~= nil) and db.reagentQualityX or -6
+    local rY = (db and db.reagentQualityY ~= nil) and db.reagentQualityY or 6
+    local slot = parentSlot or (texture.GetParent and texture:GetParent())
+    if texture.SetSize then texture:SetSize(rSize, rSize) end
+    if texture.ClearAllPoints then texture:ClearAllPoints() end
+    if texture.SetPoint and slot then
+        texture:SetPoint(rAnchor, slot, rAnchor, rX, rY)
+    end
+end
+
 function BagsMod:OnInitialize()
     self.db = RoithiUI.db and RoithiUI.db.profile and RoithiUI.db.profile.Bags or self.defaultSettings
     if not self.db.bagBar then
@@ -79,6 +142,21 @@ function BagsMod:OnInitialize()
     if self.db.junkIndicatorY == nil then
         self.db.junkIndicatorY = (self.defaultSettings and self.defaultSettings.junkIndicatorY) or 1
     end
+    if self.db.showReagentQuality == nil then
+        self.db.showReagentQuality = (self.defaultSettings and self.defaultSettings.showReagentQuality ~= false) or true
+    end
+    if self.db.reagentQualitySize == nil then
+        self.db.reagentQualitySize = (self.defaultSettings and self.defaultSettings.reagentQualitySize) or 32
+    end
+    if self.db.reagentQualityAnchor == nil then
+        self.db.reagentQualityAnchor = (self.defaultSettings and self.defaultSettings.reagentQualityAnchor) or "TOPLEFT"
+    end
+    if self.db.reagentQualityX == nil then
+        self.db.reagentQualityX = (self.defaultSettings and self.defaultSettings.reagentQualityX ~= nil) and self.defaultSettings.reagentQualityX or -6
+    end
+    if self.db.reagentQualityY == nil then
+        self.db.reagentQualityY = (self.defaultSettings and self.defaultSettings.reagentQualityY ~= nil) and self.defaultSettings.reagentQualityY or 6
+    end
     self.itemSlots = {}
     self.categoryButtons = {}
     self.newItems = {}
@@ -115,13 +193,21 @@ function BagsMod:OnEnable()
     end
     if self.db.enabled == false then return end
 
+    self:ClearReagentQualityCache()
+
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
     self:RegisterEvent("BAG_UPDATE_DELAYED", "OnBagUpdate")
     self:RegisterEvent("BAG_UPDATE", "OnBagUpdate")
     self:RegisterEvent("BAG_CONTAINER_UPDATE", "OnBagUpdate")
     self:RegisterEvent("ITEM_LOCK_CHANGED", "OnBagUpdate")
     self:RegisterEvent("BAG_UPDATE_COOLDOWN", "OnBagCooldownUpdate")
-    self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnBagUpdate")
+    self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnEquipmentChanged")
+    self:RegisterEvent("BANKFRAME_OPENED", "OnBankOpened")
+    self:RegisterEvent("BANKFRAME_CLOSED", "OnBankClosed")
+    self:RegisterEvent("PLAYERBANKSLOTS_CHANGED", "OnBankSlotsChanged")
+    self:RegisterEvent("PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED", "OnBankSlotsChanged")
+    self:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "OnInteractionShow")
+    self:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "OnInteractionHide")
     self:RegisterEvent("PLAYER_MONEY", "UpdateMoneyDisplay")
     self:RegisterEvent("CURRENCY_DISPLAY_UPDATE", "UpdateMoneyDisplay")
     self:RegisterEvent("MERCHANT_SHOW", "OnMerchantShow")
@@ -441,7 +527,7 @@ function BagsMod:HasActiveTradeTimer(bag, slot, customTooltipData)
     local tooltipData = customTooltipData or (_G.C_TooltipInfo and _G.C_TooltipInfo.GetBagItem and _G.C_TooltipInfo.GetBagItem(bag, slot))
     if tooltipData and tooltipData.lines then
         if not customTooltipData and _G.TooltipUtil and _G.TooltipUtil.SurfaceArgs then
-            pcall(_G.TooltipUtil.SurfaceArgs, tooltipData)
+            ns.Utils.SafeCall(_G.TooltipUtil.SurfaceArgs, tooltipData)
         end
 
         local tradeTimeType = (_G.Enum and _G.Enum.TooltipDataLineType and _G.Enum.TooltipDataLineType.TradeTimeRemaining) or 36
@@ -478,7 +564,7 @@ function BagsMod:HasActiveTradeTimer(bag, slot, customTooltipData)
             if tt.ClearLines then
                 tt:ClearLines()
             end
-            local ok = tt.SetBagItem and pcall(tt.SetBagItem, tt, bag, slot)
+            local ok = tt.SetBagItem and ns.Utils.SafeCall(tt.SetBagItem, tt, bag, slot)
             if ok and tt.NumLines then
                 local numLines = tt:NumLines() or 0
                 local rawPattern = _G.BIND_TRADE_TIME_REMAINING
@@ -614,7 +700,7 @@ function BagsMod:ClearNewSlot(bag, slot)
         self.dismissedNewHighlights[slotKey] = nil
     end
     if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
-        pcall(_G.C_NewItems.RemoveNewItem, bag, slot)
+        ns.Utils.SafeCall(_G.C_NewItems.RemoveNewItem, bag, slot)
     end
 end
 
@@ -710,6 +796,277 @@ function BagsMod:HookTooltipShortcuts()
     self.tooltipShortcutsHooked = true
 end
 
+local function EnsureOwnedSourceTracking(mod)
+    mod.knownEquippedCounts = mod.knownEquippedCounts or {}
+    mod.knownEquippedGUIDs = mod.knownEquippedGUIDs or {}
+    mod.unequippedSuppressCounts = mod.unequippedSuppressCounts or {}
+    mod.unequippedSuppressGUIDs = mod.unequippedSuppressGUIDs or {}
+    mod.knownBankSlots = mod.knownBankSlots or {}
+    mod.bankWithdrawnSuppressCounts = mod.bankWithdrawnSuppressCounts or {}
+    mod.bankWithdrawnSuppressGUIDs = mod.bankWithdrawnSuppressGUIDs or {}
+end
+
+local function AdjustSuppressedCount(countMap, itemID, delta)
+    if not itemID or delta == 0 then return end
+    local nextVal = (countMap[itemID] or 0) + delta
+    countMap[itemID] = (nextVal > 0) and nextVal or nil
+end
+
+function BagsMod:IsBankInteractionType(interactionType)
+    local pit = _G.Enum and _G.Enum.PlayerInteractionType
+    if not pit or interactionType == nil then return false end
+    return interactionType == pit.Banker
+        or interactionType == pit.CharacterBanker
+        or interactionType == pit.AccountBanker
+end
+
+function BagsMod:GetTrackedBankContainers()
+    local scannableSet = {}
+    for _, bag in ipairs(self:GetScannableBags()) do
+        scannableSet[bag] = true
+    end
+
+    local bankBags = {}
+    local seen = {}
+    local function TryAddBankBag(bagID)
+        if bagID ~= nil and not scannableSet[bagID] and not seen[bagID] then
+            if self:GetNumBagSlots(bagID) > 0 then
+                seen[bagID] = true
+                table.insert(bankBags, bagID)
+            end
+        end
+    end
+
+    if _G.C_Bank and _G.C_Bank.FetchPurchasedBankTabIDs and _G.Enum and _G.Enum.BankType then
+        local bt = _G.Enum.BankType
+        if bt.Character then
+            local okC, charTabs = ns.Utils.SafeCall(_G.C_Bank.FetchPurchasedBankTabIDs, bt.Character)
+            if okC and type(charTabs) == "table" then
+                for _, tabID in ipairs(charTabs) do
+                    TryAddBankBag(tabID)
+                end
+            end
+        end
+        if bt.Account then
+            local okA, accTabs = ns.Utils.SafeCall(_G.C_Bank.FetchPurchasedBankTabIDs, bt.Account)
+            if okA and type(accTabs) == "table" then
+                for _, tabID in ipairs(accTabs) do
+                    TryAddBankBag(tabID)
+                end
+            end
+        end
+    end
+
+    local bagIdx = _G.Enum and _G.Enum.BagIndex
+    if bagIdx then
+        for i = 1, 9 do
+            TryAddBankBag(bagIdx["CharacterBankTab_" .. i])
+            TryAddBankBag(bagIdx["AccountBankTab_" .. i])
+        end
+        TryAddBankBag(bagIdx.Characterbanktab)
+        TryAddBankBag(bagIdx.Accountbanktab)
+    end
+
+    if _G.BANK_CONTAINER then
+        TryAddBankBag(_G.BANK_CONTAINER)
+    end
+    if _G.REAGENTBANK_CONTAINER then
+        TryAddBankBag(_G.REAGENTBANK_CONTAINER)
+    end
+
+    return bankBags
+end
+
+local function GetEquipmentSlotGUID(invSlot)
+    if not (_G.C_Item and _G.C_Item.GetItemGUID and _G.ItemLocation and _G.ItemLocation.CreateFromEquipmentSlot) then
+        return nil
+    end
+    local okLoc, itemLoc = ns.Utils.SafeCall(_G.ItemLocation.CreateFromEquipmentSlot, _G.ItemLocation, invSlot)
+    if not okLoc or not itemLoc then return nil end
+    if _G.C_Item.DoesItemExist and not _G.C_Item.DoesItemExist(itemLoc) then return nil end
+    local okGuid, itemGUID = ns.Utils.SafeCall(_G.C_Item.GetItemGUID, itemLoc)
+    return okGuid and itemGUID or nil
+end
+
+function BagsMod:ScanEquipmentSnapshot()
+    local counts = {}
+    local guids = {}
+    for invSlot = 1, 25 do
+        local itemID = _G.GetInventoryItemID and _G.GetInventoryItemID("player", invSlot)
+        if itemID then
+            local count = 1
+            if _G.GetInventoryItemCount then
+                local okCnt, rawCnt = ns.Utils.SafeCall(_G.GetInventoryItemCount, "player", invSlot)
+                if okCnt and type(rawCnt) == "number" and rawCnt > 0 then
+                    count = rawCnt
+                end
+            end
+            counts[itemID] = (counts[itemID] or 0) + count
+
+            local itemGUID = GetEquipmentSlotGUID(invSlot)
+            if itemGUID then
+                guids[itemGUID] = itemID
+            end
+        end
+    end
+    return counts, guids
+end
+
+function BagsMod:DiffEquipmentState(isReset)
+    EnsureOwnedSourceTracking(self)
+    local currCounts, currGUIDs = self:ScanEquipmentSnapshot()
+
+    if isReset then
+        self.knownEquippedCounts = currCounts
+        self.knownEquippedGUIDs = currGUIDs
+        self.unequippedSuppressCounts = {}
+        self.unequippedSuppressGUIDs = {}
+        return
+    end
+
+    local prevCounts = self.knownEquippedCounts
+    local prevGUIDs = self.knownEquippedGUIDs
+    local leftCountByID = {}
+
+    for guid, itemID in pairs(prevGUIDs) do
+        if not currGUIDs[guid] then
+            self.unequippedSuppressGUIDs[guid] = itemID
+            leftCountByID[itemID] = (leftCountByID[itemID] or 0) + 1
+        end
+    end
+    for guid in pairs(currGUIDs) do
+        if not prevGUIDs[guid] and self.unequippedSuppressGUIDs[guid] then
+            self.unequippedSuppressGUIDs[guid] = nil
+        end
+    end
+
+    local seenIDs = {}
+    for itemID in pairs(prevCounts) do seenIDs[itemID] = true end
+    for itemID in pairs(currCounts) do seenIDs[itemID] = true end
+    for itemID in pairs(seenIDs) do
+        local delta = (prevCounts[itemID] or 0) - (currCounts[itemID] or 0)
+        local leftGuids = leftCountByID[itemID] or 0
+        if delta > 0 or leftGuids > 0 then
+            AdjustSuppressedCount(self.unequippedSuppressCounts, itemID, math.max(delta, leftGuids))
+        elseif delta < 0 then
+            AdjustSuppressedCount(self.unequippedSuppressCounts, itemID, delta)
+        end
+    end
+
+    self.knownEquippedCounts = currCounts
+    self.knownEquippedGUIDs = currGUIDs
+end
+
+function BagsMod:ScanBankContainersSnapshot()
+    local counts = {}
+    local guids = {}
+    local hasContainers = false
+    for _, bag in ipairs(self:GetTrackedBankContainers()) do
+        hasContainers = true
+        local numSlots = self:GetNumBagSlots(bag)
+        for slot = 1, numSlots do
+            local info = _G.C_Container and _G.C_Container.GetContainerItemInfo and _G.C_Container.GetContainerItemInfo(bag, slot)
+            if info and info.itemID then
+                local itemID = info.itemID
+                local count = info.stackCount or 1
+                counts[itemID] = (counts[itemID] or 0) + count
+
+                local itemGUID = info.itemGUID
+                if not itemGUID and _G.C_Item and _G.C_Item.GetItemGUID and _G.ItemLocation and _G.ItemLocation.CreateFromBagAndSlot then
+                    local okLoc, itemLoc = ns.Utils.SafeCall(_G.ItemLocation.CreateFromBagAndSlot, _G.ItemLocation, bag, slot)
+                    if okLoc and itemLoc and (not _G.C_Item.DoesItemExist or _G.C_Item.DoesItemExist(itemLoc)) then
+                        local okGuid, g = ns.Utils.SafeCall(_G.C_Item.GetItemGUID, itemLoc)
+                        if okGuid then itemGUID = g end
+                    end
+                end
+                if itemGUID then
+                    guids[itemGUID] = itemID
+                end
+            end
+        end
+    end
+    return counts, guids, hasContainers
+end
+
+function BagsMod:UpdateBankSnapshot(isInitial)
+    EnsureOwnedSourceTracking(self)
+    local currCounts, currGUIDs, hasContainers = self:ScanBankContainersSnapshot()
+    if isInitial then
+        self.knownBankSlots = { counts = currCounts, guids = currGUIDs }
+        return
+    end
+    if not self.isBankOpen or not hasContainers then
+        return
+    end
+
+    local prevCounts = (self.knownBankSlots and self.knownBankSlots.counts) or {}
+    local prevGUIDs = (self.knownBankSlots and self.knownBankSlots.guids) or {}
+    local leftCountByID = {}
+
+    for guid, itemID in pairs(prevGUIDs) do
+        if not currGUIDs[guid] then
+            self.bankWithdrawnSuppressGUIDs[guid] = itemID
+            leftCountByID[itemID] = (leftCountByID[itemID] or 0) + 1
+        end
+    end
+    for guid in pairs(currGUIDs) do
+        if not prevGUIDs[guid] and self.bankWithdrawnSuppressGUIDs[guid] then
+            self.bankWithdrawnSuppressGUIDs[guid] = nil
+        end
+    end
+
+    local seenIDs = {}
+    for itemID in pairs(prevCounts) do seenIDs[itemID] = true end
+    for itemID in pairs(currCounts) do seenIDs[itemID] = true end
+    for itemID in pairs(seenIDs) do
+        local delta = (prevCounts[itemID] or 0) - (currCounts[itemID] or 0)
+        local leftGuids = leftCountByID[itemID] or 0
+        if delta > 0 or leftGuids > 0 then
+            AdjustSuppressedCount(self.bankWithdrawnSuppressCounts, itemID, math.max(delta, leftGuids))
+        elseif delta < 0 then
+            AdjustSuppressedCount(self.bankWithdrawnSuppressCounts, itemID, delta)
+        end
+    end
+
+    self.knownBankSlots = { counts = currCounts, guids = currGUIDs }
+end
+
+function BagsMod:OnEquipmentChanged()
+    self:DiffEquipmentState(false)
+    self:OnBagUpdate()
+end
+
+function BagsMod:OnBankOpened()
+    self.isBankOpen = true
+    self:UpdateBankSnapshot(true)
+end
+
+function BagsMod:OnBankClosed()
+    self.isBankOpen = false
+    local now = _G.GetTime and _G.GetTime() or 0
+    self.bankClosedGraceUntil = now + 1.0
+    self.knownBankSlots = {}
+end
+
+function BagsMod:OnInteractionShow(event, interactionType)
+    if self:IsBankInteractionType(interactionType) then
+        self:OnBankOpened()
+    end
+end
+
+function BagsMod:OnInteractionHide(event, interactionType)
+    if self:IsBankInteractionType(interactionType) then
+        self:OnBankClosed()
+    end
+end
+
+function BagsMod:OnBankSlotsChanged()
+    if self.isBankOpen then
+        self:UpdateBankSnapshot(false)
+    end
+    self:OnBagUpdate()
+end
+
 function BagsMod:ScanInventoryOnce(isInitial) -- code_smell_audit: suppress arrow-code
     self.knownSlots = self.knownSlots or {}
     self.knownSlotCounts = self.knownSlotCounts or {}
@@ -724,8 +1081,15 @@ function BagsMod:ScanInventoryOnce(isInitial) -- code_smell_audit: suppress arro
         self.dismissedNewHighlights = {}
         self.tradeTimerCache = {}
         self.knownSlotCounts = {}
+        self:DiffEquipmentState(true)
+        EnsureOwnedSourceTracking(self)
+        self.knownBankSlots = {}
+        self.bankWithdrawnSuppressCounts = {}
+        self.bankWithdrawnSuppressGUIDs = {}
+        self.isBankOpen = false
+        self.bankClosedGraceUntil = 0
         if _G.C_NewItems and _G.C_NewItems.ClearAll then
-            pcall(_G.C_NewItems.ClearAll)
+            ns.Utils.SafeCall(_G.C_NewItems.ClearAll)
         end
     end
 
@@ -748,7 +1112,7 @@ function BagsMod:ScanInventoryOnce(isInitial) -- code_smell_audit: suppress arro
                         self.newSlots[slotKey] = nil
                         itemInfo.isNew = false
                         if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
-                            pcall(_G.C_NewItems.RemoveNewItem, bag, slot)
+                            ns.Utils.SafeCall(_G.C_NewItems.RemoveNewItem, bag, slot)
                         end
                     end
                 end
@@ -886,6 +1250,7 @@ function BagsMod:GetItemInfoAt(bag, slot)
                 showQuestBang = showQuestBang,
                 showQuestBorder = showQuestBorder,
                 isCraftingReagent = isCraftingReagent,
+                reagentQualityAtlas = self:GetReagentQualityAtlas(itemID, link),
                 itemGUID = itemGUID,
                 isBound = isBound,
                 inEquipmentSet = inEquipmentSet,
@@ -898,6 +1263,9 @@ function BagsMod:GetItemInfoAt(bag, slot)
 end
 
 function BagsMod:OnBagUpdate()
+    if self.isBankOpen then
+        self:UpdateBankSnapshot(false)
+    end
     if not self.mainFrame or not self.mainFrame:IsShown() then
         if self.UpdateBagButtonsVisual then
             self:UpdateBagButtonsVisual()
@@ -1110,6 +1478,9 @@ function BagsMod:UpdateTypography()
                 if slotFrame.junkIcon.ClearAllPoints then slotFrame.junkIcon:ClearAllPoints() end
                 slotFrame.junkIcon:SetPoint(junkAnchor, slotFrame, junkAnchor, junkX, junkY)
             end
+            if slotFrame.reagentQualityIcon then
+                ApplyReagentQualityLayout(self, slotFrame.reagentQualityIcon, slotFrame)
+            end
         end
     end
     if self.reagentGridSeparator and self.reagentGridSeparator.label then
@@ -1151,7 +1522,7 @@ function BagsMod:CreateHeaderBar()
     gearTex:SetAllPoints(settingsBtn)
     local gearAtlasOk = false
     if gearTex.SetAtlas and _G.C_Texture and _G.C_Texture.GetAtlasInfo and _G.C_Texture.GetAtlasInfo("GM-icon-settings") then
-        gearAtlasOk = pcall(function() gearTex:SetAtlas("GM-icon-settings") end)
+        gearAtlasOk = ns.Utils.SafeCall(gearTex.SetAtlas, gearTex, "GM-icon-settings")
     end
     if not gearAtlasOk then
         gearTex:SetTexture("Interface\\WorldMap\\Gear_64Grey")
@@ -1176,8 +1547,8 @@ function BagsMod:CreateHeaderBar()
             RoithiUI:OpenSettings("bags")
         elseif LibStub and LibStub("AceConfigDialog-3.0", true) then
             local ACD = LibStub("AceConfigDialog-3.0", true)
-            pcall(function() ACD:Open("RoithiUI") end)
-            pcall(function() ACD:SelectGroup("RoithiUI", "interface_group", "bags") end)
+            ns.Utils.SafeCall(ACD.Open, ACD, "RoithiUI")
+            ns.Utils.SafeCall(ACD.SelectGroup, ACD, "RoithiUI", "interface_group", "bags")
         end
     end)
     self.settingsBtn = settingsBtn
@@ -1317,7 +1688,7 @@ function BagsMod:CreateHeaderBar()
     clearTex:SetAllPoints(clearBtn)
     local clearAtlasOk = false
     if clearTex.SetAtlas and _G.C_Texture and _G.C_Texture.GetAtlasInfo and _G.C_Texture.GetAtlasInfo("common-search-clear") then
-        clearAtlasOk = pcall(function() clearTex:SetAtlas("common-search-clear") end)
+        clearAtlasOk = ns.Utils.SafeCall(clearTex.SetAtlas, clearTex, "common-search-clear")
     end
     if not clearAtlasOk then
         clearTex:SetTexture("Interface\\FriendsFrame\\ClearBroadcastIcon")
@@ -2418,9 +2789,9 @@ function BagsMod:ExecuteSellQueue(queue, isCustom, onFinished)
             -- Guard: verify slot still holds the expected junk item before selling
             if (not item.itemID or currentID == item.itemID) and currentID ~= nil then
                 if _G.C_Container and _G.C_Container.UseContainerItem then
-                    pcall(_G.C_Container.UseContainerItem, item.bag, item.slot)
+                    ns.Utils.SafeCall(_G.C_Container.UseContainerItem, item.bag, item.slot)
                 elseif _G.UseContainerItem then
-                    pcall(_G.UseContainerItem, item.bag, item.slot)
+                    ns.Utils.SafeCall(_G.UseContainerItem, item.bag, item.slot)
                 end
                 if isCustom then
                     resetItemIDs[item.itemID or 0] = true
@@ -2713,10 +3084,10 @@ function BagsMod:AcquireItemSlot(index)
     slot.icon = icon
     slot.Icon = icon
     if slot.IconMask and icon.RemoveMaskTexture then
-        pcall(icon.RemoveMaskTexture, icon, slot.IconMask)
+        ns.Utils.SafeCall(icon.RemoveMaskTexture, icon, slot.IconMask)
     end
     if slot.CircleMask and icon.RemoveMaskTexture then
-        pcall(icon.RemoveMaskTexture, icon, slot.CircleMask)
+        ns.Utils.SafeCall(icon.RemoveMaskTexture, icon, slot.CircleMask)
     end
     if icon.SetTexCoord then
         icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -2896,6 +3267,15 @@ function BagsMod:AcquireItemSlot(index)
         junkIcon:SetTexture("Interface\\Icons\\inv_misc_coin_01")
     end
 
+    -- Reagent quality tier icon (Retail crafting quality pip)
+    local reagentQualityIcon = slot.reagentQualityIcon
+    if not reagentQualityIcon then
+        reagentQualityIcon = slot:CreateTexture(nil, "OVERLAY", nil, 6)
+        reagentQualityIcon:Hide()
+        slot.reagentQualityIcon = reagentQualityIcon
+    end
+    ApplyReagentQualityLayout(self, reagentQualityIcon, slot)
+
     -- Stop and disable unused Blizzard animation groups from ContainerFrameItemButtonTemplate
     if slot.newitemglowAnim then
         slot.newitemglowAnim:Stop()
@@ -2945,6 +3325,12 @@ function BagsMod:AcquireItemSlot(index)
     if slot.ItemContextOverlay then slot.ItemContextOverlay:Hide() end
     if slot.IconOverlay then slot.IconOverlay:Hide() end
     if slot.IconOverlay2 then slot.IconOverlay2:Hide() end
+    slot.noProfessionQualityOverlay = true
+    if slot.ProfessionQualityOverlay then
+        if slot.ProfessionQualityOverlay.SetTexture then slot.ProfessionQualityOverlay:SetTexture(nil) end
+        if slot.ProfessionQualityOverlay.ClearAllPoints then slot.ProfessionQualityOverlay:ClearAllPoints() end
+        slot.ProfessionQualityOverlay:Hide()
+    end
     if slot.SetScript then
         slot:SetScript("OnEvent", nil)
     end
@@ -3063,9 +3449,9 @@ function BagsMod:AcquireItemSlot(index)
                     self:UpdateInventory()
                 elseif s.bag and s.slot then
                     if _G.C_Container and _G.C_Container.UseContainerItem then
-                        pcall(_G.C_Container.UseContainerItem, s.bag, s.slot)
+                        ns.Utils.SafeCall(_G.C_Container.UseContainerItem, s.bag, s.slot)
                     elseif _G.UseContainerItem then
-                        pcall(_G.UseContainerItem, s.bag, s.slot)
+                        ns.Utils.SafeCall(_G.UseContainerItem, s.bag, s.slot)
                     end
                 end
             end
@@ -3104,7 +3490,7 @@ end
 
 local function ClearBlizzardNewItem(bag, slot)
     if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
-        pcall(_G.C_NewItems.RemoveNewItem, bag, slot)
+        ns.Utils.SafeCall(_G.C_NewItems.RemoveNewItem, bag, slot)
     end
 end
 
@@ -3157,6 +3543,11 @@ function BagsMod:UpdateInventory()
     local now = _G.GetTime and _G.GetTime() or 0
     local isSorting = self.isSortingBagsUntil and now < self.isSortingBagsUntil
     local isTeleporting = self.teleportGraceUntil and now < self.teleportGraceUntil
+    local inBankTransferContext = (self.isBankOpen == true) or (now < (self.bankClosedGraceUntil or 0))
+    self:DiffEquipmentState(false)
+    if self.isBankOpen then
+        self:UpdateBankSnapshot(false)
+    end
 
     -- Take snapshots of previous state for cross-slot move and total count detection
     local prevKnownSlots = {}
@@ -3233,6 +3624,28 @@ function BagsMod:UpdateInventory()
                 wasDismissed = (prevDismissedNewHighlights[sKey] == true),
                 count = prevKnownCounts[sKey] or 1,
             })
+        end
+    end
+
+    -- Match known owned-source GUIDs first (order-independent across all changed slots)
+    local ownedSourceSlots = {}
+    for _, bag in ipairs(self:GetScannableBags()) do
+        local numSlots = self:GetNumBagSlots(bag)
+        for slot = 1, numSlots do
+            local slotKey = GetSlotKey(bag, slot)
+            local itemInfo = currentSlotItems[slotKey]
+            if itemInfo and itemInfo.itemID and prevKnownSlots[slotKey] ~= itemInfo.itemID then
+                local guid = itemInfo.itemGUID
+                if guid and self.unequippedSuppressGUIDs[guid] then
+                    ownedSourceSlots[slotKey] = true
+                    self.unequippedSuppressGUIDs[guid] = nil
+                    AdjustSuppressedCount(self.unequippedSuppressCounts, itemInfo.itemID, -1)
+                elseif guid and self.bankWithdrawnSuppressGUIDs[guid] then
+                    ownedSourceSlots[slotKey] = true
+                    self.bankWithdrawnSuppressGUIDs[guid] = nil
+                    AdjustSuppressedCount(self.bankWithdrawnSuppressCounts, itemInfo.itemID, -1)
+                end
+            end
         end
     end
 
@@ -3316,11 +3729,27 @@ function BagsMod:UpdateInventory()
                     end
                 end
 
+                -- Check if item arrived from an owned character/account source (equipped gear, bank, warbank)
+                local isOwnedSource = (ownedSourceSlots[slotKey] == true)
+                local slotCountGrew = (not isSlotChanged) and ((itemInfo.count or 1) > (prevKnownCounts[slotKey] or 0))
+                if not isOwnedSource and not isFromDrag and not isMovedItem and (isSlotChanged or slotCountGrew) then
+                    local addedCount = isSlotChanged and (itemInfo.count or 1) or ((itemInfo.count or 1) - (prevKnownCounts[slotKey] or 0))
+                    if (self.unequippedSuppressCounts[itemInfo.itemID] or 0) > 0 then
+                        isOwnedSource = true
+                        local consume = math.min(addedCount, self.unequippedSuppressCounts[itemInfo.itemID])
+                        AdjustSuppressedCount(self.unequippedSuppressCounts, itemInfo.itemID, -consume)
+                    elseif (self.bankWithdrawnSuppressCounts[itemInfo.itemID] or 0) > 0 then
+                        isOwnedSource = true
+                        local consume = math.min(addedCount, self.bankWithdrawnSuppressCounts[itemInfo.itemID])
+                        AdjustSuppressedCount(self.bankWithdrawnSuppressCounts, itemInfo.itemID, -consume)
+                    end
+                end
+
                 if isTradeableBoP then
                     isNewSlot = true
-                elseif self.newSlots[slotKey] then
+                elseif self.newSlots[slotKey] and not isSlotChanged then
                     isNewSlot = true
-                elseif self.hoveredNewSlots and self.hoveredNewSlots[slotKey] and now < self.hoveredNewSlots[slotKey] then
+                elseif self.hoveredNewSlots and self.hoveredNewSlots[slotKey] and now < self.hoveredNewSlots[slotKey] and not isSlotChanged then
                     isNewSlot = true
                 elseif isFromDrag then
                     if draggedItemWasNew then
@@ -3335,6 +3764,8 @@ function BagsMod:UpdateInventory()
                     else
                         ClearBlizzardNewItem(bag, slot)
                     end
+                elseif isOwnedSource then
+                    ClearBlizzardNewItem(bag, slot)
                 elseif _G.C_NewItems and _G.C_NewItems.IsNewItem and _G.C_NewItems.IsNewItem(bag, slot) then
                     local prevTotal = prevItemCounts[itemInfo.itemID] or 0
                     local currentTotal = currentItemCounts[itemInfo.itemID] or (itemInfo.count or 1)
@@ -3344,7 +3775,7 @@ function BagsMod:UpdateInventory()
                     else
                         ClearBlizzardNewItem(bag, slot)
                     end
-                elseif self.initialInventoryScanned and not isSorting and not isTeleporting and isSlotChanged then
+                elseif self.initialInventoryScanned and not isSorting and not isTeleporting and not inBankTransferContext and isSlotChanged then
                     -- Fallback for newly acquired items (boss drop, vendor buy, quest reward):
                     -- Must NOT be an already-known item whose total count in inventory did not increase!
                     local prevTotal = prevItemCounts[itemInfo.itemID] or 0
@@ -3407,7 +3838,7 @@ function BagsMod:UpdateInventory()
                 if self.hoveredNewSlots then self.hoveredNewSlots[slotKey] = nil end
                 if self.dismissedNewHighlights then self.dismissedNewHighlights[slotKey] = nil end
                 if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
-                    pcall(_G.C_NewItems.RemoveNewItem, bag, slot)
+                    ns.Utils.SafeCall(_G.C_NewItems.RemoveNewItem, bag, slot)
                 end
                 if (activeCat == "ALL" and (isNormalBag or isReagentBag))
                     or (activeCat == "REAGENTS" and isReagentBag)
@@ -3749,7 +4180,7 @@ function BagsMod:UpdateInventory()
                     local isCosmetic = false
                     if itemData and (itemData.hyperlink or itemData.itemID) then
                         if _G.C_Item and _G.C_Item.IsCosmeticItem then
-                            local ok, cosmetic = pcall(_G.C_Item.IsCosmeticItem, itemData.hyperlink or itemData.itemID)
+                            local ok, cosmetic = ns.Utils.SafeCall(_G.C_Item.IsCosmeticItem, itemData.hyperlink or itemData.itemID)
                             if ok and cosmetic then
                                 isCosmetic = true
                             end
@@ -3758,7 +4189,7 @@ function BagsMod:UpdateInventory()
                     local isLearnable = false
                     if isCosmetic and itemData.itemID then
                         if _G.C_TransmogCollection and _G.C_TransmogCollection.PlayerHasTransmog then
-                            local ok, hasTransmog = pcall(_G.C_TransmogCollection.PlayerHasTransmog, itemData.itemID)
+                            local ok, hasTransmog = ns.Utils.SafeCall(_G.C_TransmogCollection.PlayerHasTransmog, itemData.itemID)
                             if ok and not hasTransmog then
                                 isLearnable = true
                             end
@@ -3791,11 +4222,39 @@ function BagsMod:UpdateInventory()
                     end
                 end
 
+                -- Reagent quality tier icon (Retail only)
+                if slotFrame.ProfessionQualityOverlay and slotFrame.ProfessionQualityOverlay:IsShown() then
+                    slotFrame.ProfessionQualityOverlay:Hide()
+                end
+                if slotFrame.reagentQualityIcon then
+                    local rqAtlas = nil
+                    if IsRetailClient() and (self.db.showReagentQuality ~= false) then
+                        rqAtlas = itemData.reagentQualityAtlas
+                    end
+                    if rqAtlas then
+                        ApplyReagentQualityLayout(self, slotFrame.reagentQualityIcon, slotFrame)
+                        if slotFrame.lastReagentQualityAtlas ~= rqAtlas then
+                            if slotFrame.reagentQualityIcon.SetAtlas then
+                                slotFrame.reagentQualityIcon:SetAtlas(rqAtlas)
+                            elseif slotFrame.reagentQualityIcon.SetTexture then
+                                slotFrame.reagentQualityIcon:SetTexture(rqAtlas)
+                            end
+                            slotFrame.lastReagentQualityAtlas = rqAtlas
+                        end
+                        if not slotFrame.reagentQualityIcon:IsShown() then slotFrame.reagentQualityIcon:Show() end
+                    else
+                        if slotFrame.reagentQualityIcon:IsShown() then slotFrame.reagentQualityIcon:Hide() end
+                        slotFrame.lastReagentQualityAtlas = nil
+                    end
+                end
+
                 self:UpdateSlotCooldown(slotFrame)
                 slotFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
             else
                 -- Empty slot
                 if slotFrame.junkIcon and slotFrame.junkIcon:IsShown() then slotFrame.junkIcon:Hide() end
+                if slotFrame.reagentQualityIcon and slotFrame.reagentQualityIcon:IsShown() then slotFrame.reagentQualityIcon:Hide() end
+                slotFrame.lastReagentQualityAtlas = nil
                 if slotFrame.cosmeticIcon and slotFrame.cosmeticIcon:IsShown() then slotFrame.cosmeticIcon:Hide() end
                 if slotFrame.questIcon and slotFrame.questIcon:IsShown() then slotFrame.questIcon:Hide() end
                 if slotFrame.IconBorder and slotFrame.IconBorder:IsShown() then

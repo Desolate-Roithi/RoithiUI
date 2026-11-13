@@ -120,7 +120,7 @@ local function GetOrCreateAuraMover(container, unit, containerSuffix)
                 .. " " .. containerSuffix:sub(1,1):upper() .. containerSuffix:sub(2)
         end
 
-        pcall(function()
+        ns.Utils.SafeCall(function()
             LEM:AddFrame(mover, function(movedFrame, _, point, x, y)
                 local u   = movedFrame.unit
                 local suf = movedFrame.containerSuffix

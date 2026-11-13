@@ -65,7 +65,7 @@ local function IsSafeFrame(frame)
         return false
     end
     if frame.IsForbidden then
-        local ok, forbidden = pcall(frame.IsForbidden, frame)
+        local ok, forbidden = ns.Utils.SafeCall(frame.IsForbidden, frame)
         if not ok or forbidden then
             return false
         end
@@ -76,7 +76,7 @@ end
 local function SafeGetName(frame)
     if not frame or not IsSafeFrame(frame) then return nil end
     if not frame.GetName then return nil end
-    local ok, name = pcall(frame.GetName, frame)
+    local ok, name = ns.Utils.SafeCall(frame.GetName, frame)
     if ok and type(name) == "string" then
         return name
     end
@@ -86,7 +86,7 @@ end
 local function SafeIsObjectType(frame, objType)
     if not frame or not IsSafeFrame(frame) then return false end
     if not frame.IsObjectType then return false end
-    local ok, isType = pcall(frame.IsObjectType, frame, objType)
+    local ok, isType = ns.Utils.SafeCall(frame.IsObjectType, frame, objType)
     return ok and isType == true
 end
 
@@ -141,26 +141,26 @@ local function FindButtonIcon(button)
     if not button or not IsSafeFrame(button) then return end
 
     if button.icon and button.icon.GetTexture then
-        local ok, tex = pcall(button.icon.GetTexture, button.icon)
+        local ok, tex = ns.Utils.SafeCall(button.icon.GetTexture, button.icon)
         if ok and tex then return tex end
     end
     if button.Icon and button.Icon.GetTexture then
-        local ok, tex = pcall(button.Icon.GetTexture, button.Icon)
+        local ok, tex = ns.Utils.SafeCall(button.Icon.GetTexture, button.Icon)
         if ok and tex then return tex end
     end
     if button.VisualContainer and button.VisualContainer.BaseTexture and button.VisualContainer.BaseTexture.GetTexture then
-        local ok, tex = pcall(button.VisualContainer.BaseTexture.GetTexture, button.VisualContainer.BaseTexture)
+        local ok, tex = ns.Utils.SafeCall(button.VisualContainer.BaseTexture.GetTexture, button.VisualContainer.BaseTexture)
         if ok and tex then return tex end
     end
 
     local function ScanRegions(frame)
         if not frame or not IsSafeFrame(frame) then return end
         if frame.GetRegions then
-            local okRegions, regions = pcall(function() return { frame:GetRegions() } end)
+            local okRegions, regions = ns.Utils.SafeCall(function() return { frame:GetRegions() } end)
             if okRegions and regions then
                 for _, obj in ipairs(regions) do
                     if obj and SafeIsObjectType(obj, "Texture") and obj.GetTexture then
-                        local okTex, tex = pcall(obj.GetTexture, obj)
+                        local okTex, tex = ns.Utils.SafeCall(obj.GetTexture, obj)
                         if okTex and tex then
                             local texStr = type(tex) == "string" and tex:lower() or ""
                             if not texStr:find("border") and not texStr:find("background") and not texStr:find("glow") and not texStr:find("shadow") then
@@ -172,7 +172,7 @@ local function FindButtonIcon(button)
             end
         end
         if frame.GetChildren then
-            local okChildren, children = pcall(function() return { frame:GetChildren() } end)
+            local okChildren, children = ns.Utils.SafeCall(function() return { frame:GetChildren() } end)
             if okChildren and children then
                 for _, child in ipairs(children) do
                     if IsSafeFrame(child) then
@@ -1060,16 +1060,16 @@ function MinimapMod:ScanAddonButtons()
             if sBtn and UnprotectButton then
                 UnprotectButton(sBtn)
                 local origParent = GetButtonOriginalParent(sBtn) or Minimap
-                if sBtn.SetParent then pcall(sBtn.SetParent, sBtn, origParent) end
+                if sBtn.SetParent then ns.Utils.SafeCall(sBtn.SetParent, sBtn, origParent) end
                 local origPts = GetButtonOriginalPoints(sBtn)
                 if origPts and #origPts > 0 and sBtn.ClearAllPoints and sBtn.SetPoint then
-                    pcall(sBtn.ClearAllPoints, sBtn)
+                    ns.Utils.SafeCall(sBtn.ClearAllPoints, sBtn)
                     for _, pt in ipairs(origPts) do
-                        pcall(sBtn.SetPoint, sBtn, unpack(pt))
+                        ns.Utils.SafeCall(sBtn.SetPoint, sBtn, unpack(pt))
                     end
                 end
-                if sBtn.SetAlpha then pcall(sBtn.SetAlpha, sBtn, 1) end
-                if sBtn.Show then pcall(sBtn.Show, sBtn) end
+                if sBtn.SetAlpha then ns.Utils.SafeCall(sBtn.SetAlpha, sBtn, 1) end
+                if sBtn.Show then ns.Utils.SafeCall(sBtn.Show, sBtn) end
             end
             self.scannedButtons[sName] = nil
             if self.db and self.db.addonBarButtons then
@@ -1098,13 +1098,13 @@ function MinimapMod:ScanAddonButtons()
 
         if btn.HookScript and btn.HasScript and not hookedButtons[btn] then
             hookedButtons[btn] = true
-            local okEnter, hasEnter = pcall(btn.HasScript, btn, "OnEnter")
+            local okEnter, hasEnter = ns.Utils.SafeCall(btn.HasScript, btn, "OnEnter")
             if okEnter and hasEnter then
-                pcall(btn.HookScript, btn, "OnEnter", function() self:OnBarEnter() end)
+                ns.Utils.SafeCall(btn.HookScript, btn, "OnEnter", function() self:OnBarEnter() end)
             end
-            local okLeave, hasLeave = pcall(btn.HasScript, btn, "OnLeave")
+            local okLeave, hasLeave = ns.Utils.SafeCall(btn.HasScript, btn, "OnLeave")
             if okLeave and hasLeave then
-                pcall(btn.HookScript, btn, "OnLeave", function() self:OnBarLeave() end)
+                ns.Utils.SafeCall(btn.HookScript, btn, "OnLeave", function() self:OnBarLeave() end)
             end
         end
     end
@@ -1128,7 +1128,7 @@ function MinimapMod:ScanAddonButtons()
         if not name or name == "" then return end
 
         -- Prevent scanning children of self.addonBar or custom buttons
-        local okParent, parent = pcall(child.GetParent, child)
+        local okParent, parent = ns.Utils.SafeCall(child.GetParent, child)
         local parentName = (okParent and parent and SafeGetName(parent)) or nil
         if (okParent and parent == self.addonBar) or (parentName and parentName:find("^RoithiAddonButton_")) then
             return
@@ -1145,7 +1145,7 @@ function MinimapMod:ScanAddonButtons()
     end
 
     if Minimap and Minimap.GetChildren then
-        local okKids, kids = pcall(function() return { Minimap:GetChildren() } end)
+        local okKids, kids = ns.Utils.SafeCall(function() return { Minimap:GetChildren() } end)
         if okKids and kids then
             for _, child in ipairs(kids) do
                 if IsSafeFrame(child) then
@@ -1156,7 +1156,7 @@ function MinimapMod:ScanAddonButtons()
     end
 
     if MinimapCluster and MinimapCluster.GetChildren then
-        local okKids, kids = pcall(function() return { MinimapCluster:GetChildren() } end)
+        local okKids, kids = ns.Utils.SafeCall(function() return { MinimapCluster:GetChildren() } end)
         if okKids and kids then
             for _, child in ipairs(kids) do
                 if IsSafeFrame(child) then
@@ -1167,7 +1167,7 @@ function MinimapMod:ScanAddonButtons()
     end
 
     if _G.MinimapBackdrop and _G.MinimapBackdrop.GetChildren then
-        local okKids, kids = pcall(function() return { _G.MinimapBackdrop:GetChildren() } end)
+        local okKids, kids = ns.Utils.SafeCall(function() return { _G.MinimapBackdrop:GetChildren() } end)
         if okKids and kids then
             for _, child in ipairs(kids) do
                 if IsSafeFrame(child) then
@@ -1322,7 +1322,7 @@ function MinimapMod:UpdateAddonBarLayout()
                     local iconTex = FindButtonIcon(btn) or "Interface\\Icons\\INV_Misc_QuestionMark"
                     if custom.icon.SetTexture then custom.icon:SetTexture(iconTex) end
                     if custom.icon.SetAllPoints then custom.icon:SetAllPoints(custom) end
-                    if custom.icon.SetTexCoord then pcall(custom.icon.SetTexCoord, custom.icon, 0.08, 0.92, 0.08, 0.92) end
+                    if custom.icon.SetTexCoord then ns.Utils.SafeCall(custom.icon.SetTexCoord, custom.icon, 0.08, 0.92, 0.08, 0.92) end
                 end
 
                 custom:EnableMouse(false)
@@ -1341,12 +1341,12 @@ function MinimapMod:UpdateAddonBarLayout()
                 local iconTex = FindButtonIcon(btn) or (btn.icon and btn.icon.GetTexture and btn.icon:GetTexture()) or "Interface\\Icons\\INV_Gizmo_02"
                 if custom.icon.SetTexture then custom.icon:SetTexture(iconTex) end
                 if custom.icon.SetAllPoints then custom.icon:SetAllPoints(custom) end
-                if custom.icon.SetTexCoord then pcall(custom.icon.SetTexCoord, custom.icon, 0.08, 0.92, 0.08, 0.92) end
+                if custom.icon.SetTexCoord then ns.Utils.SafeCall(custom.icon.SetTexCoord, custom.icon, 0.08, 0.92, 0.08, 0.92) end
             end
 
             local function CleanTexture(region)
                 if region and SafeIsObjectType(region, "Texture") then
-                    local okTex, tex = pcall(region.GetTexture, region)
+                    local okTex, tex = ns.Utils.SafeCall(region.GetTexture, region)
                     local texPath = okTex and type(tex) == "string" and tex:lower() or ""
                     local isBorder = texPath:find("border") or texPath:find("tracking") or texPath:find("overlay") or texPath:find("shine") or texPath:find("background")
                     if not isBorder and okTex and type(tex) == "number" then
@@ -1355,13 +1355,13 @@ function MinimapMod:UpdateAddonBarLayout()
                         end
                     end
                     if isBorder and region.SetAlpha then
-                        pcall(region.SetAlpha, region, 0)
+                        ns.Utils.SafeCall(region.SetAlpha, region, 0)
                     end
                 end
             end
 
             if btn.GetRegions then
-                local okRegs, regs = pcall(function() return { btn:GetRegions() } end)
+                local okRegs, regs = ns.Utils.SafeCall(function() return { btn:GetRegions() } end)
                 if okRegs and regs then
                     for _, region in ipairs(regs) do
                         CleanTexture(region)
@@ -1369,11 +1369,11 @@ function MinimapMod:UpdateAddonBarLayout()
                 end
             end
             if btn.GetChildren then
-                local okKids, kids = pcall(function() return { btn:GetChildren() } end)
+                local okKids, kids = ns.Utils.SafeCall(function() return { btn:GetChildren() } end)
                 if okKids and kids then
                     for _, child in ipairs(kids) do
                         if IsSafeFrame(child) and child.GetRegions and not SafeIsObjectType(child, "Button") then
-                            local okRegs, regs = pcall(function() return { child:GetRegions() } end)
+                            local okRegs, regs = ns.Utils.SafeCall(function() return { child:GetRegions() } end)
                             if okRegs and regs then
                                 for _, region in ipairs(regs) do
                                     CleanTexture(region)
@@ -1387,7 +1387,7 @@ function MinimapMod:UpdateAddonBarLayout()
             local bName = SafeGetName(btn)
             local bIcon = btn.icon or btn.Icon or (bName and _G[bName .. "Icon"])
             if bIcon and bIcon.SetTexCoord then
-                pcall(bIcon.SetTexCoord, bIcon, 0.08, 0.92, 0.08, 0.92)
+                ns.Utils.SafeCall(bIcon.SetTexCoord, bIcon, 0.08, 0.92, 0.08, 0.92)
                 if bIcon.ClearAllPoints then bIcon:ClearAllPoints() end
                 if bIcon.SetAllPoints then bIcon:SetAllPoints(btn) end
             end

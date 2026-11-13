@@ -11,7 +11,7 @@ local function BuildSecondsFallbackFormatter()
     if not (csu and csu.CreateSecondsFormatter and ccu and ccu.CreateCurve and enum and enum.SecondsFormatterInterval and enum.SecondsFormatterAbbreviation) then
         return nil
     end
-    local ok, fmt = pcall(function()
+    local ok, fmt = ns.Utils.SafeCall(function()
         local curve = ccu.CreateCurve()
         curve:AddPoint(61, enum.SecondsFormatterInterval.Minutes)
         curve:AddPoint(3601, enum.SecondsFormatterInterval.Hours)
@@ -38,7 +38,7 @@ local function GetBareSecondsFormatter()
     local csu = _G.C_StringUtil
     local enum = _G.Enum
     if csu and csu.CreateNumericRuleFormatter and enum and enum.NumericRuleFormatRounding then
-        local ok, fmt = pcall(function()
+        local ok, fmt = ns.Utils.SafeCall(function()
             local down = enum.NumericRuleFormatRounding.Down
             local up   = enum.NumericRuleFormatRounding.Up
             local f = csu.CreateNumericRuleFormatter()
@@ -77,24 +77,45 @@ local function ShouldUseLegacyFormatterKey()
     return acu ~= nil and type(acu.ProcessCustomAuraButtonDurationTextOptions) ~= "function"
 end
 
+local function IsSecretVal(v)
+    return ns.Utils and ns.Utils.IsSecret and ns.Utils.IsSecret(v)
+end
+
+local function CanAccessAuraButton(auraButton)
+    if not auraButton then return false end
+    if auraButton.CanBeAccessedInContext then
+        local canAccess = auraButton:CanBeAccessedInContext()
+        if IsSecretVal(canAccess) or not canAccess then
+            return false
+        end
+    end
+    if auraButton.IsForbidden then
+        local forbidden = auraButton:IsForbidden()
+        if IsSecretVal(forbidden) or forbidden then
+            return false
+        end
+    end
+    return true
+end
+
 -------------------------------------------------------------------------------
 -- FormatAuraButton Callback for 12.1.0 AuraButtons
 -------------------------------------------------------------------------------
 local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, db, isWhitelistGroup)
-    if not auraButton then return end
+    if not CanAccessAuraButton(auraButton) then return end
 
-    pcall(function()
+    ns.Utils.SafeCall(function()
         buttonSize = buttonSize or 28
 
         if auraButton.SetSize then
-            pcall(auraButton.SetSize, auraButton, buttonSize, buttonSize)
+            ns.Utils.SafeCall(auraButton.SetSize, auraButton, buttonSize, buttonSize)
         end
 
         db = db or {}
 
         -- 1. Backdrop (Hidden: No normal generic box borders)
         if auraButton.RoithiBg then
-            pcall(auraButton.RoithiBg.Hide, auraButton.RoithiBg)
+            ns.Utils.SafeCall(auraButton.RoithiBg.Hide, auraButton.RoithiBg)
         end
 
         -- Visual Debug helper background (ONLY when /rad is enabled)
@@ -106,7 +127,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
             dbgBg:Show()
             auraButton.DbgBg = dbgBg
         elseif auraButton.DbgBg then
-            pcall(auraButton.DbgBg.Hide, auraButton.DbgBg)
+            ns.Utils.SafeCall(auraButton.DbgBg.Hide, auraButton.DbgBg)
         end
 
         -- Font settings from profile options
@@ -134,7 +155,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
             end
             auraButton.Icon = icon
             if auraButton.SetIcon then
-                pcall(auraButton.SetIcon, auraButton, icon)
+                ns.Utils.SafeCall(auraButton.SetIcon, auraButton, icon)
             end
         end
 
@@ -156,7 +177,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
             end
             auraButton.Cooldown = cd
             if auraButton.SetDurationCooldown then
-                pcall(auraButton.SetDurationCooldown, auraButton, cd)
+                ns.Utils.SafeCall(auraButton.SetDurationCooldown, auraButton, cd)
             end
         end
 
@@ -166,7 +187,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
             if textFrame.SetAllPoints then textFrame:SetAllPoints(auraButton) end
             local baseLevel = 1
             if auraButton.GetFrameLevel then
-                local ok, lvl = pcall(auraButton.GetFrameLevel, auraButton)
+                local ok, lvl = ns.Utils.SafeCall(auraButton.GetFrameLevel, auraButton)
                 if ok and type(lvl) == "number" then baseLevel = lvl end
             end
             if textFrame.SetFrameLevel then textFrame:SetFrameLevel(baseLevel + 25) end
@@ -201,7 +222,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                 local durationBound = false
                 if auraButton.SetDurationText then
                     if auraButton.ClearDurationText then
-                        pcall(auraButton.ClearDurationText, auraButton)
+                        ns.Utils.SafeCall(auraButton.ClearDurationText, auraButton)
                     end
                     local fmt = GetBareSecondsFormatter()
                     local useLegacyKey = ShouldUseLegacyFormatterKey()
@@ -213,18 +234,18 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                             durationOpts.textFormatter = fmt
                         end
                     end
-                    local ok = pcall(auraButton.SetDurationText, auraButton, durationText, durationOpts)
+                    local ok = ns.Utils.SafeCall(auraButton.SetDurationText, auraButton, durationText, durationOpts)
                     if ok then
                         durationBound = true
                     elseif fmt then
                         local altOpts = useLegacyKey and { textFormatter = fmt } or { formatter = fmt }
-                        local okAlt = pcall(auraButton.SetDurationText, auraButton, durationText, altOpts)
+                        local okAlt = ns.Utils.SafeCall(auraButton.SetDurationText, auraButton, durationText, altOpts)
                         if okAlt then
                             durationBound = true
                         end
                     end
                     if not durationBound then
-                        local okBare = pcall(auraButton.SetDurationText, auraButton, durationText, {})
+                        local okBare = ns.Utils.SafeCall(auraButton.SetDurationText, auraButton, durationText, {})
                         if okBare then
                             durationBound = true
                         end
@@ -266,7 +287,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
                 end
                 auraButton.CountText = countText
                 if auraButton.SetApplicationCount then
-                    pcall(auraButton.SetApplicationCount, auraButton, countText)
+                    ns.Utils.SafeCall(auraButton.SetApplicationCount, auraButton, countText)
                 end
             end
         end
@@ -284,7 +305,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
             auraButton.Border = borderTex
 
             if auraButton.SetAuraBorder then
-                pcall(auraButton.SetAuraBorder, auraButton, borderTex)
+                ns.Utils.SafeCall(auraButton.SetAuraBorder, auraButton, borderTex)
             end
 
             if isDebuff and not hideIcon then
@@ -297,7 +318,7 @@ local function FormatAuraButton(auraButton, containerKey, isDebuff, buttonSize, 
 
         -- 7. Right-Click to Cancel Aura ("RightButtonUp" is valid for RegisterForClicks)
         if auraButton.SetCancelAuraButtons then
-            pcall(auraButton.SetCancelAuraButtons, auraButton, "RightButtonUp")
+            ns.Utils.SafeCall(auraButton.SetCancelAuraButtons, auraButton, "RightButtonUp")
         end
     end)
 end

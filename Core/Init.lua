@@ -51,7 +51,7 @@ local function ProtectFontObjects(selection)
                 if not fontString or not fontString.fontObjectsToTry then return end
                 for _, fontObj in ipairs(fontString.fontObjectsToTry) do
                     fontString:SetFontObject(fontObj)
-                    local ok, isTrunc = pcall(function() return fontString:IsTruncated() end)
+                    local ok, isTrunc = ns.Utils.SafeCall(fontString.IsTruncated, fontString)
                     local isSec = (issecretvalue and issecretvalue(isTrunc)) or (type(isTrunc) == "userdata")
                     if not ok or isSec or not isTrunc then
                         break
@@ -62,33 +62,38 @@ local function ProtectFontObjects(selection)
     end
 end
 
+local function ShowInstructionalTooltipInner(sel)
+    local tooltip = _G.GetAppropriateTooltip and _G.GetAppropriateTooltip() or _G.GameTooltip
+    tooltip:SetOwner(sel, "ANCHOR_CURSOR")
+    if sel.system and sel.system.GetSystemName then
+        tooltip:SetText(sel.system:GetSystemName())
+    end
+    tooltip:Show()
+end
+
+local function HideAppropriateTooltipInner()
+    local tooltip = _G.GetAppropriateTooltip and _G.GetAppropriateTooltip() or _G.GameTooltip
+    tooltip:Hide()
+end
+
+local function HideGameTooltipInner()
+    _G.GameTooltip:Hide()
+end
+
 local function ProtectSelectionTooltip(selection)
     selection.CheckShowInstructionalTooltip = function(sel)
         if not sel:IsSelected() then
-            local ok = pcall(function()
-                local tooltip = _G.GetAppropriateTooltip and _G.GetAppropriateTooltip() or _G.GameTooltip
-                tooltip:SetOwner(sel, "ANCHOR_CURSOR")
-                if sel.system and sel.system.GetSystemName then
-                    tooltip:SetText(sel.system:GetSystemName())
-                end
-                tooltip:Show()
-            end)
+            local ok = ns.Utils.SafeCall(ShowInstructionalTooltipInner, sel)
             if not ok then
-                pcall(function() _G.GameTooltip:Hide() end)
+                ns.Utils.SafeCall(HideGameTooltipInner)
             end
         else
-            pcall(function()
-                local tooltip = _G.GetAppropriateTooltip and _G.GetAppropriateTooltip() or _G.GameTooltip
-                tooltip:Hide()
-            end)
+            ns.Utils.SafeCall(HideAppropriateTooltipInner)
         end
     end
 
     selection.HideInstructionalTooltip = function()
-        pcall(function()
-            local tooltip = _G.GetAppropriateTooltip and _G.GetAppropriateTooltip() or _G.GameTooltip
-            tooltip:Hide()
-        end)
+        ns.Utils.SafeCall(HideAppropriateTooltipInner)
     end
 end
 
@@ -187,6 +192,9 @@ function RoithiUI:OnInitialize()
         self.ModuleManager:CompileDefaults(ns.Defaults)
     end
     self.db = LibStub("AceDB-3.0"):New("RoithiUIDB", ns.Defaults, true)
+    if ns.Utils and ns.Utils.BindErrorLogDB and self.db and self.db.global then
+        ns.Utils.BindErrorLogDB(self.db.global)
+    end
 
     -- Create a hidden parent for Blizzard frames
     if not self.HiddenFrame then
@@ -283,7 +291,7 @@ function RoithiUI:OnInitialize()
 
                 -- Elevate selection overlay for Aura Movers so they are always clickable over overlapping unit frames (below popup dialogs)
                 if frameObj.containerRef or frameObj.containerSuffix then
-                    pcall(function()
+                    ns.Utils.SafeCall(function()
                         frameObj:SetFrameStrata("DIALOG")
                         frameObj:SetFrameLevel(200)
                         selection:SetFrameStrata("DIALOG")

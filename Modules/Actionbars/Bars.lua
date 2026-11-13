@@ -128,7 +128,7 @@ local function GetSafeButtonSize(btn, barKey, fallback)
         end
     end
     if btn and btn.GetWidth then
-        local ok, w = pcall(btn.GetWidth, btn)
+        local ok, w = ns.Utils.SafeCall(btn.GetWidth, btn)
         if ok and IsSecretSafeNumber(w) and w > 0 then
             return w
         end
@@ -793,7 +793,7 @@ function AB:SetupBars()
 
                     if hasTarget and IsNonSecretTrue(checksRange) and not IsNonSecretTrue(inRange) then
                         if btn.action and _G.C_ActionBar and _G.C_ActionBar.IsActionInRange then
-                            local ok, actionInRange = pcall(_G.C_ActionBar.IsActionInRange, btn.action)
+                            local ok, actionInRange = ns.Utils.SafeCall(_G.C_ActionBar.IsActionInRange, btn.action)
                             if ok then
                                 if IsNonSecretOutOfRange(actionInRange) then
                                     isOutOfRange = true
@@ -842,7 +842,7 @@ function AB:SetupBars()
                     local stillOutOfRange = false
                     if _G.UnitExists and _G.UnitExists("target") then
                         if btn.action and _G.C_ActionBar and _G.C_ActionBar.IsActionInRange then
-                            local ok, inRange = pcall(_G.C_ActionBar.IsActionInRange, btn.action)
+                            local ok, inRange = ns.Utils.SafeCall(_G.C_ActionBar.IsActionInRange, btn.action)
                             if ok and IsNonSecretOutOfRange(inRange) then
                                 stillOutOfRange = true
                             end
@@ -917,7 +917,7 @@ function AB:UpdateButtonRange(btn)
 
     if hasTarget then
         if btn.action and _G.C_ActionBar and _G.C_ActionBar.IsActionInRange then
-            local ok, inRange = pcall(_G.C_ActionBar.IsActionInRange, btn.action)
+            local ok, inRange = ns.Utils.SafeCall(_G.C_ActionBar.IsActionInRange, btn.action)
             if ok and IsNonSecretOutOfRange(inRange) then
                 isOutOfRange = true
             end
@@ -1482,7 +1482,7 @@ function AB:StyleButton(button, explicitBarKey)
                 btnSt.countOverlay = countOverlay
             end
             if countOverlay and count.SetParent then
-                pcall(count.SetParent, count, countOverlay)
+                ns.Utils.SafeCall(count.SetParent, count, countOverlay)
             end
         end
         if count.SetDrawLayer then
@@ -1650,13 +1650,8 @@ function AB:LayoutBar(barKey)
     if self.layoutInProgress[barKey] then return end
     self.layoutInProgress[barKey] = true
 
-    local ok, err = pcall(self.LayoutBarInternal, self, barKey)
+    ns.Utils.SafeCall(self.LayoutBarInternal, self, barKey)
     self.layoutInProgress[barKey] = nil
-    if not ok and err then
-        if _G.geterrorhandler then
-            _G.geterrorhandler()(err)
-        end
-    end
 end
 
 function AB:LayoutBarInternal(barKey)
@@ -1850,7 +1845,7 @@ function AB:LayoutBarInternal(barKey)
                     table.insert(bSt.originalPoints, { point = pt, relTo = relTo, relPt = relPt, x = x, y = y })
                 end
                 if btn.GetSize then
-                    local ok, w, h = pcall(btn.GetSize, btn)
+                    local ok, w, h = ns.Utils.SafeCall(btn.GetSize, btn)
                     if ok and IsSecretSafeNumber(w) and IsSecretSafeNumber(h) then
                         bSt.originalWidth = w
                         bSt.originalHeight = h
@@ -1944,7 +1939,7 @@ function AB:RestoreBlizzardBars()
                     if not bf.ShowOverride and bf.Show then bf:Show() end
                     if bf.Selection and bf.Selection.Show then bf.Selection:Show() end
                     if bf.UpdateGridLayout then
-                        pcall(bf.UpdateGridLayout, bf)
+                        ns.Utils.SafeCall(bf.UpdateGridLayout, bf)
                     end
                 end
             end
@@ -1956,17 +1951,17 @@ function AB:RestoreBlizzardBars()
             for _, fname in ipairs(blizzFrames) do
                 local bf = _G[fname]
                 if bf then
-                    pcall(_G.EditModeManagerFrame.UpdateActionBarLayout, _G.EditModeManagerFrame, bf)
+                    ns.Utils.SafeCall(_G.EditModeManagerFrame.UpdateActionBarLayout, _G.EditModeManagerFrame, bf)
                 end
             end
         end
     end
 
     if _G.MultiActionBar_Update then
-        pcall(_G.MultiActionBar_Update)
+        ns.Utils.SafeCall(_G.MultiActionBar_Update)
     end
     if _G.UIParent_ManageFramePositions then
-        pcall(_G.UIParent_ManageFramePositions)
+        ns.Utils.SafeCall(_G.UIParent_ManageFramePositions)
     end
 
     if _G.MainMenuBarArtFrame and _G.MainMenuBarArtFrame.Show then

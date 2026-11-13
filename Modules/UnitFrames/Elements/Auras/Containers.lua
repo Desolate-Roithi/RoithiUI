@@ -42,7 +42,7 @@ local function GetOrCreateAuraContainer(unit, containerSuffix, parentFrame)
                 c.groups[groupKey] = options
                 c.icons = c.icons or {}
                 if _G.C_UnitAuras and _G.C_UnitAuras.GetUnitAuraInstanceIDs then
-                    local ok, ids = pcall(_G.C_UnitAuras.GetUnitAuraInstanceIDs, unit or "player", filterStr, options and options.sortMethod)
+                    local ok, ids = ns.Utils.SafeCall(_G.C_UnitAuras.GetUnitAuraInstanceIDs, unit or "player", filterStr, options and options.sortMethod)
                     if ok and ids and options and options.initializeFrame then
                         for idx, auraInstId in ipairs(ids) do
                             local btn = c.icons[idx] or CreateFrame("Frame", nil, c)
@@ -503,7 +503,7 @@ local function ConfigureAuraContainer(container, unit, containerSuffix)
 
         local isSec = issecretvalue and (issecretvalue(savedPt) or issecretvalue(px) or issecretvalue(py))
         if not isSec then
-            local ok = pcall(container.SetPoint, container, savedPt, UIParent, savedPt, px, py)
+            local ok = ns.Utils.SafeCall(container.SetPoint, container, savedPt, UIParent, savedPt, px, py)
             if ok then
                 hasSavedPos = true
                 container.roithiSavedPoint = savedPt

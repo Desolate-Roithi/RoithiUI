@@ -389,9 +389,10 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                         if db and db.Blacklist then
                             for id, active in pairs(db.Blacklist) do
                                 if active and not (gl and gl[id]) then
-                                    local success, name = pcall(function()
-                                        return C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)
-                                    end)
+                                    local success, name
+                                    if C_Spell and C_Spell.GetSpellName then
+                                        success, name = ns.Utils.SafeCall(C_Spell.GetSpellName, id)
+                                    end
                                     if success and name and name ~= "" then
                                         displayList[id] = string.format("%s (%d)", name, id)
                                     else
@@ -491,9 +492,10 @@ local function GenerateAuraFilters(GetDB, RefreshFunc)
                         if db and db.Whitelist then
                             for id, active in pairs(db.Whitelist) do
                                 if active then
-                                    local success, name = pcall(function()
-                                        return C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)
-                                    end)
+                                    local success, name
+                                    if C_Spell and C_Spell.GetSpellName then
+                                        success, name = ns.Utils.SafeCall(C_Spell.GetSpellName, id)
+                                    end
                                     if success and name and name ~= "" then
                                         out[id] = string.format("%s (%d)", name, id)
                                     else
@@ -586,9 +588,10 @@ local function GetGlobalAuraOptions()
                             if bl then
                                 for sid, active in pairs(bl) do
                                     if active then
-                                        local ok, name = pcall(function()
-                                            return C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(sid)
-                                        end)
+                                        local ok, name
+                                        if C_Spell and C_Spell.GetSpellName then
+                                            ok, name = ns.Utils.SafeCall(C_Spell.GetSpellName, sid)
+                                        end
                                         if ok and name and name ~= "" then
                                             out[sid] = string.format("%s (%d)", name, sid)
                                         else

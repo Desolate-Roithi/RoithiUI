@@ -2346,7 +2346,7 @@ function ns.InitializeUnitFrameConfig()
 
                 LEM:AddFrame(frame, OnUnitFramePositionChanged, defaults)
 
-                pcall(function()
+                ns.Utils.SafeCall(function()
                     LEM:AddFrameSettings(frame, GetSettingsForMainFrame(unit, frame))
                     frame.extraButtons = nil
                     LEM:AddFrameSettingsButtons(frame, {
@@ -2365,7 +2365,7 @@ function ns.InitializeUnitFrameConfig()
                 end)
 
                 if frame.Power then
-                    pcall(function()
+                    ns.Utils.SafeCall(function()
                         LEM:AddFrameSettings(frame.Power, GetSettingsForPower(unit))
                         if LEM.AddFrameSettingsButtons then
                             LEM:AddFrameSettingsButtons(frame.Power, {
@@ -2385,7 +2385,7 @@ function ns.InitializeUnitFrameConfig()
                     end)
                 end
                 if frame.ClassPower then
-                    pcall(function()
+                    ns.Utils.SafeCall(function()
                         LEM:AddFrameSettings(frame.ClassPower, GetSettingsForClassPower(unit))
                         if LEM.AddFrameSettingsButtons then
                             LEM:AddFrameSettingsButtons(frame.ClassPower, {
@@ -2405,7 +2405,7 @@ function ns.InitializeUnitFrameConfig()
                     end)
                 end
                 if frame.AdditionalPower then
-                    pcall(function()
+                    ns.Utils.SafeCall(function()
                         LEM:AddFrameSettings(frame.AdditionalPower, GetSettingsForAdditionalPower(unit))
                         if LEM.AddFrameSettingsButtons then
                             LEM:AddFrameSettingsButtons(frame.AdditionalPower, {
