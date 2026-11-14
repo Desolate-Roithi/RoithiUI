@@ -115,8 +115,8 @@ local filterDefaults = {
         buttonSize = 30,
         spacing = 4,
         point = "BOTTOMLEFT",
-        x = 286,
-        y = 235,
+        x = 290,
+        y = 250,
     },
     bagWindow = {
         point = "BOTTOMRIGHT",
@@ -260,7 +260,7 @@ function BagsMod:AssignItemCategory(itemDataOrID, catID)
         self.db.customCategoryAssignments[key] = catID
     end
 
-    self:UpdateInventory()
+    self:UpdateInventory(true)
 end
 
 function BagsMod:ResetItemCategory(itemDataOrID)
@@ -280,7 +280,7 @@ function BagsMod:ResetItemCategory(itemDataOrID)
     else
         self.db.customCategoryAssignments[itemDataOrID] = nil
     end
-    self:UpdateInventory()
+    self:UpdateInventory(true)
 end
 
 function BagsMod:ClassifyItem(itemData)

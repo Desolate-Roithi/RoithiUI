@@ -204,7 +204,7 @@ function BagsMod:SetupBagBar()
 
     local pt = cfg.point or "BOTTOMLEFT"
     if bar.ClearAllPoints then bar:ClearAllPoints() end
-    if bar.SetPoint then bar:SetPoint(pt, UIParent, pt, cfg.x or 286, cfg.y or 235) end
+    if bar.SetPoint then bar:SetPoint(pt, UIParent, pt, cfg.x or 290, cfg.y or 250) end
 
     self.bagBarFrame = bar
 
@@ -240,13 +240,13 @@ function BagsMod:SetupBagBar()
                     maxValue = 2500,
                     valueStep = 1,
                     formatter = function(v) return string.format("%.0f", v) end,
-                    get = function() return self.db.bagBar and self.db.bagBar.x or 286 end,
+                    get = function() return self.db.bagBar and self.db.bagBar.x or 290 end,
                     set = function(_, val)
                         self.db.bagBar = self.db.bagBar or {}
                         self.db.bagBar.x = val
                         local p = self.db.bagBar.point or "BOTTOMLEFT"
                         bar:ClearAllPoints()
-                        bar:SetPoint(p, UIParent, p, val, self.db.bagBar.y or 285)
+                        bar:SetPoint(p, UIParent, p, val, self.db.bagBar.y or 250)
                         self:UpdateBagBarLayout()
                     end,
                 },
@@ -257,13 +257,13 @@ function BagsMod:SetupBagBar()
                     maxValue = 1500,
                     valueStep = 1,
                     formatter = function(v) return string.format("%.0f", v) end,
-                    get = function() return self.db.bagBar and self.db.bagBar.y or 285 end,
+                    get = function() return self.db.bagBar and self.db.bagBar.y or 250 end,
                     set = function(_, val)
                         self.db.bagBar = self.db.bagBar or {}
                         self.db.bagBar.y = val
                         local p = self.db.bagBar.point or "BOTTOMLEFT"
                         bar:ClearAllPoints()
-                        bar:SetPoint(p, UIParent, p, self.db.bagBar.x or 286, val)
+                        bar:SetPoint(p, UIParent, p, self.db.bagBar.x or 290, val)
                         self:UpdateBagBarLayout()
                     end,
                 },
@@ -756,7 +756,7 @@ function BagsMod:UpdateBagBarLayout()
     if not inCombat and self.bagBarFrame.ClearAllPoints and self.bagBarFrame.SetPoint then
         local pt = cfg.point or "BOTTOMLEFT"
         self.bagBarFrame:ClearAllPoints()
-        self.bagBarFrame:SetPoint(pt, UIParent, pt, cfg.x or 286, cfg.y or 235)
+        self.bagBarFrame:SetPoint(pt, UIParent, pt, cfg.x or 290, cfg.y or 250)
     end
     local btnSize = cfg.buttonSize or 30
     local spacing = cfg.spacing or 4

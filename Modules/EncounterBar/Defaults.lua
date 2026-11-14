@@ -6,14 +6,14 @@ local defaultSettings = {
     enabled = true,
     fontSize = 12,
     height = 20,
-    point = "TOP",
+    point = "BOTTOM",
     texture = "Solid",
     whitelist = {},
     widgetDebug = false,
     widgetLogMode = false,
     width = 250,
     x = 0,
-    y = -100,
+    y = 223,
 }
 
 local mod = RoithiUI and RoithiUI:GetModule("EncounterBar", true)

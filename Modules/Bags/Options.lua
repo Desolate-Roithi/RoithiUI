@@ -146,7 +146,7 @@ function BagsMod:GetOptions()
                         get = function() return self.db.slotSize or 36 end,
                         set = function(_, val)
                             self.db.slotSize = val
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return not self.db.enabled end,
                     },
@@ -160,7 +160,7 @@ function BagsMod:GetOptions()
                         get = function() return self.db.columns or 10 end,
                         set = function(_, val)
                             self.db.columns = val
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return not self.db.enabled end,
                     },
@@ -174,7 +174,7 @@ function BagsMod:GetOptions()
                         get = function() return self.db.spacing or 4 end,
                         set = function(_, val)
                             self.db.spacing = val
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return not self.db.enabled end,
                     },
@@ -185,7 +185,7 @@ function BagsMod:GetOptions()
                         get = function() return self.db.qualityBorders ~= false end,
                         set = function(_, val)
                             self.db.qualityBorders = val
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return not self.db.enabled end,
                     },
@@ -341,7 +341,7 @@ function BagsMod:GetOptions()
                             self.db.bagBar.point = val
                             if self.bagBarFrame then
                                 self.bagBarFrame:ClearAllPoints()
-                                self.bagBarFrame:SetPoint(val, UIParent, val, self.db.bagBar.x or 286, self.db.bagBar.y or 285)
+                                self.bagBarFrame:SetPoint(val, UIParent, val, self.db.bagBar.x or 290, self.db.bagBar.y or 250)
                                 self:UpdateBagBarLayout()
                             end
                         end,
@@ -354,14 +354,14 @@ function BagsMod:GetOptions()
                         min = -2500,
                         max = 2500,
                         step = 1,
-                        get = function() return self.db.bagBar and self.db.bagBar.x or 286 end,
+                        get = function() return self.db.bagBar and self.db.bagBar.x or 290 end,
                         set = function(_, val)
                             self.db.bagBar = self.db.bagBar or {}
                             self.db.bagBar.x = val
                             if self.bagBarFrame then
                                 local pt = self.db.bagBar.point or "BOTTOMLEFT"
                                 self.bagBarFrame:ClearAllPoints()
-                                self.bagBarFrame:SetPoint(pt, UIParent, pt, val, self.db.bagBar.y or 285)
+                                self.bagBarFrame:SetPoint(pt, UIParent, pt, val, self.db.bagBar.y or 250)
                                 self:UpdateBagBarLayout()
                             end
                         end,
@@ -374,14 +374,14 @@ function BagsMod:GetOptions()
                         min = -1500,
                         max = 1500,
                         step = 1,
-                        get = function() return self.db.bagBar and self.db.bagBar.y or 285 end,
+                        get = function() return self.db.bagBar and self.db.bagBar.y or 250 end,
                         set = function(_, val)
                             self.db.bagBar = self.db.bagBar or {}
                             self.db.bagBar.y = val
                             if self.bagBarFrame then
                                 local pt = self.db.bagBar.point or "BOTTOMLEFT"
                                 self.bagBarFrame:ClearAllPoints()
-                                self.bagBarFrame:SetPoint(pt, UIParent, pt, self.db.bagBar.x or 286, val)
+                                self.bagBarFrame:SetPoint(pt, UIParent, pt, self.db.bagBar.x or 290, val)
                                 self:UpdateBagBarLayout()
                             end
                         end,
@@ -429,7 +429,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.font = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     fontOutline = {
@@ -445,7 +445,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.fontOutline = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     showFontShadow = {
@@ -457,7 +457,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.showFontShadow = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     headerInterfaceText = {
@@ -476,7 +476,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.categoryFontSize = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     freeSlotsFontSize = {
@@ -551,7 +551,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemCountFont = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     itemCountFontOutline = {
@@ -567,7 +567,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemCountFontOutline = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     itemCountFontSize = {
@@ -581,7 +581,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemCountFontSize = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     itemCountAnchor = {
@@ -603,7 +603,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemCountAnchor = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     itemCountX = {
@@ -617,7 +617,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemCountX = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     itemCountY = {
@@ -631,7 +631,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemCountY = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     headerItemLevel = {
@@ -647,7 +647,7 @@ function BagsMod:GetOptions()
                         get = function() return self.db.showItemLevel ~= false end,
                         set = function(_, val)
                             self.db.showItemLevel = val
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     itemLevelFont = {
@@ -663,7 +663,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemLevelFont = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showItemLevel == false end,
                     },
@@ -680,7 +680,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemLevelFontOutline = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showItemLevel == false end,
                     },
@@ -695,7 +695,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemLevelFontSize = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showItemLevel == false end,
                     },
@@ -718,7 +718,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemLevelAnchor = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showItemLevel == false end,
                     },
@@ -733,7 +733,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemLevelX = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showItemLevel == false end,
                     },
@@ -748,7 +748,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.itemLevelY = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showItemLevel == false end,
                     },
@@ -760,7 +760,7 @@ function BagsMod:GetOptions()
                         get = function() return self.db.colorItemLevelByQuality ~= false end,
                         set = function(_, val)
                             self.db.colorItemLevelByQuality = val
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showItemLevel == false end,
                     },
@@ -780,7 +780,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.questIndicatorSize = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     questIndicatorAnchor = {
@@ -802,7 +802,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.questIndicatorAnchor = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     questIndicatorX = {
@@ -816,7 +816,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.questIndicatorX = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     questIndicatorY = {
@@ -830,7 +830,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.questIndicatorY = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     junkIndicatorHeader = {
@@ -846,7 +846,7 @@ function BagsMod:GetOptions()
                         get = function() return self.db.showJunkIndicator ~= false end,
                         set = function(_, val)
                             self.db.showJunkIndicator = val
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                     },
                     junkIndicatorSize = {
@@ -860,7 +860,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.junkIndicatorSize = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showJunkIndicator == false end,
                     },
@@ -883,7 +883,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.junkIndicatorAnchor = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showJunkIndicator == false end,
                     },
@@ -898,7 +898,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.junkIndicatorX = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showJunkIndicator == false end,
                     },
@@ -913,7 +913,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.junkIndicatorY = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showJunkIndicator == false end,
                     },
@@ -931,7 +931,7 @@ function BagsMod:GetOptions()
                         get = function() return self.db.showReagentQuality ~= false end,
                         set = function(_, val)
                             self.db.showReagentQuality = val
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         hidden = IsNonRetailClient,
                     },
@@ -946,7 +946,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.reagentQualitySize = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showReagentQuality == false end,
                         hidden = IsNonRetailClient,
@@ -970,7 +970,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.reagentQualityAnchor = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showReagentQuality == false end,
                         hidden = IsNonRetailClient,
@@ -986,7 +986,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.reagentQualityX = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showReagentQuality == false end,
                         hidden = IsNonRetailClient,
@@ -1002,7 +1002,7 @@ function BagsMod:GetOptions()
                         set = function(_, val)
                             self.db.reagentQualityY = val
                             if self.UpdateTypography then self:UpdateTypography() end
-                            self:UpdateInventory()
+                            self:UpdateInventory(true)
                         end,
                         disabled = function() return self.db.showReagentQuality == false end,
                         hidden = IsNonRetailClient,
@@ -1060,7 +1060,7 @@ function BagsMod:GetOptions()
                         self.catContainer = nil
                         self:CreateCategoryButtons()
                     end
-                    self:UpdateInventory()
+                    self:UpdateInventory(true)
                 end
             end,
             disabled = function() return not self.db.enabled end,

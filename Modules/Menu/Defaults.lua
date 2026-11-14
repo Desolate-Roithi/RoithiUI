@@ -14,10 +14,10 @@ local defaultSettings = {
     orientation = "HORIZONTAL",
     point = "BOTTOMLEFT",
     showBackground = true,
-    spacing = 2,
+    spacing = 0,
     styleMicroMenu = true,
-    x = 2,
-    y = 285,
+    x = 0,
+    y = 248,
 }
 
 local mod = RoithiUI and RoithiUI:GetModule("Menu", true)

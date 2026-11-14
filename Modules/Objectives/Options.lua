@@ -57,7 +57,7 @@ local function CreateOutlineOption(name, order, dbKey, defaultVal)
             ["THICKOUTLINE"] = L["Thick Outline"] or "Thick Outline",
             ["MONOCHROME"] = L["Monochrome"] or "Monochrome",
         },
-        get = function() return (ObjectivesMod.db and ObjectivesMod.db[dbKey]) or defaultVal or "OUTLINE" end,
+        get = function() return (ObjectivesMod.db and ObjectivesMod.db[dbKey]) or defaultVal or "NONE" end,
         set = function(_, val)
             if ObjectivesMod.db then ObjectivesMod.db[dbKey] = val end
             ObjectivesMod:UpdateFonts()
@@ -133,7 +133,7 @@ function ObjectivesMod:GetOptions()
             min = 1,
             max = 4,
             step = 1,
-            get = function() return self.db.dividerThickness or 1 end,
+            get = function() return self.db.dividerThickness or 2 end,
             set = function(info, val)
                 self.db.dividerThickness = val
                 self:SkinAllExisting()
@@ -210,7 +210,7 @@ function ObjectivesMod:GetOptions()
             min = 200,
             max = 1400,
             step = 25,
-            get = function() return self.db.maxHeight or 800 end,
+            get = function() return self.db.maxHeight or 850 end,
             set = function(info, val)
                 self.db.maxHeight = val
                 self:ApplyScaleAndHeight()
@@ -298,7 +298,7 @@ function ObjectivesMod:GetOptions()
             name = L["Show Quest Level"] or "Show Quest Level",
             desc = L["Display the quest level prefix [lvl] before the quest title."] or "Display the quest level prefix [lvl] before the quest title.",
             order = 2,
-            get = function() return self.db.showQuestLevel ~= false end,
+            get = function() return self.db.showQuestLevel == true end,
             set = function(info, val)
                 self.db.showQuestLevel = val
                 self:SkinAllExisting()
@@ -343,7 +343,7 @@ function ObjectivesMod:GetOptions()
             name = L["Hide Completed Objectives"] or "Hide Completed Objectives",
             desc = L["Hide completed objective lines while keeping uncompleted objectives visible, dynamically adjusting quest height."] or "Hide completed objective lines while keeping uncompleted objectives visible, dynamically adjusting quest height.",
             order = 6,
-            get = function() return self.db.hideCompletedObjectives == true end,
+            get = function() return self.db.hideCompletedObjectives ~= false end,
             set = function(info, val)
                 self.db.hideCompletedObjectives = val
                 self:RefreshSettings()
@@ -357,7 +357,7 @@ function ObjectivesMod:GetOptions()
             min = 0.05,
             max = 1.0,
             step = 0.05,
-            get = function() return self.db.collapseDelay or 0.25 end,
+            get = function() return self.db.collapseDelay or 0.5 end,
             set = function(info, val)
                 self.db.collapseDelay = val
             end,
@@ -392,7 +392,7 @@ function ObjectivesMod:GetOptions()
             name = L["Category Headers"] or "Category Headers",
             order = 1,
         },
-        headerFont = CreateFontOption(L["Header Font"] or "Header Font", 2, "headerFont", "Expressway"),
+        headerFont = CreateFontOption(L["Header Font"] or "Header Font", 2, "headerFont", "Roithi Thick"),
         headerFontSize = {
             type = "range",
             name = L["Header Font Size"] or "Header Font Size",
@@ -400,22 +400,22 @@ function ObjectivesMod:GetOptions()
             min = 9,
             max = 20,
             step = 1,
-            get = function() return (self.db and self.db.headerFontSize) or 13 end,
+            get = function() return (self.db and self.db.headerFontSize) or 16 end,
             set = function(_, val)
                 self.db.headerFontSize = val
                 self:UpdateFonts()
                 self:SkinAllExisting()
             end,
         },
-        headerFontOutline = CreateOutlineOption(L["Header Font Outline"] or "Header Font Outline", 4, "headerFontOutline", "OUTLINE"),
-        headerFontShadow = CreateShadowOption(L["Header Text Shadow"] or "Header Text Shadow", 5, "headerFontShadow", false),
+        headerFontOutline = CreateOutlineOption(L["Header Font Outline"] or "Header Font Outline", 4, "headerFontOutline", "NONE"),
+        headerFontShadow = CreateShadowOption(L["Header Text Shadow"] or "Header Text Shadow", 5, "headerFontShadow", true),
 
         titleHeader = {
             type = "header",
             name = L["Quest & Block Titles"] or "Quest & Block Titles",
             order = 6,
         },
-        titleFont = CreateFontOption(L["Title Font"] or "Title Font", 7, "titleFont", "Expressway"),
+        titleFont = CreateFontOption(L["Title Font"] or "Title Font", 7, "titleFont", "Roithi Thick"),
         titleFontSize = {
             type = "range",
             name = L["Title Font Size"] or "Title Font Size",
@@ -423,22 +423,22 @@ function ObjectivesMod:GetOptions()
             min = 9,
             max = 20,
             step = 1,
-            get = function() return (self.db and self.db.titleFontSize) or 12 end,
+            get = function() return (self.db and self.db.titleFontSize) or 14 end,
             set = function(_, val)
                 self.db.titleFontSize = val
                 self:UpdateFonts()
                 self:SkinAllExisting()
             end,
         },
-        titleFontOutline = CreateOutlineOption(L["Title Font Outline"] or "Title Font Outline", 9, "titleFontOutline", "OUTLINE"),
-        titleFontShadow = CreateShadowOption(L["Title Text Shadow"] or "Title Text Shadow", 10, "titleFontShadow", false),
+        titleFontOutline = CreateOutlineOption(L["Title Font Outline"] or "Title Font Outline", 9, "titleFontOutline", "NONE"),
+        titleFontShadow = CreateShadowOption(L["Title Text Shadow"] or "Title Text Shadow", 10, "titleFontShadow", true),
 
         objectiveHeader = {
             type = "header",
             name = L["Objective Lines"] or "Objective Lines",
             order = 11,
         },
-        objectiveFont = CreateFontOption(L["Objective Font"] or "Objective Font", 12, "objectiveFont", "Expressway"),
+        objectiveFont = CreateFontOption(L["Objective Font"] or "Objective Font", 12, "objectiveFont", "Roithi Thin"),
         objectiveFontSize = {
             type = "range",
             name = L["Objective Font Size"] or "Objective Font Size",
@@ -446,15 +446,15 @@ function ObjectivesMod:GetOptions()
             min = 8,
             max = 18,
             step = 1,
-            get = function() return (self.db and self.db.objectiveFontSize) or 11 end,
+            get = function() return (self.db and self.db.objectiveFontSize) or 14 end,
             set = function(_, val)
                 self.db.objectiveFontSize = val
                 self:UpdateFonts()
                 self:SkinAllExisting()
             end,
         },
-        objectiveFontOutline = CreateOutlineOption(L["Objective Font Outline"] or "Objective Font Outline", 14, "objectiveFontOutline", "OUTLINE"),
-        objectiveFontShadow = CreateShadowOption(L["Objective Text Shadow"] or "Objective Text Shadow", 15, "objectiveFontShadow", false),
+        objectiveFontOutline = CreateOutlineOption(L["Objective Font Outline"] or "Objective Font Outline", 14, "objectiveFontOutline", "NONE"),
+        objectiveFontShadow = CreateShadowOption(L["Objective Text Shadow"] or "Objective Text Shadow", 15, "objectiveFontShadow", true),
 
         questLevelHeader = {
             type = "header",
@@ -530,9 +530,9 @@ function ObjectivesMod:GetOptions()
             name = L["Global Fallbacks"] or "Global Fallbacks",
             order = 31,
         },
-        font = CreateFontOption(L["Global Fallback Font"] or "Global Fallback Font", 32, "font", "Expressway"),
-        fontOutline = CreateOutlineOption(L["Global Fallback Outline"] or "Global Fallback Outline", 33, "fontOutline", "OUTLINE"),
-        showFontShadow = CreateShadowOption(L["Global Fallback Text Shadow"] or "Global Fallback Text Shadow", 34, "showFontShadow", false),
+        font = CreateFontOption(L["Global Fallback Font"] or "Global Fallback Font", 32, "font", "Roithi Thick"),
+        fontOutline = CreateOutlineOption(L["Global Fallback Outline"] or "Global Fallback Outline", 33, "fontOutline", "NONE"),
+        showFontShadow = CreateShadowOption(L["Global Fallback Text Shadow"] or "Global Fallback Text Shadow", 34, "showFontShadow", true),
     }
 
     local colorsArgs = {
@@ -543,7 +543,7 @@ function ObjectivesMod:GetOptions()
             order = 1,
             get = function()
                 local c = self.db.headerColor or self.defaultSettings.headerColor
-                return c.r or 0.05, c.g or 0.82, c.b or 0.61, c.a or 1.0
+                return c.r or 0.20, c.g or 0.80, c.b or 1.0, c.a or 1.0
             end,
             set = function(_, r, g, b, a)
                 self.db.headerColor = { r = r, g = g, b = b, a = a }
@@ -557,7 +557,7 @@ function ObjectivesMod:GetOptions()
             order = 2,
             get = function()
                 local c = self.db.titleColor or self.defaultSettings.titleColor
-                return c.r or 1.0, c.g or 0.85, c.b or 0.35, c.a or 1.0
+                return c.r or 0.94, c.g or 0.96, c.b or 1.0, c.a or 1.0
             end,
             set = function(_, r, g, b, a)
                 self.db.titleColor = { r = r, g = g, b = b, a = a }
@@ -571,7 +571,7 @@ function ObjectivesMod:GetOptions()
             order = 3,
             get = function()
                 local c = self.db.objectiveColor or self.defaultSettings.objectiveColor
-                return c.r or 0.8, c.g or 0.8, c.b or 0.8, c.a or 1.0
+                return c.r or 0.93, c.g or 0.95, c.b or 0.98, c.a or 1.0
             end,
             set = function(info, r, g, b, a)
                 self.db.objectiveColor = { r = r, g = g, b = b, a = a }
@@ -585,8 +585,8 @@ function ObjectivesMod:GetOptions()
             hasAlpha = false,
             order = 4,
             get = function()
-                local c = self.db.completedColor or (self.defaultSettings and self.defaultSettings.completedColor) or { r = 0.25, g = 1, b = 0.35, a = 1.0 }
-                return c.r or 0.25, c.g or 1.0, c.b or 0.35
+                local c = self.db.completedColor or (self.defaultSettings and self.defaultSettings.completedColor) or { r = 0.20, g = 0.90, b = 0.60, a = 1.0 }
+                return c.r or 0.20, c.g or 0.90, c.b or 0.60
             end,
             set = function(info, r, g, b)
                 self.db.completedColor = { r = r, g = g, b = b, a = 1.0 }
@@ -600,8 +600,8 @@ function ObjectivesMod:GetOptions()
             hasAlpha = false,
             order = 5,
             get = function()
-                local c = self.db.foreverColor or { r = 0.22, g = 0.74, b = 0.97, a = 1.0 }
-                return c.r or 0.22, c.g or 0.74, c.b or 0.97
+                local c = self.db.foreverColor or { r = 0.30, g = 0.60, b = 1.0, a = 1.0 }
+                return c.r or 0.30, c.g or 0.60, c.b or 1.0
             end,
             set = function(info, r, g, b)
                 self.db.foreverColor = { r = r, g = g, b = b, a = 1.0 }

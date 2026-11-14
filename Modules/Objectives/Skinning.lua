@@ -95,7 +95,7 @@ function ObjectivesMod:SkinHeader(header)
         if mb.Show then mb:Show() end
 
         local hc = self.db.headerColor or self.defaultSettings.headerColor
-        local r, g, b = (hc and hc.r) or 0.05, (hc and hc.g) or 0.82, (hc and hc.b) or 0.61
+        local r, g, b = (hc and hc.r) or 0.20, (hc and hc.g) or 0.80, (hc and hc.b) or 1.0
         local function tint(tex)
             if not tex then return end
             if tex.SetDesaturated then tex:SetDesaturated(true) end
@@ -164,12 +164,12 @@ function ObjectivesMod:SkinHeader(header)
     end
     if text then
         local font = self:GetFontPath("headerFont")
-        local size = self.db.headerFontSize or 13
+        local size = self.db.headerFontSize or 16
         local outline = self:GetFontOutline("headerFontOutline")
         ApplyTypographySafe(text, font, size, outline, self:GetFontShadow("headerFontShadow"))
 
         local hc = self.db.headerColor or self.defaultSettings.headerColor
-        text:SetTextColor(hc.r or 0.05, hc.g or 0.82, hc.b or 0.61, 1.0)
+        text:SetTextColor(hc.r or 0.20, hc.g or 0.80, hc.b or 1.0, 1.0)
 
         text:ClearAllPoints()
         text:SetPoint("LEFT", header, "LEFT", 4, 0)
@@ -226,11 +226,11 @@ function ObjectivesMod:EnsureAccentDivider(header)
         divider:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, -2)
     end
 
-    local thickness = self.db.dividerThickness or 1
+    local thickness = self.db.dividerThickness or 2
     divider:SetHeight(thickness)
 
     local hc = self.db.headerColor or self.defaultSettings.headerColor
-    divider:SetColorTexture(hc.r or 0.05, hc.g or 0.82, hc.b or 0.61, 0.8)
+    divider:SetColorTexture(hc.r or 0.20, hc.g or 0.80, hc.b or 1.0, 0.8)
     divider:SetShown(true)
 end
 
@@ -391,21 +391,21 @@ local function OnBlockUpdateHighlight(self, b)
     if not b or b.used == false then return end
     local tFS = (self.GetBlockTitleFS and self:GetBlockTitleFS(b)) or titleFSCache[b]
     if tFS and tFS.SetTextColor then
-        local titleC = self.db.titleColor or (self.defaultSettings and self.defaultSettings.titleColor) or { r = 1, g = 0.85, b = 0.35 }
-        tFS:SetTextColor(titleC.r or 1.0, titleC.g or 0.85, titleC.b or 0.35, 1.0)
+        local titleC = self.db.titleColor or (self.defaultSettings and self.defaultSettings.titleColor) or { r = 0.94, g = 0.96, b = 1.0 }
+        tFS:SetTextColor(titleC.r or 0.94, titleC.g or 0.96, titleC.b or 1.0, 1.0)
     end
     if self.ApplyQuestLevelToTitle then
         self:ApplyQuestLevelToTitle(b)
     end
-    local oc = self.db.objectiveColor or (self.defaultSettings and self.defaultSettings.objectiveColor) or { r = 1, g = 1, b = 1 }
+    local oc = self.db.objectiveColor or (self.defaultSettings and self.defaultSettings.objectiveColor) or { r = 0.93, g = 0.95, b = 0.98 }
     local lines = b.usedLines or b.lines
     if lines then
         for _, line in pairs(lines) do
             if line.Text and line.Text.SetTextColor then
-                line.Text:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
+                line.Text:SetTextColor(oc.r or 0.93, oc.g or 0.95, oc.b or 0.98, 1.0)
             end
             if line.Dash and line.Dash.SetTextColor then
-                line.Dash:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
+                line.Dash:SetTextColor(oc.r or 0.93, oc.g or 0.95, oc.b or 0.98, 1.0)
             end
         end
     end
@@ -439,7 +439,7 @@ function ObjectivesMod:SkinBlock(block)
     skinnedBlocks[block] = true
 
     local font = self:GetFontPath("titleFont")
-    local tSize = self.db.titleFontSize or 12
+    local tSize = self.db.titleFontSize or 14
     local outline = self:GetFontOutline("titleFontOutline")
     local tc = self.db.titleColor or self.defaultSettings.titleColor
     local titleShadow = self:GetFontShadow("titleFontShadow")
@@ -449,7 +449,7 @@ function ObjectivesMod:SkinBlock(block)
         titleFSCache[block] = titleFS
         ApplyTypographySafe(titleFS, font, tSize, outline, titleShadow)
         if titleFS.SetTextColor then
-            titleFS:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
+            titleFS:SetTextColor(tc.r or 0.94, tc.g or 0.96, tc.b or 1.0, 1.0)
         end
         if self.ApplyQuestLevelToTitle then
             self:ApplyQuestLevelToTitle(block)
@@ -572,19 +572,19 @@ end
 function ObjectivesMod:StyleObjectiveLine(line)
     if not line then return end
     local font = self:GetFontPath("objectiveFont")
-    local objSize = self.db.objectiveFontSize or 11
+    local objSize = self.db.objectiveFontSize or 14
     local outline = self:GetFontOutline("objectiveFontOutline")
     local oc = self.db.objectiveColor or self.defaultSettings.objectiveColor
     local useShadow = self:GetFontShadow("objectiveFontShadow")
 
     if line.Dash and line.Dash.SetFont then
         ApplyTypographySafe(line.Dash, font, objSize, outline, useShadow)
-        line.Dash:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
+        line.Dash:SetTextColor(oc.r or 0.93, oc.g or 0.95, oc.b or 0.98, 1.0)
     end
 
     if line.Text and line.Text.SetFont then
         ApplyTypographySafe(line.Text, font, objSize, outline, useShadow)
-        line.Text:SetTextColor(oc.r or 1.0, oc.g or 1.0, oc.b or 1.0, 1.0)
+        line.Text:SetTextColor(oc.r or 0.93, oc.g or 0.95, oc.b or 0.98, 1.0)
     end
 
     if line.progressBar then
@@ -739,12 +739,12 @@ function ObjectivesMod:SkinAllExisting()
 
     local titleFont = self:GetFontPath("titleFont")
     local objFont = self:GetFontPath("objectiveFont")
-    local titleSize = self.db.titleFontSize or 12
-    local objSize = self.db.objectiveFontSize or 11
+    local titleSize = self.db.titleFontSize or 14
+    local objSize = self.db.objectiveFontSize or 14
     local titleOutline = self:GetFontOutline("titleFontOutline")
     local objOutline = self:GetFontOutline("objectiveFontOutline")
-    local tc = self.db.titleColor or (self.defaultSettings and self.defaultSettings.titleColor) or { r = 1, g = 0.85, b = 0.35 }
-    local oc = self.db.objectiveColor or (self.defaultSettings and self.defaultSettings.objectiveColor) or { r = 1, g = 1, b = 1 }
+    local tc = self.db.titleColor or (self.defaultSettings and self.defaultSettings.titleColor) or { r = 0.94, g = 0.96, b = 1.0 }
+    local oc = self.db.objectiveColor or (self.defaultSettings and self.defaultSettings.objectiveColor) or { r = 0.93, g = 0.95, b = 0.98 }
     local titleShadow = self:GetFontShadow("titleFontShadow")
     local objShadow = self:GetFontShadow("objectiveFontShadow")
     local offsetX = (self.db and self.db.blockOffsetX) or 4
@@ -763,7 +763,7 @@ function ObjectivesMod:SkinAllExisting()
             if titleFS and titleFS.SetFont then
                 ApplyTypographySafe(titleFS, titleFont, titleSize, titleOutline, titleShadow)
                 if titleFS.SetTextColor then
-                    titleFS:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
+                    titleFS:SetTextColor(tc.r or 0.94, tc.g or 0.96, tc.b or 1.0, 1.0)
                 end
             end
 
@@ -772,13 +772,13 @@ function ObjectivesMod:SkinAllExisting()
                     if line.Text and line.Text.SetFont then
                         ApplyTypographySafe(line.Text, objFont, objSize, objOutline, objShadow)
                         if line.Text.SetTextColor then
-                            line.Text:SetTextColor(oc.r or 0.8, oc.g or 0.8, oc.b or 0.8, 1.0)
+                            line.Text:SetTextColor(oc.r or 0.93, oc.g or 0.95, oc.b or 0.98, 1.0)
                         end
                     end
                     if line.Dash and line.Dash.SetFont then
                         ApplyTypographySafe(line.Dash, objFont, objSize, objOutline, objShadow)
                         if line.Dash.SetTextColor then
-                            line.Dash:SetTextColor(oc.r or 0.8, oc.g or 0.8, oc.b or 0.8, 1.0)
+                            line.Dash:SetTextColor(oc.r or 0.93, oc.g or 0.95, oc.b or 0.98, 1.0)
                         end
                     end
                 end)
@@ -803,9 +803,9 @@ function ObjectivesMod:UpdateFonts()
     local hFont = self:GetFontPath("headerFont")
     local tFont = self:GetFontPath("titleFont")
     local oFont = self:GetFontPath("objectiveFont")
-    local hSize = self.db.headerFontSize or 13
-    local tSize = self.db.titleFontSize or 12
-    local objSize = self.db.objectiveFontSize or 11
+    local hSize = self.db.headerFontSize or 16
+    local tSize = self.db.titleFontSize or 14
+    local objSize = self.db.objectiveFontSize or 14
     local hOutline = self:GetFontOutline("headerFontOutline")
     local tOutline = self:GetFontOutline("titleFontOutline")
     local oOutline = self:GetFontOutline("objectiveFontOutline")
@@ -933,13 +933,13 @@ function ObjectivesMod:SkinStageBlock(stageBlock)
     end
 
     local sFont = self:GetFontPath("scenarioStageFont") or self:GetFontPath("headerFont")
-    local sSize = self.db.scenarioStageFontSize or self.db.headerFontSize or 13
+    local sSize = self.db.scenarioStageFontSize or self.db.headerFontSize or 16
     local sOutline = self:GetFontOutline("scenarioStageFontOutline") or self:GetFontOutline("headerFontOutline")
     local sShadow = self:GetFontShadow("scenarioStageFontShadow")
     local tc = self.db.titleColor or self.defaultSettings.titleColor
     if stageBlock.Stage and stageBlock.Stage.SetFont then
         ApplyTypographySafe(stageBlock.Stage, sFont, sSize, sOutline, sShadow)
-        stageBlock.Stage:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
+        stageBlock.Stage:SetTextColor(tc.r or 0.94, tc.g or 0.96, tc.b or 1.0, 1.0)
         if not hasToast and stageBlock.Stage.ClearAllPoints and stageBlock.Stage.SetPoint then
             stageBlock.Stage:ClearAllPoints()
             stageBlock.Stage:SetPoint("TOPLEFT", stageBlock, "TOPLEFT", 0, 0)
@@ -947,7 +947,7 @@ function ObjectivesMod:SkinStageBlock(stageBlock)
     end
     if stageBlock.Name and stageBlock.Name.SetFont then
         ApplyTypographySafe(stageBlock.Name, sFont, sSize, sOutline, sShadow)
-        stageBlock.Name:SetTextColor(tc.r or 1.0, tc.g or 0.85, tc.b or 0.35, 1.0)
+        stageBlock.Name:SetTextColor(tc.r or 0.94, tc.g or 0.96, tc.b or 1.0, 1.0)
     end
 
     if not hasWidget and self.GetStageBlockWidgetHeight then
@@ -995,7 +995,7 @@ function ObjectivesMod:SkinScenarioLine(line)
         end
 
         local font = self:GetFontPath("objectiveFont")
-        local objSize = self.db.objectiveFontSize or 11
+        local objSize = self.db.objectiveFontSize or 14
         local outline = self:GetFontOutline("objectiveFontOutline")
         local oc = self.db.objectiveColor or self.defaultSettings.objectiveColor
         local useShadow = self:GetFontShadow("objectiveFontShadow")
@@ -1021,10 +1021,10 @@ function ObjectivesMod:SkinScenarioLine(line)
 
         if line.Text.SetTextColor then
             if isComp then
-                local cc = (self.db and self.db.completedColor) or (self.defaultSettings and self.defaultSettings.completedColor) or { r = 0.25, g = 1, b = 0.35, a = 1.0 }
-                line.Text:SetTextColor(cc.r or 0.25, cc.g or 1.0, cc.b or 0.35, cc.a or 1.0)
+                local cc = (self.db and self.db.completedColor) or (self.defaultSettings and self.defaultSettings.completedColor) or { r = 0.20, g = 0.90, b = 0.60, a = 1.0 }
+                line.Text:SetTextColor(cc.r or 0.20, cc.g or 0.90, cc.b or 0.60, cc.a or 1.0)
             else
-                line.Text:SetTextColor(oc.r or 0.92, oc.g or 0.92, oc.b or 0.92, oc.a or 1.0)
+                line.Text:SetTextColor(oc.r or 0.93, oc.g or 0.95, oc.b or 0.98, oc.a or 1.0)
             end
         end
 

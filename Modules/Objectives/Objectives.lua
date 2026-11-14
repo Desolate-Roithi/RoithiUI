@@ -24,8 +24,27 @@ objState.barBackdrops = setmetatable({}, { __mode = "k" })
 objState.blockBaseTitles = setmetatable({}, { __mode = "k" })
 objState.blockQuestIDs = setmetatable({}, { __mode = "k" })
 objState.selectionHooked = setmetatable({}, { __mode = "k" })
+objState.overflowHiddenBlocks = setmetatable({}, { __mode = "k" })
 local barBackdrops = objState.barBackdrops
 local selectionHooked = objState.selectionHooked
+local overflowHiddenBlocks = objState.overflowHiddenBlocks
+
+-- Exclude cached/turn-in/removing blocks so Blizzard animations can finish and clean up without creating gaps.
+local function IsBlockCachedOrTurnIn(block)
+    if not block then return true end
+    if block.cached then return true end
+    if block.activeAnim and (block.activeAnim == block.TurnInAnim or block.activeAnim == block.RemoveAnim) then
+        return true
+    end
+    if block.TurnInAnim and block.TurnInAnim.IsPlaying and block.TurnInAnim:IsPlaying() then
+        return true
+    end
+    if block.RemoveAnim and block.RemoveAnim.IsPlaying and block.RemoveAnim:IsPlaying() then
+        return true
+    end
+    return false
+end
+objState.IsBlockCachedOrTurnIn = IsBlockCachedOrTurnIn
 
 local seenPool = {}
 local callbackStack = {}
@@ -153,7 +172,7 @@ end
 function ObjectivesMod:GetFontOutline(tierKey)
     local val = (tierKey and self.db and self.db[tierKey])
     if not val or val == "" then
-        val = (self.db and self.db.fontOutline) or "OUTLINE"
+        val = (self.db and self.db.fontOutline) or "NONE"
     end
     return NormalizeFontFlags(val)
 end
@@ -162,7 +181,7 @@ function ObjectivesMod:GetFontShadow(tierKey)
     if tierKey and self.db and self.db[tierKey] ~= nil then
         return self.db[tierKey] == true
     end
-    return (self.db and self.db.showFontShadow) == true
+    return not (self.db and self.db.showFontShadow == false)
 end
 
 function ObjectivesMod:OnInitialize()
@@ -297,7 +316,7 @@ function ObjectivesMod:OnQuestLogUpdate()
         ns.Utils.SafeCall(self.UpdateQuestLogData, self)
     end
     for block in pairs(skinnedBlocks) do
-        if type(block) == "table" and block.used ~= false and (block.IsShown and block:IsShown()) then
+        if type(block) == "table" and block.used ~= false and not IsBlockCachedOrTurnIn(block) and ((block.IsShown and block:IsShown()) or overflowHiddenBlocks[block]) then
             if self.ApplyQuestLevelToTitle then
                 ns.Utils.SafeCall(self.ApplyQuestLevelToTitle, self, block)
             end
@@ -324,7 +343,7 @@ end
 function ObjectivesMod:RefreshTrackers()
     local offsetX = (self.db and self.db.blockOffsetX) or 4
     for block in pairs(skinnedBlocks) do
-        if type(block) == "table" and block.used ~= false and (block.IsShown and block:IsShown()) then
+        if type(block) == "table" and block.used ~= false and not IsBlockCachedOrTurnIn(block) and ((block.IsShown and block:IsShown()) or overflowHiddenBlocks[block]) then
             if block.SetPoint then
                 local parent = (block.GetParent and block:GetParent())
                 if parent then
@@ -338,7 +357,7 @@ function ObjectivesMod:RefreshTrackers()
             end
             local titleFS = self.GetBlockTitleFS and self:GetBlockTitleFS(block)
             if titleFS and ns.Utils and ns.Utils.ApplyTypography then
-                ns.Utils.ApplyTypography(titleFS, self:GetFontPath("titleFont"), self.db.titleFontSize or 12, self:GetFontOutline("titleFontOutline"), self:GetFontShadow("titleFontShadow"))
+                ns.Utils.ApplyTypography(titleFS, self:GetFontPath("titleFont"), self.db.titleFontSize or 14, self:GetFontOutline("titleFontOutline"), self:GetFontShadow("titleFontShadow"))
             end
             if self.ForEachBlockLine then
                 self.ForEachBlockLine(block, function(line)
@@ -370,7 +389,7 @@ function ObjectivesMod:OnZoneChanged()
     end
     self:UpdateTrackerVisibility()
     for block in pairs(skinnedBlocks) do
-        if type(block) == "table" and block.used ~= false and (block.IsShown and block:IsShown()) then
+        if type(block) == "table" and block.used ~= false and not IsBlockCachedOrTurnIn(block) and ((block.IsShown and block:IsShown()) or overflowHiddenBlocks[block]) then
             if self.ApplyQuestLevelToTitle then
                 ns.Utils.SafeCall(self.ApplyQuestLevelToTitle, self, block)
             end
@@ -409,10 +428,18 @@ function ObjectivesMod:RestoreDefaultView()
         if otf.Header then otf.Header:Show() end
         if otf.HeaderMenu then otf.HeaderMenu:Show() end
         if otf.SetScale then otf:SetScale(1.0) end
+        if otf.SetHeight and self.lastMaxHeight then otf:SetHeight(self.lastMaxHeight) end
         if self.trackerHiddenByAddon and otf.SetAlpha then
             otf:SetAlpha(1)
             self.trackerHiddenByAddon = nil
         end
+    end
+
+    for block in pairs(overflowHiddenBlocks) do
+        if type(block) == "table" and block.used ~= false and block.Show then
+            block:Show()
+        end
+        overflowHiddenBlocks[block] = nil
     end
 
     for bar in pairs(skinnedBars) do
@@ -672,7 +699,12 @@ function ObjectivesMod:ApplyPosition()
             end
         end
     else
-        if otf.SetClampedToScreen then otf:SetClampedToScreen(true) end
+        local em = _G.EditModeManagerFrame
+        local editModeActive = self.isEditModeActive or (em and em.IsEditModeActive and em:IsEditModeActive())
+        local maxH = self.lastMaxHeight or self.db.maxHeight or 850
+        local curH = otf.GetHeight and otf:GetHeight()
+        local isLayoutExpanded = (not editModeActive) and curH and not ns.Utils.IsSecret(curH) and type(curH) == "number" and curH > (maxH + 1)
+        if otf.SetClampedToScreen then otf:SetClampedToScreen(not isLayoutExpanded) end
         if self.anchor and self.anchor.SetClampedToScreen then self.anchor:SetClampedToScreen(true) end
         local parent = otf:GetParent() or _G.UIParent
         if parent and otf.ClearAllPoints and otf.SetPoint then
@@ -734,7 +766,7 @@ function ObjectivesMod:ApplyScaleAndHeight()
         self.anchor:SetScale(scale)
     end
 
-    local maxH = self.db.maxHeight or 800
+    local maxH = self.db.maxHeight or 850
     if self.db.attachedToMinimap ~= false then
         local anchorTarget = self:GetMinimapAnchorTarget()
         if anchorTarget and anchorTarget.GetBottom then
@@ -748,24 +780,26 @@ function ObjectivesMod:ApplyScaleAndHeight()
                 end
             end
         end
-        if otf.SetClampedToScreen then
-            otf:SetClampedToScreen(false)
-        end
-        if self.anchor and self.anchor.SetClampedToScreen then
-            self.anchor:SetClampedToScreen(false)
-        end
-    else
-        if otf.SetClampedToScreen then
-            otf:SetClampedToScreen(true)
-        end
-        if self.anchor and self.anchor.SetClampedToScreen then
-            self.anchor:SetClampedToScreen(true)
-        end
+    end
+    local em = _G.EditModeManagerFrame
+    local editModeActive = self.isEditModeActive or (em and em.IsEditModeActive and em:IsEditModeActive())
+    -- Expand Blizzard's layout height budget outside Edit Mode so collapsed quests fit without watch-order drops;
+    -- SortTrackerBlocks culls excess visual overflow post-sort using self.lastMaxHeight / self.anchor.
+    local layoutH = editModeActive and maxH or math.max(maxH, 4000)
+    local wantClamp = (self.db.attachedToMinimap == false)
+    if otf.SetClampedToScreen then
+        otf:SetClampedToScreen(wantClamp and layoutH <= maxH)
+    end
+    if self.anchor and self.anchor.SetClampedToScreen then
+        self.anchor:SetClampedToScreen(wantClamp)
     end
 
     self.lastMaxHeight = maxH
     if otf.SetHeight then
-        otf:SetHeight(maxH)
+        local curH = otf.GetHeight and otf:GetHeight()
+        if not curH or ns.Utils.IsSecret(curH) or type(curH) ~= "number" or math.abs(curH - layoutH) > 0.5 then
+            otf:SetHeight(layoutH)
+        end
     end
     if self.anchor and self.anchor.SetHeight then
         self.anchor:SetHeight(maxH)
@@ -830,8 +864,11 @@ function ObjectivesMod:RegisterWithEditMode()
     if not otf then return end
 
     local anchor = self:EnsureAnchor()
-    if otf.SetClampedToScreen then otf:SetClampedToScreen(self.db.attachedToMinimap == false) end
-    if anchor.SetClampedToScreen then anchor:SetClampedToScreen(self.db.attachedToMinimap == false) end
+    local detached = (self.db.attachedToMinimap == false)
+    local em = _G.EditModeManagerFrame
+    local editModeActive = self.isEditModeActive or (em and em.IsEditModeActive and em:IsEditModeActive())
+    if otf.SetClampedToScreen then otf:SetClampedToScreen(detached and editModeActive == true) end
+    if anchor.SetClampedToScreen then anchor:SetClampedToScreen(detached) end
 
     local defaults = {
         point = "TOPRIGHT",
@@ -848,7 +885,9 @@ function ObjectivesMod:RegisterWithEditMode()
             get = function() return self.db.attachedToMinimap ~= false end,
             set = function(_, val)
                 self.db.attachedToMinimap = val
-                if otf.SetClampedToScreen then otf:SetClampedToScreen(not val) end
+                local curEm = _G.EditModeManagerFrame
+                local curEdit = self.isEditModeActive or (curEm and curEm.IsEditModeActive and curEm:IsEditModeActive())
+                if otf.SetClampedToScreen then otf:SetClampedToScreen((not val) and curEdit == true) end
                 if anchor.SetClampedToScreen then anchor:SetClampedToScreen(not val) end
                 self:ApplyPosition()
                 self:ApplyScaleAndHeight()
@@ -957,7 +996,7 @@ end
 local function EndLayoutBlockVisitor(block)
     local ctx = layoutCtxStack[layoutCtxDepth]
     local mod = ctx and ctx.mod
-    if not mod then return end
+    if not mod or not block or IsBlockCachedOrTurnIn(block) then return end
     if mod.ApplyQuestLevelToTitle then
         ns.Utils.SafeCall(mod.ApplyQuestLevelToTitle, mod, block)
     end
@@ -1018,7 +1057,7 @@ end
 
 local function RunLayoutContentsInner(mod, tracker)
     local font = mod:GetFontPath("objectiveFont")
-    local objSize = mod.db.objectiveFontSize or 11
+    local objSize = mod.db.objectiveFontSize or 14
     local outline = mod:GetFontOutline("objectiveFontOutline")
     local useShadow = mod:GetFontShadow("objectiveFontShadow")
     PushLayoutCtx(mod, font, objSize, outline, useShadow)

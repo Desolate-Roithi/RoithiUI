@@ -27,6 +27,85 @@ BagsMod.FormatNumberWithDots = FormatNumberWithDots
 
 
 local reagentQualityCache = {}
+local cosmeticItemCache = {}
+local transmogKnownCache = {}
+local itemHasUseCache = {}
+local staticItemMetaCache = {}
+local pendingItemDataIDs = {}
+local slotDataCache = {}
+local dirtyBags = {}
+local allBagsDirty = true
+
+local scratchScannableBags = {}
+local scratchPrevKnownSlots = {}
+local scratchPrevKnownCounts = {}
+local scratchPrevNewSlots = {}
+local scratchPrevHoveredNewSlots = {}
+local scratchPrevDismissedNew = {}
+local scratchPrevNewItemIDs = {}
+local scratchPrevItemCounts = {}
+local scratchCurrentSlotItems = {}
+local scratchCurrentItemCounts = {}
+local scratchVacatedByItemID = {}
+local scratchVacatedBucketPool = {}
+local scratchVacatedEntryPool = {}
+local scratchOwnedSourceSlots = {}
+
+local function WipeTable(tbl)
+    if _G.wipe then
+        return _G.wipe(tbl)
+    end
+    for k in pairs(tbl) do
+        tbl[k] = nil
+    end
+    return tbl
+end
+
+local function AllocSlotEntry(entryPool, idx, b, s, data)
+    local entry = entryPool[idx]
+    if not entry then
+        entry = {}
+        entryPool[idx] = entry
+    end
+    entry.bag = b
+    entry.slot = s
+    entry.itemData = data
+    return entry
+end
+
+local function SlotSetBackdropColor(s, r, g, b, a)
+    if s.lastBgR == r and s.lastBgG == g and s.lastBgB == b and s.lastBgA == a then
+        return
+    end
+    s.lastBgR, s.lastBgG, s.lastBgB, s.lastBgA = r, g, b, a
+    if s.roithiBg and s.roithiBg.SetVertexColor then
+        s.roithiBg:SetVertexColor(r, g, b, a)
+    end
+end
+
+local function SlotSetBackdropBorderColor(s, r, g, b, a)
+    if s.lastBorderR == r and s.lastBorderG == g and s.lastBorderB == b and s.lastBorderA == a then
+        return
+    end
+    s.lastBorderR, s.lastBorderG, s.lastBorderB, s.lastBorderA = r, g, b, a
+    local border = s.roithiBorder
+    if not border then return end
+    if border.top and border.top.SetVertexColor then border.top:SetVertexColor(r, g, b, a) end
+    if border.bottom and border.bottom.SetVertexColor then border.bottom:SetVertexColor(r, g, b, a) end
+    if border.left and border.left.SetVertexColor then border.left:SetVertexColor(r, g, b, a) end
+    if border.right and border.right.SetVertexColor then border.right:SetVertexColor(r, g, b, a) end
+end
+
+local function ApplySlotDesat(slotFrame, isDimmed, isLocked)
+    local iconTex = slotFrame.icon or slotFrame.Icon
+    if iconTex and iconTex.SetDesaturated then
+        local desat = (isDimmed == true) or (isLocked == true)
+        if slotFrame.lastDesat ~= desat then
+            iconTex:SetDesaturated(desat)
+            slotFrame.lastDesat = desat
+        end
+    end
+end
 
 local function IsRetailClient()
     if ns and ns.IsForever then
@@ -42,14 +121,45 @@ local function IsRetailClient()
 end
 
 function BagsMod:ClearReagentQualityCache()
-    local wipeTbl = _G.wipe
-    if wipeTbl then
-        wipeTbl(reagentQualityCache)
-    else
-        for k in pairs(reagentQualityCache) do
-            reagentQualityCache[k] = nil
+    WipeTable(reagentQualityCache)
+    WipeTable(cosmeticItemCache)
+    WipeTable(transmogKnownCache)
+    WipeTable(itemHasUseCache)
+    WipeTable(staticItemMetaCache)
+    WipeTable(pendingItemDataIDs)
+    WipeTable(slotDataCache)
+    WipeTable(dirtyBags)
+    allBagsDirty = true
+end
+BagsMod.ClearItemCaches = BagsMod.ClearReagentQualityCache
+
+local function HasCachedQuestItem()
+    for _, data in pairs(slotDataCache) do
+        if type(data) == "table" and (data.isQuest or data.showQuestBang or data.showQuestBorder or data.classID == 12) then
+            return true
         end
     end
+    return false
+end
+
+local function ItemCanHaveCooldown(itemID)
+    if not itemID then return false end
+    local cached = itemHasUseCache[itemID]
+    if cached ~= nil then
+        return cached
+    end
+    local hasUse
+    if _G.C_Item and _G.C_Item.GetItemSpell then
+        local spellName, spellID = _G.C_Item.GetItemSpell(itemID)
+        hasUse = (spellName ~= nil) or (spellID ~= nil)
+    elseif _G.GetItemSpell then
+        local spellName, spellID = _G.GetItemSpell(itemID)
+        hasUse = (spellName ~= nil) or (spellID ~= nil)
+    else
+        return true
+    end
+    itemHasUseCache[itemID] = hasUse
+    return hasUse
 end
 
 function BagsMod:GetReagentQualityAtlas(itemID, link)
@@ -82,6 +192,14 @@ local function ApplyReagentQualityLayout(mod, texture, parentSlot)
     local rX = (db and db.reagentQualityX ~= nil) and db.reagentQualityX or -6
     local rY = (db and db.reagentQualityY ~= nil) and db.reagentQualityY or 6
     local slot = parentSlot or (texture.GetParent and texture:GetParent())
+    if texture.lastRqSize == rSize and texture.lastRqAnchor == rAnchor and texture.lastRqX == rX and texture.lastRqY == rY and texture.lastRqSlot == slot then
+        return
+    end
+    texture.lastRqSize = rSize
+    texture.lastRqAnchor = rAnchor
+    texture.lastRqX = rX
+    texture.lastRqY = rY
+    texture.lastRqSlot = slot
     if texture.SetSize then texture:SetSize(rSize, rSize) end
     if texture.ClearAllPoints then texture:ClearAllPoints() end
     if texture.SetPoint and slot then
@@ -199,9 +317,11 @@ function BagsMod:OnEnable()
     self:RegisterEvent("BAG_UPDATE_DELAYED", "OnBagUpdate")
     self:RegisterEvent("BAG_UPDATE", "OnBagUpdate")
     self:RegisterEvent("BAG_CONTAINER_UPDATE", "OnBagUpdate")
-    self:RegisterEvent("ITEM_LOCK_CHANGED", "OnBagUpdate")
     self:RegisterEvent("BAG_UPDATE_COOLDOWN", "OnBagCooldownUpdate")
     self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnEquipmentChanged")
+    self:RegisterEvent("EQUIPMENT_SETS_CHANGED", "OnEquipmentSetsChanged")
+    self:RegisterEvent("QUEST_LOG_UPDATE", "OnBagQuestLogUpdate")
+    self:RegisterEvent("TRANSMOG_COLLECTION_UPDATED", "OnTransmogCollectionUpdated")
     self:RegisterEvent("BANKFRAME_OPENED", "OnBankOpened")
     self:RegisterEvent("BANKFRAME_CLOSED", "OnBankClosed")
     self:RegisterEvent("PLAYERBANKSLOTS_CHANGED", "OnBankSlotsChanged")
@@ -214,6 +334,7 @@ function BagsMod:OnEnable()
     self:RegisterEvent("MERCHANT_CLOSED", "OnMerchantClosed")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
     self:RegisterEvent("ITEM_DATA_LOAD_RESULT", "OnItemDataLoadResult")
+    self:RegisterEvent("ITEM_LOCK_CHANGED", "OnItemLockChanged")
 
     self:HookTooltipShortcuts()
     self:SetupBagBar()
@@ -230,6 +351,7 @@ function BagsMod:OnEnteringWorld(event, isInitialLogin, isReloadingUi)
     else
         local now = _G.GetTime and _G.GetTime() or 0
         self.teleportGraceUntil = now + 4.0
+        allBagsDirty = true
     end
     if _G.InCombatLockdown and _G.InCombatLockdown() then
         self.pendingCombatRelogBagUpdate = true
@@ -263,13 +385,14 @@ function BagsMod:OnRegenEnabled()
     end
     if self.pendingCombatRelogBagUpdate then
         self.pendingCombatRelogBagUpdate = nil
+        allBagsDirty = true
         self:PrewarmItemSlots()
         if self.UpdateBagBarLayout then
             self:UpdateBagBarLayout()
         end
     end
-    if self.mainFrame and self.mainFrame:IsShown() then
-        self:UpdateInventory()
+    if self.mainFrame and self.mainFrame:IsShown() and (allBagsDirty or next(dirtyBags) ~= nil) then
+        self:UpdateInventory(false)
     end
 end
 
@@ -426,7 +549,7 @@ function BagsMod:OpenCategory(catID)
         self:UpdateCategoryButtonStyles()
         self:KillBlizzardBags()
         self.mainFrame:Show()
-        self:UpdateInventory()
+        self:UpdateInventory(true)
     end
 end
 
@@ -439,7 +562,7 @@ function BagsMod:OpenBags(defaultCat)
         self:UpdateCategoryButtonStyles()
         self:KillBlizzardBags()
         self.mainFrame:Show()
-        self:UpdateInventory()
+        self:UpdateInventory(true)
     end
 end
 
@@ -464,7 +587,7 @@ function BagsMod:ToggleBags(defaultCat)
 end
 
 function BagsMod:GetScannableBags()
-    local bags = {}
+    local bags = WipeTable(scratchScannableBags)
     local maxBag = 4
     if _G.NUM_TOTAL_EQUIPPED_BAG_SLOTS then
         maxBag = _G.NUM_TOTAL_EQUIPPED_BAG_SLOTS
@@ -473,7 +596,7 @@ function BagsMod:GetScannableBags()
     end
 
     for b = 0, maxBag do
-        table.insert(bags, b)
+        bags[#bags + 1] = b
     end
 
     local reagentBagID = (_G.Enum and _G.Enum.BagIndex and _G.Enum.BagIndex.ReagentBag) or 5
@@ -482,13 +605,13 @@ function BagsMod:GetScannableBags()
         if b == reagentBagID then hasReagent = true break end
     end
     if not hasReagent and self:GetNumBagSlots(reagentBagID) > 0 then
-        table.insert(bags, reagentBagID)
+        bags[#bags + 1] = reagentBagID
     end
 
     -- Classic Keyring support
     local keyringID = (_G.KEYRING_CONTAINER or -2)
     if self:GetNumBagSlots(keyringID) > 0 then
-        table.insert(bags, keyringID)
+        bags[#bags + 1] = keyringID
     end
 
     return bags
@@ -502,7 +625,7 @@ function BagsMod:GetSlotKey(bag, slot)
     return GetSlotKey(bag, slot)
 end
 
-function BagsMod:HasActiveTradeTimer(bag, slot, customTooltipData)
+function BagsMod:HasActiveTradeTimer(bag, slot, customTooltipData, knownContainerInfo)
     if not bag or not slot then return false end
     local slotKey = GetSlotKey(bag, slot)
     local now = (_G.GetTime and _G.GetTime()) or 0
@@ -514,8 +637,8 @@ function BagsMod:HasActiveTradeTimer(bag, slot, customTooltipData)
         end
     end
 
-    if not customTooltipData and _G.C_Container and _G.C_Container.GetContainerItemInfo then
-        local itemInfo = _G.C_Container.GetContainerItemInfo(bag, slot)
+    if not customTooltipData then
+        local itemInfo = knownContainerInfo or (_G.C_Container and _G.C_Container.GetContainerItemInfo and _G.C_Container.GetContainerItemInfo(bag, slot))
         if itemInfo and itemInfo.quality and itemInfo.quality < 2 then
             if not self.tradeTimerCache then self.tradeTimerCache = {} end
             self.tradeTimerCache[slotKey] = { time = now, hasTimer = false }
@@ -1033,7 +1156,32 @@ end
 
 function BagsMod:OnEquipmentChanged()
     self:DiffEquipmentState(false)
-    self:OnBagUpdate()
+end
+
+function BagsMod:OnEquipmentSetsChanged()
+    allBagsDirty = true
+    if self.mainFrame and self.mainFrame:IsShown() then
+        self:OnBagUpdate("EQUIPMENT_SETS_CHANGED")
+    end
+end
+
+function BagsMod:OnBagQuestLogUpdate()
+    if not HasCachedQuestItem() then return end
+    for _, data in pairs(slotDataCache) do
+        if type(data) == "table" and (data.isQuest or data.showQuestBang or data.showQuestBorder or data.classID == 12) and data.bag ~= nil then
+            dirtyBags[data.bag] = true
+        end
+    end
+    if self.mainFrame and self.mainFrame:IsShown() then
+        self:OnBagUpdate("BAG_UPDATE_DELAYED")
+    end
+end
+
+function BagsMod:OnTransmogCollectionUpdated()
+    WipeTable(transmogKnownCache)
+    if self.mainFrame and self.mainFrame:IsShown() then
+        self:UpdateInventory(true)
+    end
 end
 
 function BagsMod:OnBankOpened()
@@ -1064,7 +1212,6 @@ function BagsMod:OnBankSlotsChanged()
     if self.isBankOpen then
         self:UpdateBankSnapshot(false)
     end
-    self:OnBagUpdate()
 end
 
 function BagsMod:ScanInventoryOnce(isInitial) -- code_smell_audit: suppress arrow-code
@@ -1098,13 +1245,14 @@ function BagsMod:ScanInventoryOnce(isInitial) -- code_smell_audit: suppress arro
         for slot = 1, numSlots do
             local slotKey = GetSlotKey(bag, slot)
             local itemInfo = self:GetItemInfoAt(bag, slot)
+            slotDataCache[slotKey] = itemInfo or false
             if itemInfo and itemInfo.itemID then
                 anySlotScanned = true
                 self.knownItemIDs[itemInfo.itemID] = true
                 self.knownSlots[slotKey] = itemInfo.itemID
                 self.knownSlotCounts[slotKey] = itemInfo.count or 1
                 -- If item has an active trade timer, keep it marked new even on relog / login
-                if self:HasActiveTradeTimer(bag, slot) then
+                if self:HasActiveTradeTimer(bag, slot, nil, itemInfo) then
                     self.newSlots[slotKey] = true
                     itemInfo.isNew = true
                 else
@@ -1127,6 +1275,8 @@ function BagsMod:ScanInventoryOnce(isInitial) -- code_smell_audit: suppress arro
     end
     if anySlotScanned then
         self.initialInventoryScanned = true
+        WipeTable(dirtyBags)
+        allBagsDirty = false
     end
 end
 
@@ -1148,121 +1298,162 @@ local function GetItemInfoSafe(item)
     end
 end
 
-function BagsMod:GetItemInfoAt(bag, slot)
-    if _G.C_Container and _G.C_Container.GetContainerItemInfo then
-        local info = _G.C_Container.GetContainerItemInfo(bag, slot)
-        if info then
-            local itemID = info.itemID
-            local quality = info.quality or 1
-            local count = info.stackCount or 1
-            local link = info.hyperlink or info.hyperLink or (_G.C_Container.GetContainerItemLink and _G.C_Container.GetContainerItemLink(bag, slot))
-            local texture = info.iconFileID or info.icon
+local function ResolveStaticItemMeta(bag, itemID, link, fallbackQuality)
+    local targetItem = link or itemID
+    local cached = targetItem and staticItemMetaCache[targetItem] or nil
+    if cached then
+        return cached.name, cached.itemType, cached.itemSubType, cached.equipLoc,
+            (cached.quality or fallbackQuality), cached.itemLevel, cached.classID,
+            cached.subclassID, cached.bindType, cached.expID, cached.isCraftingReagent, cached.hasUseSpell
+    end
 
-            local itemGUID = info.itemGUID
-            if not itemGUID and _G.C_Item and _G.C_Item.GetItemGUID and _G.ItemLocation and _G.ItemLocation.CreateFromBagAndSlot then
-                local itemLoc = _G.ItemLocation:CreateFromBagAndSlot(bag, slot)
-                if itemLoc and _G.C_Item.DoesItemExist and _G.C_Item.DoesItemExist(itemLoc) then
-                    itemGUID = _G.C_Item.GetItemGUID(itemLoc)
-                end
-            end
+    local name, itemType, itemSubType, equipLoc, classID, subclassID, bindType, expID, isCraftingReagent, itemLevel
+    local quality = fallbackQuality
+    if itemID and _G.C_Item and _G.C_Item.GetItemInfoInstant then
+        local _, iType, iSubType, eqLoc, _, cID, scID = _G.C_Item.GetItemInfoInstant(itemID)
+        itemType, itemSubType, equipLoc, classID, subclassID = iType, iSubType, eqLoc, cID, scID
+    end
 
-            local name, itemType, itemSubType, equipLoc, classID, subclassID, bindType, expID, isCraftingReagent, itemLevel
-            if itemID and _G.C_Item and _G.C_Item.GetItemInfoInstant then
-                local _, iType, iSubType, eqLoc, _, cID, scID = _G.C_Item.GetItemInfoInstant(itemID)
-                itemType = iType
-                itemSubType = iSubType
-                equipLoc = eqLoc
-                classID = cID
-                subclassID = scID
+    local loaded = false
+    if targetItem then
+        local iName, _, iQuality, iLvl, _, iType, iSubType, _, eqLoc, _, _, cID, scID, bType, expacID, _, isCraft = GetItemInfoSafe(targetItem)
+        if iName then
+            loaded = true
+            name = iName
+            itemType = itemType or iType
+            itemSubType = itemSubType or iSubType
+            equipLoc = equipLoc or eqLoc
+            quality = iQuality or quality
+            itemLevel = iLvl
+            classID = classID or cID
+            subclassID = subclassID or scID
+            bindType = bType
+            expID = expacID
+            isCraftingReagent = isCraft
+        elseif itemID then
+            pendingItemDataIDs[itemID] = bag
+            if _G.C_Item and _G.C_Item.RequestLoadItemDataByID then
+                _G.C_Item.RequestLoadItemDataByID(itemID)
             end
-            local targetItem = link or itemID
-            if targetItem then
-                local iName, _, iQuality, iLvl, _, iType, iSubType, _, eqLoc, _, _, cID, scID, bType, expacID, _, isCraft = GetItemInfoSafe(targetItem)
-                if iName then
-                    name = iName
-                    itemType = itemType or iType
-                    itemSubType = itemSubType or iSubType
-                    equipLoc = equipLoc or eqLoc
-                    quality = iQuality or quality
-                    itemLevel = iLvl
-                    classID = classID or cID
-                    subclassID = subclassID or scID
-                    bindType = bType
-                    expID = expacID
-                    isCraftingReagent = isCraft
-                elseif itemID and _G.C_Item and _G.C_Item.RequestLoadItemDataByID then
-                    _G.C_Item.RequestLoadItemDataByID(itemID)
-                end
-            end
-            if not itemLevel and link and _G.C_Item and _G.C_Item.GetDetailedItemLevelInfo then
-                itemLevel = _G.C_Item.GetDetailedItemLevelInfo(link)
-            end
-
-            local isQuest = false
-            local showQuestBang = false
-            local showQuestBorder = false
-            local isBound = info.isBound
-            local inEquipmentSet = nil
-            if _G.C_Container and _G.C_Container.GetContainerItemEquipmentSetInfo then
-                local inSet = _G.C_Container.GetContainerItemEquipmentSetInfo(bag, slot)
-                inEquipmentSet = (inSet == true)
-            end
-            if _G.C_Container and _G.C_Container.GetContainerItemQuestInfo then
-                local qInfo = _G.C_Container.GetContainerItemQuestInfo(bag, slot)
-                if qInfo then
-                    local qState = self:EvaluateQuestItemState(itemID, qInfo.questID, qInfo.isActive)
-                    isQuest = qState.isQuest or (qInfo.isQuestItem == true) or (qInfo.questID ~= nil)
-                    showQuestBang = qState.showQuestBang
-                    showQuestBorder = qState.showQuestBorder or (qInfo.isQuestItem == true)
-                end
-            elseif _G.GetContainerItemQuestInfo then
-                local isQuestItem, qID, act = _G.GetContainerItemQuestInfo(bag, slot)
-                if isQuestItem or qID or act then
-                    local qState = self:EvaluateQuestItemState(itemID, qID, act)
-                    isQuest = qState.isQuest or (isQuestItem == true) or (qID ~= nil)
-                    showQuestBang = qState.showQuestBang
-                    showQuestBorder = qState.showQuestBorder or (isQuestItem == true)
-                end
-            end
-            if classID == 12 then
-                isQuest = true
-                showQuestBorder = true
-            end
-
-            local itemInfo = {
-                bag = bag,
-                slot = slot,
-                itemID = itemID,
-                name = name or (link and link:match("%[(.-)%]")) or ("Item " .. tostring(itemID)),
-                quality = quality,
-                count = count,
-                link = link,
-                texture = texture,
-                classID = classID,
-                subclassID = subclassID,
-                itemType = itemType,
-                itemSubType = itemSubType,
-                equipLoc = equipLoc,
-                itemLevel = itemLevel,
-                bindType = bindType,
-                expID = expID,
-                isQuest = isQuest,
-                showQuestBang = showQuestBang,
-                showQuestBorder = showQuestBorder,
-                isCraftingReagent = isCraftingReagent,
-                reagentQualityAtlas = self:GetReagentQualityAtlas(itemID, link),
-                itemGUID = itemGUID,
-                isBound = isBound,
-                inEquipmentSet = inEquipmentSet,
-            }
-            itemInfo.isNew = self:IsSlotNew(bag, slot, itemInfo)
-            return itemInfo
         end
     end
-    return nil
+
+    if not itemLevel and link and _G.C_Item and _G.C_Item.GetDetailedItemLevelInfo then
+        itemLevel = _G.C_Item.GetDetailedItemLevelInfo(link)
+    end
+    local hasUseSpell = ItemCanHaveCooldown(itemID)
+
+    if loaded and targetItem then
+        staticItemMetaCache[targetItem] = {
+            name = name,
+            itemType = itemType,
+            itemSubType = itemSubType,
+            equipLoc = equipLoc,
+            quality = quality,
+            itemLevel = itemLevel,
+            classID = classID,
+            subclassID = subclassID,
+            bindType = bindType,
+            expID = expID,
+            isCraftingReagent = isCraftingReagent,
+            hasUseSpell = hasUseSpell,
+        }
+    end
+
+    return name, itemType, itemSubType, equipLoc, quality, itemLevel, classID, subclassID, bindType, expID, isCraftingReagent, hasUseSpell
 end
 
-function BagsMod:OnBagUpdate()
+function BagsMod:GetItemInfoAt(bag, slot)
+    if not (_G.C_Container and _G.C_Container.GetContainerItemInfo) then return nil end
+    local info = _G.C_Container.GetContainerItemInfo(bag, slot)
+    if not info then return nil end
+
+    local itemID = info.itemID
+    local count = info.stackCount or 1
+    local link = info.hyperlink or info.hyperLink or (_G.C_Container.GetContainerItemLink and _G.C_Container.GetContainerItemLink(bag, slot))
+    local texture = info.iconFileID or info.icon
+
+    local itemGUID = info.itemGUID
+    if not itemGUID and _G.C_Item and _G.C_Item.GetItemGUID and _G.ItemLocation and _G.ItemLocation.CreateFromBagAndSlot then
+        local itemLoc = _G.ItemLocation:CreateFromBagAndSlot(bag, slot)
+        if itemLoc and _G.C_Item.DoesItemExist and _G.C_Item.DoesItemExist(itemLoc) then
+            itemGUID = _G.C_Item.GetItemGUID(itemLoc)
+        end
+    end
+
+    local name, itemType, itemSubType, equipLoc, quality, itemLevel, classID, subclassID, bindType, expID, isCraftingReagent, hasUseSpell =
+        ResolveStaticItemMeta(bag, itemID, link, info.quality or 1)
+
+    local isQuest = false
+    local showQuestBang = false
+    local showQuestBorder = false
+    local isBound = info.isBound
+    local inEquipmentSet = nil
+    if _G.C_Container and _G.C_Container.GetContainerItemEquipmentSetInfo then
+        local inSet = _G.C_Container.GetContainerItemEquipmentSetInfo(bag, slot)
+        inEquipmentSet = (inSet == true)
+    end
+    if _G.C_Container and _G.C_Container.GetContainerItemQuestInfo then
+        local qInfo = _G.C_Container.GetContainerItemQuestInfo(bag, slot)
+        if qInfo then
+            local qState = self:EvaluateQuestItemState(itemID, qInfo.questID, qInfo.isActive)
+            isQuest = qState.isQuest or (qInfo.isQuestItem == true) or (qInfo.questID ~= nil)
+            showQuestBang = qState.showQuestBang
+            showQuestBorder = qState.showQuestBorder or (qInfo.isQuestItem == true)
+        end
+    elseif _G.GetContainerItemQuestInfo then
+        local isQuestItem, qID, act = _G.GetContainerItemQuestInfo(bag, slot)
+        if isQuestItem or qID or act then
+            local qState = self:EvaluateQuestItemState(itemID, qID, act)
+            isQuest = qState.isQuest or (isQuestItem == true) or (qID ~= nil)
+            showQuestBang = qState.showQuestBang
+            showQuestBorder = qState.showQuestBorder or (isQuestItem == true)
+        end
+    end
+    if classID == 12 then
+        isQuest = true
+        showQuestBorder = true
+    end
+
+    local itemInfo = {
+        bag = bag,
+        slot = slot,
+        itemID = itemID,
+        name = name or (link and link:match("%[(.-)%]")) or ("Item " .. tostring(itemID)),
+        quality = quality,
+        count = count,
+        link = link,
+        texture = texture,
+        classID = classID,
+        subclassID = subclassID,
+        itemType = itemType,
+        itemSubType = itemSubType,
+        equipLoc = equipLoc,
+        itemLevel = itemLevel,
+        bindType = bindType,
+        expID = expID,
+        isQuest = isQuest,
+        showQuestBang = showQuestBang,
+        showQuestBorder = showQuestBorder,
+        isCraftingReagent = isCraftingReagent,
+        hasUseSpell = hasUseSpell,
+        reagentQualityAtlas = self:GetReagentQualityAtlas(itemID, link),
+        itemGUID = itemGUID,
+        isBound = isBound,
+        isLocked = (info.isLocked == true),
+        inEquipmentSet = inEquipmentSet,
+    }
+    itemInfo.isNew = self:IsSlotNew(bag, slot, itemInfo)
+    return itemInfo
+end
+
+function BagsMod:OnBagUpdate(event, bagID)
+    if event == "BAG_UPDATE" and type(bagID) == "number" then
+        dirtyBags[bagID] = true
+    elseif event ~= "BAG_UPDATE_DELAYED" then
+        allBagsDirty = true
+    end
+
     if self.isBankOpen then
         self:UpdateBankSnapshot(false)
     end
@@ -1282,7 +1473,7 @@ function BagsMod:OnBagUpdate()
             self:UpdateBagButtonsVisual()
         end
         if self.mainFrame and self.mainFrame:IsShown() then
-            self:UpdateInventory()
+            self:UpdateInventory(false)
         end
     end
 
@@ -1296,8 +1487,49 @@ function BagsMod:OnBagUpdate()
 end
 
 function BagsMod:OnItemDataLoadResult(event, itemID, success)
-    if success and self.mainFrame and self.mainFrame:IsShown() then
-        self:OnBagUpdate()
+    if not success or not itemID then return end
+    local pendingBag = pendingItemDataIDs[itemID]
+    if not pendingBag then return end
+    pendingItemDataIDs[itemID] = nil
+    staticItemMetaCache[itemID] = nil
+    dirtyBags[pendingBag] = true
+    for _, data in pairs(slotDataCache) do
+        if type(data) == "table" and data.itemID == itemID and data.bag ~= nil then
+            dirtyBags[data.bag] = true
+        end
+    end
+    if self.mainFrame and self.mainFrame:IsShown() then
+        self:OnBagUpdate("BAG_UPDATE", pendingBag)
+    end
+end
+
+function BagsMod:OnItemLockChanged(event, bagID, slotID)
+    if type(bagID) ~= "number" or type(slotID) ~= "number" then return end
+
+    local locked = false
+    if _G.C_Container and _G.C_Container.GetContainerItemInfo then
+        local info = _G.C_Container.GetContainerItemInfo(bagID, slotID)
+        locked = (info and info.isLocked == true) or false
+    elseif _G.GetContainerItemInfo then
+        local _, _, isLocked = _G.GetContainerItemInfo(bagID, slotID)
+        locked = (isLocked == true)
+    end
+
+    local slotKey = GetSlotKey(bagID, slotID)
+    local cached = slotDataCache[slotKey]
+    if type(cached) == "table" then
+        cached.isLocked = locked
+    end
+
+    if not self.mainFrame or not self.mainFrame:IsShown() then return end
+    for _, slotFrame in ipairs(self.itemSlots) do
+        if slotFrame:IsShown() and slotFrame.bag == bagID and slotFrame.slot == slotID then
+            if slotFrame.itemData then
+                slotFrame.itemData.isLocked = locked
+            end
+            ApplySlotDesat(slotFrame, slotFrame.isDimmed, locked)
+            break
+        end
     end
 end
 
@@ -1718,7 +1950,7 @@ function BagsMod:CreateHeaderBar()
             placeholder:Hide()
             if self.searchClearButton then self.searchClearButton:Show() end
         end
-        self:UpdateInventory()
+        self:UpdateInventory(true)
     end)
     search:SetScript("OnEscapePressed", function(s)
         s:SetText("")
@@ -1735,7 +1967,7 @@ function BagsMod:ClearSearch()
         end
     else
         self.searchText = ""
-        self:UpdateInventory()
+        self:UpdateInventory(true)
     end
 end
 
@@ -1825,7 +2057,7 @@ function BagsMod:RenameCustomFilter(filterID, newName)
         end
     end
     self:RebuildCategoryButtons()
-    self:UpdateInventory()
+    self:UpdateInventory(true)
     print("|cff00ff00[RoithiUI]|r " .. string.format(L["Renamed filter to '%s'"] or "Renamed filter to '%s'", newName))
 end
 
@@ -1929,7 +2161,7 @@ function BagsMod:SaveCurrentSearchFilter()
     })
     self.db.activeCategory = id
     self:RebuildCategoryButtons()
-    self:UpdateInventory()
+    self:UpdateInventory(true)
     print("|cff00ff00[RoithiUI]|r " .. string.format(L["Saved search filter '%s'"] or "Saved search filter '%s'", q))
 end
 
@@ -1945,7 +2177,7 @@ function BagsMod:DeleteCustomFilter(filterID)
         self.db.activeCategory = "ALL"
     end
     self:RebuildCategoryButtons()
-    self:UpdateInventory()
+    self:UpdateInventory(true)
 end
 
 function BagsMod:RebuildCategoryButtons()
@@ -2067,7 +2299,7 @@ function BagsMod:CreateCategoryButtons()
                 end
             end
             self:UpdateCategoryButtonStyles()
-            self:UpdateInventory()
+            self:UpdateInventory(true)
         end)
 
         btn:SetScript("OnReceiveDrag", function()
@@ -2238,7 +2470,7 @@ function BagsMod:OpenSubFilterDropdown(owner, catID)
                     self.activeReagentSubFilter = sub.id
                 end
                 self:UpdateCategoryButtonStyles()
-                self:UpdateInventory()
+                self:UpdateInventory(true)
             end)
         end
     end)
@@ -2807,7 +3039,7 @@ function BagsMod:ExecuteSellQueue(queue, isCustom, onFinished)
                 self.sellingJunkTicker = nil
             end
             if isCustom and next(resetItemIDs) then
-                self:UpdateInventory()
+                self:UpdateInventory(true)
             end
             if totalItems > 0 then
                 local gold = math.floor(totalCopper / 10000)
@@ -2954,8 +3186,8 @@ function BagsMod:OnSlotEnter(s)
     if not s then return end
     if s.bag and s.slot then
         local slotKey = GetSlotKey(s.bag, s.slot)
-        local hasTradeTimer = self:HasActiveTradeTimer(s.bag, s.slot)
-        local isNew = self:IsSlotNew(s.bag, s.slot, s.itemInfo)
+        local hasTradeTimer = self:HasActiveTradeTimer(s.bag, s.slot, nil, s.itemData)
+        local isNew = self:IsSlotNew(s.bag, s.slot, s.itemData)
 
         if isNew then
             self.dismissedNewHighlights = self.dismissedNewHighlights or {}
@@ -3061,15 +3293,18 @@ function BagsMod:AcquireItemSlot(index)
     slotParent:SetFrameLevel(self.mainFrame:GetFrameLevel() + 5)
     slot:SetFrameLevel(slotParent:GetFrameLevel() + 1)
 
-    if not slot.SetBackdrop and _G.BackdropTemplateMixin then
-        Mixin(slot, _G.BackdropTemplateMixin)
+    -- Lightweight background + 4-edge 1px overlay border textures (avoids BackdropTemplate frame/9-slice bloat per slot)
+    if not slot.roithiBg then
+        local bg = slot:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(slot)
+        if bg.SetColorTexture then
+            bg:SetColorTexture(1, 1, 1, 1)
+        end
+        slot.roithiBg = bg
     end
-    if slot.SetBackdrop then
-        slot:SetBackdrop({
-            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        })
-        slot:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
-    end
+    slot.SetBackdropColor = SlotSetBackdropColor
+    slot.SetBackdropBorderColor = SlotSetBackdropBorderColor
+    slot:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
 
     -- Icon texture (fills slot, border overlays on top)
     local icon = slot.icon or slot.Icon or (slot.GetName and _G[slot:GetName() .. "IconTexture"])
@@ -3137,27 +3372,40 @@ function BagsMod:AcquireItemSlot(index)
     end
     if cooldown.Hide then cooldown:Hide() end
 
-    -- 1px overlay border to guarantee border renders above the icon
+    -- 1px overlay border via 4 direct OVERLAY textures (zero child Frame or BackdropTemplate nine-slice overhead)
     if not slot.roithiBorder then
-        local border = CreateFrame("Frame", nil, slot, "BackdropTemplate")
-        border:SetAllPoints(slot)
-        border:SetFrameLevel(slot:GetFrameLevel() + 5)
-        border:EnableMouse(false)
-        border:SetBackdrop({
-            edgeFile = "Interface\\Buttons\\WHITE8x8",
-            edgeSize = 1,
-        })
-        border:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
-        slot.roithiBorder = border
-
-        if not slot.roithiBorderHooked and hooksecurefunc then
-            hooksecurefunc(slot, "SetBackdropBorderColor", function(s, r, g, b, a)
-                if s.roithiBorder and s.roithiBorder.SetBackdropBorderColor then
-                    s.roithiBorder:SetBackdropBorderColor(r, g, b, a)
-                end
-            end)
-            slot.roithiBorderHooked = true
+        local function CreateEdgeTex()
+            local t = slot:CreateTexture(nil, "OVERLAY", nil, 5)
+            if t.SetColorTexture then t:SetColorTexture(1, 1, 1, 1) end
+            return t
         end
+        local top = CreateEdgeTex()
+        top:SetHeight(1)
+        top:SetPoint("TOPLEFT", slot, "TOPLEFT", 0, 0)
+        top:SetPoint("TOPRIGHT", slot, "TOPRIGHT", 0, 0)
+
+        local bottom = CreateEdgeTex()
+        bottom:SetHeight(1)
+        bottom:SetPoint("BOTTOMLEFT", slot, "BOTTOMLEFT", 0, 0)
+        bottom:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", 0, 0)
+
+        local left = CreateEdgeTex()
+        left:SetWidth(1)
+        left:SetPoint("TOPLEFT", slot, "TOPLEFT", 0, 0)
+        left:SetPoint("BOTTOMLEFT", slot, "BOTTOMLEFT", 0, 0)
+
+        local right = CreateEdgeTex()
+        right:SetWidth(1)
+        right:SetPoint("TOPRIGHT", slot, "TOPRIGHT", 0, 0)
+        right:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", 0, 0)
+
+        slot.roithiBorder = {
+            top = top,
+            bottom = bottom,
+            left = left,
+            right = right,
+        }
+        slot:SetBackdropBorderColor(0.2, 0.2, 0.2, 1.0)
     end
 
     -- Count text
@@ -3226,6 +3474,8 @@ function BagsMod:AcquireItemSlot(index)
     local qY = (self.db and self.db.questIndicatorY) or 1
     if not questIcon then
         questIcon = slot:CreateTexture(nil, "OVERLAY", nil, 6)
+        questIcon:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
+        if questIcon.SetTexCoord then questIcon:SetTexCoord(0, 1, 0, 1) end
         questIcon:Hide()
         slot.questIcon = questIcon
     end
@@ -3326,12 +3576,22 @@ function BagsMod:AcquireItemSlot(index)
     if slot.IconOverlay then slot.IconOverlay:Hide() end
     if slot.IconOverlay2 then slot.IconOverlay2:Hide() end
     slot.noProfessionQualityOverlay = true
+    slot.GetItemContextMatchResult = nil
+    slot.normTexCleared = true
+    if _G.EventRegistry and _G.EventRegistry.UnregisterCallback then
+        ns.Utils.SafeCall(_G.EventRegistry.UnregisterCallback, _G.EventRegistry, "ItemButton.UpdateCraftedProfessionQualityShown", slot)
+    end
+    if _G.ItemButtonUtil and _G.ItemButtonUtil.UnregisterCallback and _G.ItemButtonUtil.Event and _G.ItemButtonUtil.Event.ItemContextChanged then
+        ns.Utils.SafeCall(_G.ItemButtonUtil.UnregisterCallback, _G.ItemButtonUtil.Event.ItemContextChanged, slot)
+    end
     if slot.ProfessionQualityOverlay then
         if slot.ProfessionQualityOverlay.SetTexture then slot.ProfessionQualityOverlay:SetTexture(nil) end
         if slot.ProfessionQualityOverlay.ClearAllPoints then slot.ProfessionQualityOverlay:ClearAllPoints() end
         slot.ProfessionQualityOverlay:Hide()
     end
     if slot.SetScript then
+        slot:SetScript("OnShow", nil)
+        slot:SetScript("OnHide", nil)
         slot:SetScript("OnEvent", nil)
     end
 
@@ -3413,7 +3673,7 @@ function BagsMod:AcquireItemSlot(index)
                     else
                         self.db.favorites = self.db.favorites or {}
                         self.db.favorites[s.itemData.itemID] = not self.db.favorites[s.itemData.itemID]
-                        self:UpdateInventory()
+                        self:UpdateInventory(true)
                     end
                 end
             end
@@ -3427,7 +3687,7 @@ function BagsMod:AcquireItemSlot(index)
                 if _G.IsAltKeyDown and _G.IsAltKeyDown() and s.itemData and s.itemData.itemID then
                     self.db.favorites = self.db.favorites or {}
                     self.db.favorites[s.itemData.itemID] = not self.db.favorites[s.itemData.itemID]
-                    self:UpdateInventory()
+                    self:UpdateInventory(true)
                 end
             end
         end)
@@ -3446,7 +3706,7 @@ function BagsMod:AcquireItemSlot(index)
                 elseif _G.IsAltKeyDown and _G.IsAltKeyDown() and s.itemData and s.itemData.itemID then
                     self.db.favorites = self.db.favorites or {}
                     self.db.favorites[s.itemData.itemID] = not self.db.favorites[s.itemData.itemID]
-                    self:UpdateInventory()
+                    self:UpdateInventory(true)
                 elseif s.bag and s.slot then
                     if _G.C_Container and _G.C_Container.UseContainerItem then
                         ns.Utils.SafeCall(_G.C_Container.UseContainerItem, s.bag, s.slot)
@@ -3494,7 +3754,7 @@ local function ClearBlizzardNewItem(bag, slot)
     end
 end
 
-function BagsMod:UpdateInventory()
+function BagsMod:UpdateInventory(skipBagRescan)
     if not self.mainFrame or not self.mainFrame:IsShown() then return end
 
     if not self.initialInventoryScanned then
@@ -3520,19 +3780,6 @@ function BagsMod:UpdateInventory()
     local entryPool = self.slotEntryPool
     local entryIndex = 0
 
-    local function AllocSlotEntry(b, s, data)
-        entryIndex = entryIndex + 1
-        local entry = entryPool[entryIndex]
-        if not entry then
-            entry = {}
-            entryPool[entryIndex] = entry
-        end
-        entry.bag = b
-        entry.slot = s
-        entry.itemData = data
-        return entry
-    end
-
     local totalSlots = 0
     local freeSlots = 0
     local activeCat = self.db.activeCategory or "ALL"
@@ -3540,116 +3787,154 @@ function BagsMod:UpdateInventory()
     local reagentBagID = (_G.Enum and _G.Enum.BagIndex and _G.Enum.BagIndex.ReagentBag) or 5
     local keyringID = (_G.KEYRING_CONTAINER or -2)
 
+    local hasPendingDirty = allBagsDirty or (next(dirtyBags) ~= nil)
+    local shouldScanAll = (skipBagRescan == nil) or allBagsDirty or (not self.initialInventoryScanned)
+    local needsScan = shouldScanAll or hasPendingDirty
+
     local now = _G.GetTime and _G.GetTime() or 0
     local isSorting = self.isSortingBagsUntil and now < self.isSortingBagsUntil
     local isTeleporting = self.teleportGraceUntil and now < self.teleportGraceUntil
     local inBankTransferContext = (self.isBankOpen == true) or (now < (self.bankClosedGraceUntil or 0))
-    self:DiffEquipmentState(false)
-    if self.isBankOpen then
-        self:UpdateBankSnapshot(false)
+    if needsScan then
+        self:DiffEquipmentState(false)
+        if self.isBankOpen then
+            self:UpdateBankSnapshot(false)
+        end
     end
+    local scannableBags = self:GetScannableBags()
 
-    -- Take snapshots of previous state for cross-slot move and total count detection
-    local prevKnownSlots = {}
-    local prevKnownCounts = {}
-    local prevNewSlots = {}
-    local prevItemCounts = {}
+    -- Reuse module-scoped scratch tables to eliminate per-update GC allocations
+    local prevKnownSlots, prevKnownCounts, prevNewSlots, prevHoveredNewSlots, prevDismissedNewHighlights, prevNewItemIDs, prevItemCounts
+    local currentSlotItems, currentItemCounts, vacatedSlotsByItemID, ownedSourceSlots
+    if needsScan then
+        prevKnownSlots = WipeTable(scratchPrevKnownSlots)
+        prevKnownCounts = WipeTable(scratchPrevKnownCounts)
+        prevNewSlots = WipeTable(scratchPrevNewSlots)
+        prevHoveredNewSlots = WipeTable(scratchPrevHoveredNewSlots)
+        prevDismissedNewHighlights = WipeTable(scratchPrevDismissedNew)
+        prevNewItemIDs = WipeTable(scratchPrevNewItemIDs)
+        prevItemCounts = WipeTable(scratchPrevItemCounts)
 
-    if self.knownSlots then
-        for k, v in pairs(self.knownSlots) do
-            prevKnownSlots[k] = v
-        end
-    end
-    if self.knownSlotCounts then
-        for k, v in pairs(self.knownSlotCounts) do
-            prevKnownCounts[k] = v
-        end
-    end
-    if self.newSlots then
-        for k, v in pairs(self.newSlots) do
-            prevNewSlots[k] = v
-        end
-    end
-    local prevHoveredNewSlots = {}
-    if self.hoveredNewSlots then
-        for k, v in pairs(self.hoveredNewSlots) do
-            prevHoveredNewSlots[k] = v
-        end
-    end
-    local prevDismissedNewHighlights = {}
-    if self.dismissedNewHighlights then
-        for k, v in pairs(self.dismissedNewHighlights) do
-            prevDismissedNewHighlights[k] = v
-        end
-    end
-    local prevNewItemIDs = {}
-    for k, itemID in pairs(prevKnownSlots) do
-        local count = prevKnownCounts[k] or 1
-        prevItemCounts[itemID] = (prevItemCounts[itemID] or 0) + count
-        if prevNewSlots[k] or (prevHoveredNewSlots[k] and now < prevHoveredNewSlots[k]) then
-            prevNewItemIDs[itemID] = true
-        end
-    end
-
-    -- Pre-pass: scan current contents of all scannable bags to detect vacated slots and current item counts
-    local currentSlotItems = {}
-    local currentItemCounts = {}
-    for _, bag in ipairs(self:GetScannableBags()) do
-        local numSlots = self:GetNumBagSlots(bag)
-        for slot = 1, numSlots do
-            local slotKey = GetSlotKey(bag, slot)
-            local itemInfo = self:GetItemInfoAt(bag, slot)
-            if itemInfo and itemInfo.itemID then
-                currentSlotItems[slotKey] = itemInfo
-                currentItemCounts[itemInfo.itemID] = (currentItemCounts[itemInfo.itemID] or 0) + (itemInfo.count or 1)
-            else
-                currentSlotItems[slotKey] = false
+        if self.knownSlots then
+            for k, v in pairs(self.knownSlots) do
+                prevKnownSlots[k] = v
             end
         end
-    end
-
-    -- Find all slots that previously held itemID but now do not (vacated / moved / swapped)
-    local vacatedSlotsByItemID = {}
-    for sKey, oldID in pairs(prevKnownSlots) do
-        local curr = currentSlotItems[sKey]
-        if not curr or curr.itemID ~= oldID then
-            if not vacatedSlotsByItemID[oldID] then
-                vacatedSlotsByItemID[oldID] = {}
+        if self.knownSlotCounts then
+            for k, v in pairs(self.knownSlotCounts) do
+                prevKnownCounts[k] = v
             end
-            table.insert(vacatedSlotsByItemID[oldID], {
-                slotKey = sKey,
-                wasNew = (prevNewSlots[sKey] == true)
-                    or (prevHoveredNewSlots[sKey] and now < prevHoveredNewSlots[sKey]),
-                hoveredTime = prevHoveredNewSlots[sKey],
-                wasDismissed = (prevDismissedNewHighlights[sKey] == true),
-                count = prevKnownCounts[sKey] or 1,
-            })
         end
-    end
+        if self.newSlots then
+            for k, v in pairs(self.newSlots) do
+                prevNewSlots[k] = v
+            end
+        end
+        if self.hoveredNewSlots then
+            for k, v in pairs(self.hoveredNewSlots) do
+                prevHoveredNewSlots[k] = v
+            end
+        end
+        if self.dismissedNewHighlights then
+            for k, v in pairs(self.dismissedNewHighlights) do
+                prevDismissedNewHighlights[k] = v
+            end
+        end
+        for k, itemID in pairs(prevKnownSlots) do
+            local count = prevKnownCounts[k] or 1
+            prevItemCounts[itemID] = (prevItemCounts[itemID] or 0) + count
+            if prevNewSlots[k] or (prevHoveredNewSlots[k] and now < prevHoveredNewSlots[k]) then
+                prevNewItemIDs[itemID] = true
+            end
+        end
 
-    -- Match known owned-source GUIDs first (order-independent across all changed slots)
-    local ownedSourceSlots = {}
-    for _, bag in ipairs(self:GetScannableBags()) do
-        local numSlots = self:GetNumBagSlots(bag)
-        for slot = 1, numSlots do
-            local slotKey = GetSlotKey(bag, slot)
-            local itemInfo = currentSlotItems[slotKey]
-            if itemInfo and itemInfo.itemID and prevKnownSlots[slotKey] ~= itemInfo.itemID then
-                local guid = itemInfo.itemGUID
-                if guid and self.unequippedSuppressGUIDs[guid] then
-                    ownedSourceSlots[slotKey] = true
-                    self.unequippedSuppressGUIDs[guid] = nil
-                    AdjustSuppressedCount(self.unequippedSuppressCounts, itemInfo.itemID, -1)
-                elseif guid and self.bankWithdrawnSuppressGUIDs[guid] then
-                    ownedSourceSlots[slotKey] = true
-                    self.bankWithdrawnSuppressGUIDs[guid] = nil
-                    AdjustSuppressedCount(self.bankWithdrawnSuppressCounts, itemInfo.itemID, -1)
+        -- Pre-pass: scan only dirty bags (or all if allBagsDirty / direct unflagged call); reuse slotDataCache for clean bags
+        currentSlotItems = WipeTable(scratchCurrentSlotItems)
+        currentItemCounts = WipeTable(scratchCurrentItemCounts)
+        for _, bag in ipairs(scannableBags) do
+            local numSlots = self:GetNumBagSlots(bag)
+            local scanThisBag = shouldScanAll or dirtyBags[bag] == true
+            for slot = 1, numSlots do
+                local slotKey = GetSlotKey(bag, slot)
+                local itemInfo
+                if scanThisBag or slotDataCache[slotKey] == nil then
+                    itemInfo = self:GetItemInfoAt(bag, slot)
+                    slotDataCache[slotKey] = itemInfo or false
+                else
+                    local cached = slotDataCache[slotKey]
+                    itemInfo = (cached ~= false) and cached or nil
+                end
+                if itemInfo and itemInfo.itemID then
+                    currentSlotItems[slotKey] = itemInfo
+                    currentItemCounts[itemInfo.itemID] = (currentItemCounts[itemInfo.itemID] or 0) + (itemInfo.count or 1)
+                else
+                    currentSlotItems[slotKey] = false
+                end
+            end
+        end
+
+        -- Find all slots that previously held itemID but now do not (vacated / moved / swapped)
+        for _, bucket in pairs(scratchVacatedByItemID) do
+            WipeTable(bucket)
+        end
+        vacatedSlotsByItemID = WipeTable(scratchVacatedByItemID)
+        local vacatedBucketIdx = 0
+        local vacatedEntryIdx = 0
+        for sKey, oldID in pairs(prevKnownSlots) do
+            local curr = currentSlotItems[sKey]
+            if not curr or curr.itemID ~= oldID then
+                local bucket = vacatedSlotsByItemID[oldID]
+                if not bucket then
+                    vacatedBucketIdx = vacatedBucketIdx + 1
+                    bucket = scratchVacatedBucketPool[vacatedBucketIdx]
+                    if not bucket then
+                        bucket = {}
+                        scratchVacatedBucketPool[vacatedBucketIdx] = bucket
+                    else
+                        WipeTable(bucket)
+                    end
+                    vacatedSlotsByItemID[oldID] = bucket
+                end
+                vacatedEntryIdx = vacatedEntryIdx + 1
+                local vacEntry = scratchVacatedEntryPool[vacatedEntryIdx]
+                if not vacEntry then
+                    vacEntry = {}
+                    scratchVacatedEntryPool[vacatedEntryIdx] = vacEntry
+                end
+                vacEntry.slotKey = sKey
+                vacEntry.wasNew = (prevNewSlots[sKey] == true)
+                    or (prevHoveredNewSlots[sKey] and now < prevHoveredNewSlots[sKey])
+                vacEntry.hoveredTime = prevHoveredNewSlots[sKey]
+                vacEntry.wasDismissed = (prevDismissedNewHighlights[sKey] == true)
+                vacEntry.count = prevKnownCounts[sKey] or 1
+                bucket[#bucket + 1] = vacEntry
+            end
+        end
+
+        -- Match known owned-source GUIDs first (order-independent across all changed slots)
+        ownedSourceSlots = WipeTable(scratchOwnedSourceSlots)
+        for _, bag in ipairs(scannableBags) do
+            local numSlots = self:GetNumBagSlots(bag)
+            for slot = 1, numSlots do
+                local slotKey = GetSlotKey(bag, slot)
+                local itemInfo = currentSlotItems[slotKey]
+                if itemInfo and itemInfo.itemID and prevKnownSlots[slotKey] ~= itemInfo.itemID then
+                    local guid = itemInfo.itemGUID
+                    if guid and self.unequippedSuppressGUIDs[guid] then
+                        ownedSourceSlots[slotKey] = true
+                        self.unequippedSuppressGUIDs[guid] = nil
+                        AdjustSuppressedCount(self.unequippedSuppressCounts, itemInfo.itemID, -1)
+                    elseif guid and self.bankWithdrawnSuppressGUIDs[guid] then
+                        ownedSourceSlots[slotKey] = true
+                        self.bankWithdrawnSuppressGUIDs[guid] = nil
+                        AdjustSuppressedCount(self.bankWithdrawnSuppressCounts, itemInfo.itemID, -1)
+                    end
                 end
             end
         end
     end
 
-    for _, bag in ipairs(self:GetScannableBags()) do
+    for _, bag in ipairs(scannableBags) do
         local isReagentBag = (bag == reagentBagID)
         local isKeyringBag = (bag == keyringID)
         local isNormalBag = (not isReagentBag and not isKeyringBag)
@@ -3676,203 +3961,231 @@ function BagsMod:UpdateInventory()
 
         for slot = 1, numSlots do
             local slotKey = GetSlotKey(bag, slot)
-            local itemInfo = currentSlotItems[slotKey] or self:GetItemInfoAt(bag, slot)
-            if itemInfo and itemInfo.itemID then
-                local isTradeableBoP = false
-                if (itemInfo.quality or 0) >= 2 and (itemInfo.bindType == 1 or itemInfo.bindType == 4 or not itemInfo.bindType) then
-                    isTradeableBoP = self:HasActiveTradeTimer(bag, slot)
-                end
+            local itemInfo
+            if needsScan then
+                itemInfo = currentSlotItems[slotKey]
+                if itemInfo == false then itemInfo = nil end
+                if itemInfo and itemInfo.itemID then
+                    local isTradeableBoP = false
+                    if (itemInfo.quality or 0) >= 2 and (itemInfo.bindType == 1 or itemInfo.bindType == 4 or not itemInfo.bindType) then
+                        isTradeableBoP = self:HasActiveTradeTimer(bag, slot, nil, itemInfo)
+                    end
 
-                local prevID = prevKnownSlots[slotKey]
-                local isNewSlot = false
+                    local prevID = prevKnownSlots[slotKey]
+                    local isNewSlot = false
 
-                -- Check if this slot was just filled by user drag
-                local isSlotChanged = (prevID ~= itemInfo.itemID)
-                local isFromDrag = false
-                local draggedItemWasNew = false
-                local transferredHoveredTime = nil
-                local transferredWasDismissed = false
-                if self.draggedItemInfo and (now - self.draggedItemInfo.time) <= 3.0 and self.draggedItemInfo.itemID == itemInfo.itemID then
-                    if self.draggedItemInfo.fromSlotKey ~= slotKey then
-                        if isSlotChanged then
-                            isFromDrag = true
-                            draggedItemWasNew = (self.draggedItemInfo.isNew == true)
-                            transferredHoveredTime = self.draggedItemInfo.hoveredTime
-                            transferredWasDismissed = (self.draggedItemInfo.wasDismissed == true)
+                    -- Check if this slot was just filled by user drag
+                    local isSlotChanged = (prevID ~= itemInfo.itemID)
+                    local isFromDrag = false
+                    local draggedItemWasNew = false
+                    local transferredHoveredTime = nil
+                    local transferredWasDismissed = false
+                    if self.draggedItemInfo and (now - self.draggedItemInfo.time) <= 3.0 and self.draggedItemInfo.itemID == itemInfo.itemID then
+                        if self.draggedItemInfo.fromSlotKey ~= slotKey then
+                            if isSlotChanged then
+                                isFromDrag = true
+                                draggedItemWasNew = (self.draggedItemInfo.isNew == true)
+                                transferredHoveredTime = self.draggedItemInfo.hoveredTime
+                                transferredWasDismissed = (self.draggedItemInfo.wasDismissed == true)
+                                self.draggedItemInfo = nil
+                            end
+                        else
+                            -- Dropped back into the same slot
+                            if self.draggedItemInfo.isNew then
+                                isFromDrag = true
+                                draggedItemWasNew = true
+                                transferredHoveredTime = self.draggedItemInfo.hoveredTime
+                                transferredWasDismissed = (self.draggedItemInfo.wasDismissed == true)
+                            end
                             self.draggedItemInfo = nil
                         end
-                    else
-                        -- Dropped back into the same slot
-                        if self.draggedItemInfo.isNew then
-                            isFromDrag = true
-                            draggedItemWasNew = true
-                            transferredHoveredTime = self.draggedItemInfo.hoveredTime
-                            transferredWasDismissed = (self.draggedItemInfo.wasDismissed == true)
+                    end
+
+                    -- Check if this item was moved/swapped/split from another slot in inventory
+                    local isMovedItem = false
+                    local movedWasNew = false
+                    if isSlotChanged and not isFromDrag then
+                        local vacatedList = vacatedSlotsByItemID[itemInfo.itemID]
+                        if vacatedList and #vacatedList > 0 then
+                            local vac = table.remove(vacatedList, 1)
+                            isMovedItem = true
+                            if vac.wasNew then
+                                movedWasNew = true
+                            end
+                            transferredHoveredTime = vac.hoveredTime
+                            transferredWasDismissed = vac.wasDismissed
                         end
-                        self.draggedItemInfo = nil
                     end
-                end
 
-                -- Check if this item was moved/swapped/split from another slot in inventory
-                local isMovedItem = false
-                local movedWasNew = false
-                if isSlotChanged and not isFromDrag then
-                    local vacatedList = vacatedSlotsByItemID[itemInfo.itemID]
-                    if vacatedList and #vacatedList > 0 then
-                        local vac = table.remove(vacatedList, 1)
-                        isMovedItem = true
-                        if vac.wasNew then
-                            movedWasNew = true
+                    -- Check if item arrived from an owned character/account source (equipped gear, bank, warbank)
+                    local isOwnedSource = (ownedSourceSlots[slotKey] == true)
+                    local slotCountGrew = (not isSlotChanged) and ((itemInfo.count or 1) > (prevKnownCounts[slotKey] or 0))
+                    if not isOwnedSource and not isFromDrag and not isMovedItem and (isSlotChanged or slotCountGrew) then
+                        local addedCount = isSlotChanged and (itemInfo.count or 1) or ((itemInfo.count or 1) - (prevKnownCounts[slotKey] or 0))
+                        if (self.unequippedSuppressCounts[itemInfo.itemID] or 0) > 0 then
+                            isOwnedSource = true
+                            local consume = math.min(addedCount, self.unequippedSuppressCounts[itemInfo.itemID])
+                            AdjustSuppressedCount(self.unequippedSuppressCounts, itemInfo.itemID, -consume)
+                        elseif (self.bankWithdrawnSuppressCounts[itemInfo.itemID] or 0) > 0 then
+                            isOwnedSource = true
+                            local consume = math.min(addedCount, self.bankWithdrawnSuppressCounts[itemInfo.itemID])
+                            AdjustSuppressedCount(self.bankWithdrawnSuppressCounts, itemInfo.itemID, -consume)
                         end
-                        transferredHoveredTime = vac.hoveredTime
-                        transferredWasDismissed = vac.wasDismissed
                     end
-                end
 
-                -- Check if item arrived from an owned character/account source (equipped gear, bank, warbank)
-                local isOwnedSource = (ownedSourceSlots[slotKey] == true)
-                local slotCountGrew = (not isSlotChanged) and ((itemInfo.count or 1) > (prevKnownCounts[slotKey] or 0))
-                if not isOwnedSource and not isFromDrag and not isMovedItem and (isSlotChanged or slotCountGrew) then
-                    local addedCount = isSlotChanged and (itemInfo.count or 1) or ((itemInfo.count or 1) - (prevKnownCounts[slotKey] or 0))
-                    if (self.unequippedSuppressCounts[itemInfo.itemID] or 0) > 0 then
-                        isOwnedSource = true
-                        local consume = math.min(addedCount, self.unequippedSuppressCounts[itemInfo.itemID])
-                        AdjustSuppressedCount(self.unequippedSuppressCounts, itemInfo.itemID, -consume)
-                    elseif (self.bankWithdrawnSuppressCounts[itemInfo.itemID] or 0) > 0 then
-                        isOwnedSource = true
-                        local consume = math.min(addedCount, self.bankWithdrawnSuppressCounts[itemInfo.itemID])
-                        AdjustSuppressedCount(self.bankWithdrawnSuppressCounts, itemInfo.itemID, -consume)
-                    end
-                end
-
-                if isTradeableBoP then
-                    isNewSlot = true
-                elseif self.newSlots[slotKey] and not isSlotChanged then
-                    isNewSlot = true
-                elseif self.hoveredNewSlots and self.hoveredNewSlots[slotKey] and now < self.hoveredNewSlots[slotKey] and not isSlotChanged then
-                    isNewSlot = true
-                elseif isFromDrag then
-                    if draggedItemWasNew then
+                    if isTradeableBoP then
                         isNewSlot = true
-                    else
-                        ClearBlizzardNewItem(bag, slot)
-                    end
-                elseif isMovedItem then
-                    -- Moved items inherit new status if and only if they were already new
-                    if movedWasNew then
+                    elseif self.newSlots[slotKey] and not isSlotChanged then
                         isNewSlot = true
-                    else
-                        ClearBlizzardNewItem(bag, slot)
-                    end
-                elseif isOwnedSource then
-                    ClearBlizzardNewItem(bag, slot)
-                elseif _G.C_NewItems and _G.C_NewItems.IsNewItem and _G.C_NewItems.IsNewItem(bag, slot) then
-                    local prevTotal = prevItemCounts[itemInfo.itemID] or 0
-                    local currentTotal = currentItemCounts[itemInfo.itemID] or (itemInfo.count or 1)
-                    local wasExistingNonNew = (prevTotal > 0 and currentTotal <= prevTotal and not prevNewItemIDs[itemInfo.itemID])
-                    if not wasExistingNonNew then
+                    elseif self.hoveredNewSlots and self.hoveredNewSlots[slotKey] and now < self.hoveredNewSlots[slotKey] and not isSlotChanged then
                         isNewSlot = true
-                    else
-                        ClearBlizzardNewItem(bag, slot)
-                    end
-                elseif self.initialInventoryScanned and not isSorting and not isTeleporting and not inBankTransferContext and isSlotChanged then
-                    -- Fallback for newly acquired items (boss drop, vendor buy, quest reward):
-                    -- Must NOT be an already-known item whose total count in inventory did not increase!
-                    local prevTotal = prevItemCounts[itemInfo.itemID] or 0
-                    local currentTotal = currentItemCounts[itemInfo.itemID] or (itemInfo.count or 1)
-                    if prevTotal == 0 then
-                        -- Item was never seen in inventory before -> truly new acquisition
-                        isNewSlot = true
-                    elseif currentTotal > prevTotal then
-                        -- Total count increased (e.g. duplicate boss drop)
-                        if (itemInfo.maxStack or 1) == 1 then
+                    elseif isFromDrag then
+                        if draggedItemWasNew then
                             isNewSlot = true
+                        else
+                            ClearBlizzardNewItem(bag, slot)
+                        end
+                    elseif isMovedItem then
+                        -- Moved items inherit new status if and only if they were already new
+                        if movedWasNew then
+                            isNewSlot = true
+                        else
+                            ClearBlizzardNewItem(bag, slot)
+                        end
+                    elseif isOwnedSource then
+                        ClearBlizzardNewItem(bag, slot)
+                    elseif _G.C_NewItems and _G.C_NewItems.IsNewItem and _G.C_NewItems.IsNewItem(bag, slot) then
+                        local prevTotal = prevItemCounts[itemInfo.itemID] or 0
+                        local currentTotal = currentItemCounts[itemInfo.itemID] or (itemInfo.count or 1)
+                        local wasExistingNonNew = (prevTotal > 0 and currentTotal <= prevTotal and not prevNewItemIDs[itemInfo.itemID])
+                        if not wasExistingNonNew then
+                            isNewSlot = true
+                        else
+                            ClearBlizzardNewItem(bag, slot)
+                        end
+                    elseif self.initialInventoryScanned and not isSorting and not isTeleporting and not inBankTransferContext and isSlotChanged then
+                        -- Fallback for newly acquired items (boss drop, vendor buy, quest reward):
+                        -- Must NOT be an already-known item whose total count in inventory did not increase!
+                        local prevTotal = prevItemCounts[itemInfo.itemID] or 0
+                        local currentTotal = currentItemCounts[itemInfo.itemID] or (itemInfo.count or 1)
+                        if prevTotal == 0 then
+                            -- Item was never seen in inventory before -> truly new acquisition
+                            isNewSlot = true
+                        elseif currentTotal > prevTotal then
+                            -- Total count increased (e.g. duplicate boss drop)
+                            if (itemInfo.maxStack or 1) == 1 then
+                                isNewSlot = true
+                            end
                         end
                     end
-                end
 
-                -- Junk items (poor quality or custom assigned junk) are strictly never marked as new
-                if isNewSlot and self.IsItemJunk and self:IsItemJunk(itemInfo) then
-                    isNewSlot = false
-                end
+                    -- Junk items (poor quality or custom assigned junk) are strictly never marked as new
+                    if isNewSlot and self.IsItemJunk and self:IsItemJunk(itemInfo) then
+                        isNewSlot = false
+                    end
 
-                if isNewSlot then
-                    self.newSlots[slotKey] = true
-                    itemInfo.isNew = true
+                    if isNewSlot then
+                        self.newSlots[slotKey] = true
+                        itemInfo.isNew = true
+                    else
+                        self.newSlots[slotKey] = nil
+                        itemInfo.isNew = false
+                    end
+
+                    if prevID and prevID ~= itemInfo.itemID then
+                        if self.dismissedNewHighlights then
+                            self.dismissedNewHighlights[slotKey] = nil
+                        end
+                        if self.hoveredNewSlots then
+                            self.hoveredNewSlots[slotKey] = nil
+                        end
+                        if self.tradeTimerCache then
+                            self.tradeTimerCache[slotKey] = nil
+                        end
+                    end
+                    if transferredHoveredTime and now < transferredHoveredTime then
+                        self.hoveredNewSlots = self.hoveredNewSlots or {}
+                        self.hoveredNewSlots[slotKey] = transferredHoveredTime
+                    end
+                    if transferredWasDismissed then
+                        self.dismissedNewHighlights = self.dismissedNewHighlights or {}
+                        self.dismissedNewHighlights[slotKey] = true
+                    end
+                    self.knownSlots[slotKey] = itemInfo.itemID
+                    self.knownSlotCounts = self.knownSlotCounts or {}
+                    self.knownSlotCounts[slotKey] = itemInfo.count or 1
+                    self.knownItemIDs[itemInfo.itemID] = true
+                    allItems[#allItems + 1] = itemInfo
                 else
+                    if not isTeleporting then
+                        self.knownSlots[slotKey] = nil
+                        if self.knownSlotCounts then self.knownSlotCounts[slotKey] = nil end
+                    end
                     self.newSlots[slotKey] = nil
-                    itemInfo.isNew = false
-                end
-
-                if prevID and prevID ~= itemInfo.itemID then
-                    if self.dismissedNewHighlights then
-                        self.dismissedNewHighlights[slotKey] = nil
+                    if self.tradeTimerCache then self.tradeTimerCache[slotKey] = nil end
+                    if self.hoveredNewSlots then self.hoveredNewSlots[slotKey] = nil end
+                    if self.dismissedNewHighlights then self.dismissedNewHighlights[slotKey] = nil end
+                    if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
+                        ns.Utils.SafeCall(_G.C_NewItems.RemoveNewItem, bag, slot)
                     end
-                    if self.hoveredNewSlots then
-                        self.hoveredNewSlots[slotKey] = nil
+                    if (activeCat == "ALL" and (isNormalBag or isReagentBag))
+                        or (activeCat == "REAGENTS" and isReagentBag)
+                        or (activeCat == "KEYRING" and isKeyringBag)
+                        or (activeCat ~= "ALL" and activeCat ~= "REAGENTS" and activeCat ~= "KEYRING" and isNormalBag) then
+                        freeSlots = freeSlots + 1
                     end
-                    if self.tradeTimerCache then
-                        self.tradeTimerCache[slotKey] = nil
-                    end
                 end
-                if transferredHoveredTime and now < transferredHoveredTime then
-                    self.hoveredNewSlots = self.hoveredNewSlots or {}
-                    self.hoveredNewSlots[slotKey] = transferredHoveredTime
-                end
-                if transferredWasDismissed then
-                    self.dismissedNewHighlights = self.dismissedNewHighlights or {}
-                    self.dismissedNewHighlights[slotKey] = true
-                end
-                self.knownSlots[slotKey] = itemInfo.itemID
-                self.knownSlotCounts = self.knownSlotCounts or {}
-                self.knownSlotCounts[slotKey] = itemInfo.count or 1
-                self.knownItemIDs[itemInfo.itemID] = true
-                table.insert(allItems, itemInfo)
             else
-                if not isTeleporting then
-                    self.knownSlots[slotKey] = nil
-                    if self.knownSlotCounts then self.knownSlotCounts[slotKey] = nil end
-                end
-                self.newSlots[slotKey] = nil
-                if self.tradeTimerCache then self.tradeTimerCache[slotKey] = nil end
-                if self.hoveredNewSlots then self.hoveredNewSlots[slotKey] = nil end
-                if self.dismissedNewHighlights then self.dismissedNewHighlights[slotKey] = nil end
-                if _G.C_NewItems and _G.C_NewItems.RemoveNewItem then
-                    ns.Utils.SafeCall(_G.C_NewItems.RemoveNewItem, bag, slot)
-                end
-                if (activeCat == "ALL" and (isNormalBag or isReagentBag))
-                    or (activeCat == "REAGENTS" and isReagentBag)
-                    or (activeCat == "KEYRING" and isKeyringBag)
-                    or (activeCat ~= "ALL" and activeCat ~= "REAGENTS" and activeCat ~= "KEYRING" and isNormalBag) then
-                    freeSlots = freeSlots + 1
+                local cached = slotDataCache[slotKey]
+                itemInfo = (cached and cached ~= false) and cached or nil
+                if itemInfo and itemInfo.itemID then
+                    allItems[#allItems + 1] = itemInfo
+                else
+                    if (activeCat == "ALL" and (isNormalBag or isReagentBag))
+                        or (activeCat == "REAGENTS" and isReagentBag)
+                        or (activeCat == "KEYRING" and isKeyringBag)
+                        or (activeCat ~= "ALL" and activeCat ~= "REAGENTS" and activeCat ~= "KEYRING" and isNormalBag) then
+                        freeSlots = freeSlots + 1
+                    end
                 end
             end
 
             if activeCat == "ALL" then
                 if isNormalBag then
-                    table.insert(normalDisplaySlots, AllocSlotEntry(bag, slot, itemInfo))
+                    entryIndex = entryIndex + 1
+                    normalDisplaySlots[#normalDisplaySlots + 1] = AllocSlotEntry(entryPool, entryIndex, bag, slot, itemInfo)
                 elseif isReagentBag then
-                    table.insert(reagentDisplaySlots, AllocSlotEntry(bag, slot, itemInfo))
+                    entryIndex = entryIndex + 1
+                    reagentDisplaySlots[#reagentDisplaySlots + 1] = AllocSlotEntry(entryPool, entryIndex, bag, slot, itemInfo)
                 end
             elseif activeCat == "REAGENTS" then
                 if isNormalBag then
                     if itemInfo and itemInfo.itemID and self:ItemMatchesCategory(itemInfo, activeCat) then
-                        table.insert(normalDisplaySlots, AllocSlotEntry(bag, slot, itemInfo))
+                        entryIndex = entryIndex + 1
+                        normalDisplaySlots[#normalDisplaySlots + 1] = AllocSlotEntry(entryPool, entryIndex, bag, slot, itemInfo)
                         totalSlots = totalSlots + 1
                     end
                 elseif isReagentBag then
-                    table.insert(reagentDisplaySlots, AllocSlotEntry(bag, slot, itemInfo))
+                    entryIndex = entryIndex + 1
+                    reagentDisplaySlots[#reagentDisplaySlots + 1] = AllocSlotEntry(entryPool, entryIndex, bag, slot, itemInfo)
                 end
             elseif activeCat == "KEYRING" then
                 if isKeyringBag then
-                    table.insert(displaySlots, AllocSlotEntry(bag, slot, itemInfo))
+                    entryIndex = entryIndex + 1
+                    displaySlots[#displaySlots + 1] = AllocSlotEntry(entryPool, entryIndex, bag, slot, itemInfo)
                 end
             else
                 if itemInfo and itemInfo.itemID and self:ItemMatchesCategory(itemInfo, activeCat) then
-                    table.insert(displaySlots, AllocSlotEntry(bag, slot, itemInfo))
+                    entryIndex = entryIndex + 1
+                    displaySlots[#displaySlots + 1] = AllocSlotEntry(entryPool, entryIndex, bag, slot, itemInfo)
                 end
             end
         end
+    end
+
+    if needsScan then
+        WipeTable(dirtyBags)
+        allBagsDirty = false
     end
 
     local numNormal = 0
@@ -3996,9 +4309,6 @@ function BagsMod:UpdateInventory()
 
             if not parent:IsShown() then parent:Show() end
             if not slotFrame:IsShown() then slotFrame:Show() end
-            if slotFrame.roithiBorder and slotFrame.roithiBorder.Show and not slotFrame.roithiBorder:IsShown() then
-                slotFrame.roithiBorder:Show()
-            end
 
             slotFrame:SetID(entry.slot or 0)
             if slotFrame.slotParent then
@@ -4011,15 +4321,19 @@ function BagsMod:UpdateInventory()
 
             local itemData = entry.itemData
             if itemData then
+                slotFrame.wasEmptyCleared = false
                 if slotFrame.IconBorder and slotFrame.IconBorder:IsShown() then
                     slotFrame.IconBorder:SetAlpha(0)
                     slotFrame.IconBorder:Hide()
                 end
-                local normTex = slotFrame.GetNormalTexture and slotFrame:GetNormalTexture()
-                if type(normTex) == "table" and normTex.IsShown and normTex:IsShown() then
-                    if normTex.SetTexture then normTex:SetTexture(nil) end
-                    if normTex.SetAlpha then normTex:SetAlpha(0) end
-                    if normTex.Hide then normTex:Hide() end
+                if not slotFrame.normTexCleared then
+                    local normTex = slotFrame.GetNormalTexture and slotFrame:GetNormalTexture()
+                    if type(normTex) == "table" and normTex.IsShown and normTex:IsShown() then
+                        if normTex.SetTexture then normTex:SetTexture(nil) end
+                        if normTex.SetAlpha then normTex:SetAlpha(0) end
+                        if normTex.Hide then normTex:Hide() end
+                    end
+                    slotFrame.normTexCleared = true
                 end
                 local isMatch = true
                 if isSearching then
@@ -4054,13 +4368,8 @@ function BagsMod:UpdateInventory()
                     slotFrame:SetAlpha(targetAlpha)
                     slotFrame.lastAlpha = targetAlpha
                 end
-                if iconTex and iconTex.SetDesaturated then
-                    local desat = isDimmed
-                    if slotFrame.lastDesat ~= desat then
-                        iconTex:SetDesaturated(desat)
-                        slotFrame.lastDesat = desat
-                    end
-                end
+                slotFrame.isDimmed = isDimmed
+                ApplySlotDesat(slotFrame, isDimmed, itemData.isLocked)
 
                 local br, bg, bb, ba
                 if isDimmed then
@@ -4153,45 +4462,46 @@ function BagsMod:UpdateInventory()
                     slotFrame.IconQuestTexture:Hide()
                 end
 
-                -- Quest indicator (clean exclamation mark without squashed box/border)
+                -- Quest indicator (clean exclamation mark; geometry configured in AcquireItemSlot/UpdateTypography)
                 if slotFrame.questIcon then
                     local isQuest = itemData.showQuestBang or itemData.showQuestBorder or itemData.isQuest or (itemData.classID == 12)
                     if isQuest then
-                        local questTex = "Interface\\GossipFrame\\AvailableQuestIcon"
-                        slotFrame.questIcon:SetTexture(questTex)
-                        if slotFrame.questIcon.SetTexCoord then
-                            slotFrame.questIcon:SetTexCoord(0, 1, 0, 1)
+                        if not slotFrame.questTexApplied then
+                            slotFrame.questIcon:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
+                            if slotFrame.questIcon.SetTexCoord then slotFrame.questIcon:SetTexCoord(0, 1, 0, 1) end
+                            slotFrame.questTexApplied = true
                         end
-                        local qSize = (self.db and self.db.questIndicatorSize) or 16
-                        local qAnchor = (self.db and self.db.questIndicatorAnchor) or "BOTTOMLEFT"
-                        local qX = (self.db and self.db.questIndicatorX) or 1
-                        local qY = (self.db and self.db.questIndicatorY) or 1
-                        if slotFrame.questIcon.SetSize then slotFrame.questIcon:SetSize(qSize, qSize) end
-                        if slotFrame.questIcon.ClearAllPoints then slotFrame.questIcon:ClearAllPoints() end
-                        slotFrame.questIcon:SetPoint(qAnchor, slotFrame, qAnchor, qX, qY)
                         if not slotFrame.questIcon:IsShown() then slotFrame.questIcon:Show() end
                     else
                         if slotFrame.questIcon:IsShown() then slotFrame.questIcon:Hide() end
                     end
                 end
 
-                -- Cosmetic indicator (shows on cosmetic items that can be learned)
+                -- Cosmetic indicator (memoized per itemID; shows on cosmetic items that can be learned)
                 if slotFrame.cosmeticIcon then
                     local isCosmetic = false
-                    if itemData and (itemData.hyperlink or itemData.itemID) then
-                        if _G.C_Item and _G.C_Item.IsCosmeticItem then
-                            local ok, cosmetic = ns.Utils.SafeCall(_G.C_Item.IsCosmeticItem, itemData.hyperlink or itemData.itemID)
-                            if ok and cosmetic then
-                                isCosmetic = true
-                            end
+                    local cItemID = itemData.itemID
+                    if cItemID then
+                        local cachedCosmetic = cosmeticItemCache[cItemID]
+                        if cachedCosmetic ~= nil then
+                            isCosmetic = cachedCosmetic
+                        elseif _G.C_Item and _G.C_Item.IsCosmeticItem then
+                            local ok, cosmetic = ns.Utils.SafeCall(_G.C_Item.IsCosmeticItem, itemData.hyperlink or cItemID)
+                            isCosmetic = (ok and cosmetic) and true or false
+                            cosmeticItemCache[cItemID] = isCosmetic
                         end
                     end
                     local isLearnable = false
-                    if isCosmetic and itemData.itemID then
-                        if _G.C_TransmogCollection and _G.C_TransmogCollection.PlayerHasTransmog then
-                            local ok, hasTransmog = ns.Utils.SafeCall(_G.C_TransmogCollection.PlayerHasTransmog, itemData.itemID)
-                            if ok and not hasTransmog then
-                                isLearnable = true
+                    if isCosmetic and cItemID then
+                        local cachedTransmog = transmogKnownCache[cItemID]
+                        if cachedTransmog ~= nil then
+                            isLearnable = not cachedTransmog
+                        elseif _G.C_TransmogCollection and _G.C_TransmogCollection.PlayerHasTransmog then
+                            local ok, hasTransmog = ns.Utils.SafeCall(_G.C_TransmogCollection.PlayerHasTransmog, cItemID)
+                            if ok then
+                                local known = (hasTransmog == true)
+                                transmogKnownCache[cItemID] = known
+                                isLearnable = not known
                             end
                         else
                             isLearnable = true
@@ -4205,17 +4515,10 @@ function BagsMod:UpdateInventory()
                     end
                 end
 
-                -- Junk indicator (gold coin for poor quality or custom junk items)
+                -- Junk indicator (gold coin for poor quality or custom junk items; geometry configured in AcquireItemSlot/UpdateTypography)
                 if slotFrame.junkIcon then
                     local isJunk = (self.db.showJunkIndicator ~= false) and self:IsItemJunk(itemData)
                     if isJunk then
-                        local jSize = (self.db and self.db.junkIndicatorSize) or 14
-                        local jAnchor = (self.db and self.db.junkIndicatorAnchor) or "BOTTOMLEFT"
-                        local jX = (self.db and self.db.junkIndicatorX) or 1
-                        local jY = (self.db and self.db.junkIndicatorY) or 1
-                        if slotFrame.junkIcon.SetSize then slotFrame.junkIcon:SetSize(jSize, jSize) end
-                        if slotFrame.junkIcon.ClearAllPoints then slotFrame.junkIcon:ClearAllPoints() end
-                        slotFrame.junkIcon:SetPoint(jAnchor, slotFrame, jAnchor, jX, jY)
                         if not slotFrame.junkIcon:IsShown() then slotFrame.junkIcon:Show() end
                     else
                         if slotFrame.junkIcon:IsShown() then slotFrame.junkIcon:Hide() end
@@ -4251,56 +4554,66 @@ function BagsMod:UpdateInventory()
                 self:UpdateSlotCooldown(slotFrame)
                 slotFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
             else
-                -- Empty slot
-                if slotFrame.junkIcon and slotFrame.junkIcon:IsShown() then slotFrame.junkIcon:Hide() end
-                if slotFrame.reagentQualityIcon and slotFrame.reagentQualityIcon:IsShown() then slotFrame.reagentQualityIcon:Hide() end
-                slotFrame.lastReagentQualityAtlas = nil
-                if slotFrame.cosmeticIcon and slotFrame.cosmeticIcon:IsShown() then slotFrame.cosmeticIcon:Hide() end
-                if slotFrame.questIcon and slotFrame.questIcon:IsShown() then slotFrame.questIcon:Hide() end
-                if slotFrame.IconBorder and slotFrame.IconBorder:IsShown() then
-                    slotFrame.IconBorder:SetAlpha(0)
-                    slotFrame.IconBorder:Hide()
-                end
-                local normEmpty = slotFrame.GetNormalTexture and slotFrame:GetNormalTexture()
-                if type(normEmpty) == "table" and normEmpty.IsShown and normEmpty:IsShown() then
-                    if normEmpty.SetTexture then normEmpty:SetTexture(nil) end
-                    if normEmpty.SetAlpha then normEmpty:SetAlpha(0) end
-                    if normEmpty.Hide then normEmpty:Hide() end
-                end
-                local iconTex = slotFrame.icon or slotFrame.Icon
-                if iconTex then
-                    if iconTex.SetDesaturated then iconTex:SetDesaturated(false) end
-                    if iconTex.SetVertexColor then iconTex:SetVertexColor(1, 1, 1, 1) end
-                    if iconTex.SetAtlas then iconTex:SetAtlas(nil) end
-                    if iconTex.SetTexture then iconTex:SetTexture(nil) end
-                    if iconTex:IsShown() then iconTex:Hide() end
-                end
-                if slotFrame.SetItemButtonTexture then slotFrame:SetItemButtonTexture(nil) end
-                slotFrame.emptyBackgroundAtlas = nil
-                slotFrame.emptyBackgroundTexture = nil
-                slotFrame.lastTexture = nil
-                slotFrame.lastDesat = nil
-                local countText = slotFrame.count or slotFrame.Count
-                if countText and countText:IsShown() then countText:Hide() end
-                if slotFrame.lastCountText ~= nil then slotFrame.lastCountText = nil end
-
-                if slotFrame.ilvl and slotFrame.ilvl:IsShown() then slotFrame.ilvl:Hide() end
-                if slotFrame.lastIlvlText ~= nil then slotFrame.lastIlvlText = nil end
-
-                if slotFrame.fav and slotFrame.fav:IsShown() then slotFrame.fav:Hide() end
-                if slotFrame.newOverlay and slotFrame.newOverlay:IsShown() then slotFrame.newOverlay:Hide() end
-                if slotFrame.NewItemTexture and slotFrame.NewItemTexture:IsShown() then slotFrame.NewItemTexture:Hide() end
-                if slotFrame.BattlepayItemTexture and slotFrame.BattlepayItemTexture:IsShown() then slotFrame.BattlepayItemTexture:Hide() end
-                if slotFrame.newitemglowAnim and slotFrame.newitemglowAnim.Stop then slotFrame.newitemglowAnim:Stop() end
-                if slotFrame.flashAnim and slotFrame.flashAnim.Stop then slotFrame.flashAnim:Stop() end
-                if slotFrame.AugmentBorderAnim and slotFrame.AugmentBorderAnim.Stop then slotFrame.AugmentBorderAnim:Stop() end
-                if slotFrame.Cooldown then
-                    slotFrame.Cooldown:Hide()
-                    if slotFrame.Cooldown.Clear then
-                        slotFrame.Cooldown:Clear()
-                    elseif slotFrame.Cooldown.SetCooldown then
-                        slotFrame.Cooldown:SetCooldown(0, 0)
+                -- Empty slot (skip redundant C-widget clears if already cleared)
+                if not slotFrame.wasEmptyCleared then
+                    if slotFrame.junkIcon and slotFrame.junkIcon:IsShown() then slotFrame.junkIcon:Hide() end
+                    if slotFrame.reagentQualityIcon and slotFrame.reagentQualityIcon:IsShown() then slotFrame.reagentQualityIcon:Hide() end
+                    slotFrame.lastReagentQualityAtlas = nil
+                    if slotFrame.cosmeticIcon and slotFrame.cosmeticIcon:IsShown() then slotFrame.cosmeticIcon:Hide() end
+                    if slotFrame.questIcon and slotFrame.questIcon:IsShown() then slotFrame.questIcon:Hide() end
+                    if slotFrame.IconBorder and slotFrame.IconBorder:IsShown() then
+                        slotFrame.IconBorder:SetAlpha(0)
+                        slotFrame.IconBorder:Hide()
                     end
+                    if not slotFrame.normTexCleared then
+                        local normEmpty = slotFrame.GetNormalTexture and slotFrame:GetNormalTexture()
+                        if type(normEmpty) == "table" and normEmpty.IsShown and normEmpty:IsShown() then
+                            if normEmpty.SetTexture then normEmpty:SetTexture(nil) end
+                            if normEmpty.SetAlpha then normEmpty:SetAlpha(0) end
+                            if normEmpty.Hide then normEmpty:Hide() end
+                        end
+                        slotFrame.normTexCleared = true
+                    end
+                    local iconTex = slotFrame.icon or slotFrame.Icon
+                    if iconTex then
+                        if iconTex.SetDesaturated then iconTex:SetDesaturated(false) end
+                        if iconTex.SetVertexColor then iconTex:SetVertexColor(1, 1, 1, 1) end
+                        if iconTex.SetAtlas then iconTex:SetAtlas(nil) end
+                        if iconTex.SetTexture then iconTex:SetTexture(nil) end
+                        if iconTex:IsShown() then iconTex:Hide() end
+                    end
+                    if slotFrame.SetItemButtonTexture then slotFrame:SetItemButtonTexture(nil) end
+                    slotFrame.emptyBackgroundAtlas = nil
+                    slotFrame.emptyBackgroundTexture = nil
+                    slotFrame.lastTexture = nil
+                    slotFrame.lastDesat = nil
+                    slotFrame.isDimmed = false
+                    local countText = slotFrame.count or slotFrame.Count
+                    if countText and countText:IsShown() then countText:Hide() end
+                    if slotFrame.lastCountText ~= nil then slotFrame.lastCountText = nil end
+
+                    if slotFrame.ilvl and slotFrame.ilvl:IsShown() then slotFrame.ilvl:Hide() end
+                    if slotFrame.lastIlvlText ~= nil then slotFrame.lastIlvlText = nil end
+
+                    if slotFrame.fav and slotFrame.fav:IsShown() then slotFrame.fav:Hide() end
+                    if slotFrame.newOverlay and slotFrame.newOverlay:IsShown() then slotFrame.newOverlay:Hide() end
+                    if slotFrame.NewItemTexture and slotFrame.NewItemTexture:IsShown() then slotFrame.NewItemTexture:Hide() end
+                    if slotFrame.BattlepayItemTexture and slotFrame.BattlepayItemTexture:IsShown() then slotFrame.BattlepayItemTexture:Hide() end
+                    if slotFrame.newitemglowAnim and slotFrame.newitemglowAnim.Stop then slotFrame.newitemglowAnim:Stop() end
+                    if slotFrame.flashAnim and slotFrame.flashAnim.Stop then slotFrame.flashAnim:Stop() end
+                    if slotFrame.AugmentBorderAnim and slotFrame.AugmentBorderAnim.Stop then slotFrame.AugmentBorderAnim:Stop() end
+                    if slotFrame.Cooldown then
+                        if slotFrame.lastCdEnable ~= 0 or slotFrame.Cooldown:IsShown() then
+                            slotFrame.Cooldown:Hide()
+                            if slotFrame.Cooldown.Clear then
+                                slotFrame.Cooldown:Clear()
+                            elseif slotFrame.Cooldown.SetCooldown then
+                                slotFrame.Cooldown:SetCooldown(0, 0)
+                            end
+                        end
+                        slotFrame.lastCdStart, slotFrame.lastCdDuration, slotFrame.lastCdEnable = 0, 0, 0
+                    end
+                    slotFrame.wasEmptyCleared = true
                 end
                 local targetAlpha = isSearching and 0.2 or 1.0
                 if slotFrame.lastAlpha ~= targetAlpha then
@@ -4319,11 +4632,10 @@ function BagsMod:UpdateInventory()
     for i = numDisplay + 1, #self.itemSlots do
         local s = self.itemSlots[i]
         if s then
-            s:Hide()
-            if s.slotParent then s.slotParent:Hide() end
-            if s.Cooldown then s.Cooldown:Hide() end
-            if s.newOverlay then s.newOverlay:Hide() end
-            if s.roithiBorder then s.roithiBorder:Hide() end
+            if s:IsShown() then s:Hide() end
+            if s.slotParent and s.slotParent:IsShown() then s.slotParent:Hide() end
+            if s.Cooldown and s.Cooldown:IsShown() then s.Cooldown:Hide() end
+            if s.newOverlay and s.newOverlay:IsShown() then s.newOverlay:Hide() end
         end
     end
 
@@ -4360,11 +4672,21 @@ function BagsMod:UpdateSlotCooldown(slotFrame)
             start, duration, enable = _G.GetContainerItemCooldown(slotFrame.bag, slotFrame.slot)
         end
     end
-    if enable and enable ~= 0 and duration and duration > 0 then
+    start = start or 0
+    duration = duration or 0
+    enable = enable or 0
+    if slotFrame.lastCdStart == start and slotFrame.lastCdDuration == duration and slotFrame.lastCdEnable == enable then
+        if enable ~= 0 and duration > 0 and not slotFrame.Cooldown:IsShown() then
+            slotFrame.Cooldown:Show()
+        end
+        return
+    end
+    slotFrame.lastCdStart, slotFrame.lastCdDuration, slotFrame.lastCdEnable = start, duration, enable
+    if enable ~= 0 and duration > 0 then
         slotFrame.Cooldown:SetCooldown(start, duration)
-        slotFrame.Cooldown:Show()
+        if not slotFrame.Cooldown:IsShown() then slotFrame.Cooldown:Show() end
     else
-        slotFrame.Cooldown:Hide()
+        if slotFrame.Cooldown:IsShown() then slotFrame.Cooldown:Hide() end
         if slotFrame.Cooldown.Clear then
             slotFrame.Cooldown:Clear()
         elseif slotFrame.Cooldown.SetCooldown then
@@ -4373,12 +4695,39 @@ function BagsMod:UpdateSlotCooldown(slotFrame)
     end
 end
 
-function BagsMod:OnBagCooldownUpdate()
+function BagsMod:FlushBagCooldownUpdate()
     if not self.mainFrame or not self.mainFrame:IsShown() then return end
     for _, slotFrame in ipairs(self.itemSlots) do
         if slotFrame:IsShown() and slotFrame.bag and slotFrame.slot then
-            self:UpdateSlotCooldown(slotFrame)
+            local data = slotFrame.itemData
+            if data and (ItemCanHaveCooldown(data.itemID) or (slotFrame.lastCdEnable and slotFrame.lastCdEnable ~= 0) or (slotFrame.lastCdDuration and slotFrame.lastCdDuration > 0)) then
+                self:UpdateSlotCooldown(slotFrame)
+            elseif slotFrame.Cooldown and slotFrame.Cooldown:IsShown() then
+                slotFrame.Cooldown:Hide()
+                slotFrame.lastCdStart, slotFrame.lastCdDuration, slotFrame.lastCdEnable = 0, 0, 0
+            end
         end
+    end
+end
+
+function BagsMod:OnBagCooldownUpdate()
+    if not self.mainFrame or not self.mainFrame:IsShown() then return end
+    if self.pendingCooldownUpdate then return end
+    self.pendingCooldownUpdate = true
+
+    if not self.runCooldownFlush then
+        self.runCooldownFlush = function()
+            self.pendingCooldownUpdate = nil
+            self:FlushBagCooldownUpdate()
+        end
+    end
+
+    if _G.RunNextFrame then
+        _G.RunNextFrame(self.runCooldownFlush)
+    elseif _G.C_Timer and _G.C_Timer.After then
+        _G.C_Timer.After(0, self.runCooldownFlush)
+    else
+        self.runCooldownFlush()
     end
 end
 
@@ -4389,7 +4738,7 @@ function BagsMod:RefreshProfile()
         local cfg = (self.db and self.db.bagBar) or (self.defaultSettings and self.defaultSettings.bagBar) or {}
         local pt = cfg.point or "BOTTOMLEFT"
         self.bagBarFrame:ClearAllPoints()
-        self.bagBarFrame:SetPoint(pt, UIParent, pt, cfg.x or 286, cfg.y or 285)
+        self.bagBarFrame:SetPoint(pt, UIParent, pt, cfg.x or 290, cfg.y or 250)
     end
     if self.UpdateBagBarLayout then
         self:UpdateBagBarLayout()
@@ -4398,7 +4747,7 @@ function BagsMod:RefreshProfile()
         self:UpdateTypography()
     end
     if self.UpdateInventory then
-        self:UpdateInventory()
+        self:UpdateInventory(true)
     end
     if self.mainFrame and self.mainFrame.ClearAllPoints and self.mainFrame.SetPoint then
         local pos = (self.db and (self.db.bagWindow or self.db.mainBagPosition)) or (self.defaultSettings and (self.defaultSettings.bagWindow or self.defaultSettings.mainBagPosition))
@@ -4416,5 +4765,5 @@ BagsMod.RefreshSettings = BagsMod.RefreshProfile
 
 function BagsMod:UpdateFonts()
     if self.UpdateTypography then self:UpdateTypography() end
-    self:UpdateInventory()
+    self:UpdateInventory(true)
 end

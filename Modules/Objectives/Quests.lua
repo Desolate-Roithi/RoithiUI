@@ -14,6 +14,16 @@ local blockQuestIDs = objState.blockQuestIDs or setmetatable({}, { __mode = "k" 
 objState.blockQuestIDs = blockQuestIDs
 local barBackdrops = objState.barBackdrops or setmetatable({}, { __mode = "k" })
 objState.barBackdrops = barBackdrops
+local overflowHiddenBlocks = objState.overflowHiddenBlocks or setmetatable({}, { __mode = "k" })
+objState.overflowHiddenBlocks = overflowHiddenBlocks
+
+local function IsBlockCachedOrTurnIn(block)
+    if objState.IsBlockCachedOrTurnIn then
+        return objState.IsBlockCachedOrTurnIn(block)
+    end
+    if not block then return true end
+    return block.cached == true
+end
 
 local questZoneCache = {}
 local questTitleCache = {}
@@ -661,10 +671,10 @@ function ObjectivesMod:ApplyQuestLevelToTitle(block)
     local baseText = GetCleanQuestTitle(block, questID, curText)
     if not baseText or IsSecret(baseText) or type(baseText) ~= "string" or baseText == "" then return end
 
-    local fc = self.db.foreverColor or (self.defaultSettings and self.defaultSettings.foreverColor) or { r = 0.22, g = 0.74, b = 0.97 }
-    local infR = math.floor((fc.r or 0.22) * 255 + 0.5)
-    local infG = math.floor((fc.g or 0.74) * 255 + 0.5)
-    local infB = math.floor((fc.b or 0.97) * 255 + 0.5)
+    local fc = self.db.foreverColor or (self.defaultSettings and self.defaultSettings.foreverColor) or { r = 0.30, g = 0.60, b = 1.0 }
+    local infR = math.floor((fc.r or 0.30) * 255 + 0.5)
+    local infG = math.floor((fc.g or 0.60) * 255 + 0.5)
+    local infB = math.floor((fc.b or 1.0) * 255 + 0.5)
     local infinityStr = string.format("|TInterface\\AddOns\\%s\\Media\\Textures\\Infinity:12:12:0:0:64:64:0:64:0:64:%d:%d:%d|t", addonName or "RoithiUI", infR, infG, infB)
 
     local newText
@@ -747,6 +757,9 @@ function ObjectivesMod:HandleBlockEnter(block)
         self:CancelCollapseTimer()
     end
     self:UpdateBlockHoverObjectives(block, true)
+    if self.TrimTrackerGap and block.parentModule then
+        self:TrimTrackerGap(block.parentModule)
+    end
 end
 
 function ObjectivesMod:HandleBlockLeave(block)
@@ -761,12 +774,18 @@ function ObjectivesMod:HandleBlockLeave(block)
 
     if self:IsQuestPinned(block) then
         self:UpdateBlockHoverObjectives(block, false)
+        if self.TrimTrackerGap and block.parentModule then
+            self:TrimTrackerGap(block.parentModule)
+        end
         return
     end
 
-    local delay = (self.db and self.db.collapseDelay) or 0.25
+    local delay = (self.db and self.db.collapseDelay) or 0.5
     if delay <= 0 or not _G.C_Timer or not _G.C_Timer.After then
         self:UpdateBlockHoverObjectives(block, false)
+        if self.TrimTrackerGap and block.parentModule then
+            self:TrimTrackerGap(block.parentModule)
+        end
         return
     end
 
@@ -781,12 +800,20 @@ function ObjectivesMod:HandleBlockLeave(block)
             else
                 self:UpdateBlockHoverObjectives(block, true)
             end
+            if self.TrimTrackerGap and block.parentModule then
+                self:TrimTrackerGap(block.parentModule)
+            end
         end
     end)
 end
 
 function ObjectivesMod:UpdateBlockHoverObjectives(block, isHovered)
-    if not block then return end
+    if not block or IsBlockCachedOrTurnIn(block) then return end
+
+    -- Restore block and header alpha in case a pooled frame carried zero alpha from TurnInAnim/AddAnim.
+    if block.SetAlpha then block:SetAlpha(1) end
+    local titleFS = block.HeaderText or GetBlockTitleFS(block)
+    if titleFS and titleFS.SetAlpha then titleFS:SetAlpha(1) end
 
     local isPinned = self:IsQuestPinned(block)
     local isPendingCollapse = (self.pendingCollapseBlock == block)
@@ -972,7 +999,12 @@ local function SortQuestEntriesByIndex(a, b)
 end
 
 local function CollectTrackerSortBlock(block)
-    if block and block.used ~= false and (block.IsShown == nil or block:IsShown()) then
+    if not block then return end
+    if IsBlockCachedOrTurnIn(block) then
+        overflowHiddenBlocks[block] = nil
+        return
+    end
+    if block.used ~= false and ((block.IsShown and block:IsShown()) or overflowHiddenBlocks[block] or block.IsShown == nil) then
         local isPopup = (block.popUpType ~= nil) or (type(block.id) == "string") or (block.template == "AutoQuestPopUpBlockTemplate")
         local mod = sortActiveSelf or ObjectivesMod
         local qID = (not isPopup and mod and mod.GetBlockQuestID) and mod:GetBlockQuestID(block) or nil
@@ -996,6 +1028,53 @@ local function CollectTrackerSortBlock(block)
         else
             table.insert(sortPrefixBlocks, block)
         end
+    end
+end
+
+local function GetTrackerVisualBudget(mod, tracker)
+    local maxTotal = (mod and (mod.lastMaxHeight or (mod.db and mod.db.maxHeight))) or 850
+    local otf = _G.ObjectiveTrackerFrame
+    local usedAbove = 0
+
+    if otf and tracker and otf.GetTop and tracker.GetTop then
+        local otfTop = otf:GetTop()
+        local tTop = tracker:GetTop()
+        if otfTop and tTop and not IsSecret(otfTop) and not IsSecret(tTop) and type(otfTop) == "number" and type(tTop) == "number" and otfTop > tTop then
+            usedAbove = otfTop - tTop
+        end
+    end
+
+    if usedAbove <= 0 and otf and otf.modules then
+        local pad = (not IsSecret(otf.topModulePadding) and type(otf.topModulePadding) == "number") and otf.topModulePadding or 38
+        local spacing = (not IsSecret(otf.moduleSpacing) and type(otf.moduleSpacing) == "number") and otf.moduleSpacing or 10
+        usedAbove = pad
+        for _, m in ipairs(otf.modules) do
+            if m == tracker then break end
+            if m and (m.IsShown == nil or m:IsShown()) and m.GetHeight then
+                local mh = m:GetHeight()
+                if mh and not IsSecret(mh) and type(mh) == "number" and mh > 0 then
+                    usedAbove = usedAbove + mh + spacing
+                end
+            end
+        end
+    end
+
+    return math.max(100, maxTotal - usedAbove)
+end
+
+local function MeasureSortedBlockStep(b, isFirst, fromHeader, fromBlock)
+    local rawH = b and b.GetHeight and b:GetHeight()
+    local bh = (rawH and not IsSecret(rawH) and type(rawH) == "number" and rawH > 0) and rawH or 0
+    return (isFirst and fromHeader or fromBlock) + bh
+end
+
+local function RestoreOverflowBlock(b)
+    if not b then return end
+    if overflowHiddenBlocks[b] then
+        overflowHiddenBlocks[b] = nil
+    end
+    if b.Show and not (b.IsShown and b:IsShown()) then
+        b:Show()
     end
 end
 
@@ -1035,18 +1114,20 @@ function ObjectivesMod:SortTrackerBlocks(tracker)
 
     forEachBlock(tracker, CollectTrackerSortBlock)
 
-    if #sortQuestEntries <= 1 and #sortPrefixBlocks == 0 then
+    if #sortQuestEntries == 0 and #sortPrefixBlocks == 0 then
         sortActiveSelf = nil
         return
     end
 
-    if self.db and self.db.sortQuestsByZone ~= false then
-        local sortFunc = self.SortInfosByCurrentZone or (objState and objState.SortInfosByCurrentZone) or SortInfosByCurrentZone
-        if sortFunc then
-            sortFunc(sortQuestEntries)
+    if #sortQuestEntries > 1 then
+        if self.db and self.db.sortQuestsByZone ~= false then
+            local sortFunc = self.SortInfosByCurrentZone or (objState and objState.SortInfosByCurrentZone) or SortInfosByCurrentZone
+            if sortFunc then
+                sortFunc(sortQuestEntries)
+            end
+        else
+            table.sort(sortQuestEntries, SortQuestEntriesByIndex)
         end
-    else
-        table.sort(sortQuestEntries, SortQuestEntriesByIndex)
     end
 
     sortAnchorParent = tracker.ContentsFrame or tracker
@@ -1055,11 +1136,33 @@ function ObjectivesMod:SortTrackerBlocks(tracker)
     sortAnchorDefaultOffsetX = (self.db and self.db.blockOffsetX) or tracker.blockOffsetX or 4
     sortAnchorPrev = nil
 
+    local rawHeaderH = (tracker.Header and (tracker.Header.IsShown == nil or tracker.Header:IsShown()) and tracker.Header.GetHeight and tracker.Header:GetHeight()) or tracker.headerHeight or 20
+    local headerH = (not IsSecret(rawHeaderH) and type(rawHeaderH) == "number" and rawHeaderH > 0) and rawHeaderH or 20
+    local fromHeader = math.abs(sortAnchorFromHeader)
+    local fromBlock = math.abs(sortAnchorFromBlock)
+    local visualBudget = GetTrackerVisualBudget(self, tracker)
+    local cumHeight = headerH
+    local anchoredCount = 0
+
     for _, pBlock in ipairs(sortPrefixBlocks) do
+        RestoreOverflowBlock(pBlock)
+        cumHeight = cumHeight + MeasureSortedBlockStep(pBlock, anchoredCount == 0, fromHeader, fromBlock)
         AnchorOneSortedBlock(pBlock)
+        anchoredCount = anchoredCount + 1
     end
     for _, entry in ipairs(sortQuestEntries) do
-        AnchorOneSortedBlock(entry.block)
+        local b = entry.block
+        local step = MeasureSortedBlockStep(b, anchoredCount == 0, fromHeader, fromBlock)
+        if anchoredCount == 0 or (cumHeight + step) <= visualBudget then
+            RestoreOverflowBlock(b)
+            AnchorOneSortedBlock(b)
+            cumHeight = cumHeight + step
+            anchoredCount = anchoredCount + 1
+        else
+            if b.ClearAllPoints then b:ClearAllPoints() end
+            if b.Hide then b:Hide() end
+            overflowHiddenBlocks[b] = true
+        end
     end
     sortActiveSelf = nil
 end
@@ -1091,7 +1194,7 @@ function ObjectivesMod:TrimTrackerGap(tracker)
     local forEachBlock = objState.ForEachTrackerBlock or self.ForEachTrackerBlock
     if forEachBlock then
         forEachBlock(tracker, function(block)
-            if block and block.used ~= false and (block.IsShown == nil or block:IsShown()) then
+            if block and block.used ~= false and not overflowHiddenBlocks[block] and not IsBlockCachedOrTurnIn(block) and (block.IsShown == nil or block:IsShown()) then
                 local bh = (block.GetHeight and block:GetHeight()) or 0
                 if not IsSecret(bh) and type(bh) == "number" and bh > 0 then
                     activeBlockCount = activeBlockCount + 1
@@ -1113,7 +1216,7 @@ function ObjectivesMod:TrimTrackerGap(tracker)
     local lowest = nil
     if forEachBlock and not IsSecret(top) and type(top) == "number" then
         forEachBlock(tracker, function(block)
-            if block and block.used ~= false and (block.IsShown == nil or block:IsShown()) and block.GetBottom then
+            if block and block.used ~= false and not overflowHiddenBlocks[block] and not IsBlockCachedOrTurnIn(block) and (block.IsShown == nil or block:IsShown()) and block.GetBottom then
                 local b = block:GetBottom()
                 if b and not IsSecret(b) and type(b) == "number" and (not lowest or b < lowest) then
                     lowest = b

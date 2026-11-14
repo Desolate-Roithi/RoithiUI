@@ -2,11 +2,25 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1.5)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v2.0.6-Beta  
-**Last Updated:** 2026-11-05  
+**Latest Version:** v2.0.7-Beta  
+**Last Updated:** 2026-11-14  
 **Compatibility:** WoW 12.1.5 (Midnight) & WoW Forever (16001)
 
-## 🆕 Recent Updates (v2.0.6-Beta)
+## 🆕 Recent Updates (v2.0.7-Beta)
+
+### 1. Obsidian & Ice Design System & Objectives Overhaul
+* **Obsidian & Ice Palette (`Objectives`)**: Introduced RoithiUI's unified **Obsidian & Ice** color palette (`#33ccff` Ice Cyan section headers, `#f0f5ff` titles, `#eef3fa` Crisp Offwhite objective text, `#33e699` Mint completion, `#4d99ff` Forever infinity indicator) designed for transparent HUD readability across bright, mixed, and dark scenes.
+* **Shadow-First Typography**: Switched `Objectives` and `Chat` defaults to `Outline = "NONE"` with black `(1, -1)` drop shadows, `Roithi Thick` headers/titles, and `Roithi Thin` objective and chat lines, with synchronized AceConfig/skinning fallbacks.
+
+### 2. Refined Out-of-the-Box Module Defaults
+* **Comprehensive Default Tuning**: Updated out-of-the-box defaults across `Actionbars`, `Bags` (14 columns, auto-repair with guild preference, auto-sell junk, `bagBar` at `290, 250`), `Castbar` (`focus`, `focustarget`, detached `player` defaults), `Chat` (`425x215`, `16px` font & class/race icons, `%H:%M:%S ` timestamps), `CooldownManager`, `EncounterBar`, `Menu`, `Minimap`, `Objectives`, and `UnitFrames`.
+
+### 3. Bags Reagent Quality, Minimap & Chat Hardening
+* **Reagent Quality Icons (`Bags`)**: Added configurable reagent quality star icons (anchor, size, X/Y offsets) on bag and bank item slots along with optimized frame-budgeted new-item flash updates.
+* **QuickJoin & Aura Stability (`Chat`, `Minimap`, `UnitFrames`)**: Hardened `QuickJoinToastButton` docking against `ChatAlertFrame` / `InputUtil`, refined minimap debuff/buff duration anchoring and Secret-safe timer formatting, and aligned UnitFrame PvP timers cleanly with faction crests.
+* **60fps Combat & Taint Safety**: Eliminated remaining hot-path allocations, tightened Midnight Secret number guards across health/tags/auras/objectives/cooldowns, and routed protected calls through `ns.Utils.SafeCall`.
+
+## 📦 Previous Updates (v2.0.6-Beta)
 
 ### 1. Edit Mode Taint Elimination & Midnight Secret Value Safety
 * **EventRegistry Lifecycle Migration**: Replaced `EditModeManagerFrame:HookScript("OnShow" / "OnHide")` closures in `LibEditMode`, `BagBar`, and `Chat` with native `EventRegistry:RegisterCallback("EditMode.Enter" / "EditMode.Exit")`, eliminating AddOn taint on Edit Mode dispatch.
