@@ -169,12 +169,8 @@ commandHandlers = {
         commandHandlers["help"](self)
     end,
     ["testsuite"] = function(self)
-        local UI = RoithiUI:GetModule("UI_TestSuite", true)
-        local TS = RoithiUI:GetModule("TestSuite", true)
-        if UI and UI.ToggleWindow then
-            UI:ToggleWindow()
-        elseif TS and TS.ToggleWindow then
-            TS:ToggleWindow()
+        if self.ToggleTestSuite then
+            self:ToggleTestSuite()
         else
             self:Print("TestSuite is only available in local development mode.")
         end

@@ -257,6 +257,11 @@ function ObjectivesMod:ApplyMasterHeaderVisibility()
             if otf.HeaderMenu.SetAlpha then otf.HeaderMenu:SetAlpha(1) end
         end
     end
+    if self.db and self.db.attachedToMinimap ~= false then
+        if self.ApplyScaleAndHeight then self:ApplyScaleAndHeight() end
+        if self.ApplyPosition then self:ApplyPosition() end
+        if self.RefreshTrackers then self:RefreshTrackers() end
+    end
 end
 
 local function HookOrSetScript(frame, script, handler)

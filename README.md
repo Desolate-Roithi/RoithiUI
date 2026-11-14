@@ -2,11 +2,19 @@
 
 A modular UI replacement for **World of Warcraft: Midnight (12.1.5)**. Built on native **Edit Mode**, RoithiUI provides a lightweight, module-first interface with ElvUI-inspired aesthetics and strict anchor logic.
 
-**Latest Version:** v2.0.7-Beta  
+**Latest Version:** v2.0.8-Beta  
 **Last Updated:** 2026-11-14  
 **Compatibility:** WoW 12.1.5 (Midnight) & WoW Forever (16001)
 
-## 🆕 Recent Updates (v2.0.7-Beta)
+## 🆕 Recent Updates (v2.0.8-Beta)
+
+### 1. Objectives Detached Pinning, Master Header Lift & Full 2500px Visual Budget
+* **Detached Edit Mode Anchoring (`Objectives`)**: Fixed detached `ObjectiveTrackerFrame` positioning so unchecking *Attach to Minimap* pins the tracker cleanly to `RoithiObjectiveTrackerAnchor` (`TOPRIGHT`), preserves visibility during and after Edit Mode, and guards Blizzard `SetPoint` resets in detached mode.
+* **True `Max Height` Visual Culling (`200–1400px`)**: Switched internal Blizzard layout height to `2500px` (supporting up to 40 tracked quests without Blizzard truncating or dropping trackers) while capping visible height dynamically via `Max Height` across all sub-trackers (`Quests`, `Campaign`, `World Quests`, `Achievements`, etc.) with live Edit Mode slider refresh.
+* **Master Header Flush Lift**: Automatically shifts `ObjectiveTrackerFrame` upward by Blizzard's top padding when *Hide 'All Objectives' Header* is enabled and attached to the Minimap.
+* **Core & LibEditMode Hardening**: Removed deprecated `C_Secrets.IsSecret` usage and raw closures in `LibEditModeExtension`, cleaned up dead mixins in `LibRoithi`, and routed dev-only `/rui testsuite` activation through a clean core hook.
+
+## 📦 Previous Updates (v2.0.7-Beta)
 
 ### 1. Obsidian & Ice Design System & Objectives Overhaul
 * **Obsidian & Ice Palette (`Objectives`)**: Introduced RoithiUI's unified **Obsidian & Ice** color palette (`#33ccff` Ice Cyan section headers, `#f0f5ff` titles, `#eef3fa` Crisp Offwhite objective text, `#33e699` Mint completion, `#4d99ff` Forever infinity indicator) designed for transparent HUD readability across bright, mixed, and dark scenes.

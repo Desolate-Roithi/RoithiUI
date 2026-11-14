@@ -93,6 +93,46 @@ if sliderPool then
     end
 end
 
+local function CallIsMovable(frame)
+    return frame:IsMovable()
+end
+
+local function SafeIsMovable(frame)
+    if not frame or type(frame.IsMovable) ~= "function" then
+        return false, nil
+    end
+    local utils = _G.RoithiUI and _G.RoithiUI.Utils
+    if utils and utils.SafeCall then
+        return utils.SafeCall(CallIsMovable, frame)
+    end
+    return true, frame:IsMovable()
+end
+
+local function IsSecretValue(val)
+    return (issecretvalue and issecretvalue(val))
+        or (canaccessvalue and not canaccessvalue(val))
+        or (type(val) == "userdata")
+end
+
+local function ProtectSelectionDragStart(selection)
+    if not selection or selection.isDragStartProtected or not selection.GetScript or not selection.SetScript then
+        return
+    end
+    selection.isDragStartProtected = true
+    local oldDragStart = selection:GetScript("OnDragStart")
+    selection:SetScript("OnDragStart", function(s)
+        if s.parent and s.parent.SetMovable then
+            local okMovable, isMovable = SafeIsMovable(s.parent)
+            if not okMovable or (not IsSecretValue(isMovable) and not isMovable) then
+                s.parent:SetMovable(true)
+            end
+        end
+        if oldDragStart then
+            oldDragStart(s)
+        end
+    end)
+end
+
 -- 2. Stale Closure Protection (Self-Healing)
 -- If lib.internal is wiped but lib object persists, we restore basic hooks.
 if not lib.internal.IsHealed then
@@ -112,14 +152,9 @@ if not lib.internal.IsHealed then
         -- If frame is locked (SetMovable(false)), we should NOT process the drag end.
         local safeCallback = function(f, layoutName, point, x, y)
             local movableVal = true
-            local ok, res = pcall(function() return f:IsMovable() end)
-            if ok then
-                local isSec = (issecretvalue and issecretvalue(res))
-                           or (C_Secrets and C_Secrets.IsSecret and C_Secrets.IsSecret(res))
-                           or (type(res) == "userdata")
-                if not isSec then
-                    movableVal = (res == true)
-                end
+            local ok, res = SafeIsMovable(f)
+            if ok and not IsSecretValue(res) then
+                movableVal = (res == true)
             end
 
             if not movableVal then
@@ -141,21 +176,7 @@ if not lib.internal.IsHealed then
             if selection.SetFrameLevel and frame.GetFrameLevel then
                 selection:SetFrameLevel(frame:GetFrameLevel() + 50)
             end
-            if not selection.isDragStartProtected then
-                selection.isDragStartProtected = true
-                local oldDragStart = selection:GetScript("OnDragStart")
-                selection:SetScript("OnDragStart", function(s)
-                    if s.parent and s.parent.SetMovable then
-                        local okMovable, isMovable = pcall(function() return s.parent:IsMovable() end)
-                        if not okMovable or not isMovable then
-                            s.parent:SetMovable(true)
-                        end
-                    end
-                    if oldDragStart then
-                        oldDragStart(s)
-                    end
-                end)
-            end
+            ProtectSelectionDragStart(selection)
         end
 
         return ret
@@ -164,21 +185,7 @@ if not lib.internal.IsHealed then
     -- Also protect any pre-existing frameSelections
     if lib.frameSelections then
         for _, selection in pairs(lib.frameSelections) do
-            if selection and not selection.isDragStartProtected and selection.GetScript and selection.SetScript then
-                selection.isDragStartProtected = true
-                local oldDragStart = selection:GetScript("OnDragStart")
-                selection:SetScript("OnDragStart", function(s)
-                    if s.parent and s.parent.SetMovable then
-                        local okMovable, isMovable = pcall(function() return s.parent:IsMovable() end)
-                        if not okMovable or not isMovable then
-                            s.parent:SetMovable(true)
-                        end
-                    end
-                    if oldDragStart then
-                        oldDragStart(s)
-                    end
-                end)
-            end
+            ProtectSelectionDragStart(selection)
         end
     end
 

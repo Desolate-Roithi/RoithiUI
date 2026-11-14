@@ -214,6 +214,10 @@ function ObjectivesMod:GetOptions()
             set = function(info, val)
                 self.db.maxHeight = val
                 self:ApplyScaleAndHeight()
+                self:ApplyPosition()
+                if self.RefreshTrackers then
+                    self:RefreshTrackers()
+                end
             end,
         },
         attachedToMinimap = {
@@ -731,136 +735,49 @@ function ObjectivesMod:GetOptions()
     return options
 end
 
+local function FormatWholeHeight(val)
+    return string.format("%.0f", val)
+end
+
 function ObjectivesMod:GetLEMFrameSettings()
     local LEM = LibStub("LibEditMode-Roithi", true) or LibStub("LibEditMode-1.0", true)
     if not LEM or not LEM.SettingType then return {} end
 
-    local settings = {
+    return {
         {
-            name = L["Attach to Minimap"] or "Attach to Minimap",
+            name = L["Attached to Minimap"] or "Attached to Minimap",
             kind = LEM.SettingType.Checkbox,
             default = true,
             get = function() return self.db.attachedToMinimap ~= false end,
             set = function(_, val)
                 self.db.attachedToMinimap = val
-                self:ApplyPosition()
+                local otf = _G.ObjectiveTrackerFrame
+                local anchor = self.anchor or (self.EnsureAnchor and self:EnsureAnchor())
+                if otf and otf.SetClampedToScreen then otf:SetClampedToScreen(false) end
+                if anchor and anchor.SetClampedToScreen then anchor:SetClampedToScreen(not val) end
                 self:ApplyScaleAndHeight()
-                if LEM.RefreshFrameSettings and _G.ObjectiveTrackerFrame then
-                    LEM:RefreshFrameSettings(_G.ObjectiveTrackerFrame)
+                self:ApplyPosition()
+            end,
+        },
+        {
+            name = L["Max Height"] or "Max Height",
+            kind = LEM.SettingType.Slider,
+            default = 850,
+            minValue = 200,
+            maxValue = 1400,
+            valueStep = 25,
+            formatter = FormatWholeHeight,
+            get = function() return self.db.maxHeight or 850 end,
+            set = function(_, val)
+                self.db.maxHeight = val
+                self:ApplyScaleAndHeight()
+                self:ApplyPosition()
+                if self.RefreshTrackers then
+                    self:RefreshTrackers()
                 end
             end,
         },
-        {
-            name = L["Objectives on Hover Only"] or "Objectives on Hover Only",
-            kind = LEM.SettingType.Checkbox,
-            default = true,
-            get = function() return self.db.hoverObjectiveText ~= false end,
-            set = function(_, val)
-                self.db.hoverObjectiveText = val
-                self:RefreshSettings()
-            end,
-        },
-        {
-            name = L["X Position"] or "X Position",
-            kind = LEM.SettingType.Slider,
-            default = -50,
-            minValue = -2500,
-            maxValue = 2500,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            disabled = function() return self.db.attachedToMinimap ~= false end,
-            get = function() return self.db.x or -50 end,
-            set = function(_, val)
-                self.db.x = val
-                self.db.attachedToMinimap = false
-                self:ApplyPosition()
-            end,
-        },
-        {
-            name = L["Y Position"] or "Y Position",
-            kind = LEM.SettingType.Slider,
-            default = -200,
-            minValue = -1500,
-            maxValue = 1500,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            disabled = function() return self.db.attachedToMinimap ~= false end,
-            get = function() return self.db.y or -200 end,
-            set = function(_, val)
-                self.db.y = val
-                self.db.attachedToMinimap = false
-                self:ApplyPosition()
-            end,
-        },
-        {
-            name = L["Detached Width"] or "Detached Width",
-            kind = LEM.SettingType.Slider,
-            default = 235,
-            minValue = 160,
-            maxValue = 500,
-            valueStep = 5,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return self.db.detachedWidth or self.db.width or 235 end,
-            set = function(_, val)
-                self.db.detachedWidth = val
-                self.db.width = val
-                self:ApplyPosition()
-            end,
-        },
-        {
-            name = L["Header Font Size"] or "Header Font Size",
-            kind = LEM.SettingType.Slider,
-            default = 13,
-            minValue = 9,
-            maxValue = 20,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return self.db.headerFontSize or 13 end,
-            set = function(_, val)
-                self.db.headerFontSize = val
-                self:SkinAllExisting()
-            end,
-        },
-        {
-            name = L["Title Font Size"] or "Title Font Size",
-            kind = LEM.SettingType.Slider,
-            default = 12,
-            minValue = 9,
-            maxValue = 20,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return self.db.titleFontSize or 12 end,
-            set = function(_, val)
-                self.db.titleFontSize = val
-                self:SkinAllExisting()
-            end,
-        },
-        {
-            name = L["Objective Font Size"] or "Objective Font Size",
-            kind = LEM.SettingType.Slider,
-            default = 11,
-            minValue = 8,
-            maxValue = 18,
-            valueStep = 1,
-            formatter = function(v) return string.format("%.0f", v) end,
-            get = function() return self.db.objectiveFontSize or 11 end,
-            set = function(_, val)
-                self.db.objectiveFontSize = val
-                self:SkinAllExisting()
-            end,
-        },
-        {
-            name = L["Hide Master Header"] or "Hide Master Header",
-            kind = LEM.SettingType.Checkbox,
-            default = false,
-            get = function() return self.db.hideMasterHeader == true end,
-            set = function(_, val)
-                self.db.hideMasterHeader = val
-                self:ApplyMasterHeaderVisibility()
-            end,
-        },
     }
-    return settings
 end
 
 

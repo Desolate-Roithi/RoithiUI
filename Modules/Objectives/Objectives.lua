@@ -25,6 +25,7 @@ objState.blockBaseTitles = setmetatable({}, { __mode = "k" })
 objState.blockQuestIDs = setmetatable({}, { __mode = "k" })
 objState.selectionHooked = setmetatable({}, { __mode = "k" })
 objState.overflowHiddenBlocks = setmetatable({}, { __mode = "k" })
+objState.overflowHiddenHeaders = setmetatable({}, { __mode = "k" })
 local barBackdrops = objState.barBackdrops
 local selectionHooked = objState.selectionHooked
 local overflowHiddenBlocks = objState.overflowHiddenBlocks
@@ -340,6 +341,19 @@ function ObjectivesMod:OnQuestLogUpdate()
     end
 end
 
+local refreshedTrackerSet = {}
+
+local function RefreshOneTracker(self, tracker)
+    if tracker and tracker.IsShown and tracker:IsShown() then
+        if self.SortTrackerBlocks then
+            self:SortTrackerBlocks(tracker)
+        end
+        if self.TrimTrackerGap then
+            self:TrimTrackerGap(tracker)
+        end
+    end
+end
+
 function ObjectivesMod:RefreshTrackers()
     local offsetX = (self.db and self.db.blockOffsetX) or 4
     for block in pairs(skinnedBlocks) do
@@ -370,15 +384,22 @@ function ObjectivesMod:RefreshTrackers()
             end
         end
     end
+
+    for k in pairs(refreshedTrackerSet) do refreshedTrackerSet[k] = nil end
+    local otf = _G.ObjectiveTrackerFrame
+    if otf and otf.modules then
+        for _, m in ipairs(otf.modules) do
+            if m and m ~= _G.ScenarioObjectiveTracker and not (objState.SharesWidgetPool and objState.SharesWidgetPool(m)) then
+                refreshedTrackerSet[m] = true
+                RefreshOneTracker(self, m)
+            end
+        end
+    end
     for _, trackerName in ipairs(SUB_TRACKERS) do
         local tracker = _G[trackerName]
-        if tracker and tracker.IsShown and tracker:IsShown() then
-            if self.SortTrackerBlocks then
-                self:SortTrackerBlocks(tracker)
-            end
-            if self.TrimTrackerGap then
-                self:TrimTrackerGap(tracker)
-            end
+        if tracker and not refreshedTrackerSet[tracker] then
+            refreshedTrackerSet[tracker] = true
+            RefreshOneTracker(self, tracker)
         end
     end
 end
@@ -600,14 +621,25 @@ function ObjectivesMod:GetBelowMinimapWidgetOffset(anchorTarget)
     return 0
 end
 
+local function GetMasterHeaderTopLift(self, otf)
+    if not self.db or self.db.hideMasterHeader ~= true or not otf then
+        return 0
+    end
+    local pad = otf.topModulePadding
+    if pad and not ns.Utils.IsSecret(pad) and type(pad) == "number" and pad > 0 then
+        return pad
+    end
+    return 0
+end
+
 local function OnObjectiveTrackerSetPoint(self, relativeTo)
     local em = _G.EditModeManagerFrame
     if (em and em.layoutApplyInProgress) or (self.isEditModeActive and em and em.editModeActive == false) then
         return
     end
-    if not self.settingPosition and self.db and self.db.enabled ~= false and self.db.attachedToMinimap ~= false then
-        local expectedTarget = self:GetMinimapAnchorTarget()
-        if relativeTo ~= expectedTarget then
+    if not self.settingPosition and self.db and self.db.enabled ~= false then
+        local expectedTarget = (self.db.attachedToMinimap ~= false) and self:GetMinimapAnchorTarget() or self.anchor
+        if expectedTarget and relativeTo ~= expectedTarget then
             self:ApplyPosition()
         end
     end
@@ -637,20 +669,16 @@ function ObjectivesMod:ApplyPosition()
         _G.EventRegistry:RegisterCallback("EditMode.Enter", function()
             self.isEditModeActive = true
             if self.db and self.db.enabled ~= false then
-                if self.db.attachedToMinimap ~= false then
-                    self:ApplyPosition()
-                end
                 self:ApplyScaleAndHeight()
+                self:ApplyPosition()
             end
         end, self)
         _G.EventRegistry:RegisterCallback("EditMode.Exit", function()
             self.isEditModeActive = false
             local function RefreshAfterExit()
                 if self.db and self.db.enabled ~= false then
-                    if self.db.attachedToMinimap ~= false then
-                        self:ApplyPosition()
-                    end
                     self:ApplyScaleAndHeight()
+                    self:ApplyPosition()
                 end
             end
             if _G.C_Timer and _G.C_Timer.After then
@@ -680,8 +708,9 @@ function ObjectivesMod:ApplyPosition()
             local extraY = self:GetBelowMinimapWidgetOffset(anchorTarget)
             local xOffset = self.db.offsetX or 0
             local yOffset = self.db.offsetY or -5
+            local headerLift = GetMasterHeaderTopLift(self, otf)
             self.settingPosition = true
-            ns.Utils.SafeCall(SetDetachedOrAttachedPoints, otf, "TOPRIGHT", anchorTarget, "BOTTOMRIGHT", xOffset, yOffset - extraY)
+            ns.Utils.SafeCall(SetDetachedOrAttachedPoints, otf, "TOPRIGHT", anchorTarget, "BOTTOMRIGHT", xOffset, yOffset - extraY + headerLift)
             self.settingPosition = nil
 
             if not ns.Utils.IsSecret(mmWidth) and mmWidth > 50 then
@@ -699,26 +728,33 @@ function ObjectivesMod:ApplyPosition()
             end
         end
     else
-        local em = _G.EditModeManagerFrame
-        local editModeActive = self.isEditModeActive or (em and em.IsEditModeActive and em:IsEditModeActive())
+        local anchor = self.anchor or (self.EnsureAnchor and self:EnsureAnchor())
         local maxH = self.lastMaxHeight or self.db.maxHeight or 850
-        local curH = otf.GetHeight and otf:GetHeight()
-        local isLayoutExpanded = (not editModeActive) and curH and not ns.Utils.IsSecret(curH) and type(curH) == "number" and curH > (maxH + 1)
-        if otf.SetClampedToScreen then otf:SetClampedToScreen(not isLayoutExpanded) end
-        if self.anchor and self.anchor.SetClampedToScreen then self.anchor:SetClampedToScreen(true) end
-        local parent = otf:GetParent() or _G.UIParent
-        if parent and otf.ClearAllPoints and otf.SetPoint then
-            local p = self.db.point or "TOPRIGHT"
-            local rp = self.db.relativePoint or "TOPRIGHT"
-            local x = self.db.detachedX or self.db.x or -20
-            local y = self.db.detachedY or self.db.y or -200
+        if otf.SetClampedToScreen then otf:SetClampedToScreen(false) end
+        if anchor and anchor.SetClampedToScreen then anchor:SetClampedToScreen(true) end
+        if anchor and anchor.SetHeight then anchor:SetHeight(maxH) end
+
+        local p = self.db.point or "TOPRIGHT"
+        local rp = self.db.relativePoint or "TOPRIGHT"
+        local x = self.db.detachedX or self.db.x or -20
+        local y = self.db.detachedY or self.db.y or -200
+        local anchorParent = (anchor and anchor.GetParent and anchor:GetParent()) or _G.UIParent
+        if anchor and anchorParent and anchor.ClearAllPoints and anchor.SetPoint then
+            anchor:ClearAllPoints()
+            anchor:SetPoint(p, anchorParent, rp, x, y)
+        end
+
+        if otf.ClearAllPoints and otf.SetPoint then
             self.settingPosition = true
-            ns.Utils.SafeCall(SetDetachedOrAttachedPoints, otf, p, parent, rp, x, y)
-            self.settingPosition = nil
-            if self.anchor and self.anchor.ClearAllPoints and self.anchor.SetPoint then
-                self.anchor:ClearAllPoints()
-                self.anchor:SetPoint(p, parent, rp, x, y)
+            if anchor then
+                ns.Utils.SafeCall(SetDetachedOrAttachedPoints, otf, "TOPRIGHT", anchor, "TOPRIGHT", 0, 0)
+            else
+                local parent = otf:GetParent() or _G.UIParent
+                if parent then
+                    ns.Utils.SafeCall(SetDetachedOrAttachedPoints, otf, p, parent, rp, x, y)
+                end
             end
+            self.settingPosition = nil
 
             local customWidth = self.db.detachedWidth or 235
             if not ns.Utils.IsSecret(customWidth) and customWidth > 50 then
@@ -728,7 +764,7 @@ function ObjectivesMod:ApplyPosition()
                     otf.Header:SetWidth(customWidth)
                 end
                 if otf.HeaderMenu and otf.HeaderMenu.SetWidth then otf.HeaderMenu:SetWidth(customWidth) end
-                if self.anchor and self.anchor.SetWidth then self.anchor:SetWidth(customWidth) end
+                if anchor and anchor.SetWidth then anchor:SetWidth(customWidth) end
             end
         end
     end
@@ -774,21 +810,20 @@ function ObjectivesMod:ApplyScaleAndHeight()
             if bottomY and not ns.Utils.IsSecret(bottomY) and bottomY > 50 then
                 local bottomMargin = 20
                 local extraY = self:GetBelowMinimapWidgetOffset(anchorTarget)
-                local availableH = math.floor(bottomY - extraY - bottomMargin)
+                local headerLift = GetMasterHeaderTopLift(self, otf)
+                local availableH = math.floor(bottomY - extraY + headerLift - bottomMargin)
                 if availableH > 100 then
                     maxH = math.min(maxH, availableH)
                 end
             end
         end
     end
-    local em = _G.EditModeManagerFrame
-    local editModeActive = self.isEditModeActive or (em and em.IsEditModeActive and em:IsEditModeActive())
-    -- Expand Blizzard's layout height budget outside Edit Mode so collapsed quests fit without watch-order drops;
-    -- SortTrackerBlocks culls excess visual overflow post-sort using self.lastMaxHeight / self.anchor.
-    local layoutH = editModeActive and maxH or math.max(maxH, 4000)
+    -- Always keep Blizzard's container layout height >= 2500px (covers 40-quest limit in & out of Edit Mode)
+    -- so Blizzard never truncates or skips modules; SortTrackerBlocks enforces maxH visually.
+    local layoutH = math.max(maxH, 2500)
     local wantClamp = (self.db.attachedToMinimap == false)
     if otf.SetClampedToScreen then
-        otf:SetClampedToScreen(wantClamp and layoutH <= maxH)
+        otf:SetClampedToScreen(false)
     end
     if self.anchor and self.anchor.SetClampedToScreen then
         self.anchor:SetClampedToScreen(wantClamp)
@@ -865,9 +900,7 @@ function ObjectivesMod:RegisterWithEditMode()
 
     local anchor = self:EnsureAnchor()
     local detached = (self.db.attachedToMinimap == false)
-    local em = _G.EditModeManagerFrame
-    local editModeActive = self.isEditModeActive or (em and em.IsEditModeActive and em:IsEditModeActive())
-    if otf.SetClampedToScreen then otf:SetClampedToScreen(detached and editModeActive == true) end
+    if otf.SetClampedToScreen then otf:SetClampedToScreen(false) end
     if anchor.SetClampedToScreen then anchor:SetClampedToScreen(detached) end
 
     local defaults = {
@@ -877,23 +910,7 @@ function ObjectivesMod:RegisterWithEditMode()
         y = -200,
     }
 
-    local settings = {
-        {
-            name = L["Attached to Minimap"] or "Attached to Minimap",
-            kind = LEM.SettingType.Checkbox,
-            default = true,
-            get = function() return self.db.attachedToMinimap ~= false end,
-            set = function(_, val)
-                self.db.attachedToMinimap = val
-                local curEm = _G.EditModeManagerFrame
-                local curEdit = self.isEditModeActive or (curEm and curEm.IsEditModeActive and curEm:IsEditModeActive())
-                if otf.SetClampedToScreen then otf:SetClampedToScreen((not val) and curEdit == true) end
-                if anchor.SetClampedToScreen then anchor:SetClampedToScreen(not val) end
-                self:ApplyPosition()
-                self:ApplyScaleAndHeight()
-            end,
-        },
-    }
+    local settings = self.GetLEMFrameSettings and self:GetLEMFrameSettings() or {}
 
     local buttons = {
         {
